@@ -32,5 +32,12 @@
     },
     "startup": {
         "placeholderBody": "Application skeleton (Milestone M0).\nThe editing workspace arrives in the next milestones."
-    }
+    },
+    "panel.layers": "Layers",
+    "panel.lock": "Lock",
+    "panel.unlock": "Unlock",
+    "panel.front": "Bring to Front",
+    "panel.back": "Send to Back",
+    "panel.duplicate": "Duplicate",
+    "panel.delete": "Delete"
 }

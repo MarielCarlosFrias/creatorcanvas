@@ -170,6 +170,7 @@ void renderDocument(const Document& doc, QPainter* painter,
     painter->setTransform(docToDevice);
     painter->setRenderHint(QPainter::Antialiasing, true);
     painter->setRenderHint(QPainter::TextAntialiasing, true);
+    painter->setClipRect(canvasRect); // layers never draw outside the canvas
 
     const GroupLayer* root = doc.rootGroup();
     for (const auto& child : root->children)

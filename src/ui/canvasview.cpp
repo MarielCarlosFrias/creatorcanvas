@@ -64,6 +64,11 @@ void CanvasView::clearSelection()
     selectLayer(LayerId());
 }
 
+void CanvasView::setSelectedLayer(const LayerId& id)
+{
+    selectLayer(id);
+}
+
 void CanvasView::selectLayer(const LayerId& id)
 {
     if (m_selectedId == id)

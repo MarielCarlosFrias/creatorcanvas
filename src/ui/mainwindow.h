@@ -9,6 +9,7 @@
 #include "core/history/CommandStack.h"
 #include "services/presetstore.h"
 
+class QDockWidget;
 class QLabel;
 class QMenu;
 class QAction;
@@ -18,6 +19,7 @@ namespace cc {
 class I18nService;
 class SettingsService;
 class CanvasView;
+class LayersPanel;
 
 class MainWindow final : public QMainWindow
 {
@@ -31,6 +33,7 @@ private:
     void createDefaultDocument();
     void connectDocumentSignals();
     void buildCentralWidget();
+    void buildLayersDock();
     void buildActions();
     void buildMenus();
     void buildStatusBar();
@@ -50,6 +53,8 @@ private:
 
     std::unique_ptr<Document> m_document;
     CanvasView* m_canvas = nullptr;
+    LayersPanel* m_layersPanel = nullptr;
+    QDockWidget* m_layersDock = nullptr;
     LayerId m_selectedId;
 
     QAction* m_newAction = nullptr;

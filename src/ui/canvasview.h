@@ -17,6 +17,7 @@ public:
 
     void setDocument(Document* document);
     void clearSelection();
+    void setSelectedLayer(const LayerId& id);
 
     double zoom() const { return m_zoom; }
     QPointF panOffset() const { return m_panOffset; }

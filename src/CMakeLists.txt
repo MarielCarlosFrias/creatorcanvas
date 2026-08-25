@@ -82,6 +82,8 @@ add_executable(creatorcanvas
     ui/canvasview.cpp
     ui/newdocumentdialog.h
     ui/newdocumentdialog.cpp
+    ui/layerspanel.h
+    ui/layerspanel.cpp
 )
 target_link_libraries(creatorcanvas
     PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets

@@ -6,9 +6,11 @@
 #include "imageio/ImageImporter.h"
 #include "localization/i18nservice.h"
 #include "ui/canvasview.h"
+#include "ui/layerspanel.h"
 #include "ui/newdocumentdialog.h"
 
 #include <QApplication>
+#include <QDockWidget>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QKeySequence>
@@ -38,6 +40,7 @@ MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
 
     createDefaultDocument();
     buildCentralWidget();
+    buildLayersDock();
     buildActions();
     buildMenus();
     buildStatusBar();
@@ -63,6 +66,12 @@ void MainWindow::connectDocumentSignals()
             m_canvas, qOverload<>(&QWidget::update));
     connect(m_document.get(), &Document::layerPropertyChanged,
             m_canvas, qOverload<>(&QWidget::update));
+    if (m_layersPanel) {
+        connect(m_document.get(), &Document::structureChanged,
+                m_layersPanel, &LayersPanel::refresh);
+        connect(m_document.get(), &Document::layerPropertyChanged,
+                m_layersPanel, &LayersPanel::refresh);
+    }
 }
 
 void MainWindow::buildCentralWidget()
@@ -78,7 +87,11 @@ void MainWindow::buildCentralWidget()
     connect(m_canvas, &CanvasView::fileDropped,
             this, &MainWindow::importImage);
     connect(m_canvas, &CanvasView::selectionChanged, this,
-            [this](const LayerId& id) { m_selectedId = id; });
+            [this](const LayerId& id) {
+                m_selectedId = id;
+                if (m_layersPanel)
+                    m_layersPanel->setSelectedLayer(id);
+            });
     connect(m_canvas, &CanvasView::transformCommitted, this,
             [this](const LayerId& id, const AffineTransform& oldValue,
                    const AffineTransform& newValue) {
@@ -90,6 +103,32 @@ void MainWindow::buildCentralWidget()
             this, &MainWindow::deleteSelectedLayer);
 
     setCentralWidget(m_canvas);
+}
+
+void MainWindow::buildLayersDock()
+{
+    m_layersPanel = new LayersPanel(m_i18n, this);
+    m_layersPanel->setDocument(m_document.get());
+
+    m_layersDock = new QDockWidget(QString(), this);
+    m_layersDock->setWidget(m_layersPanel);
+    m_layersDock->setFeatures(QDockWidget::DockWidgetMovable
+                              | QDockWidget::DockWidgetFloatable);
+    addDockWidget(Qt::RightDockWidgetArea, m_layersDock);
+
+    connect(m_layersPanel, &LayersPanel::selectionRequested, this,
+            [this](const LayerId& id) {
+                m_selectedId = id;
+                m_canvas->setSelectedLayer(id);
+            });
+    connect(m_layersPanel, &LayersPanel::deleteRequested,
+            this, &MainWindow::deleteSelectedLayer);
+    connect(m_layersPanel, &LayersPanel::duplicateRequested, this,
+            [this](const LayerId& id) {
+                if (m_history && m_document)
+                    m_history->execute(
+                        std::make_unique<DuplicateLayerCommand>(*m_document, id));
+            });
 }
 
 void MainWindow::buildActions()
@@ -199,6 +238,8 @@ void MainWindow::newDocument()
     m_history->clear();
     m_selectedId = LayerId();
     m_canvas->setDocument(m_document.get());
+    if (m_layersPanel)
+        m_layersPanel->setDocument(m_document.get());
     connectDocumentSignals();
 }
 
@@ -332,6 +373,9 @@ void MainWindow::retranslateUi()
     m_editMenu->setTitle(m_i18n->t("common", "menu.edit"));
     m_layerMenu->setTitle(m_i18n->t("common", "menu.layer"));
     m_helpMenu->setTitle(m_i18n->t("common", "menu.help"));
+
+    if (m_layersDock)
+        m_layersDock->setWindowTitle(m_i18n->t("common", "panel.layers"));
 
     updateZoomLabel();
     updatePositionLabel(m_lastCursorPos);

@@ -32,5 +32,12 @@
     },
     "startup": {
         "placeholderBody": "Estrutura inicial do aplicativo (Etapa M0).\nO ambiente de edição chega nas próximas etapas."
-    }
+    },
+    "panel.layers": "Camadas",
+    "panel.lock": "Bloquear",
+    "panel.unlock": "Desbloquear",
+    "panel.front": "Trazer para Frente",
+    "panel.back": "Enviar para Trás",
+    "panel.duplicate": "Duplicar",
+    "panel.delete": "Excluir"
 }
