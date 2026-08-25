@@ -4,11 +4,10 @@
 #include "core/layers/Layer.h"
 
 #include <QBrush>
-#include <QFont>        // <-- adicionei
-#include <QPainter>     // <-- adicionei
-#include <QPen>   
-#include <QPen>
+#include <QFont>
 #include <QImage>
+#include <QPainter>
+#include <QPen>
 
 namespace cc {
 namespace {
@@ -35,6 +34,8 @@ void drawCheckerboard(QPainter* painter, const QRectF& canvasOnDevice,
     painter->setClipRect(canvasOnDevice);
     painter->fillRect(canvasOnDevice, options.checkerLight);
 
+    // QImage (not QPixmap): the renderer must work headless - the export
+    // path renders on worker threads without a GUI application.
     QImage tile(options.checkerSize * 2, options.checkerSize * 2,
                 QImage::Format_ARGB32_Premultiplied);
     tile.fill(options.checkerLight);
@@ -91,8 +92,8 @@ void drawShape(QPainter* painter, const ShapeLayer& shape)
     }
 }
 
-void drawLayer(QPainter* painter, const Layer& layer, const QRectF& canvasRect,
-               float parentOpacity)
+void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
+               const QRectF& canvasRect, float parentOpacity)
 {
     if (!layer.visible)
         return;
@@ -114,7 +115,7 @@ void drawLayer(QPainter* painter, const Layer& layer, const QRectF& canvasRect,
     case LayerType::Group: {
         const auto& group = static_cast<const GroupLayer&>(layer);
         for (const auto& child : group.children)
-            drawLayer(painter, *child, canvasRect, effectiveOpacity);
+            drawLayer(painter, *child, doc, canvasRect, effectiveOpacity);
         break;
     }
     case LayerType::Shape:
@@ -129,16 +130,22 @@ void drawLayer(QPainter* painter, const Layer& layer, const QRectF& canvasRect,
             font.setUnderline(text.underline);
             painter->setFont(font);
             painter->setPen(text.color);
-            // Transforms arrive in M6; until then text sits at the doc origin.
+            // Transforms arrive in M6b; until then text sits at the doc origin.
             painter->drawText(QPointF(0, 0), text.content);
         }
         break;
     }
     case LayerType::Image: {
         const auto& image = static_cast<const ImageLayer&>(layer);
-        // Neutral placeholder until the pixel store exists (M6 import).
-        painter->fillRect(QRectF(0, 0, image.naturalWidth, image.naturalHeight),
-                          QColor(0x3a, 0x3b, 0x40));
+        const QImage pixels = doc.assets().decodedImage(image.assetId);
+        if (!pixels.isNull()) {
+            painter->drawImage(QPointF(0, 0), pixels);
+        } else {
+            // Placeholder while the asset has no decoded pixels.
+            painter->fillRect(
+                QRectF(0, 0, image.naturalWidth, image.naturalHeight),
+                QColor(0x3a, 0x3b, 0x40));
+        }
         break;
     }
     }
@@ -164,7 +171,7 @@ void renderDocument(const Document& doc, QPainter* painter,
 
     const GroupLayer* root = doc.rootGroup();
     for (const auto& child : root->children)
-        drawLayer(painter, *child, canvasRect, 1.0f);
+        drawLayer(painter, *child, doc, canvasRect, 1.0f);
     painter->restore();
 
     painter->save();

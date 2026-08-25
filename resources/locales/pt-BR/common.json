@@ -11,7 +11,11 @@
     "menu": {
         "file": "&Arquivo",
         "file.new": "&Novo...",
+        "file.import": "&Importar Imagem...",
         "file.quit": "&Sair",
+        "edit": "E&ditar",
+        "edit.undo": "&Desfazer",
+        "edit.redo": "&Refazer",
         "help": "A&juda",
         "help.about": "&Sobre o CreatorCanvas",
         "help.aboutQt": "Sobre o &Qt"

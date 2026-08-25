@@ -2,14 +2,14 @@
 
 #include <QPointF>
 #include <QWidget>
-#include "core/Document.h"
 
 namespace cc {
 
 class Document;
 
-/// Interactive document viewport: pan, zoom and painting via the software
-/// renderer. Owns the view transform only — never mutates the document.
+/// Interactive document viewport: pan, zoom, painting via the software
+/// renderer, and image drag-and-drop. Owns the view transform only - never
+/// mutates the document.
 class CanvasView final : public QWidget
 {
     Q_OBJECT
@@ -19,7 +19,6 @@ public:
     void setDocument(Document* document);
 
     double zoom() const { return m_zoom; }
-    /// Position of the document origin in widget coordinates.
     QPointF panOffset() const { return m_panOffset; }
 
 public slots:
@@ -31,6 +30,7 @@ public slots:
 signals:
     void zoomChanged(double zoom);
     void cursorMoved(const QPointF& documentPos);
+    void fileDropped(const QString& filePath);
 
 protected:
     void paintEvent(QPaintEvent*) override;
@@ -41,6 +41,9 @@ protected:
     void keyPressEvent(QKeyEvent*) override;
     void keyReleaseEvent(QKeyEvent*) override;
     void resizeEvent(QResizeEvent*) override;
+    void dragEnterEvent(QDragEnterEvent*) override;
+    void dragMoveEvent(QDragMoveEvent*) override;
+    void dropEvent(QDropEvent*) override;
 
 private:
     QTransform docToDevice() const;

@@ -1,4 +1,3 @@
-#include <miniz.h>
 #include "ProjectFile.h"
 
 #include "core/Document.h"
@@ -8,12 +7,15 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
 #include <QLoggingCategory>
+#include <QCryptographicHash>
 
+#include <miniz.h>
 
 #include <cstring>
 #include <memory>
@@ -22,6 +24,8 @@
 
 namespace cc {
 
+namespace {
+
 Q_LOGGING_CATEGORY(lcSerialization, "cc.serialization")
 
 constexpr auto kEntryName   = "project.json";
@@ -29,8 +33,7 @@ constexpr auto kFormatKey   = "formatVersion";
 constexpr auto kAppKey      = "app";
 constexpr auto kDocumentKey = "document";
 constexpr auto kLayersKey   = "layers";
-
-// ------------------------------------------------------------ enum mapping
+constexpr auto kAssetsKey   = "assets";
 
 QString blendModeToString(BlendMode mode)
 {
@@ -109,8 +112,6 @@ QColor colorFromString(const QString& value)
     const QColor color(value);
     return color.isValid() ? color : QColor(0, 0, 0, 0);
 }
-
-// ----------------------------------------------------------------- writing
 
 QJsonObject writeLayer(const Layer& layer)
 {
@@ -198,6 +199,23 @@ QJsonObject buildProjectJson(const Document& doc)
     document.insert(QStringLiteral("dpi"), doc.dpi());
     root.insert(QLatin1String(kDocumentKey), document);
 
+    QJsonArray assets;
+    for (const Asset& asset : doc.assets().assets()) {
+        QJsonObject o;
+        o.insert(QStringLiteral("id"),
+                 asset.id.toString(QUuid::WithoutBraces));
+        o.insert(QStringLiteral("file"),
+                 QStringLiteral("media/%1.%2")
+                     .arg(asset.id.toString(QUuid::WithoutBraces),
+                          asset.format));
+        o.insert(QStringLiteral("format"), asset.format);
+        o.insert(QStringLiteral("width"), asset.width);
+        o.insert(QStringLiteral("height"), asset.height);
+        o.insert(QStringLiteral("sha256"), asset.sha256);
+        assets.append(o);
+    }
+    root.insert(QStringLiteral("assets"), assets);
+
     QJsonArray layers;
     for (const auto& child : doc.rootGroup()->children)
         layers.append(writeLayer(*child));
@@ -206,8 +224,8 @@ QJsonObject buildProjectJson(const Document& doc)
     return root;
 }
 
-bool writeArchive(const QString& filePath, const QByteArray& bytes,
-                  QString* error)
+bool writeArchive(const QString& filePath, const QByteArray& jsonBytes,
+                  const Document& doc, QString* error)
 {
     const QFileInfo info(filePath);
     if (!QDir().mkpath(info.absolutePath())) {
@@ -223,12 +241,30 @@ bool writeArchive(const QString& filePath, const QByteArray& bytes,
         return false;
     }
 
-    if (!mz_zip_writer_add_mem(&zip, kEntryName, bytes.constData(),
-                               static_cast<size_t>(bytes.size()),
-                               MZ_DEFAULT_LEVEL)
-        || !mz_zip_writer_finalize_archive(&zip)) {
+    const bool jsonOk =
+        mz_zip_writer_add_mem(&zip, kEntryName, jsonBytes.constData(),
+                              static_cast<size_t>(jsonBytes.size()),
+                              MZ_DEFAULT_LEVEL);
+
+    bool assetsOk = jsonOk;
+    if (jsonOk) {
+        for (const Asset& asset : doc.assets().assets()) {
+            const QString entry = QStringLiteral("media/%1.%2")
+                                      .arg(asset.id.toString(QUuid::WithoutBraces),
+                                           asset.format);
+            if (!mz_zip_writer_add_mem(&zip, entry.toUtf8().constData(),
+                                       asset.encoded.constData(),
+                                       static_cast<size_t>(asset.encoded.size()),
+                                       MZ_DEFAULT_LEVEL)) {
+                assetsOk = false;
+                break;
+            }
+        }
+    }
+
+    if (!assetsOk || !mz_zip_writer_finalize_archive(&zip)) {
         mz_zip_writer_end(&zip);
-        QFile::remove(filePath);
+        QFile::remove(filePath); // never leave a broken file behind
         *error = QStringLiteral("Could not write the project contents.");
         return false;
     }
@@ -237,8 +273,19 @@ bool writeArchive(const QString& filePath, const QByteArray& bytes,
     return true;
 }
 
-// ----------------------------------------------------------------- reading
+std::unique_ptr<Document> loadFail(QString* out, const QString& message,
+                                   const QString& detail = {})
+{
+    qCWarning(lcSerialization) << "loadDocument failed:" << message << detail;
+    if (out)
+        *out = message;
+    return nullptr;
+}
 
+} // namespace
+
+// Defined at cc scope (NOT the anonymous namespace): Layer declares this
+// class as a friend so ids can be restored exactly as saved.
 class ProjectReader
 {
 public:
@@ -247,7 +294,8 @@ public:
     {
     }
 
-    std::unique_ptr<Document> run(QString* error)
+    std::unique_ptr<Document> run(QString* error,
+                                  const QHash<QString, QByteArray>& media)
     {
         const QJsonValue format = m_root.value(QLatin1String(kFormatKey));
         if (!format.isDouble()) {
@@ -284,6 +332,42 @@ public:
 
         auto doc = std::make_unique<Document>(width, height, dpi);
 
+        const QJsonArray assets = m_root.value(QLatin1String(kAssetsKey)).toArray();
+        for (const QJsonValue& value : assets) {
+            const QJsonObject o = value.toObject();
+            Asset asset;
+            asset.id = LayerId(o.value(QStringLiteral("id")).toString());
+            const QString file = o.value(QStringLiteral("file")).toString();
+            asset.format = o.value(QStringLiteral("format")).toString();
+            asset.width = o.value(QStringLiteral("width")).toInt();
+            asset.height = o.value(QStringLiteral("height")).toInt();
+            asset.sha256 = o.value(QStringLiteral("sha256")).toString();
+
+            if (asset.id.isNull() || file.isEmpty() || asset.sha256.isEmpty()) {
+                *error = QStringLiteral(
+                    "The project file contains an invalid embedded asset.");
+                return nullptr;
+            }
+
+            asset.encoded = media.value(file);
+            if (asset.encoded.isEmpty()) {
+                *error = QStringLiteral(
+                    "An embedded image is missing from the project archive.");
+                return nullptr;
+            }
+
+            const QString actualHash = QString::fromLatin1(
+                QCryptographicHash::hash(asset.encoded,
+                                         QCryptographicHash::Sha256).toHex());
+            if (actualHash != asset.sha256) {
+                *error = QStringLiteral(
+                    "An embedded image failed the integrity check (SHA-256).");
+                return nullptr;
+            }
+
+            doc->assets().restore(asset);
+        }
+
         const QJsonArray layers = m_root.value(QLatin1String(kLayersKey)).toArray();
         for (const QJsonValue& value : layers) {
             std::unique_ptr<Layer> layer;
@@ -318,7 +402,6 @@ private:
         if (type == QLatin1String("background"))
             return readBackground(o, id, out);
 
-        // Unknown type: placeholder group
         qCWarning(lcSerialization)
             << "Unknown layer type" << type
             << "- loading as a placeholder group.";
@@ -434,7 +517,7 @@ private:
 
     void finishLayer(Layer& layer, const QJsonObject& o, const LayerId& id)
     {
-        layer.m_id = id; // friend access
+        layer.m_id = id;
         layer.name = o.value(QStringLiteral("name")).toString();
         layer.visible = o.value(QStringLiteral("visible")).toBool(true);
         layer.locked = o.value(QStringLiteral("locked")).toBool(false);
@@ -448,8 +531,6 @@ private:
     QJsonObject m_root;
 };
 
-// ----------------------------------------------------------------- API
-
 bool saveDocument(const Document& doc, const QString& filePath,
                   QString* errorMessage)
 {
@@ -457,7 +538,7 @@ bool saveDocument(const Document& doc, const QString& filePath,
         QJsonDocument(buildProjectJson(doc)).toJson(QJsonDocument::Indented);
 
     QString localError;
-    if (!writeArchive(filePath, bytes, &localError)) {
+    if (!writeArchive(filePath, bytes, doc, &localError)) {
         qCWarning(lcSerialization) << "saveDocument failed:" << localError
                                    << filePath;
         if (errorMessage)
@@ -474,24 +555,31 @@ std::unique_ptr<Document> loadDocument(const QString& filePath,
     std::memset(&zip, 0, sizeof(zip));
 
     if (!mz_zip_reader_init_file(&zip, QFile::encodeName(filePath).constData(), 0)) {
-        qCWarning(lcSerialization) << "loadDocument failed: cannot open ZIP" << filePath;
-        if (errorMessage)
-            *errorMessage = QStringLiteral(
-                "The file could not be opened as a CreatorCanvas project. "
-                "It may be corrupted or in a different format.");
-        return nullptr;
+        return loadFail(errorMessage, QStringLiteral(
+            "The file could not be opened as a CreatorCanvas project. "
+            "It may be corrupted or in a different format."), filePath);
     }
 
     QByteArray bytes;
+    QHash<QString, QByteArray> media;
     {
-        const int entryIndex =
-            mz_zip_reader_locate_file(&zip, kEntryName, nullptr, 0);
-        if (entryIndex >= 0) {
+        const int entryCount = mz_zip_reader_get_num_files(&zip);
+        for (int i = 0; i < entryCount; ++i) {
+            char name[512];
+            if (!mz_zip_reader_get_filename(&zip, static_cast<mz_uint>(i),
+                                            name, sizeof(name)))
+                continue;
+            const QString entryName = QString::fromUtf8(name);
+
             size_t size = 0;
             if (void* data = mz_zip_reader_extract_to_heap(
-                    &zip, static_cast<mz_uint>(entryIndex), &size, 0)) {
-                bytes = QByteArray(static_cast<const char*>(data),
-                                   static_cast<qint64>(size));
+                    &zip, static_cast<mz_uint>(i), &size, 0)) {
+                const QByteArray entryBytes(static_cast<const char*>(data),
+                                            static_cast<qint64>(size));
+                if (entryName == QLatin1String(kEntryName))
+                    bytes = entryBytes;
+                else if (entryName.startsWith(QLatin1String("media/")))
+                    media.insert(entryName, entryBytes);
                 mz_free(data);
             }
         }
@@ -499,25 +587,22 @@ std::unique_ptr<Document> loadDocument(const QString& filePath,
     }
 
     if (bytes.isEmpty()) {
-        if (errorMessage)
-            *errorMessage = QStringLiteral(
-                "The project archive does not contain a readable project "
-                "description (project.json).");
-        return nullptr;
+        return loadFail(errorMessage, QStringLiteral(
+            "The project archive does not contain a readable project "
+            "description (project.json)."));
     }
 
     QJsonParseError parseError{};
     const QJsonDocument parsed = QJsonDocument::fromJson(bytes, &parseError);
     if (parseError.error != QJsonParseError::NoError || !parsed.isObject()) {
-        if (errorMessage)
-            *errorMessage = QStringLiteral(
-                "The project description inside the file is not valid.");
-        return nullptr;
+        return loadFail(errorMessage, QStringLiteral(
+            "The project description inside the file is not valid."),
+            parseError.errorString());
     }
 
     QString error;
     ProjectReader reader(parsed.object());
-    auto document = reader.run(&error);
+    auto document = reader.run(&error, media);
     if (!document) {
         qCWarning(lcSerialization) << "loadDocument failed:" << error
                                    << filePath;

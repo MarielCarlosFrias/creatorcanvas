@@ -2,18 +2,12 @@
 
 #include <QMainWindow>
 #include <QPointF>
+
 #include <memory>
+
 #include "core/Document.h"
+#include "core/history/CommandStack.h"
 #include "services/presetstore.h"
-#include "services/settingsservice.h"
-#include "services/presetstore.h"
-#include "services/settingsservice.h"
-#include "services/presetstore.h"
-#include "services/settingsservice.h"
-#include "services/presetstore.h"
-#include "services/settingsservice.h"
-#include "services/presetstore.h"
-#include "services/settingsservice.h"
 
 class QLabel;
 class QMenu;
@@ -22,9 +16,11 @@ class QAction;
 namespace cc {
 
 class I18nService;
-class PresetStore;
+class SettingsService;
 class CanvasView;
 
+/// Top-level window. Owns the working document, the undo history and the
+/// canvas viewport.
 class MainWindow final : public QMainWindow
 {
     Q_OBJECT
@@ -41,6 +37,8 @@ private:
     void buildMenus();
     void buildStatusBar();
     void newDocument();
+    void importImageViaDialog();
+    void importImage(const QString& filePath);
     void retranslateUi();
     void updateZoomLabel();
     void updatePositionLabel(const QPointF& documentPos);
@@ -48,16 +46,21 @@ private:
     SettingsService* m_settings = nullptr;
     I18nService* m_i18n = nullptr;
     std::unique_ptr<PresetStore> m_presetStore;
+    std::unique_ptr<CommandStack> m_history;
 
     std::unique_ptr<Document> m_document;
     CanvasView* m_canvas = nullptr;
 
     QAction* m_newAction = nullptr;
+    QAction* m_importAction = nullptr;
     QAction* m_quitAction = nullptr;
+    QAction* m_undoAction = nullptr;
+    QAction* m_redoAction = nullptr;
     QAction* m_aboutAction = nullptr;
     QAction* m_aboutQtAction = nullptr;
 
     QMenu* m_fileMenu = nullptr;
+    QMenu* m_editMenu = nullptr;
     QMenu* m_helpMenu = nullptr;
 
     QLabel* m_zoomLabel = nullptr;

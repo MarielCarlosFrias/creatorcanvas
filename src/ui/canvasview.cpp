@@ -7,6 +7,16 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QWheelEvent>
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QUrl>
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QUrl>
 
 #include <algorithm>
 #include <cmath>
@@ -24,6 +34,7 @@ CanvasView::CanvasView(QWidget* parent)
     : QWidget(parent)
 {
     setFocusPolicy(Qt::StrongFocus);
+    setAcceptDrops(true);
     setMouseTracking(true); // cursor position reporting without buttons
 }
 
@@ -219,6 +230,31 @@ void CanvasView::resizeEvent(QResizeEvent* event)
     QWidget::resizeEvent(event);
     if (m_needsFit)
         update();
+}
+
+void CanvasView::dragEnterEvent(QDragEnterEvent* event)
+{
+    if (event->mimeData()->hasUrls())
+        event->acceptProposedAction();
+}
+
+void CanvasView::dragMoveEvent(QDragMoveEvent* event)
+{
+    if (event->mimeData()->hasUrls())
+        event->acceptProposedAction();
+}
+
+void CanvasView::dropEvent(QDropEvent* event)
+{
+    const auto urls = event->mimeData()->urls();
+    for (const QUrl& url : urls) {
+        const QString path = url.toLocalFile();
+        if (!path.isEmpty()) {
+            emit fileDropped(path);
+            event->acceptProposedAction();
+            return;
+        }
+    }
 }
 
 } // namespace cc

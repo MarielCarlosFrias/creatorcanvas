@@ -12,5 +12,18 @@
             "presetName": "Preset name",
             "exists": "A preset with this name already exists."
         }
+    },
+    "import": {
+        "dialog": {
+            "title": "Import Image"
+        },
+        "error": {
+            "title": "Import failed",
+            "notFound": "The file does not exist.",
+            "cannotRead": "The file could not be opened for reading.",
+            "tooLarge": "The image exceeds the supported size limits.",
+            "unsupported": "The file is not a supported image (PNG, JPEG, WebP or BMP).",
+            "corrupt": "The image data appears to be corrupted."
+        }
     }
 }

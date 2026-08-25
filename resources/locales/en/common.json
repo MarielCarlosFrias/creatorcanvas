@@ -11,7 +11,11 @@
     "menu": {
         "file": "&File",
         "file.new": "&New...",
+        "file.import": "&Import Image...",
         "file.quit": "&Quit",
+        "edit": "&Edit",
+        "edit.undo": "&Undo",
+        "edit.redo": "&Redo",
         "help": "&Help",
         "help.about": "&About CreatorCanvas",
         "help.aboutQt": "About &Qt"

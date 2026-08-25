@@ -27,6 +27,10 @@ add_library(cc_core STATIC
     core/history/DocumentCommands.h
     core/serialization/ProjectFile.h
     core/serialization/ProjectFile.cpp
+    core/assets/AssetStore.h
+    core/assets/AssetStore.cpp
+    imageio/ImageImporter.h
+    imageio/ImageImporter.cpp
 )
 target_link_libraries(cc_core PUBLIC Qt6::Core Qt6::Gui miniz)
 target_compile_definitions(cc_core PRIVATE CC_PROJECT_VERSION="${PROJECT_VERSION}")

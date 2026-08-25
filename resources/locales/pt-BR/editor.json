@@ -12,5 +12,18 @@
             "presetName": "Nome da predefinição",
             "exists": "Já existe uma predefinição com esse nome."
         }
+    },
+    "import": {
+        "dialog": {
+            "title": "Importar Imagem"
+        },
+        "error": {
+            "title": "Falha na importação",
+            "notFound": "O arquivo não existe.",
+            "cannotRead": "O arquivo não pôde ser aberto para leitura.",
+            "tooLarge": "A imagem excede os limites de tamanho suportados.",
+            "unsupported": "O arquivo não é uma imagem suportada (PNG, JPEG, WebP ou BMP).",
+            "corrupt": "Os dados da imagem parecem estar corrompidos."
+        }
     }
 }
