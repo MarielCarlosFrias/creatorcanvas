@@ -7,6 +7,7 @@
 #include "localization/i18nservice.h"
 #include "ui/canvasview.h"
 #include "ui/layerspanel.h"
+#include "ui/textinspector.h"
 #include "ui/newdocumentdialog.h"
 
 #include <QApplication>
@@ -91,6 +92,8 @@ void MainWindow::buildCentralWidget()
                 m_selectedId = id;
                 if (m_layersPanel)
                     m_layersPanel->setSelectedLayer(id);
+                if (m_textInspector)
+                    m_textInspector->setSelectedLayer(id);
             });
     connect(m_canvas, &CanvasView::transformCommitted, this,
             [this](const LayerId& id, const AffineTransform& oldValue,
@@ -115,6 +118,13 @@ void MainWindow::buildCentralWidget()
 
 void MainWindow::buildLayersDock()
 {
+    m_textInspector = new TextInspector(m_i18n, m_document.get(), this);
+    m_textDock = new QDockWidget(QString(), this);
+    m_textDock->setWidget(m_textInspector);
+    m_textDock->setFeatures(QDockWidget::DockWidgetMovable
+                            | QDockWidget::DockWidgetFloatable);
+    addDockWidget(Qt::RightDockWidgetArea, m_textDock);
+
     m_layersPanel = new LayersPanel(m_i18n, this);
     m_layersPanel->setDocument(m_document.get());
 
@@ -259,6 +269,8 @@ void MainWindow::newDocument()
     m_canvas->setDocument(m_document.get());
     if (m_layersPanel)
         m_layersPanel->setDocument(m_document.get());
+    if (m_textInspector)
+        m_textInspector->setSelectedLayer(LayerId());
     connectDocumentSignals();
 }
 

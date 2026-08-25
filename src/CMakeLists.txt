@@ -82,6 +82,8 @@ add_executable(creatorcanvas
     ui/canvasview.cpp
     ui/newdocumentdialog.h
     ui/newdocumentdialog.cpp
+    ui/textinspector.h
+    ui/textinspector.cpp
     ui/layerspanel.h
     ui/layerspanel.cpp
 )

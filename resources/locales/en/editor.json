@@ -27,6 +27,16 @@
         }
     },
     "text": {
-        "default": "Text"
+        "default": "Text",
+        "title": "Text",
+        "content": "Content",
+        "font": "Font",
+        "size": "Size",
+        "style": "Style",
+        "color": "Color",
+        "align": "Align",
+        "align.left": "Left",
+        "align.center": "Center",
+        "align.right": "Right"
     }
 }

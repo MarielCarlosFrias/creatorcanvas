@@ -20,6 +20,7 @@ class I18nService;
 class SettingsService;
 class CanvasView;
 class LayersPanel;
+class TextInspector;
 
 class MainWindow final : public QMainWindow
 {
@@ -56,6 +57,8 @@ private:
     CanvasView* m_canvas = nullptr;
     LayersPanel* m_layersPanel = nullptr;
     QDockWidget* m_layersDock = nullptr;
+    TextInspector* m_textInspector = nullptr;
+    QDockWidget* m_textDock = nullptr;
     LayerId m_selectedId;
 
     QAction* m_newAction = nullptr;

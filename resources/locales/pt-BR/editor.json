@@ -27,6 +27,16 @@
         }
     },
     "text": {
-        "default": "Texto"
+        "default": "Texto",
+        "title": "Texto",
+        "content": "Conteúdo",
+        "font": "Fonte",
+        "size": "Tamanho",
+        "style": "Estilo",
+        "color": "Cor",
+        "align": "Alinhamento",
+        "align.left": "Esquerda",
+        "align.center": "Centro",
+        "align.right": "Direita"
     }
 }

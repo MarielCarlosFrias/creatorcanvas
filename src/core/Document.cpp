@@ -254,4 +254,12 @@ bool Document::setLayerTextContent(const LayerId& id, QString content)
     return true;
 }
 
+void Document::touchLayer(const LayerId& id)
+{
+    if (findLayer(id)) {
+        bumpRevision();
+        emit layerPropertyChanged(id);
+    }
+}
+
 } // namespace cc
