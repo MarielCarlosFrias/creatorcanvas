@@ -32,6 +32,8 @@ add_library(cc_core STATIC
     core/assets/AssetStore.cpp
     imageio/ImageImporter.h
     imageio/ImageImporter.cpp
+    imageio/DocumentExporter.h
+    imageio/DocumentExporter.cpp
 )
 target_link_libraries(cc_core PUBLIC Qt6::Core Qt6::Gui miniz)
 target_compile_definitions(cc_core PRIVATE CC_PROJECT_VERSION="${PROJECT_VERSION}")
@@ -84,6 +86,8 @@ add_executable(creatorcanvas
     ui/newdocumentdialog.cpp
     ui/textinspector.h
     ui/textinspector.cpp
+    ui/exportdialog.h
+    ui/exportdialog.cpp
     ui/layerspanel.h
     ui/layerspanel.cpp
     ui/settingsdialog.h

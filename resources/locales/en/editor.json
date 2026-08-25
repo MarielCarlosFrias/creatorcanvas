@@ -43,5 +43,14 @@
         "title": "Effects",
         "outline": "Outline",
         "shadow": "Shadow"
+    },
+    "export": {
+        "dialog.title": "Export",
+        "format": "Format",
+        "quality": "Quality",
+        "scale": "Scale",
+        "success.title": "Export successful",
+        "success": "Exported to %1",
+        "error.title": "Export failed"
     }
 }

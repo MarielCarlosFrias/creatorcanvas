@@ -27,7 +27,8 @@
         "file.save": "&Save",
         "file.saveAs": "Save &As...",
         "settings": "&Settings",
-        "settings.open": "&Preferences..."
+        "settings.open": "&Preferences...",
+        "file.export": "E&xport..."
     },
     "statusbar": {
         "version": "Version %1",

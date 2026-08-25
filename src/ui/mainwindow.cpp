@@ -5,8 +5,10 @@
 #include "core/layers/Layer.h"
 #include "core/serialization/ProjectFile.h"
 #include "imageio/ImageImporter.h"
+#include "imageio/DocumentExporter.h"
 #include "localization/i18nservice.h"
 #include "ui/canvasview.h"
+#include "ui/exportdialog.h"
 #include "ui/layerspanel.h"
 #include "ui/newdocumentdialog.h"
 #include "ui/settingsdialog.h"
@@ -199,6 +201,11 @@ void MainWindow::buildActions()
     connect(m_importAction, &QAction::triggered,
             this, &MainWindow::importImageViaDialog);
 
+    m_exportAction = new QAction(this);
+    m_exportAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+E")));
+    connect(m_exportAction, &QAction::triggered,
+            this, &MainWindow::exportImage);
+
     m_quitAction = new QAction(this);
     connect(m_quitAction, &QAction::triggered, this, &MainWindow::close);
 
@@ -267,6 +274,7 @@ void MainWindow::buildMenus()
     m_fileMenu->addAction(m_saveAsAction);
     m_fileMenu->addSeparator();
     m_fileMenu->addAction(m_importAction);
+    m_fileMenu->addAction(m_exportAction);
     m_fileMenu->addSeparator();
     m_fileMenu->addAction(m_quitAction);
 
@@ -400,6 +408,44 @@ void MainWindow::addText()
         std::make_unique<AddLayerCommand>(*m_document, std::move(layer)));
     m_canvas->setSelectedLayer(id);
     m_canvas->beginTextEdit(id);
+}
+
+void MainWindow::exportImage()
+{
+    if (!m_i18n || !m_document)
+        return;
+
+    ExportDialog dialog(m_i18n, this);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    const ExportSettings settings = dialog.settings();
+    QString filter = QStringLiteral("PNG (*.png)");
+    if (settings.format == QLatin1String("jpeg"))
+        filter = QStringLiteral("JPEG (*.jpg *.jpeg)");
+    else if (settings.format == QLatin1String("webp"))
+        filter = QStringLiteral("WebP (*.webp)");
+
+    QString path = QFileDialog::getSaveFileName(
+        this, m_i18n->t("editor", "export.dialog.title"),
+        QStringLiteral("export"), filter);
+    if (path.isEmpty())
+        return;
+
+    const QString suffix = QStringLiteral(".") + settings.format;
+    if (!path.endsWith(suffix))
+        path += suffix;
+
+    QString error;
+    if (!exportDocumentToImage(*m_document, path, settings.format,
+                               settings.quality, settings.scale, &error)) {
+        QMessageBox::warning(this,
+                             m_i18n->t("editor", "export.error.title"), error);
+        return;
+    }
+    QMessageBox::information(
+        this, m_i18n->t("editor", "export.success.title"),
+        m_i18n->t("editor", "export.success").arg(path));
 }
 
 void MainWindow::flipLayer(bool horizontal)
@@ -581,6 +627,7 @@ void MainWindow::retranslateUi()
     m_saveAction->setText(m_i18n->t("common", "menu.file.save"));
     m_saveAsAction->setText(m_i18n->t("common", "menu.file.saveAs"));
     m_importAction->setText(m_i18n->t("common", "menu.file.import"));
+    m_exportAction->setText(m_i18n->t("common", "menu.file.export"));
     m_quitAction->setText(m_i18n->t("common", "menu.file.quit"));
     m_undoAction->setText(m_i18n->t("common", "menu.edit.undo"));
     m_redoAction->setText(m_i18n->t("common", "menu.edit.redo"));

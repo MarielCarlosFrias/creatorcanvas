@@ -43,6 +43,7 @@ private:
     void buildStatusBar();
     void newDocument();
     void importImageViaDialog();
+    void exportImage();
     void importImage(const QString& filePath);
     void flipLayer(bool horizontal);
     void addText();
@@ -77,6 +78,7 @@ private:
     QAction* m_saveAction = nullptr;
     QAction* m_saveAsAction = nullptr;
     QAction* m_importAction = nullptr;
+    QAction* m_exportAction = nullptr;
     QAction* m_quitAction = nullptr;
     QAction* m_undoAction = nullptr;
     QAction* m_redoAction = nullptr;
