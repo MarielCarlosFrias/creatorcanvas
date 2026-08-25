@@ -25,5 +25,8 @@
             "unsupported": "The file is not a supported image (PNG, JPEG, WebP or BMP).",
             "corrupt": "The image data appears to be corrupted."
         }
+    },
+    "text": {
+        "default": "Text"
     }
 }
