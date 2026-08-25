@@ -30,6 +30,9 @@ public:
                         I18nService* i18n,
                         QWidget* parent = nullptr);
 
+protected:
+    void closeEvent(QCloseEvent* event) override;
+
 private:
     void createDefaultDocument();
     void connectDocumentSignals();
@@ -44,6 +47,12 @@ private:
     void flipLayer(bool horizontal);
     void addText();
     void deleteSelectedLayer();
+    bool saveDocument();
+    bool saveDocumentAs();
+    void openDocument();
+    bool confirmDiscardUnsavedChanges();
+    void openSettings();
+    void updateWindowTitle();
     void retranslateUi();
     void updateZoomLabel();
     void updatePositionLabel(const QPointF& documentPos);
@@ -60,8 +69,13 @@ private:
     TextInspector* m_textInspector = nullptr;
     QDockWidget* m_textDock = nullptr;
     LayerId m_selectedId;
+    QString m_currentFilePath;
+    bool m_modified = false;
 
     QAction* m_newAction = nullptr;
+    QAction* m_openAction = nullptr;
+    QAction* m_saveAction = nullptr;
+    QAction* m_saveAsAction = nullptr;
     QAction* m_importAction = nullptr;
     QAction* m_quitAction = nullptr;
     QAction* m_undoAction = nullptr;
@@ -70,12 +84,14 @@ private:
     QAction* m_flipHAction = nullptr;
     QAction* m_flipVAction = nullptr;
     QAction* m_deleteAction = nullptr;
+    QAction* m_settingsAction = nullptr;
     QAction* m_aboutAction = nullptr;
     QAction* m_aboutQtAction = nullptr;
 
     QMenu* m_fileMenu = nullptr;
     QMenu* m_editMenu = nullptr;
     QMenu* m_layerMenu = nullptr;
+    QMenu* m_settingsMenu = nullptr;
     QMenu* m_helpMenu = nullptr;
 
     QLabel* m_zoomLabel = nullptr;

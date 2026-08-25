@@ -22,7 +22,12 @@
         "layer": "&Camada",
         "layer.flipH": "Inverter &Horizontal",
         "layer.flipV": "Inverter &Vertical",
-        "layer.delete": "&Excluir"
+        "layer.delete": "&Excluir",
+        "file.open": "&Abrir...",
+        "file.save": "&Salvar",
+        "file.saveAs": "Salvar &como...",
+        "settings": "&Configurações",
+        "settings.open": "&Preferências..."
     },
     "statusbar": {
         "version": "Versão %1",
@@ -41,5 +46,15 @@
     "panel.duplicate": "Duplicar",
     "panel.delete": "Excluir",
     "menu.layer.addText": "Adicionar &Texto",
-    "text.default": "Texto"
+    "text.default": "Texto",
+    "dialog": {
+        "unsaved.title": "Alterações não salvas",
+        "unsaved.body": "O documento tem alterações não salvas. Salvar?",
+        "unsaved.save": "Salvar",
+        "unsaved.discard": "Descartar",
+        "saveAs.title": "Salvar como",
+        "saveError.title": "Falha ao salvar",
+        "open.title": "Abrir projeto",
+        "openError.title": "Falha ao abrir"
+    }
 }

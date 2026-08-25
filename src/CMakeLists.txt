@@ -86,6 +86,8 @@ add_executable(creatorcanvas
     ui/textinspector.cpp
     ui/layerspanel.h
     ui/layerspanel.cpp
+    ui/settingsdialog.h
+    ui/settingsdialog.cpp
 )
 target_link_libraries(creatorcanvas
     PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets

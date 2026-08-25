@@ -22,7 +22,12 @@
         "layer": "&Layer",
         "layer.flipH": "Flip &Horizontal",
         "layer.flipV": "Flip &Vertical",
-        "layer.delete": "&Delete"
+        "layer.delete": "&Delete",
+        "file.open": "&Open...",
+        "file.save": "&Save",
+        "file.saveAs": "Save &As...",
+        "settings": "&Settings",
+        "settings.open": "&Preferences..."
     },
     "statusbar": {
         "version": "Version %1",
@@ -41,5 +46,15 @@
     "panel.duplicate": "Duplicate",
     "panel.delete": "Delete",
     "menu.layer.addText": "Add &Text",
-    "text.default": "Text"
+    "text.default": "Text",
+    "dialog": {
+        "unsaved.title": "Unsaved changes",
+        "unsaved.body": "The document has unsaved changes. Save them?",
+        "unsaved.save": "Save",
+        "unsaved.discard": "Discard",
+        "saveAs.title": "Save As",
+        "saveError.title": "Save failed",
+        "open.title": "Open project",
+        "openError.title": "Open failed"
+    }
 }

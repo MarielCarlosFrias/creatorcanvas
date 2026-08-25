@@ -3,14 +3,17 @@
 #include "core/document/NewDocumentSpec.h"
 #include "core/history/DocumentCommands.h"
 #include "core/layers/Layer.h"
+#include "core/serialization/ProjectFile.h"
 #include "imageio/ImageImporter.h"
 #include "localization/i18nservice.h"
 #include "ui/canvasview.h"
 #include "ui/layerspanel.h"
-#include "ui/textinspector.h"
 #include "ui/newdocumentdialog.h"
+#include "ui/settingsdialog.h"
+#include "ui/textinspector.h"
 
 #include <QApplication>
+#include <QCloseEvent>
 #include <QDockWidget>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -19,6 +22,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QStandardPaths>
 #include <QStatusBar>
 
@@ -46,11 +50,28 @@ MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
     buildActions();
     buildMenus();
     buildStatusBar();
+    updateWindowTitle();
+
+    connect(m_history.get(), &CommandStack::stateChanged, this, [this] {
+        if (!m_modified) {
+            m_modified = true;
+            updateWindowTitle();
+        }
+    });
 
     if (m_i18n)
         connect(m_i18n, &I18nService::languageChanged,
                 this, &MainWindow::retranslateUi);
     retranslateUi();
+}
+
+void MainWindow::closeEvent(QCloseEvent* event)
+{
+    if (!confirmDiscardUnsavedChanges()) {
+        event->ignore();
+        return;
+    }
+    event->accept();
 }
 
 void MainWindow::createDefaultDocument()
@@ -102,14 +123,6 @@ void MainWindow::buildCentralWidget()
                     m_history->execute(std::make_unique<SetLayerTransformCommand>(
                         *m_document, id, oldValue, newValue));
             });
-    connect(m_canvas, &CanvasView::deleteRequested,
-            this, &MainWindow::deleteSelectedLayer);
-    connect(m_canvas, &CanvasView::textBoxCommitted, this,
-            [this](const LayerId& id, const QSizeF& oldValue, const QSizeF& newValue) {
-                if (m_history && m_document)
-                    m_history->execute(std::make_unique<SetLayerTextBoxCommand>(
-                        *m_document, id, oldValue, newValue));
-            });
     connect(m_canvas, &CanvasView::textCommitted, this,
             [this](const LayerId& id, const QString& oldValue,
                    const QString& newValue) {
@@ -118,19 +131,20 @@ void MainWindow::buildCentralWidget()
                         *m_document, id, QStringLiteral("layer.text"),
                         &Document::setLayerTextContent, oldValue, newValue));
             });
+    connect(m_canvas, &CanvasView::textBoxCommitted, this,
+            [this](const LayerId& id, const QSizeF& oldValue, const QSizeF& newValue) {
+                if (m_history && m_document)
+                    m_history->execute(std::make_unique<SetLayerTextBoxCommand>(
+                        *m_document, id, oldValue, newValue));
+            });
+    connect(m_canvas, &CanvasView::deleteRequested,
+            this, &MainWindow::deleteSelectedLayer);
 
     setCentralWidget(m_canvas);
 }
 
 void MainWindow::buildLayersDock()
 {
-    m_textInspector = new TextInspector(m_i18n, m_document.get(), this);
-    m_textDock = new QDockWidget(QString(), this);
-    m_textDock->setWidget(m_textInspector);
-    m_textDock->setFeatures(QDockWidget::DockWidgetMovable
-                            | QDockWidget::DockWidgetFloatable);
-    addDockWidget(Qt::RightDockWidgetArea, m_textDock);
-
     m_layersPanel = new LayersPanel(m_i18n, this);
     m_layersPanel->setDocument(m_document.get());
 
@@ -153,11 +167,13 @@ void MainWindow::buildLayersDock()
                     m_history->execute(
                         std::make_unique<DuplicateLayerCommand>(*m_document, id));
             });
-    connect(m_layersPanel, &LayersPanel::focusRequested, this,
-            [this](const QPointF& documentPos) {
-                if (m_canvas)
-                    m_canvas->centerOn(documentPos);
-            });
+
+    m_textInspector = new TextInspector(m_i18n, m_document.get(), this);
+    m_textDock = new QDockWidget(QString(), this);
+    m_textDock->setWidget(m_textInspector);
+    m_textDock->setFeatures(QDockWidget::DockWidgetMovable
+                            | QDockWidget::DockWidgetFloatable);
+    addDockWidget(Qt::RightDockWidgetArea, m_textDock);
 }
 
 void MainWindow::buildActions()
@@ -165,6 +181,18 @@ void MainWindow::buildActions()
     m_newAction = new QAction(this);
     m_newAction->setShortcut(QKeySequence::New);
     connect(m_newAction, &QAction::triggered, this, &MainWindow::newDocument);
+
+    m_openAction = new QAction(this);
+    m_openAction->setShortcut(QKeySequence::Open);
+    connect(m_openAction, &QAction::triggered, this, &MainWindow::openDocument);
+
+    m_saveAction = new QAction(this);
+    m_saveAction->setShortcut(QKeySequence::Save);
+    connect(m_saveAction, &QAction::triggered, this, &MainWindow::saveDocument);
+
+    m_saveAsAction = new QAction(this);
+    m_saveAsAction->setShortcut(QKeySequence::SaveAs);
+    connect(m_saveAsAction, &QAction::triggered, this, &MainWindow::saveDocumentAs);
 
     m_importAction = new QAction(this);
     m_importAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+I")));
@@ -193,8 +221,7 @@ void MainWindow::buildActions()
 
     m_addTextAction = new QAction(this);
     m_addTextAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+T")));
-    connect(m_addTextAction, &QAction::triggered,
-            this, &MainWindow::addText);
+    connect(m_addTextAction, &QAction::triggered, this, &MainWindow::addText);
 
     m_flipHAction = new QAction(this);
     connect(m_flipHAction, &QAction::triggered,
@@ -208,6 +235,10 @@ void MainWindow::buildActions()
     m_deleteAction->setShortcut(QKeySequence::Delete);
     connect(m_deleteAction, &QAction::triggered,
             this, &MainWindow::deleteSelectedLayer);
+
+    m_settingsAction = new QAction(this);
+    m_settingsAction->setShortcut(QKeySequence::Preferences);
+    connect(m_settingsAction, &QAction::triggered, this, &MainWindow::openSettings);
 
     m_aboutAction = new QAction(this);
     connect(m_aboutAction, &QAction::triggered, this, [this] {
@@ -231,6 +262,10 @@ void MainWindow::buildMenus()
 {
     m_fileMenu = menuBar()->addMenu(QString());
     m_fileMenu->addAction(m_newAction);
+    m_fileMenu->addAction(m_openAction);
+    m_fileMenu->addAction(m_saveAction);
+    m_fileMenu->addAction(m_saveAsAction);
+    m_fileMenu->addSeparator();
     m_fileMenu->addAction(m_importAction);
     m_fileMenu->addSeparator();
     m_fileMenu->addAction(m_quitAction);
@@ -245,6 +280,9 @@ void MainWindow::buildMenus()
     m_layerMenu->addAction(m_flipVAction);
     m_layerMenu->addSeparator();
     m_layerMenu->addAction(m_deleteAction);
+
+    m_settingsMenu = menuBar()->addMenu(QString());
+    m_settingsMenu->addAction(m_settingsAction);
 
     m_helpMenu = menuBar()->addMenu(QString());
     m_helpMenu->addAction(m_aboutAction);
@@ -265,6 +303,9 @@ void MainWindow::buildStatusBar()
 
 void MainWindow::newDocument()
 {
+    if (!confirmDiscardUnsavedChanges())
+        return;
+
     NewDocumentDialog dialog(m_i18n, m_presetStore.get(), this);
     if (dialog.exec() != QDialog::Accepted)
         return;
@@ -272,12 +313,15 @@ void MainWindow::newDocument()
     m_document = createDocument(dialog.spec());
     m_history->clear();
     m_selectedId = LayerId();
+    m_currentFilePath.clear();
+    m_modified = false;
     m_canvas->setDocument(m_document.get());
     if (m_layersPanel)
         m_layersPanel->setDocument(m_document.get());
     if (m_textInspector)
         m_textInspector->setSelectedLayer(LayerId());
     connectDocumentSignals();
+    updateWindowTitle();
 }
 
 void MainWindow::importImageViaDialog()
@@ -387,6 +431,127 @@ void MainWindow::deleteSelectedLayer()
     m_canvas->clearSelection();
 }
 
+bool MainWindow::saveDocument()
+{
+    if (m_currentFilePath.isEmpty())
+        return saveDocumentAs();
+
+    QString error;
+    if (!cc::saveDocument(*m_document, m_currentFilePath, &error)) {
+        if (m_i18n)
+            QMessageBox::warning(this,
+                                 m_i18n->t("common", "dialog.saveError.title"),
+                                 error);
+        return false;
+    }
+    m_modified = false;
+    updateWindowTitle();
+    return true;
+}
+
+bool MainWindow::saveDocumentAs()
+{
+    if (!m_i18n)
+        return false;
+    QString path = QFileDialog::getSaveFileName(
+        this,
+        m_i18n->t("common", "dialog.saveAs.title"),
+        QStringLiteral("untitled.creatorcanvas"),
+        QStringLiteral("CreatorCanvas (*.creatorcanvas)"));
+    if (path.isEmpty())
+        return false;
+    if (!path.endsWith(QLatin1String(".creatorcanvas")))
+        path += QLatin1String(".creatorcanvas");
+
+    QString error;
+    if (!cc::saveDocument(*m_document, path, &error)) {
+        QMessageBox::warning(this,
+                             m_i18n->t("common", "dialog.saveError.title"), error);
+        return false;
+    }
+    m_currentFilePath = path;
+    m_modified = false;
+    updateWindowTitle();
+    return true;
+}
+
+void MainWindow::openDocument()
+{
+    if (!confirmDiscardUnsavedChanges())
+        return;
+
+    if (!m_i18n)
+        return;
+    const QString path = QFileDialog::getOpenFileName(
+        this,
+        m_i18n->t("common", "dialog.open.title"),
+        QString(),
+        QStringLiteral("CreatorCanvas (*.creatorcanvas)"));
+    if (path.isEmpty())
+        return;
+
+    QString error;
+    auto loaded = loadDocument(path, &error);
+    if (!loaded) {
+        QMessageBox::warning(this,
+                             m_i18n->t("common", "dialog.openError.title"), error);
+        return;
+    }
+
+    m_document = std::move(loaded);
+    m_history->clear();
+    m_selectedId = LayerId();
+    m_currentFilePath = path;
+    m_modified = false;
+    m_canvas->setDocument(m_document.get());
+    if (m_layersPanel)
+        m_layersPanel->setDocument(m_document.get());
+    if (m_textInspector)
+        m_textInspector->setSelectedLayer(LayerId());
+    connectDocumentSignals();
+    updateWindowTitle();
+}
+
+bool MainWindow::confirmDiscardUnsavedChanges()
+{
+    if (!m_modified || !m_i18n)
+        return true;
+
+    QMessageBox box(this);
+    box.setWindowTitle(m_i18n->t("common", "dialog.unsaved.title"));
+    box.setText(m_i18n->t("common", "dialog.unsaved.body"));
+    QAbstractButton* saveButton =
+        box.addButton(m_i18n->t("common", "dialog.unsaved.save"),
+                      QMessageBox::AcceptRole);
+    QAbstractButton* discardButton =
+        box.addButton(m_i18n->t("common", "dialog.unsaved.discard"),
+                      QMessageBox::DestructiveRole);
+    box.addButton(QMessageBox::Cancel);
+    box.exec();
+
+    if (box.clickedButton() == saveButton)
+        return saveDocument();
+    return box.clickedButton() == discardButton;
+}
+
+void MainWindow::openSettings()
+{
+    SettingsDialog dialog(m_i18n, m_settings, this);
+    dialog.exec();
+}
+
+void MainWindow::updateWindowTitle()
+{
+    QString title = m_i18n ? m_i18n->t("common", "app.title")
+                           : QStringLiteral("CreatorCanvas");
+    if (!m_currentFilePath.isEmpty())
+        title += QStringLiteral(" - ")
+                 + QFileInfo(m_currentFilePath).fileName();
+    if (m_modified)
+        title += QStringLiteral(" *");
+    setWindowTitle(title);
+}
+
 void MainWindow::updateZoomLabel()
 {
     if (!m_i18n || !m_zoomLabel)
@@ -411,9 +576,10 @@ void MainWindow::retranslateUi()
     if (!m_i18n)
         return;
 
-    setWindowTitle(m_i18n->t("common", "app.title"));
-
     m_newAction->setText(m_i18n->t("common", "menu.file.new"));
+    m_openAction->setText(m_i18n->t("common", "menu.file.open"));
+    m_saveAction->setText(m_i18n->t("common", "menu.file.save"));
+    m_saveAsAction->setText(m_i18n->t("common", "menu.file.saveAs"));
     m_importAction->setText(m_i18n->t("common", "menu.file.import"));
     m_quitAction->setText(m_i18n->t("common", "menu.file.quit"));
     m_undoAction->setText(m_i18n->t("common", "menu.edit.undo"));
@@ -422,16 +588,20 @@ void MainWindow::retranslateUi()
     m_flipHAction->setText(m_i18n->t("common", "menu.layer.flipH"));
     m_flipVAction->setText(m_i18n->t("common", "menu.layer.flipV"));
     m_deleteAction->setText(m_i18n->t("common", "menu.layer.delete"));
+    m_settingsAction->setText(m_i18n->t("common", "menu.settings.open"));
     m_aboutAction->setText(m_i18n->t("common", "menu.help.about"));
     m_aboutQtAction->setText(m_i18n->t("common", "menu.help.aboutQt"));
 
     m_fileMenu->setTitle(m_i18n->t("common", "menu.file"));
     m_editMenu->setTitle(m_i18n->t("common", "menu.edit"));
     m_layerMenu->setTitle(m_i18n->t("common", "menu.layer"));
+    m_settingsMenu->setTitle(m_i18n->t("common", "menu.settings"));
     m_helpMenu->setTitle(m_i18n->t("common", "menu.help"));
 
     if (m_layersDock)
         m_layersDock->setWindowTitle(m_i18n->t("common", "panel.layers"));
+    if (m_textDock)
+        m_textDock->setWindowTitle(m_i18n->t("editor", "text.title"));
 
     updateZoomLabel();
     updatePositionLabel(m_lastCursorPos);
@@ -442,6 +612,8 @@ void MainWindow::retranslateUi()
     m_languageLabel->setText(
         m_i18n->t("common", "statusbar.language")
             .arg(m_i18n->displayName(m_i18n->currentLanguage())));
+
+    updateWindowTitle();
 }
 
 } // namespace cc

@@ -1,1 +1,7 @@
-{}
+{
+    "dialog": {
+        "title": "Configurações",
+        "language": "Idioma",
+        "autosave": "Salvamento automático (minutos)"
+    }
+}
