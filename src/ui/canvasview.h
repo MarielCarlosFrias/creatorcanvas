@@ -44,6 +44,8 @@ signals:
                        const QString& oldValue,
                        const QString& newValue);
     void deleteRequested(const cc::LayerId& id);
+    void textBoxCommitted(const cc::LayerId& id,
+                          const QSizeF& oldValue, const QSizeF& newValue);
 
 protected:
     void paintEvent(QPaintEvent*) override;
@@ -102,6 +104,7 @@ private:
     QPointF m_localPress;
     QPointF m_rotateCenter;
     double m_rotateStartAngle = 0.0;
+    QSizeF m_gestureStartBox;
 
     QLineEdit* m_textEditor = nullptr;
     LayerId m_editingTextId;

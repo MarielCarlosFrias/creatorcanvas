@@ -1,4 +1,5 @@
 #include "CanvasRenderer.h"
+#include <QRectF>
 
 #include "core/Document.h"
 #include "core/layers/Layer.h"
@@ -133,7 +134,13 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
             painter->setFont(font);
             painter->setPen(text.color);
             // Transforms arrive in M6b; until then text sits at the doc origin.
-            painter->drawText(QPointF(0, 0), text.content);
+            if (!text.box.isEmpty()) {
+                painter->drawText(QRectF(QPointF(0, 0), text.box),
+                                  Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap,
+                                  text.content);
+            } else {
+                painter->drawText(QPointF(0, 0), text.content);
+            }
         }
         break;
     }

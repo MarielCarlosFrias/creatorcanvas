@@ -203,6 +203,30 @@ private:
     std::unique_ptr<Layer> m_clone;
 };
 
+/// Resizes a text layer's wrap box (handle gesture on text).
+class SetLayerTextBoxCommand final : public Command
+{
+public:
+    SetLayerTextBoxCommand(Document& doc, const LayerId& id,
+                           QSizeF oldValue, QSizeF newValue)
+        : Command(QStringLiteral("layer.textBox"))
+        , m_doc(&doc)
+        , m_id(id)
+        , m_old(std::move(oldValue))
+        , m_new(std::move(newValue))
+    {
+    }
+
+    void redo() override { m_doc->setLayerTextBox(m_id, m_new); }
+    void undo() override { m_doc->setLayerTextBox(m_id, m_old); }
+
+private:
+    Document* m_doc;
+    LayerId m_id;
+    QSizeF m_old;
+    QSizeF m_new;
+};
+
 /// Generic property change routed through a Document setter, so clamping and
 /// change notifications behave exactly like a direct edit.
 ///

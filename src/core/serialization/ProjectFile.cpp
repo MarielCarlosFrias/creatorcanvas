@@ -160,6 +160,8 @@ QJsonObject writeLayer(const Layer& layer)
         o.insert(QStringLiteral("letterSpacingPx"), text.letterSpacingPx);
         o.insert(QStringLiteral("lineHeightMult"), text.lineHeightMult);
         o.insert(QStringLiteral("align"), textAlignToString(text.align));
+        o.insert(QStringLiteral("boxW"), text.box.width());
+        o.insert(QStringLiteral("boxH"), text.box.height());
         break;
     }
     case LayerType::Shape: {
@@ -476,6 +478,8 @@ private:
         text->align =
             textAlignFromString(o.value(QStringLiteral("align")).toString())
                 .value_or(TextAlignment::Center);
+        text->box = QSizeF(o.value(QStringLiteral("boxW")).toDouble(0.0),
+                           o.value(QStringLiteral("boxH")).toDouble(0.0));
         finishLayer(*text, o, id);
         *out = std::move(text);
         return true;

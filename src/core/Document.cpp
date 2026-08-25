@@ -240,6 +240,20 @@ bool Document::setLayerTransform(const LayerId& id, const AffineTransform& trans
     return true;
 }
 
+bool Document::setLayerTextBox(const LayerId& id, const QSizeF& box)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Text)
+        return false;
+    auto* text = static_cast<TextLayer*>(layer);
+    if (text->box == box)
+        return true;
+    text->box = box;
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
 bool Document::setLayerTextContent(const LayerId& id, QString content)
 {
     Layer* layer = findLayer(id);

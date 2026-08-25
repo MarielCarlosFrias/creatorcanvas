@@ -403,6 +403,10 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
             if (Layer* layer = m_document->findLayer(m_selectedId)) {
                 m_gestureStart = layer->transform;
                 m_gestureBounds = layer->contentBounds();
+                if (layer->type() == LayerType::Text)
+                    m_gestureStartBox = static_cast<TextLayer*>(layer)->box;
+                else
+                    m_gestureStartBox = QSizeF();
                 const QTransform matrix = m_gestureStart.matrix(m_gestureBounds);
                 m_gestureStartDoc = docPos;
                 m_localPress = matrix.inverted().map(docPos);
@@ -462,6 +466,11 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event)
 
     if (m_gesture != Gesture::None && m_document) {
         if (m_document && !m_selectedId.isNull()) {
+            Layer* layer = m_document->findLayer(m_selectedId);
+            if (!layer) {
+                event->accept();
+                return;
+            }
             const QPointF docNow = deviceToDoc().map(QPointF(event->pos()));
             AffineTransform t = m_gestureStart;
 
@@ -473,6 +482,35 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event)
                 t.rotationDeg = m_gestureStart.rotationDeg
                                 + qRadiansToDegrees(angle - m_rotateStartAngle);
                 t.position = m_gestureStart.position;
+            } else if (layer->type() == LayerType::Text) {
+                // Text: handles resize the WRAP BOX, never the glyph size.
+                const QTransform inv =
+                    m_gestureStart.matrix(m_gestureBounds).inverted();
+                const QPointF localNow = inv.map(docNow);
+                QSizeF box = m_gestureStartBox;
+                if (box.isEmpty())
+                    box = m_gestureBounds.size();
+                const bool corner = m_activeHandle <= 3;
+                const bool doW = corner || m_activeHandle == 5 || m_activeHandle == 7;
+                const bool doH = corner || m_activeHandle == 4 || m_activeHandle == 6;
+                double newW = box.width();
+                double newH = box.height();
+                if (doW)
+                    newW = qMax(24.0, qAbs(localNow.x() - m_fixedLocal.x()));
+                if (doH)
+                    newH = qMax(12.0, qAbs(localNow.y() - m_fixedLocal.y()));
+                static_cast<TextLayer*>(layer)->box = QSizeF(newW, newH);
+
+                // anchor the fixed point under the new box
+                const double rad = qDegreesToRadians(m_gestureStart.rotationDeg);
+                const double cosR = std::cos(rad);
+                const double sinR = std::sin(rad);
+                const QPointF c2(newW / 2.0, newH / 2.0);
+                const QPointF v(m_fixedLocal.x() - c2.x(),
+                                m_fixedLocal.y() - c2.y());
+                const QPointF rotated(v.x() * cosR - v.y() * sinR,
+                                      v.x() * sinR + v.y() * cosR);
+                t.position = m_fixedDoc - rotated;
             } else {
                 const QTransform inv =
                     m_gestureStart.matrix(m_gestureBounds).inverted();
@@ -543,9 +581,16 @@ void CanvasView::mouseReleaseEvent(QMouseEvent* event)
 
     if (event->button() == Qt::LeftButton && m_gesture != Gesture::None) {
         if (m_document && !m_selectedId.isNull()) {
-            if (Layer* layer = m_document->findLayer(m_selectedId))
+            if (Layer* layer = m_document->findLayer(m_selectedId)) {
                 emit transformCommitted(m_selectedId, m_gestureStart,
                                         layer->transform);
+                if (layer->type() == LayerType::Text) {
+                    const QSizeF newBox = static_cast<TextLayer*>(layer)->box;
+                    if (newBox != m_gestureStartBox)
+                        emit textBoxCommitted(m_selectedId, m_gestureStartBox,
+                                              newBox);
+                }
+            }
         }
         m_gesture = Gesture::None;
         m_activeHandle = -1;

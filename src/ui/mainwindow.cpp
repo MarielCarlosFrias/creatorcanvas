@@ -104,6 +104,12 @@ void MainWindow::buildCentralWidget()
             });
     connect(m_canvas, &CanvasView::deleteRequested,
             this, &MainWindow::deleteSelectedLayer);
+    connect(m_canvas, &CanvasView::textBoxCommitted, this,
+            [this](const LayerId& id, const QSizeF& oldValue, const QSizeF& newValue) {
+                if (m_history && m_document)
+                    m_history->execute(std::make_unique<SetLayerTextBoxCommand>(
+                        *m_document, id, oldValue, newValue));
+            });
     connect(m_canvas, &CanvasView::textCommitted, this,
             [this](const LayerId& id, const QString& oldValue,
                    const QString& newValue) {

@@ -3,6 +3,7 @@
 #include <QColor>
 #include <QPolygonF>
 #include <QRectF>
+#include <QSizeF>
 #include <QString>
 #include <QUuid>
 
@@ -104,6 +105,7 @@ public:
     QColor color = QColor(17, 17, 17);
     double letterSpacingPx = 0.0;
     double lineHeightMult = 1.0;
+    QSizeF box; // wrap box; empty = auto-size from font metrics
     TextAlignment align = TextAlignment::Center;
 };
 

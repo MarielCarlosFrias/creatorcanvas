@@ -99,8 +99,13 @@ std::unique_ptr<Layer> TextLayer::deepCopy() const
 
 QRectF TextLayer::contentBounds() const
 {
-    // Font metrics need the GUI toolkit; headless contexts get an estimate.
-    if (!QGuiApplication::instance())
+    if (!box.isEmpty())
+        return QRectF(QPointF(0, 0), box); // fixed wrap box (resizable via handles)
+    // Auto-size: font metrics need the GUI toolkit; headless gets an estimate.
+    // Note: QGuiApplication::instance() is inherited from QCoreApplication and
+    // returns non-null even for a plain QCoreApplication (e.g. QTEST_GUILESS_MAIN),
+    // so we must check the actual runtime type via qobject_cast.
+    if (!qobject_cast<QGuiApplication*>(QCoreApplication::instance()))
         return QRectF(0, 0, 100, 50);
     QFont font(fontFamily);
     font.setBold(bold);
