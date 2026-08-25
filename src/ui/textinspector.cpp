@@ -5,9 +5,9 @@
 #include <QColorDialog>
 #include <QComboBox>
 #include <QFontComboBox>
+#include <QFormLayout>
 #include <QGroupBox>
 #include <QLabel>
-#include <QFormLayout>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSpinBox>
@@ -196,9 +196,6 @@ void TextInspector::buildUi()
     });
 }
 
-
-void TextInspector::loadFromLayer() {}
-
 void TextInspector::retranslateUi()
 {
     if (!m_i18n)
@@ -208,7 +205,6 @@ void TextInspector::retranslateUi()
     m_fontLabel->setText(m_i18n->t("editor", "text.font"));
     m_sizeLabel->setText(m_i18n->t("editor", "text.size"));
     m_styleLabel->setText(m_i18n->t("editor", "text.style"));
-    m_colorLabel->setText(m_i18n->t("editor", "text.color"));
     m_alignLabel->setText(m_i18n->t("editor", "text.align"));
 
     m_loading = true;
