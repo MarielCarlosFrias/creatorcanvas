@@ -53,6 +53,7 @@ public:
     bool setLayerOpacity(const LayerId& id, float opacity);
     bool setLayerBlendMode(const LayerId& id, BlendMode mode);
     bool setLayerTransform(const LayerId& id, const AffineTransform& transform);
+    bool setLayerTextContent(const LayerId& id, QString content);
 
     quint64 revision() const { return m_revision; }
 

@@ -6,6 +6,7 @@
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QKeyEvent>
+#include <QLineEdit>
 #include <QLineF>
 #include <QMimeData>
 #include <QMouseEvent>
@@ -53,6 +54,7 @@ void CanvasView::setDocument(Document* document)
 {
     if (m_document == document)
         return;
+    hideTextEdit();
     m_document = document;
     m_selectedId = LayerId();
     m_needsFit = true;
@@ -61,7 +63,77 @@ void CanvasView::setDocument(Document* document)
 
 void CanvasView::clearSelection()
 {
+    if (m_textEditor && m_textEditor->isVisible())
+        commitTextEdit();
     selectLayer(LayerId());
+}
+
+void CanvasView::setSelectedLayer(const LayerId& id)
+{
+    selectLayer(id);
+}
+
+void CanvasView::beginTextEdit(const LayerId& id)
+{
+    if (!m_document)
+        return;
+    Layer* layer = m_document->findLayer(id);
+    if (!layer || layer->type() != LayerType::Text)
+        return;
+
+    selectLayer(id);
+    m_editingTextId = id;
+
+    if (!m_textEditor) {
+        m_textEditor = new QLineEdit(this);
+        m_textEditor->setStyleSheet(
+            QStringLiteral("background: white; color: black; "
+                           "border: 1px solid #2f6fed; padding: 2px;"));
+        m_textEditor->installEventFilter(this);
+        connect(m_textEditor, &QLineEdit::returnPressed,
+                this, [this] { commitTextEdit(); });
+        connect(m_textEditor, &QLineEdit::editingFinished,
+                this, [this] { commitTextEdit(); });
+    }
+
+    const QRectF bounds = layer->contentBounds();
+    const QTransform toScreen = docToDevice() * layer->transform.matrix(bounds);
+    const QPointF topLeft = toScreen.map(bounds.topLeft());
+    const QPointF bottomRight = toScreen.map(bounds.bottomRight());
+    m_textEditor->setGeometry(QRect(
+        topLeft.toPoint(),
+        QSize(qMax(120, static_cast<int>(bottomRight.x() - topLeft.x())),
+              qMax(24, static_cast<int>(bottomRight.y() - topLeft.y())))));
+    m_textEditor->setText(static_cast<const TextLayer*>(layer)->content);
+    m_textEditor->show();
+    m_textEditor->raise();
+    m_textEditor->setFocus();
+    m_textEditor->selectAll();
+}
+
+void CanvasView::commitTextEdit()
+{
+    if (!m_textEditor || !m_textEditor->isVisible() || !m_document)
+        return;
+    Layer* layer = m_document->findLayer(m_editingTextId);
+    if (!layer || layer->type() != LayerType::Text) {
+        m_textEditor->hide();
+        return;
+    }
+    const QString oldContent = static_cast<TextLayer*>(layer)->content;
+    const QString newContent = m_textEditor->text();
+    m_textEditor->hide();
+    if (newContent == oldContent)
+        return;
+    m_document->setLayerTextContent(m_editingTextId, newContent);
+    emit textCommitted(m_editingTextId, oldContent, newContent);
+}
+
+void CanvasView::hideTextEdit()
+{
+    if (m_textEditor)
+        m_textEditor->hide();
+    m_editingTextId = LayerId();
 }
 
 void CanvasView::centerOn(const QPointF& documentPos)
@@ -71,13 +143,11 @@ void CanvasView::centerOn(const QPointF& documentPos)
     update();
 }
 
-void CanvasView::setSelectedLayer(const LayerId& id)
-{
-    selectLayer(id);
-}
 
 void CanvasView::selectLayer(const LayerId& id)
 {
+    if (m_textEditor && m_textEditor->isVisible() && id != m_editingTextId)
+        commitTextEdit();
     if (m_selectedId == id)
         return;
     m_selectedId = id;
@@ -446,6 +516,33 @@ void CanvasView::mouseReleaseEvent(QMouseEvent* event)
         return;
     }
     event->ignore();
+}
+
+void CanvasView::mouseDoubleClickEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::LeftButton && m_document) {
+        const QPointF docPos = deviceToDoc().map(QPointF(event->pos()));
+        Layer* layer = hitTestLayer(docPos);
+        if (layer && layer->type() == LayerType::Text) {
+            beginTextEdit(layer->id());
+            event->accept();
+            return;
+        }
+    }
+    event->ignore();
+}
+
+bool CanvasView::eventFilter(QObject* watched, QEvent* event)
+{
+    if (watched == m_textEditor && event->type() == QEvent::KeyPress) {
+        auto* keyEvent = static_cast<QKeyEvent*>(event);
+        if (keyEvent->key() == Qt::Key_Escape) {
+            m_textEditor->hide(); // cancel: no commit
+            m_editingTextId = LayerId();
+            return true;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void CanvasView::keyPressEvent(QKeyEvent* event)

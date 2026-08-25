@@ -240,4 +240,18 @@ bool Document::setLayerTransform(const LayerId& id, const AffineTransform& trans
     return true;
 }
 
+bool Document::setLayerTextContent(const LayerId& id, QString content)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Text)
+        return false;
+    auto* text = static_cast<TextLayer*>(layer);
+    if (text->content == content)
+        return true;
+    text->content = std::move(content);
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
 } // namespace cc

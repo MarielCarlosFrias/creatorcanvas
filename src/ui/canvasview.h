@@ -5,10 +5,12 @@
 
 #include "core/Document.h"
 
+class QLineEdit;
+
 namespace cc {
 
 /// Interactive document viewport: pan, zoom, selection with transform
-/// handles, gestures, and painting via the software renderer.
+/// handles, gestures, inline text editing, and software rendering.
 class CanvasView final : public QWidget
 {
     Q_OBJECT
@@ -17,11 +19,12 @@ public:
 
     void setDocument(Document* document);
     void clearSelection();
-    void centerOn(const QPointF& documentPos);
     void setSelectedLayer(const LayerId& id);
+    void beginTextEdit(const LayerId& id);
 
     double zoom() const { return m_zoom; }
     QPointF panOffset() const { return m_panOffset; }
+    void centerOn(const QPointF& documentPos);
 
 public slots:
     void zoomIn();
@@ -37,6 +40,9 @@ signals:
     void transformCommitted(const cc::LayerId& id,
                             const cc::AffineTransform& oldValue,
                             const cc::AffineTransform& newValue);
+    void textCommitted(const cc::LayerId& id,
+                       const QString& oldValue,
+                       const QString& newValue);
     void deleteRequested(const cc::LayerId& id);
 
 protected:
@@ -45,12 +51,14 @@ protected:
     void mousePressEvent(QMouseEvent*) override;
     void mouseMoveEvent(QMouseEvent*) override;
     void mouseReleaseEvent(QMouseEvent*) override;
+    void mouseDoubleClickEvent(QMouseEvent*) override;
     void keyPressEvent(QKeyEvent*) override;
     void keyReleaseEvent(QKeyEvent*) override;
     void resizeEvent(QResizeEvent*) override;
     void dragEnterEvent(QDragEnterEvent*) override;
     void dragMoveEvent(QDragMoveEvent*) override;
     void dropEvent(QDropEvent*) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
     struct HandleSet
@@ -71,6 +79,8 @@ private:
     void drawSelectionOverlay(QPainter* painter);
     void selectLayer(const LayerId& id);
     void updateCursor(const QPointF& widgetPos);
+    void commitTextEdit();
+    void hideTextEdit();
 
     Document* m_document = nullptr;
     double m_zoom = 1.0;
@@ -92,6 +102,9 @@ private:
     QPointF m_localPress;
     QPointF m_rotateCenter;
     double m_rotateStartAngle = 0.0;
+
+    QLineEdit* m_textEditor = nullptr;
+    LayerId m_editingTextId;
 };
 
 } // namespace cc

@@ -39,5 +39,7 @@
     "panel.front": "Trazer para Frente",
     "panel.back": "Enviar para Trás",
     "panel.duplicate": "Duplicar",
-    "panel.delete": "Excluir"
+    "panel.delete": "Excluir",
+    "menu.layer.addText": "Adicionar &Texto",
+    "text.default": "Texto"
 }

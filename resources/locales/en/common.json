@@ -39,5 +39,7 @@
     "panel.front": "Bring to Front",
     "panel.back": "Send to Back",
     "panel.duplicate": "Duplicate",
-    "panel.delete": "Delete"
+    "panel.delete": "Delete",
+    "menu.layer.addText": "Add &Text",
+    "text.default": "Text"
 }

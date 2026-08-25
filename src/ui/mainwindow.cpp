@@ -101,6 +101,14 @@ void MainWindow::buildCentralWidget()
             });
     connect(m_canvas, &CanvasView::deleteRequested,
             this, &MainWindow::deleteSelectedLayer);
+    connect(m_canvas, &CanvasView::textCommitted, this,
+            [this](const LayerId& id, const QString& oldValue,
+                   const QString& newValue) {
+                if (m_history && m_document)
+                    m_history->execute(std::make_unique<LayerPropertyCommand<QString>>(
+                        *m_document, id, QStringLiteral("layer.text"),
+                        &Document::setLayerTextContent, oldValue, newValue));
+            });
 
     setCentralWidget(m_canvas);
 }
@@ -167,6 +175,11 @@ void MainWindow::buildActions()
     connect(m_history.get(), &CommandStack::canRedoChanged,
             m_redoAction, &QAction::setEnabled);
 
+    m_addTextAction = new QAction(this);
+    m_addTextAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+T")));
+    connect(m_addTextAction, &QAction::triggered,
+            this, &MainWindow::addText);
+
     m_flipHAction = new QAction(this);
     connect(m_flipHAction, &QAction::triggered,
             this, [this] { flipLayer(true); });
@@ -211,6 +224,7 @@ void MainWindow::buildMenus()
     m_editMenu->addAction(m_redoAction);
 
     m_layerMenu = menuBar()->addMenu(QString());
+    m_layerMenu->addAction(m_addTextAction);
     m_layerMenu->addAction(m_flipHAction);
     m_layerMenu->addAction(m_flipVAction);
     m_layerMenu->addSeparator();
@@ -308,6 +322,24 @@ void MainWindow::importImage(const QString& filePath)
         std::make_unique<AddLayerCommand>(*m_document, std::move(layer)));
 }
 
+void MainWindow::addText()
+{
+    if (!m_document || !m_i18n)
+        return;
+
+    auto layer = std::make_unique<TextLayer>();
+    layer->name = QStringLiteral("Text");
+    layer->content = m_i18n->t("editor", "text.default");
+    layer->transform.position = QPointF(m_document->width() / 2.0,
+                                        m_document->height() / 2.0);
+    const LayerId id = layer->id();
+
+    m_history->execute(
+        std::make_unique<AddLayerCommand>(*m_document, std::move(layer)));
+    m_canvas->setSelectedLayer(id);
+    m_canvas->beginTextEdit(id);
+}
+
 void MainWindow::flipLayer(bool horizontal)
 {
     if (!m_document || m_selectedId.isNull())
@@ -368,6 +400,7 @@ void MainWindow::retranslateUi()
     m_quitAction->setText(m_i18n->t("common", "menu.file.quit"));
     m_undoAction->setText(m_i18n->t("common", "menu.edit.undo"));
     m_redoAction->setText(m_i18n->t("common", "menu.edit.redo"));
+    m_addTextAction->setText(m_i18n->t("common", "menu.layer.addText"));
     m_flipHAction->setText(m_i18n->t("common", "menu.layer.flipH"));
     m_flipVAction->setText(m_i18n->t("common", "menu.layer.flipV"));
     m_deleteAction->setText(m_i18n->t("common", "menu.layer.delete"));

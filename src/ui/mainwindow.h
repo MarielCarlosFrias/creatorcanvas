@@ -41,6 +41,7 @@ private:
     void importImageViaDialog();
     void importImage(const QString& filePath);
     void flipLayer(bool horizontal);
+    void addText();
     void deleteSelectedLayer();
     void retranslateUi();
     void updateZoomLabel();
@@ -62,6 +63,7 @@ private:
     QAction* m_quitAction = nullptr;
     QAction* m_undoAction = nullptr;
     QAction* m_redoAction = nullptr;
+    QAction* m_addTextAction = nullptr;
     QAction* m_flipHAction = nullptr;
     QAction* m_flipVAction = nullptr;
     QAction* m_deleteAction = nullptr;
