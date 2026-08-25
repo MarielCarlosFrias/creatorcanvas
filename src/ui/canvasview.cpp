@@ -64,6 +64,13 @@ void CanvasView::clearSelection()
     selectLayer(LayerId());
 }
 
+void CanvasView::centerOn(const QPointF& documentPos)
+{
+    m_panOffset = QPointF(width() / 2.0, height() / 2.0)
+                  - documentPos * m_zoom;
+    update();
+}
+
 void CanvasView::setSelectedLayer(const LayerId& id)
 {
     selectLayer(id);

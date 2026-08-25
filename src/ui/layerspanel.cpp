@@ -68,6 +68,8 @@ void LayersPanel::buildUi()
             this, &LayersPanel::onCurrentRowChanged);
     connect(m_list, &QListWidget::itemChanged,
             this, &LayersPanel::onItemChanged);
+    connect(m_list, &QListWidget::itemDoubleClicked,
+            this, &LayersPanel::onItemDoubleClicked);
     connect(static_cast<LayerListWidget*>(m_list), &LayerListWidget::moved,
             this, &LayersPanel::onMoved);
     connect(m_list, &QListWidget::customContextMenuRequested,
@@ -165,6 +167,17 @@ void LayersPanel::onItemChanged(QListWidgetItem* item)
     if (id.isNull())
         return;
     m_document->setLayerVisible(id, item->checkState() == Qt::Checked);
+}
+
+void LayersPanel::onItemDoubleClicked(QListWidgetItem* item)
+{
+    if (!m_document || !item)
+        return;
+    const LayerId id = item->data(Qt::UserRole).value<LayerId>();
+    Layer* layer = m_document->findLayer(id);
+    if (!layer)
+        return;
+    emit focusRequested(layer->transform.position);
 }
 
 void LayersPanel::onMoved()

@@ -27,6 +27,7 @@ signals:
     void selectionRequested(const cc::LayerId& id);
     void duplicateRequested(const cc::LayerId& id);
     void deleteRequested(const cc::LayerId& id);
+    void focusRequested(const QPointF& documentPos);
 
 private:
     void buildUi();
@@ -36,6 +37,7 @@ private:
     void onItemChanged(QListWidgetItem* item);
     void onMoved();
     void showContextMenu(const QPoint& pos);
+    void onItemDoubleClicked(QListWidgetItem* item);
     int docIndexFromRow(int row) const;
     LayerId layerIdFromRow(int row) const;
 

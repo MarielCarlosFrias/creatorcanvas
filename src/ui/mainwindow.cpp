@@ -41,6 +41,7 @@ MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
     createDefaultDocument();
     buildCentralWidget();
     buildLayersDock();
+    connectDocumentSignals();
     buildActions();
     buildMenus();
     buildStatusBar();
@@ -78,7 +79,6 @@ void MainWindow::buildCentralWidget()
 {
     m_canvas = new CanvasView(this);
     m_canvas->setDocument(m_document.get());
-    connectDocumentSignals();
 
     connect(m_canvas, &CanvasView::zoomChanged,
             this, &MainWindow::updateZoomLabel);
@@ -128,6 +128,11 @@ void MainWindow::buildLayersDock()
                 if (m_history && m_document)
                     m_history->execute(
                         std::make_unique<DuplicateLayerCommand>(*m_document, id));
+            });
+    connect(m_layersPanel, &LayersPanel::focusRequested, this,
+            [this](const QPointF& documentPos) {
+                if (m_canvas)
+                    m_canvas->centerOn(documentPos);
             });
 }
 
