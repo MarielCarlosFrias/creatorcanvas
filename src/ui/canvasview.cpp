@@ -83,12 +83,10 @@ void CanvasView::beginTextEdit(const LayerId& id)
 
     selectLayer(id);
     m_editingTextId = id;
+    auto* textLayer = static_cast<TextLayer*>(layer);
 
     if (!m_textEditor) {
         m_textEditor = new QLineEdit(this);
-        m_textEditor->setStyleSheet(
-            QStringLiteral("background: white; color: black; "
-                           "border: 1px solid #2f6fed; padding: 2px;"));
         m_textEditor->installEventFilter(this);
         connect(m_textEditor, &QLineEdit::returnPressed,
                 this, [this] { commitTextEdit(); });
@@ -96,15 +94,45 @@ void CanvasView::beginTextEdit(const LayerId& id)
                 this, [this] { commitTextEdit(); });
     }
 
-    const QRectF bounds = layer->contentBounds();
-    const QTransform toScreen = docToDevice() * layer->transform.matrix(bounds);
-    const QPointF topLeft = toScreen.map(bounds.topLeft());
-    const QPointF bottomRight = toScreen.map(bounds.bottomRight());
-    m_textEditor->setGeometry(QRect(
-        topLeft.toPoint(),
-        QSize(qMax(120, static_cast<int>(bottomRight.x() - topLeft.x())),
-              qMax(24, static_cast<int>(bottomRight.y() - topLeft.y())))));
-    m_textEditor->setText(static_cast<const TextLayer*>(layer)->content);
+    // Position the editor over the text using the SAME math as the
+    // selection overlay.
+    const HandleSet set = handlePositions(*layer);
+    if (!set.valid)
+        return;
+    const QRectF screenRect = QRectF(set.points[0], set.points[2])
+                                  .normalized()
+                                  .united(QRectF(set.points[3], set.points[1])
+                                              .normalized());
+
+    // WYSIWYG: style the editor with the text's own attributes (a widget
+    // with a stylesheet resolves its font from the STYLE, not setFont).
+    const QString hex = textLayer->color.name(QColor::HexRgb);
+    const double px = qMax(6.0, textLayer->sizePt * (96.0 / 72.0) * m_zoom);
+    m_textEditor->setStyleSheet(QStringLiteral(
+        "QLineEdit { background: white; color: %1;"
+        " border: 1px solid #2f6fed; padding: 0px;"
+        " font-family: \"%2\"; font-size: %3px;"
+        " font-weight: %4; font-style: %5; text-decoration: %6; }"
+        "QLineEdit { selection-background-color: #2f6fed;"
+        " selection-color: white; }")
+        .arg(hex,
+             textLayer->fontFamily,
+             QString::number(px, 'f', 0),
+             textLayer->bold ? QStringLiteral("bold")
+                             : QStringLiteral("normal"),
+             textLayer->italic ? QStringLiteral("italic")
+                               : QStringLiteral("normal"),
+             textLayer->underline ? QStringLiteral("underline")
+                                  : QStringLiteral("none")));
+
+    m_textEditor->setAlignment(
+        textLayer->align == TextAlignment::Center
+            ? Qt::AlignCenter
+            : (textLayer->align == TextAlignment::Right ? Qt::AlignRight
+                                                        : Qt::AlignLeft));
+
+    m_textEditor->setGeometry(screenRect.toRect().adjusted(-2, -2, 2, 2));
+    m_textEditor->setText(textLayer->content);
     m_textEditor->show();
     m_textEditor->raise();
     m_textEditor->setFocus();
