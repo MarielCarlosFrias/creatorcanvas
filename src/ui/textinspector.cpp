@@ -45,6 +45,13 @@ bool TextInspector::editingLayer(TextLayer** out) const
     return true;
 }
 
+void TextInspector::setDocument(Document* document)
+{
+    m_document = document;
+    m_id = LayerId();
+    refresh();
+}
+
 void TextInspector::setSelectedLayer(const LayerId& id)
 {
     m_id = id;

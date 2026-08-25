@@ -2,6 +2,7 @@
 
 #include <QWidget>
 
+#include <QPointer>
 #include "core/Document.h"
 
 class QListWidget;
@@ -41,7 +42,7 @@ private:
     int docIndexFromRow(int row) const;
     LayerId layerIdFromRow(int row) const;
 
-    Document* m_document = nullptr;
+    QPointer<Document> m_document;
     I18nService* m_i18n = nullptr;
     QListWidget* m_list = nullptr;
     bool m_updating = false;

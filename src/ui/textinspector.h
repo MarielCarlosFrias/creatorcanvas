@@ -2,6 +2,7 @@
 
 #include <QWidget>
 
+#include <QPointer>
 #include "core/Document.h"
 
 class QCheckBox;
@@ -29,6 +30,7 @@ public:
                            QWidget* parent = nullptr);
 
     void setSelectedLayer(const LayerId& id);
+    void setDocument(Document* document);
     void refresh();
 
 private:
@@ -39,7 +41,7 @@ private:
     void touch();
 
     I18nService* m_i18n = nullptr;
-    Document* m_document = nullptr;
+    QPointer<Document> m_document;
     LayerId m_id;
     bool m_loading = false;
 

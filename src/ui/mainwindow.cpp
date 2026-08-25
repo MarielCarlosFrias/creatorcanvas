@@ -327,7 +327,7 @@ void MainWindow::newDocument()
     if (m_layersPanel)
         m_layersPanel->setDocument(m_document.get());
     if (m_textInspector)
-        m_textInspector->setSelectedLayer(LayerId());
+        m_textInspector->setDocument(m_document.get());
     connectDocumentSignals();
     updateWindowTitle();
 }
@@ -553,7 +553,7 @@ void MainWindow::openDocument()
     if (m_layersPanel)
         m_layersPanel->setDocument(m_document.get());
     if (m_textInspector)
-        m_textInspector->setSelectedLayer(LayerId());
+        m_textInspector->setDocument(m_document.get());
     connectDocumentSignals();
     updateWindowTitle();
 }

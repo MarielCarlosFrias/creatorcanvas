@@ -3,6 +3,7 @@
 #include <QPointF>
 #include <QWidget>
 
+#include <QPointer>
 #include "core/Document.h"
 
 class QLineEdit;
@@ -84,7 +85,7 @@ private:
     void commitTextEdit();
     void hideTextEdit();
 
-    Document* m_document = nullptr;
+    QPointer<Document> m_document;
     double m_zoom = 1.0;
     QPointF m_panOffset{0, 0};
 
