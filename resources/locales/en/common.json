@@ -10,6 +10,7 @@
     },
     "menu": {
         "file": "&File",
+        "file.new": "&New...",
         "file.quit": "&Quit",
         "help": "&Help",
         "help.about": "&About CreatorCanvas",

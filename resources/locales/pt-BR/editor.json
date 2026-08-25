@@ -1,1 +1,16 @@
-{}
+{
+    "dialog": {
+        "newDocument": {
+            "title": "Novo Documento",
+            "presets": "Predefinições",
+            "width": "Largura",
+            "height": "Altura",
+            "dpi": "DPI",
+            "background": "Fundo",
+            "transparent": "Fundo transparente",
+            "savePreset": "Salvar como predefinição...",
+            "presetName": "Nome da predefinição",
+            "exists": "Já existe uma predefinição com esse nome."
+        }
+    }
+}

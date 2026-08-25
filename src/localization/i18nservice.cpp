@@ -12,6 +12,8 @@
 
 #include <algorithm>
 #include <utility>
+// Força o linker a puxar o objeto de recurso locales.qrc da biblioteca estática.
+extern int qInitResources_locales();
 
 namespace cc {
 namespace {
@@ -83,6 +85,7 @@ I18nService::I18nService(SettingsService *settings,
 
 bool I18nService::loadAvailableLanguages()
 {
+qInitResources_locales();   // registra :/locales/ (símbolo global)
     m_catalogs.clear();
     m_languages.clear();
 

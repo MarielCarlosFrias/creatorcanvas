@@ -1,21 +1,22 @@
 #include "mainwindow.h"
 
-#include "core/Document.h"
+#include "core/document/NewDocumentSpec.h"
 #include "core/layers/Layer.h"
 #include "localization/i18nservice.h"
-#include "services/settingsservice.h"
+#include "services/presetstore.h"
 #include "ui/canvasview.h"
+#include "ui/newdocumentdialog.h"
 
 #include <QApplication>
+#include <QKeySequence>
 #include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QStandardPaths>
 #include <QStatusBar>
 
 namespace cc {
-
-MainWindow::~MainWindow() = default;
 
 MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
                        QWidget* parent)
@@ -25,6 +26,11 @@ MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
 {
     setMinimumSize(1000, 640);
     resize(1280, 800);
+
+    const QString configDir =
+        QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+    m_presetStore =
+        std::make_unique<PresetStore>(configDir + QStringLiteral("/presets.json"));
 
     createDefaultDocument();
     buildCentralWidget();
@@ -40,24 +46,29 @@ MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
 
 void MainWindow::createDefaultDocument()
 {
-    m_document = std::make_unique<Document>(1280, 720, 96);
-    auto background = std::make_unique<BackgroundLayer>();
-    background->name = QStringLiteral("Background");
-    background->fill = QColor(Qt::white);
-    m_document->addLayer(std::move(background));
+    NewDocumentSpec spec;
+    spec.width = 1280;
+    spec.height = 720;
+    spec.dpi = 96;
+    spec.backgroundColor = QColor(Qt::white);
+    m_document = createDocument(spec);
+}
+
+void MainWindow::connectDocumentSignals()
+{
+    if (!m_document || !m_canvas)
+        return;
+    connect(m_document.get(), &Document::structureChanged,
+            m_canvas, qOverload<>(&QWidget::update));
+    connect(m_document.get(), &Document::layerPropertyChanged,
+            m_canvas, qOverload<>(&QWidget::update));
 }
 
 void MainWindow::buildCentralWidget()
 {
     m_canvas = new CanvasView(this);
     m_canvas->setDocument(m_document.get());
-
-    if (m_document) {
-        connect(m_document.get(), &Document::structureChanged,
-                m_canvas, qOverload<>(&QWidget::update));
-        connect(m_document.get(), &Document::layerPropertyChanged,
-                m_canvas, qOverload<>(&QWidget::update));
-    }
+    connectDocumentSignals();
 
     connect(m_canvas, &CanvasView::zoomChanged,
             this, &MainWindow::updateZoomLabel);
@@ -69,6 +80,10 @@ void MainWindow::buildCentralWidget()
 
 void MainWindow::buildActions()
 {
+    m_newAction = new QAction(this);
+    m_newAction->setShortcut(QKeySequence::New);
+    connect(m_newAction, &QAction::triggered, this, &MainWindow::newDocument);
+
     m_quitAction = new QAction(this);
     connect(m_quitAction, &QAction::triggered, this, &MainWindow::close);
 
@@ -93,6 +108,8 @@ void MainWindow::buildActions()
 void MainWindow::buildMenus()
 {
     m_fileMenu = menuBar()->addMenu(QString());
+    m_fileMenu->addAction(m_newAction);
+    m_fileMenu->addSeparator();
     m_fileMenu->addAction(m_quitAction);
 
     m_helpMenu = menuBar()->addMenu(QString());
@@ -110,6 +127,17 @@ void MainWindow::buildStatusBar()
     statusBar()->addPermanentWidget(m_positionLabel);
     statusBar()->addPermanentWidget(m_languageLabel);
     statusBar()->addPermanentWidget(m_versionLabel);
+}
+
+void MainWindow::newDocument()
+{
+    NewDocumentDialog dialog(m_i18n, m_presetStore.get(), this);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    m_document = createDocument(dialog.spec());
+    m_canvas->setDocument(m_document.get());
+    connectDocumentSignals();
 }
 
 void MainWindow::updateZoomLabel()
@@ -138,6 +166,7 @@ void MainWindow::retranslateUi()
 
     setWindowTitle(m_i18n->t("common", "app.title"));
 
+    m_newAction->setText(m_i18n->t("common", "menu.file.new"));
     m_quitAction->setText(m_i18n->t("common", "menu.file.quit"));
     m_aboutAction->setText(m_i18n->t("common", "menu.help.about"));
     m_aboutQtAction->setText(m_i18n->t("common", "menu.help.aboutQt"));

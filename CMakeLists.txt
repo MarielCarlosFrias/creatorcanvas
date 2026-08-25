@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.24)
 
 project(CreatorCanvas
     VERSION 0.1.0
-    LANGUAGES CXX
+    LANGUAGES C CXX
     DESCRIPTION "Fast, layer-based image editor for content creators")
 
 option(CC_BUILD_TESTS         "Build unit tests"                    ON)

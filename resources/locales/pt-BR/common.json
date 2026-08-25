@@ -10,6 +10,7 @@
     },
     "menu": {
         "file": "&Arquivo",
+        "file.new": "&Novo...",
         "file.quit": "&Sair",
         "help": "A&juda",
         "help.about": "&Sobre o CreatorCanvas",

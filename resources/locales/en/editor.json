@@ -1,1 +1,16 @@
-{}
+{
+    "dialog": {
+        "newDocument": {
+            "title": "New Document",
+            "presets": "Presets",
+            "width": "Width",
+            "height": "Height",
+            "dpi": "DPI",
+            "background": "Background",
+            "transparent": "Transparent background",
+            "savePreset": "Save as preset...",
+            "presetName": "Preset name",
+            "exists": "A preset with this name already exists."
+        }
+    }
+}

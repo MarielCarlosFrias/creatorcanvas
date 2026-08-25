@@ -1,0 +1,16 @@
+{
+    "presets": [
+        { "name": "YouTube Thumbnail", "width": 1280, "height": 720, "dpi": 96, "background": "#ffffff" },
+        { "name": "YouTube Banner", "width": 2560, "height": 1440, "dpi": 96, "background": "#ffffff" },
+        { "name": "YouTube Shorts", "width": 1080, "height": 1920, "dpi": 96, "background": "#ffffff" },
+        { "name": "Instagram Square Post", "width": 1080, "height": 1080, "dpi": 96, "background": "#ffffff" },
+        { "name": "Instagram Portrait Post", "width": 1080, "height": 1350, "dpi": 96, "background": "#ffffff" },
+        { "name": "Instagram Story", "width": 1080, "height": 1920, "dpi": 96, "background": "#ffffff" },
+        { "name": "TikTok Video", "width": 1080, "height": 1920, "dpi": 96, "background": "#ffffff" },
+        { "name": "Facebook Post", "width": 1200, "height": 630, "dpi": 96, "background": "#ffffff" },
+        { "name": "Facebook Story", "width": 1080, "height": 1920, "dpi": 96, "background": "#ffffff" },
+        { "name": "X Post", "width": 1600, "height": 900, "dpi": 96, "background": "#ffffff" },
+        { "name": "X Header", "width": 1500, "height": 500, "dpi": 96, "background": "#ffffff" },
+        { "name": "Transparent 1280x720", "width": 1280, "height": 720, "dpi": 96, "transparent": true }
+    ]
+}
