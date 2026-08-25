@@ -5,7 +5,6 @@
 #include "core/layers/Layer.h"
 #include "imageio/ImageImporter.h"
 #include "localization/i18nservice.h"
-#include "services/presetstore.h"
 #include "ui/canvasview.h"
 #include "ui/newdocumentdialog.h"
 
@@ -78,6 +77,17 @@ void MainWindow::buildCentralWidget()
             this, &MainWindow::updatePositionLabel);
     connect(m_canvas, &CanvasView::fileDropped,
             this, &MainWindow::importImage);
+    connect(m_canvas, &CanvasView::selectionChanged, this,
+            [this](const LayerId& id) { m_selectedId = id; });
+    connect(m_canvas, &CanvasView::transformCommitted, this,
+            [this](const LayerId& id, const AffineTransform& oldValue,
+                   const AffineTransform& newValue) {
+                if (m_history && m_document)
+                    m_history->execute(std::make_unique<SetLayerTransformCommand>(
+                        *m_document, id, oldValue, newValue));
+            });
+    connect(m_canvas, &CanvasView::deleteRequested,
+            this, &MainWindow::deleteSelectedLayer);
 
     setCentralWidget(m_canvas);
 }
@@ -113,6 +123,19 @@ void MainWindow::buildActions()
     connect(m_history.get(), &CommandStack::canRedoChanged,
             m_redoAction, &QAction::setEnabled);
 
+    m_flipHAction = new QAction(this);
+    connect(m_flipHAction, &QAction::triggered,
+            this, [this] { flipLayer(true); });
+
+    m_flipVAction = new QAction(this);
+    connect(m_flipVAction, &QAction::triggered,
+            this, [this] { flipLayer(false); });
+
+    m_deleteAction = new QAction(this);
+    m_deleteAction->setShortcut(QKeySequence::Delete);
+    connect(m_deleteAction, &QAction::triggered,
+            this, &MainWindow::deleteSelectedLayer);
+
     m_aboutAction = new QAction(this);
     connect(m_aboutAction, &QAction::triggered, this, [this] {
         if (!m_i18n)
@@ -143,6 +166,12 @@ void MainWindow::buildMenus()
     m_editMenu->addAction(m_undoAction);
     m_editMenu->addAction(m_redoAction);
 
+    m_layerMenu = menuBar()->addMenu(QString());
+    m_layerMenu->addAction(m_flipHAction);
+    m_layerMenu->addAction(m_flipVAction);
+    m_layerMenu->addSeparator();
+    m_layerMenu->addAction(m_deleteAction);
+
     m_helpMenu = menuBar()->addMenu(QString());
     m_helpMenu->addAction(m_aboutAction);
     m_helpMenu->addAction(m_aboutQtAction);
@@ -168,6 +197,7 @@ void MainWindow::newDocument()
 
     m_document = createDocument(dialog.spec());
     m_history->clear();
+    m_selectedId = LayerId();
     m_canvas->setDocument(m_document.get());
     connectDocumentSignals();
 }
@@ -225,9 +255,40 @@ void MainWindow::importImage(const QString& filePath)
     layer->assetId = assetId;
     layer->naturalWidth = result.image.width();
     layer->naturalHeight = result.image.height();
+    layer->transform.position = QPointF(m_document->width() / 2.0,
+                                        m_document->height() / 2.0);
 
     m_history->execute(
         std::make_unique<AddLayerCommand>(*m_document, std::move(layer)));
+}
+
+void MainWindow::flipLayer(bool horizontal)
+{
+    if (!m_document || m_selectedId.isNull())
+        return;
+    Layer* layer = m_document->findLayer(m_selectedId);
+    if (!layer)
+        return;
+
+    const AffineTransform oldT = layer->transform;
+    AffineTransform newT = oldT;
+    if (horizontal)
+        newT.scaleX = -newT.scaleX;
+    else
+        newT.scaleY = -newT.scaleY;
+
+    if (m_history)
+        m_history->execute(std::make_unique<SetLayerTransformCommand>(
+            *m_document, m_selectedId, oldT, newT));
+}
+
+void MainWindow::deleteSelectedLayer()
+{
+    if (m_selectedId.isNull() || !m_document || !m_history)
+        return;
+    m_history->execute(
+        std::make_unique<RemoveLayerCommand>(*m_document, m_selectedId));
+    m_canvas->clearSelection();
 }
 
 void MainWindow::updateZoomLabel()
@@ -261,11 +322,15 @@ void MainWindow::retranslateUi()
     m_quitAction->setText(m_i18n->t("common", "menu.file.quit"));
     m_undoAction->setText(m_i18n->t("common", "menu.edit.undo"));
     m_redoAction->setText(m_i18n->t("common", "menu.edit.redo"));
+    m_flipHAction->setText(m_i18n->t("common", "menu.layer.flipH"));
+    m_flipVAction->setText(m_i18n->t("common", "menu.layer.flipV"));
+    m_deleteAction->setText(m_i18n->t("common", "menu.layer.delete"));
     m_aboutAction->setText(m_i18n->t("common", "menu.help.about"));
     m_aboutQtAction->setText(m_i18n->t("common", "menu.help.aboutQt"));
 
     m_fileMenu->setTitle(m_i18n->t("common", "menu.file"));
     m_editMenu->setTitle(m_i18n->t("common", "menu.edit"));
+    m_layerMenu->setTitle(m_i18n->t("common", "menu.layer"));
     m_helpMenu->setTitle(m_i18n->t("common", "menu.help"));
 
     updateZoomLabel();

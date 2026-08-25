@@ -19,8 +19,6 @@ class I18nService;
 class SettingsService;
 class CanvasView;
 
-/// Top-level window. Owns the working document, the undo history and the
-/// canvas viewport.
 class MainWindow final : public QMainWindow
 {
     Q_OBJECT
@@ -39,6 +37,8 @@ private:
     void newDocument();
     void importImageViaDialog();
     void importImage(const QString& filePath);
+    void flipLayer(bool horizontal);
+    void deleteSelectedLayer();
     void retranslateUi();
     void updateZoomLabel();
     void updatePositionLabel(const QPointF& documentPos);
@@ -50,17 +50,22 @@ private:
 
     std::unique_ptr<Document> m_document;
     CanvasView* m_canvas = nullptr;
+    LayerId m_selectedId;
 
     QAction* m_newAction = nullptr;
     QAction* m_importAction = nullptr;
     QAction* m_quitAction = nullptr;
     QAction* m_undoAction = nullptr;
     QAction* m_redoAction = nullptr;
+    QAction* m_flipHAction = nullptr;
+    QAction* m_flipVAction = nullptr;
+    QAction* m_deleteAction = nullptr;
     QAction* m_aboutAction = nullptr;
     QAction* m_aboutQtAction = nullptr;
 
     QMenu* m_fileMenu = nullptr;
     QMenu* m_editMenu = nullptr;
+    QMenu* m_layerMenu = nullptr;
     QMenu* m_helpMenu = nullptr;
 
     QLabel* m_zoomLabel = nullptr;

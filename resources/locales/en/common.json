@@ -18,7 +18,11 @@
         "edit.redo": "&Redo",
         "help": "&Help",
         "help.about": "&About CreatorCanvas",
-        "help.aboutQt": "About &Qt"
+        "help.aboutQt": "About &Qt",
+        "layer": "&Layer",
+        "layer.flipH": "Flip &Horizontal",
+        "layer.flipV": "Flip &Vertical",
+        "layer.delete": "&Delete"
     },
     "statusbar": {
         "version": "Version %1",

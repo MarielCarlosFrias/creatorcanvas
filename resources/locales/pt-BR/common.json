@@ -18,7 +18,11 @@
         "edit.redo": "&Refazer",
         "help": "A&juda",
         "help.about": "&Sobre o CreatorCanvas",
-        "help.aboutQt": "Sobre o &Qt"
+        "help.aboutQt": "Sobre o &Qt",
+        "layer": "&Camada",
+        "layer.flipH": "Inverter &Horizontal",
+        "layer.flipV": "Inverter &Vertical",
+        "layer.delete": "&Excluir"
     },
     "statusbar": {
         "version": "Versão %1",
