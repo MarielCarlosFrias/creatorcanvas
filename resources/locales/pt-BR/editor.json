@@ -38,5 +38,10 @@
         "align.left": "Esquerda",
         "align.center": "Centro",
         "align.right": "Direita"
+    },
+    "effects": {
+        "title": "Efeitos",
+        "outline": "Contorno",
+        "shadow": "Sombra"
     }
 }

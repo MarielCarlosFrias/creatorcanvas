@@ -8,6 +8,7 @@
 #include <QFont>
 #include <QImage>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPen>
 
 namespace cc {
@@ -125,15 +126,23 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
         break;
     case LayerType::Text: {
         const auto& text = static_cast<const TextLayer&>(layer);
-        if (!text.content.isEmpty()) {
-            QFont font(text.fontFamily);
-            font.setBold(text.bold);
-            font.setItalic(text.italic);
-            font.setUnderline(text.underline);
-            font.setPointSizeF(text.sizePt > 0 ? text.sizePt : 1.0);
+        if (text.content.isEmpty())
+            break;
+
+        QFont font(text.fontFamily);
+        font.setBold(text.bold);
+        font.setItalic(text.italic);
+        font.setUnderline(text.underline);
+        font.setPointSizeF(text.sizePt > 0 ? text.sizePt : 1.0);
+
+        const bool hasOutline = text.effects.outline.enabled
+                                && text.effects.outline.width > 0.0;
+        const bool hasShadow = text.effects.shadow.enabled;
+
+        if (!hasOutline && !hasShadow) {
+            // Fast path: identical to the pre-effects behavior.
             painter->setFont(font);
             painter->setPen(text.color);
-            // Transforms arrive in M6b; until then text sits at the doc origin.
             if (!text.box.isEmpty()) {
                 painter->drawText(QRectF(QPointF(0, 0), text.box),
                                   Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap,
@@ -141,7 +150,61 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
             } else {
                 painter->drawText(QPointF(0, 0), text.content);
             }
+            break;
         }
+
+        // Effects path: build the glyph outline(s), then draw
+        // shadow (blurred silhouette) -> outline stroke -> fill.
+        // Note: word-wrap via `box` is not applied here yet, only
+        // manual newlines - combining box-wrap with effects is a
+        // follow-up (needs QTextLayout instead of QPainterPath::addText).
+        const QFontMetrics metrics(font);
+        const QStringList lines = text.content.split(QLatin1Char('\n'));
+        QPainterPath path;
+        double lineY = metrics.ascent();
+        for (const QString& lineText : lines) {
+            path.addText(QPointF(0, lineY), font, lineText);
+            lineY += metrics.lineSpacing();
+        }
+
+        if (hasShadow) {
+            const auto& shadow = text.effects.shadow;
+            const QRectF pb = path.boundingRect();
+            const int margin = static_cast<int>(shadow.blur * 3) + 8;
+            QImage silhouette(static_cast<int>(pb.width()) + 2 * margin + 2,
+                              static_cast<int>(pb.height()) + 2 * margin + 2,
+                              QImage::Format_ARGB32_Premultiplied);
+            silhouette.fill(Qt::transparent);
+            {
+                QPainter sp(&silhouette);
+                sp.setRenderHint(QPainter::Antialiasing);
+                sp.translate(margin - pb.left(), margin - pb.top());
+                sp.fillPath(path, shadow.color);
+            }
+            if (shadow.blur > 0.5) {
+                const int k = qMax(2, static_cast<int>(shadow.blur));
+                QImage small = silhouette.scaled(
+                    qMax(1, silhouette.width() / k),
+                    qMax(1, silhouette.height() / k),
+                    Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+                silhouette = small.scaled(silhouette.size(),
+                                          Qt::IgnoreAspectRatio,
+                                          Qt::SmoothTransformation);
+            }
+            painter->drawImage(
+                pb.topLeft() - QPointF(margin, margin)
+                    + QPointF(shadow.offsetX, shadow.offsetY),
+                silhouette);
+        }
+
+        if (hasOutline) {
+            const QPen outlinePen(text.effects.outline.color,
+                                  text.effects.outline.width,
+                                  Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+            painter->strokePath(path, outlinePen);
+        }
+
+        painter->fillPath(path, text.color);
         break;
     }
     case LayerType::Image: {

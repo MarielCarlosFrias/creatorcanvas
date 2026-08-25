@@ -254,6 +254,20 @@ bool Document::setLayerTextBox(const LayerId& id, const QSizeF& box)
     return true;
 }
 
+bool Document::setLayerTextEffects(const LayerId& id, const TextEffects& effects)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Text)
+        return false;
+    auto* text = static_cast<TextLayer*>(layer);
+    if (text->effects == effects)
+        return true;
+    text->effects = effects;
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
 bool Document::setLayerTextContent(const LayerId& id, QString content)
 {
     Layer* layer = findLayer(id);

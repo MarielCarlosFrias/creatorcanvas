@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "../geometry/AffineTransform.h"
+#include "TextEffects.h"
 
 namespace cc {
 
@@ -107,6 +108,7 @@ public:
     double lineHeightMult = 1.0;
     QSizeF box; // wrap box; empty = auto-size from font metrics
     TextAlignment align = TextAlignment::Center;
+    TextEffects effects;
 };
 
 class ShapeLayer final : public Layer

@@ -162,6 +162,23 @@ QJsonObject writeLayer(const Layer& layer)
         o.insert(QStringLiteral("align"), textAlignToString(text.align));
         o.insert(QStringLiteral("boxW"), text.box.width());
         o.insert(QStringLiteral("boxH"), text.box.height());
+
+        QJsonObject effects;
+        QJsonObject outline;
+        outline.insert(QStringLiteral("enabled"), text.effects.outline.enabled);
+        outline.insert(QStringLiteral("color"), colorToString(text.effects.outline.color));
+        outline.insert(QStringLiteral("width"), text.effects.outline.width);
+        effects.insert(QStringLiteral("outline"), outline);
+
+        QJsonObject shadow;
+        shadow.insert(QStringLiteral("enabled"), text.effects.shadow.enabled);
+        shadow.insert(QStringLiteral("color"), colorToString(text.effects.shadow.color));
+        shadow.insert(QStringLiteral("offsetX"), text.effects.shadow.offsetX);
+        shadow.insert(QStringLiteral("offsetY"), text.effects.shadow.offsetY);
+        shadow.insert(QStringLiteral("blur"), text.effects.shadow.blur);
+        effects.insert(QStringLiteral("shadow"), shadow);
+
+        o.insert(QStringLiteral("effects"), effects);
         break;
     }
     case LayerType::Shape: {
@@ -480,6 +497,19 @@ private:
                 .value_or(TextAlignment::Center);
         text->box = QSizeF(o.value(QStringLiteral("boxW")).toDouble(0.0),
                            o.value(QStringLiteral("boxH")).toDouble(0.0));
+
+        const QJsonObject effects = o.value(QStringLiteral("effects")).toObject();
+        const QJsonObject outline = effects.value(QStringLiteral("outline")).toObject();
+        text->effects.outline.enabled = outline.value(QStringLiteral("enabled")).toBool(false);
+        text->effects.outline.color = colorFromString(outline.value(QStringLiteral("color")).toString());
+        text->effects.outline.width = outline.value(QStringLiteral("width")).toDouble(4.0);
+
+        const QJsonObject shadow = effects.value(QStringLiteral("shadow")).toObject();
+        text->effects.shadow.enabled = shadow.value(QStringLiteral("enabled")).toBool(false);
+        text->effects.shadow.color = colorFromString(shadow.value(QStringLiteral("color")).toString());
+        text->effects.shadow.offsetX = shadow.value(QStringLiteral("offsetX")).toDouble(4.0);
+        text->effects.shadow.offsetY = shadow.value(QStringLiteral("offsetY")).toDouble(4.0);
+        text->effects.shadow.blur = shadow.value(QStringLiteral("blur")).toDouble(6.0);
         finishLayer(*text, o, id);
         *out = std::move(text);
         return true;

@@ -94,25 +94,38 @@ std::unique_ptr<Layer> TextLayer::deepCopy() const
     copy->letterSpacingPx = letterSpacingPx;
     copy->lineHeightMult = lineHeightMult;
     copy->align = align;
+    copy->effects = effects;
     return copy;
 }
 
 QRectF TextLayer::contentBounds() const
 {
-    if (!box.isEmpty())
-        return QRectF(QPointF(0, 0), box); // fixed wrap box (resizable via handles)
-    // Auto-size: font metrics need the GUI toolkit; headless gets an estimate.
-    // Note: QGuiApplication::instance() is inherited from QCoreApplication and
-    // returns non-null even for a plain QCoreApplication (e.g. QTEST_GUILESS_MAIN),
-    // so we must check the actual runtime type via qobject_cast.
-    if (!qobject_cast<QGuiApplication*>(QCoreApplication::instance()))
-        return QRectF(0, 0, 100, 50);
-    QFont font(fontFamily);
-    font.setBold(bold);
-    font.setItalic(italic);
-    font.setPointSizeF(sizePt > 0 ? sizePt : 1.0);
-    const QFontMetrics metrics(font);
-    return metrics.boundingRect(content);
+    QRectF base;
+    if (!box.isEmpty()) {
+        base = QRectF(QPointF(0, 0), box); // fixed wrap box (resizable via handles)
+    } else if (!qobject_cast<QGuiApplication*>(QCoreApplication::instance())) {
+        // Auto-size: font metrics need the GUI toolkit; headless gets an estimate.
+        base = QRectF(0, 0, 100, 50);
+    } else {
+        QFont font(fontFamily);
+        font.setBold(bold);
+        font.setItalic(italic);
+        font.setPointSizeF(sizePt > 0 ? sizePt : 1.0);
+        base = QFontMetrics(font).boundingRect(content);
+    }
+
+    // Effects spill outside the glyph area: outline half-width, shadow
+    // offset + blur spread.
+    double spill = 0.0;
+    if (effects.outline.enabled)
+        spill = qMax(spill, effects.outline.width / 2.0);
+    if (effects.shadow.enabled)
+        spill = qMax(spill, qMax(qAbs(effects.shadow.offsetX),
+                                 qAbs(effects.shadow.offsetY))
+                                  + effects.shadow.blur * 2.0);
+    if (spill > 0.0)
+        base = base.adjusted(-spill, -spill, spill, spill);
+    return base;
 }
 
 ShapeLayer::ShapeLayer()

@@ -38,5 +38,10 @@
         "align.left": "Left",
         "align.center": "Center",
         "align.right": "Right"
+    },
+    "effects": {
+        "title": "Effects",
+        "outline": "Outline",
+        "shadow": "Shadow"
     }
 }

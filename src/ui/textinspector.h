@@ -4,7 +4,9 @@
 
 #include "core/Document.h"
 
+class QCheckBox;
 class QComboBox;
+class QDoubleSpinBox;
 class QFontComboBox;
 class QPlainTextEdit;
 class QPushButton;
@@ -56,6 +58,16 @@ private:
     QLabel* m_styleLabel = nullptr;
     QLabel* m_colorLabel = nullptr;
     QLabel* m_alignLabel = nullptr;
+
+    QLabel* m_effectsLabel = nullptr;
+    QCheckBox* m_outlineOn = nullptr;
+    QPushButton* m_outlineColor = nullptr;
+    QDoubleSpinBox* m_outlineWidth = nullptr;
+    QCheckBox* m_shadowOn = nullptr;
+    QPushButton* m_shadowColor = nullptr;
+    QDoubleSpinBox* m_shadowX = nullptr;
+    QDoubleSpinBox* m_shadowY = nullptr;
+    QDoubleSpinBox* m_shadowBlur = nullptr;
 };
 
 } // namespace cc

@@ -54,6 +54,7 @@ public:
     bool setLayerBlendMode(const LayerId& id, BlendMode mode);
     bool setLayerTransform(const LayerId& id, const AffineTransform& transform);
     bool setLayerTextBox(const LayerId& id, const QSizeF& box);
+    bool setLayerTextEffects(const LayerId& id, const TextEffects& effects);
     void touchLayer(const LayerId& id);
     bool setLayerTextContent(const LayerId& id, QString content);
 
