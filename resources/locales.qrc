@@ -1,0 +1,13 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/">
+        <file>locales/en/common.json</file>
+        <file>locales/en/editor.json</file>
+        <file>locales/en/templates.json</file>
+        <file>locales/en/settings.json</file>
+        <file>locales/pt-BR/common.json</file>
+        <file>locales/pt-BR/editor.json</file>
+        <file>locales/pt-BR/templates.json</file>
+        <file>locales/pt-BR/settings.json</file>
+    </qresource>
+</RCC>

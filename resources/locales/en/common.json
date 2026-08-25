@@ -1,0 +1,25 @@
+{
+    "_meta": {
+        "nativeName": "English",
+        "englishName": "English"
+    },
+    "app": {
+        "title": "CreatorCanvas",
+        "tagline": "Quick visuals with real layer control",
+        "aboutBody": "A fast, layer-based image editor for content creators.\nMilestone M0 — application skeleton."
+    },
+    "menu": {
+        "file": "&File",
+        "file.quit": "&Quit",
+        "help": "&Help",
+        "help.about": "&About CreatorCanvas",
+        "help.aboutQt": "About &Qt"
+    },
+    "statusbar": {
+        "version": "Version %1",
+        "language": "Language: %1"
+    },
+    "startup": {
+        "placeholderBody": "Application skeleton (Milestone M0).\nThe editing workspace arrives in the next milestones."
+    }
+}

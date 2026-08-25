@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-22.04,  os: ubuntu-22.04,   preset: linux-debug }
+          - { name: linux-24.04,  os: ubuntu-24.04,   preset: linux-debug }
+          - { name: windows-msvc, os: windows-latest, preset: windows-debug }
+          - { name: linux-asan,   os: ubuntu-24.04,   preset: linux-asan }
+    env:
+      ASAN_OPTIONS: detect_leaks=0:halt_on_error=1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.*'
+          cache: true
+
+      - name: Install build tools (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }}
+
+      - name: Build
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cmake --build --preset ${{ matrix.preset }} --config Debug
+          else
+            cmake --build --preset ${{ matrix.preset }}
+          fi
+
+      - name: Test
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            ctest --test-dir build/${{ matrix.preset }} -C Debug --output-on-failure
+          else
+            ctest --test-dir build/${{ matrix.preset }} --output-on-failure
+          fi

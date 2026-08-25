@@ -1,0 +1,25 @@
+{
+    "_meta": {
+        "nativeName": "Português",
+        "englishName": "Portuguese (Brazil)"
+    },
+    "app": {
+        "title": "CreatorCanvas",
+        "tagline": "Visuais rápidos com controle real de camadas",
+        "aboutBody": "Um editor de imagens rápido e baseado em camadas para criadores de conteúdo.\nEtapa M0 — estrutura inicial do aplicativo."
+    },
+    "menu": {
+        "file": "&Arquivo",
+        "file.quit": "&Sair",
+        "help": "A&juda",
+        "help.about": "&Sobre o CreatorCanvas",
+        "help.aboutQt": "Sobre o &Qt"
+    },
+    "statusbar": {
+        "version": "Versão %1",
+        "language": "Idioma: %1"
+    },
+    "startup": {
+        "placeholderBody": "Estrutura inicial do aplicativo (Etapa M0).\nO ambiente de edição chega nas próximas etapas."
+    }
+}
