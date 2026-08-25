@@ -1,5 +1,8 @@
 #include "Layer.h"
 
+#include <QFontMetrics>
+#include <QGuiApplication>
+
 #include <algorithm>
 
 namespace cc {
@@ -14,13 +17,19 @@ void Layer::setOpacity(float value)
     m_opacity = std::clamp(value, 0.0f, 1.0f);
 }
 
+QRectF Layer::contentBounds() const
+{
+    return QRectF(); // no intrinsic geometry by default
+}
+
 void Layer::copyCommonFrom(const Layer& other)
 {
-    m_id = newLayerId();          // duplicates always get a fresh identity
+    m_id = newLayerId(); // duplicates always get a fresh identity
     name = other.name;
     visible = other.visible;
     locked = other.locked;
     blendMode = other.blendMode;
+    transform = other.transform;
     m_opacity = other.m_opacity;
 }
 
@@ -37,6 +46,19 @@ std::unique_ptr<Layer> GroupLayer::deepCopy() const
     return copy;
 }
 
+QRectF GroupLayer::contentBounds() const
+{
+    QRectF united;
+    for (const auto& child : children) {
+        const QRectF bounds = child->contentBounds();
+        if (bounds.isEmpty())
+            continue;
+        const QRectF mapped = child->transform.matrix(bounds).mapRect(bounds);
+        united = united.isNull() ? mapped : united.united(mapped);
+    }
+    return united;
+}
+
 ImageLayer::ImageLayer()
     : Layer(LayerType::Image) {}
 
@@ -48,6 +70,11 @@ std::unique_ptr<Layer> ImageLayer::deepCopy() const
     copy->naturalWidth = naturalWidth;
     copy->naturalHeight = naturalHeight;
     return copy;
+}
+
+QRectF ImageLayer::contentBounds() const
+{
+    return QRectF(0, 0, naturalWidth, naturalHeight);
 }
 
 TextLayer::TextLayer()
@@ -70,6 +97,19 @@ std::unique_ptr<Layer> TextLayer::deepCopy() const
     return copy;
 }
 
+QRectF TextLayer::contentBounds() const
+{
+    // Font metrics need the GUI toolkit; headless contexts get an estimate.
+    if (!QGuiApplication::instance())
+        return QRectF(0, 0, 100, 50);
+    QFont font(fontFamily);
+    font.setBold(bold);
+    font.setItalic(italic);
+    font.setPointSizeF(sizePt > 0 ? sizePt : 1.0);
+    const QFontMetrics metrics(font);
+    return metrics.boundingRect(content);
+}
+
 ShapeLayer::ShapeLayer()
     : Layer(LayerType::Shape) {}
 
@@ -84,6 +124,11 @@ std::unique_ptr<Layer> ShapeLayer::deepCopy() const
     copy->cornerRadius = cornerRadius;
     copy->points = points;
     return copy;
+}
+
+QRectF ShapeLayer::contentBounds() const
+{
+    return points.size() >= 2 ? points.boundingRect() : QRectF();
 }
 
 BackgroundLayer::BackgroundLayer()

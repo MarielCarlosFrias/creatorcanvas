@@ -105,7 +105,8 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
     painter->save();
     painter->setOpacity(effectiveOpacity);
     painter->setCompositionMode(compositionMode(layer.blendMode));
-
+    painter->setTransform(layer.transform.matrix(layer.contentBounds()),
+                          /*combine=*/true);
     switch (layer.type()) {
     case LayerType::Background: {
         const auto& background = static_cast<const BackgroundLayer&>(layer);
@@ -128,6 +129,7 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
             font.setBold(text.bold);
             font.setItalic(text.italic);
             font.setUnderline(text.underline);
+            font.setPointSizeF(text.sizePt > 0 ? text.sizePt : 1.0);
             painter->setFont(font);
             painter->setPen(text.color);
             // Transforms arrive in M6b; until then text sits at the doc origin.

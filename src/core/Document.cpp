@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <utility>
 
 namespace cc {
 
@@ -77,7 +78,7 @@ bool Document::addLayer(std::unique_ptr<Layer> layer, GroupLayer* parent, int in
     if (!parent)
         parent = m_root.get();
     if (findLayer(parent->id()) != parent)
-        return false; // parent must belong to THIS document
+        return false;
 
     auto& children = parent->children;
     if (index < 0)
@@ -131,7 +132,6 @@ bool Document::reorderLayer(const LayerId& id, GroupLayer* newParent, int newInd
     if (findLayer(newParent->id()) != newParent)
         return false;
 
-    // Reject moves into the layer itself or into its own subtree (cycle).
     for (GroupLayer* p = newParent; p; p = parentOf(p->id())) {
         if (p == layer)
             return false;
@@ -139,9 +139,8 @@ bool Document::reorderLayer(const LayerId& id, GroupLayer* newParent, int newInd
 
     auto moved = detachLayer(id);
     if (!moved)
-        return false; // unreachable given the checks above
+        return false;
 
-    // The layer is already detached, so newIndex is its FINAL position.
     auto& children = newParent->children;
     if (newIndex < 0)
         newIndex = static_cast<int>(children.size());
@@ -161,7 +160,7 @@ LayerId Document::duplicateLayer(const LayerId& id)
         return {};
 
     GroupLayer* parent = parentOf(id);
-    const int insertAt = indexOf(id) + 1; // directly above the original
+    const int insertAt = indexOf(id) + 1;
 
     auto copy = original->deepCopy();
     copy->name = original->name + QStringLiteral(" copy");
@@ -171,6 +170,7 @@ LayerId Document::duplicateLayer(const LayerId& id)
         return {};
     return newId;
 }
+
 bool Document::setLayerName(const LayerId& id, QString name)
 {
     Layer* layer = findLayer(id);
@@ -181,6 +181,7 @@ bool Document::setLayerName(const LayerId& id, QString name)
     emit layerPropertyChanged(id);
     return true;
 }
+
 bool Document::setLayerVisible(const LayerId& id, bool visible)
 {
     Layer* layer = findLayer(id);
@@ -209,7 +210,7 @@ bool Document::setLayerOpacity(const LayerId& id, float opacity)
     if (!layer)
         return false;
     const float old = layer->opacity();
-    layer->setOpacity(opacity); // clamps
+    layer->setOpacity(opacity);
     if (layer->opacity() == old)
         return true;
     bumpRevision();
@@ -223,6 +224,17 @@ bool Document::setLayerBlendMode(const LayerId& id, BlendMode mode)
     if (!layer || layer->blendMode == mode)
         return layer != nullptr;
     layer->blendMode = mode;
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
+bool Document::setLayerTransform(const LayerId& id, const AffineTransform& transform)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->transform == transform)
+        return layer != nullptr;
+    layer->transform = transform;
     bumpRevision();
     emit layerPropertyChanged(id);
     return true;

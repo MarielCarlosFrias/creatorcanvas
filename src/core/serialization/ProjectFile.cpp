@@ -122,6 +122,11 @@ QJsonObject writeLayer(const Layer& layer)
     o.insert(QStringLiteral("locked"), layer.locked);
     o.insert(QStringLiteral("opacity"), double(layer.opacity()));
     o.insert(QStringLiteral("blendMode"), blendModeToString(layer.blendMode));
+    o.insert(QStringLiteral("transformX"), layer.transform.position.x());
+    o.insert(QStringLiteral("transformY"), layer.transform.position.y());
+    o.insert(QStringLiteral("rotation"), layer.transform.rotationDeg);
+    o.insert(QStringLiteral("scaleX"), layer.transform.scaleX);
+    o.insert(QStringLiteral("scaleY"), layer.transform.scaleY);
 
     switch (layer.type()) {
     case LayerType::Group: {
@@ -526,6 +531,15 @@ private:
         layer.blendMode =
             blendModeFromString(o.value(QStringLiteral("blendMode")).toString())
                 .value_or(BlendMode::Normal);
+        layer.transform.position = QPointF(
+            o.value(QStringLiteral("transformX")).toDouble(0.0),
+            o.value(QStringLiteral("transformY")).toDouble(0.0));
+        layer.transform.rotationDeg =
+            o.value(QStringLiteral("rotation")).toDouble(0.0);
+        layer.transform.scaleX =
+            o.value(QStringLiteral("scaleX")).toDouble(1.0);
+        layer.transform.scaleY =
+            o.value(QStringLiteral("scaleY")).toDouble(1.0);
     }
 
     QJsonObject m_root;

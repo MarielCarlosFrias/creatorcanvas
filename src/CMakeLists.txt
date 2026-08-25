@@ -27,6 +27,7 @@ add_library(cc_core STATIC
     core/history/DocumentCommands.h
     core/serialization/ProjectFile.h
     core/serialization/ProjectFile.cpp
+    core/geometry/AffineTransform.h
     core/assets/AssetStore.h
     core/assets/AssetStore.cpp
     imageio/ImageImporter.h

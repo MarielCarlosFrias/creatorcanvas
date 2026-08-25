@@ -84,14 +84,18 @@ private slots:
         image.fill(Qt::black);
         renderTo(image, doc);
 
-        // Inside: ~50% blue over red. Allow +-1 for rounding.
-        const QColor inside = image.pixelColor(50, 50);
+         // With the transform system, the rect (points 25..75) renders
+        // centered on its transform position (0,0): doc rect (-25..25)^2.
+        const QColor inside = image.pixelColor(10, 10);
         QVERIFY(qAbs(inside.red() - 128) <= 1);
         QCOMPARE(inside.green(), 0);
         QVERIFY(qAbs(inside.blue() - 128) <= 1);
 
         // Outside the rect: pure red.
-        QCOMPARE(image.pixelColor(5, 5), QColor(255, 0, 0));
+        QCOMPARE(image.pixelColor(50, 50), QColor(255, 0, 0));
+
+        // Outside the rect: pure red.
+        QCOMPARE(image.pixelColor(50, 50), QColor(255, 0, 0));
     }
 
     void checkerboardShowsThroughTransparentBackground()

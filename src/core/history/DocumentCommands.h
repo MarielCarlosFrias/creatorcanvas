@@ -10,6 +10,29 @@
 
 namespace cc {
 
+class SetLayerTransformCommand final : public Command
+{
+public:
+    SetLayerTransformCommand(Document& doc, const LayerId& id,
+                             AffineTransform oldValue, AffineTransform newValue)
+        : Command(QStringLiteral("layer.transform"))
+        , m_doc(&doc)
+        , m_id(id)
+        , m_oldValue(std::move(oldValue))
+        , m_newValue(std::move(newValue))
+    {
+    }
+
+    void redo() override { m_doc->setLayerTransform(m_id, m_newValue); }
+    void undo() override { m_doc->setLayerTransform(m_id, m_oldValue); }
+
+private:
+    Document* m_doc;
+    LayerId m_id;
+    AffineTransform m_oldValue;
+    AffineTransform m_newValue;
+};
+
 namespace detail {
 inline GroupLayer* resolveGroup(Document* doc, const LayerId& id)
 {
