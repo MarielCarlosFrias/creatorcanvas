@@ -1,6 +1,10 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QPointF>
+#include <memory>
+
+#include "core/Document.h"
 
 class QLabel;
 class QMenu;
@@ -10,38 +14,47 @@ namespace cc {
 
 class I18nService;
 class SettingsService;
+class CanvasView;
 
-/// Top-level window. Milestone M0 scope: shell, menus (File/Help),
-/// status bar, live language switching. Editor surfaces arrive in later
-/// milestones; nothing decorative is placed here.
 class MainWindow final : public QMainWindow
 {
     Q_OBJECT
 public:
-    explicit MainWindow(SettingsService *settings,
-                        I18nService *i18n,
-                        QWidget *parent = nullptr);
+    explicit MainWindow(SettingsService* settings,
+                        I18nService* i18n,
+                        QWidget* parent = nullptr);
+    ~MainWindow() override;
 
 private:
+    void createDefaultDocument();
     void buildCentralWidget();
     void buildActions();
     void buildMenus();
     void buildStatusBar();
     void retranslateUi();
+    void updateZoomLabel();
+    void updatePositionLabel(const QPointF& documentPos);
 
-    SettingsService *m_settings = nullptr;
-    I18nService *m_i18n = nullptr;
+    SettingsService* m_settings = nullptr;
+    I18nService* m_i18n = nullptr;
 
-    QAction *m_quitAction = nullptr;
-    QAction *m_aboutAction = nullptr;
-    QAction *m_aboutQtAction = nullptr;
+    std::unique_ptr<Document> m_document;
+    CanvasView* m_canvas = nullptr;
 
-    QMenu *m_fileMenu = nullptr;
-    QMenu *m_helpMenu = nullptr;
+    QAction* m_quitAction = nullptr;
+    QAction* m_aboutAction = nullptr;
+    QAction* m_aboutQtAction = nullptr;
 
-    QLabel *m_placeholderLabel = nullptr;
-    QLabel *m_versionLabel = nullptr;
-    QLabel *m_languageLabel = nullptr;
+    QMenu* m_fileMenu = nullptr;
+    QMenu* m_helpMenu = nullptr;
+
+    QLabel* m_zoomLabel = nullptr;
+    QLabel* m_positionLabel = nullptr;
+    QLabel* m_versionLabel = nullptr;
+    QLabel* m_languageLabel = nullptr;
+
+    double m_currentZoom = 1.0;
+    QPointF m_lastCursorPos;
 };
 
 } // namespace cc

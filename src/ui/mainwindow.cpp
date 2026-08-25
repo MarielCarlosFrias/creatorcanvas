@@ -1,7 +1,10 @@
 #include "mainwindow.h"
 
+#include "core/Document.h"
+#include "core/layers/Layer.h"
 #include "localization/i18nservice.h"
 #include "services/settingsservice.h"
+#include "ui/canvasview.h"
 
 #include <QApplication>
 #include <QLabel>
@@ -9,13 +12,13 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QStatusBar>
-#include <QVBoxLayout>
-#include <QWidget>
 
 namespace cc {
 
-MainWindow::MainWindow(SettingsService *settings, I18nService *i18n,
-                       QWidget *parent)
+MainWindow::~MainWindow() = default;
+
+MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
+                       QWidget* parent)
     : QMainWindow(parent)
     , m_settings(settings)
     , m_i18n(i18n)
@@ -23,6 +26,7 @@ MainWindow::MainWindow(SettingsService *settings, I18nService *i18n,
     setMinimumSize(1000, 640);
     resize(1280, 800);
 
+    createDefaultDocument();
     buildCentralWidget();
     buildActions();
     buildMenus();
@@ -34,18 +38,33 @@ MainWindow::MainWindow(SettingsService *settings, I18nService *i18n,
     retranslateUi();
 }
 
+void MainWindow::createDefaultDocument()
+{
+    m_document = std::make_unique<Document>(1280, 720, 96);
+    auto background = std::make_unique<BackgroundLayer>();
+    background->name = QStringLiteral("Background");
+    background->fill = QColor(Qt::white);
+    m_document->addLayer(std::move(background));
+}
+
 void MainWindow::buildCentralWidget()
 {
-    auto *holder = new QWidget(this);
-    auto *layout = new QVBoxLayout(holder);
-    layout->setContentsMargins(0, 0, 0, 0);
+    m_canvas = new CanvasView(this);
+    m_canvas->setDocument(m_document.get());
 
-    m_placeholderLabel = new QLabel(holder);
-    m_placeholderLabel->setAlignment(Qt::AlignCenter);
-    m_placeholderLabel->setWordWrap(true);
-    layout->addWidget(m_placeholderLabel);
+    if (m_document) {
+        connect(m_document.get(), &Document::structureChanged,
+                m_canvas, qOverload<>(&QWidget::update));
+        connect(m_document.get(), &Document::layerPropertyChanged,
+                m_canvas, qOverload<>(&QWidget::update));
+    }
 
-    setCentralWidget(holder);
+    connect(m_canvas, &CanvasView::zoomChanged,
+            this, &MainWindow::updateZoomLabel);
+    connect(m_canvas, &CanvasView::cursorMoved,
+            this, &MainWindow::updatePositionLabel);
+
+    setCentralWidget(m_canvas);
 }
 
 void MainWindow::buildActions()
@@ -83,10 +102,33 @@ void MainWindow::buildMenus()
 
 void MainWindow::buildStatusBar()
 {
+    m_zoomLabel = new QLabel(this);
+    m_positionLabel = new QLabel(this);
     m_versionLabel = new QLabel(this);
     m_languageLabel = new QLabel(this);
+    statusBar()->addPermanentWidget(m_zoomLabel);
+    statusBar()->addPermanentWidget(m_positionLabel);
     statusBar()->addPermanentWidget(m_languageLabel);
     statusBar()->addPermanentWidget(m_versionLabel);
+}
+
+void MainWindow::updateZoomLabel()
+{
+    if (!m_i18n || !m_zoomLabel)
+        return;
+    m_zoomLabel->setText(m_i18n->t("common", "statusbar.zoom")
+                             .arg(QString::number(m_currentZoom * 100.0,
+                                                  'f', 0)));
+}
+
+void MainWindow::updatePositionLabel(const QPointF& documentPos)
+{
+    m_lastCursorPos = documentPos;
+    if (!m_i18n || !m_positionLabel)
+        return;
+    m_positionLabel->setText(m_i18n->t("common", "statusbar.position")
+                                 .arg(QString::number(documentPos.x(), 'f', 0),
+                                      QString::number(documentPos.y(), 'f', 0)));
 }
 
 void MainWindow::retranslateUi()
@@ -103,11 +145,8 @@ void MainWindow::retranslateUi()
     m_fileMenu->setTitle(m_i18n->t("common", "menu.file"));
     m_helpMenu->setTitle(m_i18n->t("common", "menu.help"));
 
-    m_placeholderLabel->setText(
-        QStringLiteral("<div align='center'><h1>%1</h1><p>%2</p></div>")
-            .arg(m_i18n->t("common", "app.title"),
-                 m_i18n->t("common", "startup.placeholderBody")
-                     .toHtmlEscaped()));
+    updateZoomLabel();
+    updatePositionLabel(m_lastCursorPos);
 
     m_versionLabel->setText(
         m_i18n->t("common", "statusbar.version")

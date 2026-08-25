@@ -17,7 +17,9 @@
     },
     "statusbar": {
         "version": "Versão %1",
-        "language": "Idioma: %1"
+        "language": "Idioma: %1",
+        "zoom": "Zoom: %1%",
+        "position": "Pos: %1, %2"
     },
     "startup": {
         "placeholderBody": "Estrutura inicial do aplicativo (Etapa M0).\nO ambiente de edição chega nas próximas etapas."

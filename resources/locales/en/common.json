@@ -17,7 +17,9 @@
     },
     "statusbar": {
         "version": "Version %1",
-        "language": "Language: %1"
+        "language": "Language: %1",
+        "zoom": "Zoom: %1%",
+        "position": "Pos: %1, %2"
     },
     "startup": {
         "placeholderBody": "Application skeleton (Milestone M0).\nThe editing workspace arrives in the next milestones."

@@ -1,5 +1,14 @@
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+# ------------------------------------------------------------ 3rdparty: miniz --
+add_library(miniz STATIC
+    ${PROJECT_SOURCE_DIR}/3rdparty/miniz/miniz.cpp
+    ${PROJECT_SOURCE_DIR}/3rdparty/miniz/miniz_tdef.cpp
+    ${PROJECT_SOURCE_DIR}/3rdparty/miniz/miniz_tinfl.cpp
+    ${PROJECT_SOURCE_DIR}/3rdparty/miniz/miniz_zip.cpp
+)
+target_include_directories(miniz SYSTEM PUBLIC ${PROJECT_SOURCE_DIR}/3rdparty/miniz)
+
 # --------------------------------------------------------------------- core --
 add_library(cc_core STATIC
     core/layers/Layer.h
@@ -13,16 +22,21 @@ add_library(cc_core STATIC
     core/history/DocumentCommands.h
     core/serialization/ProjectFile.h
     core/serialization/ProjectFile.cpp
-    ${PROJECT_SOURCE_DIR}/3rdparty/miniz/miniz.cpp
-    ${PROJECT_SOURCE_DIR}/3rdparty/miniz/miniz_tdef.cpp
-    ${PROJECT_SOURCE_DIR}/3rdparty/miniz/miniz_tinfl.cpp
-    ${PROJECT_SOURCE_DIR}/3rdparty/miniz/miniz_zip.cpp
 )
-target_include_directories(cc_core PUBLIC ${PROJECT_SOURCE_DIR}/src)
-target_include_directories(cc_core SYSTEM PUBLIC ${PROJECT_SOURCE_DIR}/3rdparty/miniz)
-target_link_libraries(cc_core PUBLIC Qt6::Core Qt6::Gui)
+target_link_libraries(cc_core PUBLIC Qt6::Core Qt6::Gui miniz)
 target_compile_definitions(cc_core PRIVATE CC_PROJECT_VERSION="${PROJECT_VERSION}")
+target_include_directories(cc_core PUBLIC ${PROJECT_SOURCE_DIR}/src)
+target_include_directories(cc_core PUBLIC ${PROJECT_SOURCE_DIR}/src/core)
 cc_enable_warnings(cc_core)
+
+# --------------------------------------------------------------- rendering --
+add_library(cc_rendering STATIC
+    rendering/CanvasRenderer.h
+    rendering/CanvasRenderer.cpp
+)
+target_link_libraries(cc_rendering PUBLIC Qt6::Core Qt6::Gui cc_core)
+target_include_directories(cc_rendering PUBLIC ${PROJECT_SOURCE_DIR}/src)
+cc_enable_warnings(cc_rendering)
 
 # ---------------------------------------------------------------- services --
 add_library(cc_services STATIC
@@ -52,10 +66,12 @@ add_executable(creatorcanvas
     ui/darktheme.cpp
     ui/mainwindow.h
     ui/mainwindow.cpp
+    ui/canvasview.h
+    ui/canvasview.cpp
 )
 target_link_libraries(creatorcanvas
     PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets
-            cc_core cc_services cc_localization)
+            cc_core cc_services cc_localization cc_rendering)
 target_include_directories(creatorcanvas PRIVATE ${PROJECT_SOURCE_DIR}/src)
 target_compile_definitions(creatorcanvas PRIVATE APP_VERSION="${PROJECT_VERSION}")
 set_target_properties(creatorcanvas PROPERTIES
