@@ -108,22 +108,31 @@ void CanvasView::beginTextEdit(const LayerId& id)
     // with a stylesheet resolves its font from the STYLE, not setFont).
     const QString hex = textLayer->color.name(QColor::HexRgb);
     const double px = qMax(6.0, textLayer->sizePt * (96.0 / 72.0) * m_zoom);
+    // Light text on a light editor backdrop is unreadable while typing:
+    // darken the editor background when the text color is light.
+    const QColor textColor = textLayer->color;
+    const double luminance = 0.299 * textColor.red()
+                           + 0.587 * textColor.green()
+                           + 0.114 * textColor.blue();
+    const QString editorBg = luminance > 150 ? QStringLiteral("#26272b")
+                                             : QStringLiteral("white");
     m_textEditor->setStyleSheet(QStringLiteral(
-        "QLineEdit { background: white; color: %1;"
+        "QLineEdit { background: %7; color: %1;"
         " border: 1px solid #2f6fed; padding: 0px;"
         " font-family: \"%2\"; font-size: %3px;"
         " font-weight: %4; font-style: %5; text-decoration: %6; }"
         "QLineEdit { selection-background-color: #2f6fed;"
-        " selection-color: white; }")
-        .arg(hex,
-             textLayer->fontFamily,
-             QString::number(px, 'f', 0),
-             textLayer->bold ? QStringLiteral("bold")
-                             : QStringLiteral("normal"),
-             textLayer->italic ? QStringLiteral("italic")
-                               : QStringLiteral("normal"),
-             textLayer->underline ? QStringLiteral("underline")
-                                  : QStringLiteral("none")));
+        " selection-color: %1; }")
+        .arg(hex)
+        .arg(textLayer->fontFamily)
+        .arg(QString::number(px, 'f', 0))
+        .arg(textLayer->bold ? QStringLiteral("bold")
+                             : QStringLiteral("normal"))
+        .arg(textLayer->italic ? QStringLiteral("italic")
+                               : QStringLiteral("normal"))
+        .arg(textLayer->underline ? QStringLiteral("underline")
+                                  : QStringLiteral("none"))
+        .arg(editorBg));
 
     m_textEditor->setAlignment(
         textLayer->align == TextAlignment::Center

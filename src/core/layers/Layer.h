@@ -101,7 +101,7 @@ public:
     bool bold = false;
     bool italic = false;
     bool underline = false;
-    QColor color = Qt::white;
+    QColor color = QColor(17, 17, 17);
     double letterSpacingPx = 0.0;
     double lineHeightMult = 1.0;
     TextAlignment align = TextAlignment::Center;
