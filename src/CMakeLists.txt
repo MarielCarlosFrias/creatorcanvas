@@ -57,6 +57,8 @@ add_library(cc_services STATIC
     services/settingsservice.cpp
     services/presetstore.h
     services/presetstore.cpp
+    services/autosaveservice.h
+    services/autosaveservice.cpp
     ${PROJECT_SOURCE_DIR}/resources/presets.qrc
 )
 target_link_libraries(cc_services PUBLIC Qt6::Core Qt6::Gui)

@@ -56,6 +56,10 @@
         "saveAs.title": "Salvar como",
         "saveError.title": "Falha ao salvar",
         "open.title": "Abrir projeto",
-        "openError.title": "Falha ao abrir"
+        "openError.title": "Falha ao abrir",
+        "recovery.title": "Recuperar sessão",
+        "recovery.body": "Uma sessão não salva foi encontrada. Recuperar?",
+        "recovery.recover": "Recuperar",
+        "recovery.discard": "Descartar"
     }
 }

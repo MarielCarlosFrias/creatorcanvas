@@ -12,6 +12,7 @@
 #include "ui/layerspanel.h"
 #include "ui/newdocumentdialog.h"
 #include "ui/settingsdialog.h"
+#include "services/autosaveservice.h"
 #include "ui/textinspector.h"
 
 #include <QApplication>
@@ -45,7 +46,12 @@ MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
         std::make_unique<PresetStore>(configDir + QStringLiteral("/presets.json"));
     m_history = std::make_unique<CommandStack>();
 
+    const QString recoveryPath =
+        configDir + QStringLiteral("/autosave/recovery.creatorcanvas");
+    m_autosave = std::make_unique<AutosaveService>(m_settings, recoveryPath, this);
+
     createDefaultDocument();
+    m_autosave->setDocument(m_document.get());
     buildCentralWidget();
     buildLayersDock();
     connectDocumentSignals();
@@ -65,6 +71,8 @@ MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
         connect(m_i18n, &I18nService::languageChanged,
                 this, &MainWindow::retranslateUi);
     retranslateUi();
+
+    checkForRecoveryFile();
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)
@@ -323,6 +331,10 @@ void MainWindow::newDocument()
     m_selectedId = LayerId();
     m_currentFilePath.clear();
     m_modified = false;
+    if (m_autosave) {
+        m_autosave->discardRecovery();
+        m_autosave->setDocument(m_document.get());
+    }
     m_canvas->setDocument(m_document.get());
     if (m_layersPanel)
         m_layersPanel->setDocument(m_document.get());
@@ -491,6 +503,8 @@ bool MainWindow::saveDocument()
         return false;
     }
     m_modified = false;
+    if (m_autosave)
+        m_autosave->discardRecovery();
     updateWindowTitle();
     return true;
 }
@@ -517,6 +531,8 @@ bool MainWindow::saveDocumentAs()
     }
     m_currentFilePath = path;
     m_modified = false;
+    if (m_autosave)
+        m_autosave->discardRecovery();
     updateWindowTitle();
     return true;
 }
@@ -549,6 +565,10 @@ void MainWindow::openDocument()
     m_selectedId = LayerId();
     m_currentFilePath = path;
     m_modified = false;
+    if (m_autosave) {
+        m_autosave->discardRecovery();
+        m_autosave->setDocument(m_document.get());
+    }
     m_canvas->setDocument(m_document.get());
     if (m_layersPanel)
         m_layersPanel->setDocument(m_document.get());
@@ -578,6 +598,54 @@ bool MainWindow::confirmDiscardUnsavedChanges()
     if (box.clickedButton() == saveButton)
         return saveDocument();
     return box.clickedButton() == discardButton;
+}
+
+void MainWindow::checkForRecoveryFile()
+{
+    if (!m_autosave || !m_autosave->hasRecoveryFile())
+        return;
+    if (!m_i18n) {
+        m_autosave->discardRecovery();
+        return;
+    }
+
+    QMessageBox box(this);
+    box.setWindowTitle(m_i18n->t("common", "dialog.recovery.title"));
+    box.setText(m_i18n->t("common", "dialog.recovery.body"));
+    auto* recoverButton =
+        box.addButton(m_i18n->t("common", "dialog.recovery.recover"),
+                      QMessageBox::AcceptRole);
+    box.addButton(m_i18n->t("common", "dialog.recovery.discard"),
+                  QMessageBox::DestructiveRole);
+    box.exec();
+
+    if (box.clickedButton() != recoverButton) {
+        m_autosave->discardRecovery();
+        return;
+    }
+
+    QString error;
+    auto loaded = loadDocument(m_autosave->recoveryFilePath(), &error);
+    if (!loaded) {
+        QMessageBox::warning(this,
+                             m_i18n->t("common", "dialog.openError.title"), error);
+        m_autosave->discardRecovery();
+        return;
+    }
+
+    m_document = std::move(loaded);
+    m_history->clear();
+    m_selectedId = LayerId();
+    m_currentFilePath.clear();
+    m_modified = true; // recovered session stays unsaved until explicitly saved
+    m_canvas->setDocument(m_document.get());
+    if (m_layersPanel)
+        m_layersPanel->setDocument(m_document.get());
+    if (m_textInspector)
+        m_textInspector->setDocument(m_document.get());
+    m_autosave->setDocument(m_document.get());
+    connectDocumentSignals();
+    updateWindowTitle();
 }
 
 void MainWindow::openSettings()

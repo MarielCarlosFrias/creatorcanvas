@@ -8,6 +8,7 @@
 #include "core/Document.h"
 #include "core/history/CommandStack.h"
 #include "services/presetstore.h"
+#include "services/autosaveservice.h"
 
 class QDockWidget;
 class QLabel;
@@ -53,6 +54,7 @@ private:
     void openDocument();
     bool confirmDiscardUnsavedChanges();
     void openSettings();
+    void checkForRecoveryFile();
     void updateWindowTitle();
     void retranslateUi();
     void updateZoomLabel();
@@ -62,6 +64,7 @@ private:
     I18nService* m_i18n = nullptr;
     std::unique_ptr<PresetStore> m_presetStore;
     std::unique_ptr<CommandStack> m_history;
+    std::unique_ptr<AutosaveService> m_autosave;
 
     std::unique_ptr<Document> m_document;
     CanvasView* m_canvas = nullptr;

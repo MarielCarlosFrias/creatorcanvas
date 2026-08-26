@@ -56,6 +56,10 @@
         "saveAs.title": "Save As",
         "saveError.title": "Save failed",
         "open.title": "Open project",
-        "openError.title": "Open failed"
+        "openError.title": "Open failed",
+        "recovery.title": "Recover session",
+        "recovery.body": "An unsaved session was found. Recover it?",
+        "recovery.recover": "Recover",
+        "recovery.discard": "Discard"
     }
 }
