@@ -5,7 +5,7 @@
     },
     "app": {
         "title": "CreatorCanvas",
-        "tagline": "Quick visuals with real layer control",
+        "tagline": "Create something amazing",
         "aboutBody": "A fast, layer-based image editor for content creators.\nMilestone M0 — application skeleton."
     },
     "menu": {
@@ -61,5 +61,12 @@
         "recovery.body": "An unsaved session was found. Recover it?",
         "recovery.recover": "Recover",
         "recovery.discard": "Discard"
+    },
+    "start": {
+        "createNew": "Create new",
+        "custom": "Custom size...",
+        "open": "Open project...",
+        "recent": "Recent projects",
+        "screenAction": "Start Screen"
     }
 }

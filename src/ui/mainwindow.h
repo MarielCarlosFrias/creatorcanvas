@@ -2,18 +2,25 @@
 
 #include <QMainWindow>
 #include <QPointF>
+#include <QString>
 
 #include <memory>
 
 #include "core/Document.h"
 #include "core/history/CommandStack.h"
+#include "core/document/NewDocumentSpec.h"
 #include "services/presetstore.h"
 #include "services/autosaveservice.h"
+#include "services/recentfiles.h"
+#include "services/autosaveservice.h"
+#include "services/recentfiles.h"
 
+class QCloseEvent;
 class QDockWidget;
 class QLabel;
 class QMenu;
 class QAction;
+class QStackedWidget;
 
 namespace cc {
 
@@ -22,6 +29,7 @@ class SettingsService;
 class CanvasView;
 class LayersPanel;
 class TextInspector;
+class StartScreen;
 
 class MainWindow final : public QMainWindow
 {
@@ -32,7 +40,7 @@ public:
                         QWidget* parent = nullptr);
 
 protected:
-    void closeEvent(QCloseEvent* event) override;
+    void closeEvent(QCloseEvent*) override;
 
 private:
     void createDefaultDocument();
@@ -42,10 +50,14 @@ private:
     void buildActions();
     void buildMenus();
     void buildStatusBar();
+    void showStartScreen();
+    void enterEditor();
+    void startFromPreset(const NewDocumentSpec& spec);
+    void openFromPath(const QString& path);
     void newDocument();
     void importImageViaDialog();
-    void exportImage();
     void importImage(const QString& filePath);
+    void exportImage();
     void flipLayer(bool horizontal);
     void addText();
     void deleteSelectedLayer();
@@ -63,14 +75,18 @@ private:
     SettingsService* m_settings = nullptr;
     I18nService* m_i18n = nullptr;
     std::unique_ptr<PresetStore> m_presetStore;
+    std::unique_ptr<RecentFiles> m_recentFiles;
     std::unique_ptr<CommandStack> m_history;
     std::unique_ptr<AutosaveService> m_autosave;
+    QString m_configDir;
 
     std::unique_ptr<Document> m_document;
+    QStackedWidget* m_centralStack = nullptr;
+    StartScreen* m_startScreen = nullptr;
     CanvasView* m_canvas = nullptr;
     LayersPanel* m_layersPanel = nullptr;
-    QDockWidget* m_layersDock = nullptr;
     TextInspector* m_textInspector = nullptr;
+    QDockWidget* m_layersDock = nullptr;
     QDockWidget* m_textDock = nullptr;
     LayerId m_selectedId;
     QString m_currentFilePath;
@@ -90,6 +106,7 @@ private:
     QAction* m_flipVAction = nullptr;
     QAction* m_deleteAction = nullptr;
     QAction* m_settingsAction = nullptr;
+    QAction* m_startScreenAction = nullptr;
     QAction* m_aboutAction = nullptr;
     QAction* m_aboutQtAction = nullptr;
 

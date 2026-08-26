@@ -5,7 +5,7 @@
     },
     "app": {
         "title": "CreatorCanvas",
-        "tagline": "Visuais rápidos com controle real de camadas",
+        "tagline": "Crie algo incrível",
         "aboutBody": "Um editor de imagens rápido e baseado em camadas para criadores de conteúdo.\nEtapa M0 — estrutura inicial do aplicativo."
     },
     "menu": {
@@ -61,5 +61,12 @@
         "recovery.body": "Uma sessão não salva foi encontrada. Recuperar?",
         "recovery.recover": "Recuperar",
         "recovery.discard": "Descartar"
+    },
+    "start": {
+        "createNew": "Criar novo",
+        "custom": "Tamanho personalizado...",
+        "open": "Abrir projeto...",
+        "recent": "Projetos recentes",
+        "screenAction": "Tela Inicial"
     }
 }

@@ -57,6 +57,8 @@ add_library(cc_services STATIC
     services/settingsservice.cpp
     services/presetstore.h
     services/presetstore.cpp
+    services/recentfiles.h
+    services/recentfiles.cpp
     services/autosaveservice.h
     services/autosaveservice.cpp
     ${PROJECT_SOURCE_DIR}/resources/presets.qrc
@@ -94,6 +96,8 @@ add_executable(creatorcanvas
     ui/layerspanel.cpp
     ui/settingsdialog.h
     ui/settingsdialog.cpp
+    ui/startscreen.h
+    ui/startscreen.cpp
 )
 target_link_libraries(creatorcanvas
     PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets
