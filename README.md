@@ -67,3 +67,28 @@ From a developer prompt:
 Source is proprietary to the project for now. Third-party runtime
 components include Qt 6 (LGPLv3 - dynamic linking; notices ship with
 installers in M14) and miniz (public domain, vendored at packaging time).
+
+## Packaging
+
+### Linux — AppImage
+    cmake --preset linux-release
+    cmake --build --preset linux-release
+    ./packaging/linux/build_appimage.sh build/linux-release
+    # Requer linuxdeployqt no PATH. Sem ele, use o DEB:
+
+### Linux — DEB
+    cmake --preset linux-release
+    cmake --build --preset linux-release
+    ./packaging/linux/build_deb.sh build/linux-release
+    sudo dpkg -i packaging/debroot/creatorcanvas_*.deb
+
+### Windows — ZIP portátil
+    # No prompt do desenvolvedor (VS 2022 + Qt):
+    cmake --preset windows-debug
+    cmake --build build/windows-debug --config Release --target creatorcanvas
+    powershell -File packaging\windows\build_portable.ps1 -BuildDir build\windows-debug
+
+### Nota de licença (LGPLv3)
+Qt 6 é LGPLv3: o empacotamento mantém a vinculação dinâmica (o AppImage/ZIP
+carrega as DLLs do sistema ou as empacota sem modificar), e o aviso de
+licença do Qt deve ser incluído na distribuição (LICENSES/ na raiz).

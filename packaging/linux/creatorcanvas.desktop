@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=CreatorCanvas
+Comment=Fast, layer-based image editor for content creators
+Exec=CreatorCanvas
+Icon=creatorcanvas
+Categories=Graphics;RasterGraphics;ImageEditor;
+StartupNotify=true

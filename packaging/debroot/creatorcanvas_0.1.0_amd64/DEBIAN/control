@@ -1,0 +1,10 @@
+Package: creatorcanvas
+Version: 0.1.0
+Section: graphics
+Priority: optional
+Architecture: amd64
+Depends: libqt6core6t64, libqt6gui6, libqt6widgets6
+Maintainer: CreatorCanvas Project
+Description: Fast, layer-based image editor for content creators
+ CreatorCanvas is a simplified, layer-based image editor targeting
+ content creators (YouTube thumbnails, social media posts, banners).
