@@ -109,3 +109,44 @@ set_target_properties(creatorcanvas PROPERTIES
     WIN32_EXECUTABLE $<BOOL:WIN32>
     MACOSX_BUNDLE TRUE)
 cc_enable_warnings(creatorcanvas)
+
+# ===================================================================
+# M14 - Distribution: install rules (DEB/AppImage/NSIS-friendly)
+# ===================================================================
+
+set(CC_STAGING_DIR ${CMAKE_BINARY_DIR}/staging)
+
+install(TARGETS creatorcanvas
+        RUNTIME DESTINATION bin
+        BUNDLE DESTINATION .)
+
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/resources/locales
+        DESTINATION share/creatorcanvas/locales
+        OPTIONAL)
+
+install(FILES ${PROJECT_SOURCE_DIR}/resources/presets/builtin.json
+        DESTINATION share/creatorcanvas/presets
+        OPTIONAL)
+
+install(FILES ${PROJECT_SOURCE_DIR}/resources/icons/creatorcanvas.svg
+        DESTINATION share/icons/hicolor/scalable/apps
+        RENAME creatorcanvas.svg
+        OPTIONAL)
+
+install(FILES ${PROJECT_SOURCE_DIR}/packaging/linux/creatorcanvas.desktop
+        DESTINATION share/applications
+        OPTIONAL)
+
+install(FILES ${PROJECT_SOURCE_DIR}/packaging/linux/creatorcanvas.appdata.xml
+        DESTINATION share/metainfo
+        RENAME creatorcanvas.appdata.xml
+        OPTIONAL)
+
+add_custom_target(stage ALL
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                ${CC_STAGING_DIR}/bin
+                ${CC_STAGING_DIR}/share/creatorcanvas
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:creatorcanvas>
+                ${CC_STAGING_DIR}/bin/creatorcanvas
+        COMMENT "Staging CreatorCanvas for packaging")

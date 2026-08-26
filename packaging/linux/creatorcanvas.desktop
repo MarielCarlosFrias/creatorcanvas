@@ -1,8 +1,13 @@
 [Desktop Entry]
 Type=Application
+Version=1.0
 Name=CreatorCanvas
-Comment=Fast, layer-based image editor for content creators
-Exec=CreatorCanvas
+GenericName=Image Editor
+Comment=A simple yet powerful image editor for content creators
+Exec=creatorcanvas %F
 Icon=creatorcanvas
-Categories=Graphics;RasterGraphics;ImageEditor;
+Terminal=false
 StartupNotify=true
+Categories=Graphics;2DGraphics;Photography;RasterGraphics;Publishing;
+MimeType=image/png;image/jpeg;image/webp;image/bmp;image/x-portable-bitmap;application/x-creatorcanvas-project;
+Keywords=image;editor;thumbnail;youtube;social;media;creator;canvas;layer;
