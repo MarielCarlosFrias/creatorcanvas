@@ -25,6 +25,8 @@ add_library(cc_core STATIC
     core/history/CommandStack.h
     core/history/CommandStack.cpp
     core/history/DocumentCommands.h
+    core/snap/SnapEngine.h
+    core/snap/SnapEngine.cpp
     core/serialization/ProjectFile.h
     core/serialization/ProjectFile.cpp
     core/geometry/AffineTransform.h

@@ -5,6 +5,7 @@
 
 #include <QPointer>
 #include "core/Document.h"
+#include "core/snap/SnapEngine.h"
 
 class QLineEdit;
 
@@ -80,6 +81,7 @@ private:
     HandleSet handlePositions(const Layer& layer) const;
     int handleAt(const QPointF& widgetPos) const;
     void drawSelectionOverlay(QPainter* painter);
+    void drawSnapGuides(QPainter* painter);
     void selectLayer(const LayerId& id);
     void updateCursor(const QPointF& widgetPos);
     void commitTextEdit();
@@ -91,6 +93,8 @@ private:
 
     bool m_panning = false;
     bool m_spacePanning = false;
+    SnapEngine m_snapEngine;
+    QList<GuideLine> m_activeGuides;
     QPoint m_lastMousePos;
     bool m_needsFit = true;
 
