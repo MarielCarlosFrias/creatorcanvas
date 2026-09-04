@@ -82,6 +82,8 @@ private:
     int handleAt(const QPointF& widgetPos) const;
     void drawSelectionOverlay(QPainter* painter);
     void drawSnapGuides(QPainter* painter);
+    void collectSnapTargets(GroupLayer* group, const LayerId& excludeId,
+                            QList<Layer*>& out) const;
     void selectLayer(const LayerId& id);
     void updateCursor(const QPointF& widgetPos);
     void commitTextEdit();

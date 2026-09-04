@@ -371,6 +371,7 @@ void CanvasView::paintEvent(QPaintEvent*)
 
     if (!m_selectedId.isNull())
         drawSelectionOverlay(&painter);
+    drawSnapGuides(&painter);
 }
 
 void CanvasView::wheelEvent(QWheelEvent* event)
@@ -451,6 +452,97 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
         selectLayer(LayerId());
     }
     event->ignore();
+}
+
+void CanvasView::collectSnapTargets(GroupLayer* group, const LayerId& excludeId,
+                                    QList<Layer*>& out) const
+{
+    if (!group)
+        return;
+
+    // Percorre recursivamente todas as camadas filhas do grupo raiz
+    for (const auto& child : group->children) {
+        Layer* layer = child.get();
+        // Ignora ponteiros nulos ou a própria camada que está sendo movida
+        if (!layer || layer->id() == excludeId)
+            continue;
+
+        // O BackgroundLayer não tem dimensões intrínsecas (contentBounds vazio).
+        // Os limites do documento já são providos por canvasRect, então ignoramos o fundo aqui.
+        if (layer->type() == LayerType::Background)
+            continue;
+
+        // Apenas camadas visíveis e destravadas servem de alvo para snap magnético
+        if (layer->visible && !layer->locked)
+            out.append(layer);
+
+        // Se for um grupo, desce recursivamente para coletar os filhos dentro dele
+        if (layer->type() == LayerType::Group)
+            collectSnapTargets(static_cast<GroupLayer*>(layer), excludeId, out);
+    }
+}
+
+void CanvasView::drawSnapGuides(QPainter* painter)
+{
+    // Se não houver guias de alinhamento ativas ou se não houver documento aberto, sai
+    if (m_activeGuides.isEmpty() || !m_document)
+        return;
+
+    painter->save();
+
+    // Reseta a transformação do painter para desenhar diretamente em coordenadas da janela (device pixels).
+    // Isso é crucial para que a espessura das linhas e o padrão tracejado não sofram distorção de zoom.
+    painter->resetTransform();
+
+    // Ativa o anti-aliasing explicitamente para garantir que linhas finas fiquem contínuas e sem artefatos
+    painter->setRenderHint(QPainter::Antialiasing, true);
+
+    const QTransform toDevice = docToDevice();
+    const double docW = double(m_document->width());
+    const double docH = double(m_document->height());
+
+    // Margem de transbordo (em pixels de documento) para a linha passar um pouco além das bordas do canvas.
+    // Isso garante que mesmo quando a imagem encosta na borda exata da tela (como na foto do usuário),
+    // a guia fique visível e não seja escondida pela borda de seleção azul ou pela própria imagem.
+    const double marginDoc = 40.0 / std::max(0.01, m_zoom);
+
+    // 1. Caneta de sombra (contraste escuro semi-transparente):
+    // Garante que a linha guia seja facilmente legível mesmo sobre imagens claras ou brancas.
+    QPen shadowPen(QColor(0, 0, 0, 140));
+    shadowPen.setWidthF(3.0);
+    shadowPen.setCosmetic(true);
+
+    // 2. Caneta principal (magenta vibrante #ff007f):
+    // Cor padrão da indústria (Canva, Figma, Illustrator) para guias inteligentes com alta visibilidade.
+    QPen guidePen(QColor(0xff, 0x00, 0x7f));
+    guidePen.setWidthF(1.5);
+    guidePen.setStyle(Qt::DashLine);
+    guidePen.setCosmetic(true); // Garante espessura exata de 1.5px na tela independente do zoom
+
+    for (const GuideLine& guide : std::as_const(m_activeGuides)) {
+        QPointF p1;
+        QPointF p2;
+
+        if (guide.isVertical()) {
+            // Guia vertical: atravessa de cima a baixo ao longo do eixo X (guide.axisPosition)
+            p1 = toDevice.map(QPointF(guide.axisPosition, -marginDoc));
+            p2 = toDevice.map(QPointF(guide.axisPosition, docH + marginDoc));
+        } else {
+            // Guia horizontal: atravessa da esquerda para a direita ao longo do eixo Y (guide.axisPosition)
+            p1 = toDevice.map(QPointF(-marginDoc, guide.axisPosition));
+            p2 = toDevice.map(QPointF(docW + marginDoc, guide.axisPosition));
+        }
+
+        // Desenha primeiro o fundo escuro de contraste
+        painter->setPen(shadowPen);
+        painter->drawLine(p1, p2);
+
+        // Desenha por cima a linha magenta tracejada de alta visibilidade
+        painter->setPen(guidePen);
+        painter->drawLine(p1, p2);
+    }
+
+    painter->restore();
 }
 
 void CanvasView::mouseMoveEvent(QMouseEvent* event)
@@ -553,6 +645,46 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event)
                 t.position = m_fixedDoc - rotated;
             }
 
+            if (m_gesture == Gesture::Move) {
+                // Se o usuário segurar Alt durante o movimento, desativa temporariamente o snap magnético
+                // para permitir ajustes finos manuais sem interferência das guias.
+                const bool snapDisabled = (event->modifiers() & Qt::AltModifier);
+
+                if (!snapDisabled) {
+                    // 1. Sensibilidade dinâmica baseada no zoom da tela:
+                    // Definimos um limiar confortável de cerca de 10 pixels físicos na tela.
+                    // Em zoom 100% -> limiar de 10px em coordenadas do documento.
+                    // Em zoom 50% -> limiar de 20px em coordenadas do documento.
+                    // Isso evita que em zoom reduzido o usuário precise acertar uma faixa minúscula e perca o snap.
+                    const double screenThresholdPx = 10.0;
+                    m_snapEngine.setThreshold(screenThresholdPx / std::max(0.01, m_zoom));
+
+                    // 2. Calcula a caixa delimitadora atual da camada em coordenadas do documento
+                    const QRectF bounds = layer->contentBounds();
+                    const QRectF currentDocRect = t.matrix(bounds).mapRect(bounds);
+                    const QRectF canvasRect(0, 0, m_document->width(), m_document->height());
+
+                    // 3. Coleta todas as outras camadas visíveis para comparar posições de bordas e centros
+                    QList<Layer*> others;
+                    if (GroupLayer* root = m_document->rootGroup())
+                        collectSnapTargets(root, m_selectedId, others);
+
+                    // 4. Computa se há alinhamento com o centro/bordas do documento ou com outras camadas
+                    const SnapResult snap = m_snapEngine.computeSnap(*layer, currentDocRect,
+                                                                     canvasRect, others);
+
+                    // 5. Aplica a atração magnética (delta) diretamente na posição da camada para alinhá-la
+                    t.position += snap.delta;
+
+                    // 6. Salva as linhas guias calculadas para que o paintEvent as desenhe imediatamente
+                    m_activeGuides = snap.guides;
+                } else {
+                    m_activeGuides.clear();
+                }
+            } else {
+                m_activeGuides.clear();
+            }
+
             m_document->setLayerTransform(m_selectedId, t);
             update();
             event->accept();
@@ -592,8 +724,14 @@ void CanvasView::mouseReleaseEvent(QMouseEvent* event)
                 }
             }
         }
+        // Finaliza o gesto interativo e limpa o handle ativo
         m_gesture = Gesture::None;
         m_activeHandle = -1;
+
+        // Limpa as guias inteligentes da tela assim que o usuário solta o botão do mouse
+        // e solicita uma repintura imediata para remover as linhas de guia
+        m_activeGuides.clear();
+        update();
         event->accept();
         return;
     }
