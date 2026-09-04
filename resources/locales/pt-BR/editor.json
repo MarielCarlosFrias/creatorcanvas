@@ -44,6 +44,13 @@
         "outline": "Contorno",
         "shadow": "Sombra"
     },
+    "shape": {
+        "title": "Forma",
+        "fill": "Cor de Preenchimento",
+        "stroke": "Cor do Contorno",
+        "strokeWidth": "Espessura do Contorno",
+        "cornerRadius": "Raio dos Cantos"
+    },
     "export": {
         "dialog.title": "Exportar",
         "format": "Formato",

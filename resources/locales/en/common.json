@@ -47,6 +47,11 @@
     "panel.duplicate": "Duplicate",
     "panel.delete": "Delete",
     "menu.layer.addText": "Add &Text",
+    "menu.layer.addShape": "Add &Shape",
+    "menu.layer.shape.rect": "&Rectangle",
+    "menu.layer.shape.roundedRect": "R&ounded Rectangle",
+    "menu.layer.shape.ellipse": "&Ellipse",
+    "menu.layer.shape.line": "&Line",
     "text.default": "Text",
     "dialog": {
         "unsaved.title": "Unsaved changes",

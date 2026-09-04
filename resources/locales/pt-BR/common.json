@@ -47,6 +47,11 @@
     "panel.duplicate": "Duplicar",
     "panel.delete": "Excluir",
     "menu.layer.addText": "Adicionar &Texto",
+    "menu.layer.addShape": "Adicionar &Forma",
+    "menu.layer.shape.rect": "&Retângulo",
+    "menu.layer.shape.roundedRect": "Retângulo &Arredondado",
+    "menu.layer.shape.ellipse": "&Elipse",
+    "menu.layer.shape.line": "&Linha",
     "text.default": "Texto",
     "dialog": {
         "unsaved.title": "Alterações não salvas",

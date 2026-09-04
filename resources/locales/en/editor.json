@@ -44,6 +44,13 @@
         "outline": "Outline",
         "shadow": "Shadow"
     },
+    "shape": {
+        "title": "Shape",
+        "fill": "Fill Color",
+        "stroke": "Stroke Color",
+        "strokeWidth": "Stroke Width",
+        "cornerRadius": "Corner Radius"
+    },
     "export": {
         "dialog.title": "Export",
         "format": "Format",
