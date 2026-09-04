@@ -290,4 +290,66 @@ void Document::touchLayer(const LayerId& id)
     }
 }
 
+// Altera a cor de preenchimento da forma geométrica
+bool Document::setShapeFill(const LayerId& id, QColor fill)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Shape)
+        return false;
+    auto* shape = static_cast<ShapeLayer*>(layer);
+    if (shape->fill == fill)
+        return true; // Sem alteração, evita notificações redundantes
+    shape->fill = std::move(fill);
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
+// Altera a cor do contorno (stroke) da forma geométrica
+bool Document::setShapeStroke(const LayerId& id, QColor stroke)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Shape)
+        return false;
+    auto* shape = static_cast<ShapeLayer*>(layer);
+    if (shape->stroke == stroke)
+        return true;
+    shape->stroke = std::move(stroke);
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
+// Altera a espessura do contorno da forma geométrica (clamped em >= 0.0)
+bool Document::setShapeStrokeWidth(const LayerId& id, double width)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Shape)
+        return false;
+    auto* shape = static_cast<ShapeLayer*>(layer);
+    const double clamped = std::max(0.0, width);
+    if (qFuzzyCompare(shape->strokeWidth, clamped))
+        return true;
+    shape->strokeWidth = clamped;
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
+// Altera o raio de arredondamento dos cantos (para RoundedRect, clamped em >= 0.0)
+bool Document::setShapeCornerRadius(const LayerId& id, double radius)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Shape)
+        return false;
+    auto* shape = static_cast<ShapeLayer*>(layer);
+    const double clamped = std::max(0.0, radius);
+    if (qFuzzyCompare(shape->cornerRadius, clamped))
+        return true;
+    shape->cornerRadius = clamped;
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
 } // namespace cc

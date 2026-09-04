@@ -58,6 +58,13 @@ public:
     void touchLayer(const LayerId& id);
     bool setLayerTextContent(const LayerId& id, QString content);
 
+    // Propriedades de ShapeLayer (retângulos, elipses, linhas)
+    // Passadas por valor para garantir compatibilidade com LayerPropertyCommand (Undo/Redo)
+    bool setShapeFill(const LayerId& id, QColor fill);
+    bool setShapeStroke(const LayerId& id, QColor stroke);
+    bool setShapeStrokeWidth(const LayerId& id, double width);
+    bool setShapeCornerRadius(const LayerId& id, double radius);
+
     quint64 revision() const { return m_revision; }
 
 signals:

@@ -292,4 +292,11 @@ using LayerLockCommand       = LayerPropertyCommand<bool>;
 using LayerOpacityCommand    = LayerPropertyCommand<float>;
 using LayerBlendModeCommand  = LayerPropertyCommand<BlendMode>;
 
+// Comandos de histórico fortemente tipados para operações de formas geométricas (ShapeLayer)
+// Permitem desfazer (Undo) e refazer (Redo) edições de cores, bordas e cantos arredondados
+using SetShapeFillCommand         = LayerPropertyCommand<QColor>;
+using SetShapeStrokeCommand       = LayerPropertyCommand<QColor>;
+using SetShapeStrokeWidthCommand  = LayerPropertyCommand<double>;
+using SetShapeCornerRadiusCommand = LayerPropertyCommand<double>;
+
 } // namespace cc
