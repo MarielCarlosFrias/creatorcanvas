@@ -11,6 +11,8 @@ class QLineEdit;
 
 namespace cc {
 
+class I18nService;
+
 /// Interactive document viewport: pan, zoom, selection with transform
 /// handles, gestures, inline text editing, and software rendering.
 class CanvasView final : public QWidget
@@ -20,6 +22,7 @@ public:
     explicit CanvasView(QWidget* parent = nullptr);
 
     void setDocument(Document* document);
+    void setI18n(I18nService* i18n);
     void clearSelection();
     void setSelectedLayer(const LayerId& id);
     void beginTextEdit(const LayerId& id);
@@ -46,6 +49,7 @@ signals:
                        const QString& oldValue,
                        const QString& newValue);
     void deleteRequested(const cc::LayerId& id);
+    void duplicateRequested(const cc::LayerId& id);
     void textBoxCommitted(const cc::LayerId& id,
                           const QSizeF& oldValue, const QSizeF& newValue);
 
@@ -56,6 +60,7 @@ protected:
     void mouseMoveEvent(QMouseEvent*) override;
     void mouseReleaseEvent(QMouseEvent*) override;
     void mouseDoubleClickEvent(QMouseEvent*) override;
+    void contextMenuEvent(QContextMenuEvent*) override;
     void keyPressEvent(QKeyEvent*) override;
     void keyReleaseEvent(QKeyEvent*) override;
     void resizeEvent(QResizeEvent*) override;
@@ -115,6 +120,7 @@ private:
 
     QLineEdit* m_textEditor = nullptr;
     LayerId m_editingTextId;
+    I18nService* m_i18n = nullptr;
 };
 
 } // namespace cc

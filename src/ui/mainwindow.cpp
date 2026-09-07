@@ -119,6 +119,7 @@ void MainWindow::buildCentralWidget()
                                     m_recentFiles.get(), this);
     m_canvas = new CanvasView(this);
     m_canvas->setDocument(m_document.get());
+    m_canvas->setI18n(m_i18n);
 
     m_centralStack = new QStackedWidget(this);
     m_centralStack->addWidget(m_startScreen); // page 0: start
@@ -139,6 +140,14 @@ void MainWindow::buildCentralWidget()
             this, &MainWindow::updatePositionLabel);
     connect(m_canvas, &CanvasView::fileDropped,
             this, &MainWindow::importImage);
+    connect(m_canvas, &CanvasView::duplicateRequested, this,
+            [this](const LayerId& id) {
+                if (m_history && m_document)
+                    m_history->execute(
+                        std::make_unique<DuplicateLayerCommand>(*m_document, id));
+            });
+    connect(m_canvas, &CanvasView::deleteRequested,
+            this, &MainWindow::deleteSelectedLayer);
     connect(m_canvas, &CanvasView::selectionChanged, this,
             [this](const LayerId& id) {
                 m_selectedId = id;

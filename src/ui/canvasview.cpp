@@ -2,12 +2,14 @@
 
 #include "rendering/CanvasRenderer.h"
 
+#include <QContextMenuEvent>
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QLineF>
+#include <QMenu>
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
@@ -15,6 +17,8 @@
 #include <QPolygonF>
 #include <QUrl>
 #include <QWheelEvent>
+
+#include "localization/i18nservice.h"
 
 #include <algorithm>
 #include <cmath>
@@ -59,6 +63,11 @@ void CanvasView::setDocument(Document* document)
     m_selectedId = LayerId();
     m_needsFit = true;
     update();
+}
+
+void CanvasView::setI18n(I18nService* i18n)
+{
+    m_i18n = i18n;
 }
 
 void CanvasView::clearSelection()
@@ -773,6 +782,33 @@ void CanvasView::keyPressEvent(QKeyEvent* event)
         event->accept();
         return;
     }
+
+    // Nudge: movimentação fina de 1px (ou 10px segurando Shift) com as setas do teclado
+    if (!m_selectedId.isNull() && m_document &&
+        (event->key() == Qt::Key_Left || event->key() == Qt::Key_Right ||
+         event->key() == Qt::Key_Up || event->key() == Qt::Key_Down)) {
+        Layer* layer = m_document->findLayer(m_selectedId);
+        if (layer && !layer->locked && layer->type() != LayerType::Background) {
+            const double step = (event->modifiers() & Qt::ShiftModifier) ? 10.0 : 1.0;
+            const AffineTransform oldT = layer->transform;
+            AffineTransform newT = oldT;
+            if (event->key() == Qt::Key_Left)
+                newT.position.rx() -= step;
+            else if (event->key() == Qt::Key_Right)
+                newT.position.rx() += step;
+            else if (event->key() == Qt::Key_Up)
+                newT.position.ry() -= step;
+            else if (event->key() == Qt::Key_Down)
+                newT.position.ry() += step;
+
+            m_document->setLayerTransform(m_selectedId, newT);
+            emit transformCommitted(m_selectedId, oldT, newT);
+            update();
+            event->accept();
+            return;
+        }
+    }
+
     if (event->key() == Qt::Key_Space && !event->isAutoRepeat()) {
         m_spacePanning = true;
         setCursor(Qt::OpenHandCursor);
@@ -787,6 +823,81 @@ void CanvasView::keyPressEvent(QKeyEvent* event)
     case Qt::Key_Minus: zoomOut(); event->accept(); return;
     case Qt::Key_1: zoomTo(1.0); event->accept(); return;
     default: event->ignore();
+    }
+}
+
+// Menu de contexto com botão direito diretamente sobre qualquer camada no canvas
+void CanvasView::contextMenuEvent(QContextMenuEvent* event)
+{
+    if (!m_document)
+        return;
+
+    const QPointF docPos = deviceToDoc().map(QPointF(event->pos()));
+    Layer* layer = hitTestLayer(docPos);
+    if (!layer || layer->type() == LayerType::Background)
+        return;
+
+    selectLayer(layer->id());
+
+    QMenu menu(this);
+
+    // Rótulos contextualizados e traduzidos com fallbacks seguros
+    const QString duplicateText = m_i18n ? m_i18n->t("common", "panel.duplicate") : QStringLiteral("Duplicate");
+    const QString deleteText = m_i18n ? m_i18n->t("common", "panel.delete") : QStringLiteral("Delete");
+    const QString frontText = m_i18n ? m_i18n->t("common", "panel.front") : QStringLiteral("Bring to Front");
+    const QString backText = m_i18n ? m_i18n->t("common", "panel.back") : QStringLiteral("Send to Back");
+    const QString flipHText = m_i18n ? m_i18n->t("common", "menu.layer.flipH") : QStringLiteral("Flip Horizontal");
+    const QString flipVText = m_i18n ? m_i18n->t("common", "menu.layer.flipV") : QStringLiteral("Flip Vertical");
+    const QString centerText = m_i18n ? m_i18n->t("common", "menu.layer.align.centerBoth") : QStringLiteral("Center on Canvas");
+    const QString lockText = layer->locked
+        ? (m_i18n ? m_i18n->t("common", "panel.unlock") : QStringLiteral("Unlock"))
+        : (m_i18n ? m_i18n->t("common", "panel.lock") : QStringLiteral("Lock"));
+
+    QAction* duplicateAction = menu.addAction(duplicateText);
+    QAction* deleteAction = menu.addAction(deleteText);
+    menu.addSeparator();
+    QAction* frontAction = menu.addAction(frontText);
+    QAction* backAction = menu.addAction(backText);
+    menu.addSeparator();
+    QAction* flipHAction = menu.addAction(flipHText);
+    QAction* flipVAction = menu.addAction(flipVText);
+    QAction* centerAction = menu.addAction(centerText);
+    menu.addSeparator();
+    QAction* lockAction = menu.addAction(lockText);
+
+    QAction* chosen = menu.exec(event->globalPos());
+    if (!chosen)
+        return;
+
+    const LayerId id = layer->id();
+    if (chosen == duplicateAction) {
+        emit duplicateRequested(id);
+    } else if (chosen == deleteAction) {
+        emit deleteRequested(id);
+    } else if (chosen == frontAction) {
+        m_document->reorderLayer(id, m_document->rootGroup(), -1);
+    } else if (chosen == backAction) {
+        m_document->reorderLayer(id, m_document->rootGroup(), 0);
+    } else if (chosen == flipHAction) {
+        const AffineTransform oldT = layer->transform;
+        AffineTransform newT = oldT;
+        newT.scaleX = -newT.scaleX;
+        m_document->setLayerTransform(id, newT);
+        emit transformCommitted(id, oldT, newT);
+    } else if (chosen == flipVAction) {
+        const AffineTransform oldT = layer->transform;
+        AffineTransform newT = oldT;
+        newT.scaleY = -newT.scaleY;
+        m_document->setLayerTransform(id, newT);
+        emit transformCommitted(id, oldT, newT);
+    } else if (chosen == centerAction) {
+        const AffineTransform oldT = layer->transform;
+        AffineTransform newT = oldT;
+        newT.position = QPointF(m_document->width() / 2.0, m_document->height() / 2.0);
+        m_document->setLayerTransform(id, newT);
+        emit transformCommitted(id, oldT, newT);
+    } else if (chosen == lockAction) {
+        m_document->setLayerLocked(id, !layer->locked);
     }
 }
 
