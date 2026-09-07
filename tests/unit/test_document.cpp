@@ -21,6 +21,14 @@ std::unique_ptr<GroupLayer> makeGroup(const QString& name)
     return layer;
 }
 
+std::unique_ptr<ShapeLayer> makeShape(const QString& name, ShapeKind kind = ShapeKind::Rectangle)
+{
+    auto layer = std::make_unique<ShapeLayer>();
+    layer->name = name;
+    layer->kind = kind;
+    return layer;
+}
+
 } // namespace
 
 class TestDocument final : public QObject
@@ -357,6 +365,88 @@ private slots:
 
         QVERIFY(doc.setLayerName(id, QStringLiteral("B")));
         QVERIFY(doc.revision() > revAfterAdd);
+    }
+
+    void shapePropertySetters()
+    {
+        Document doc(200, 200);
+        auto shape = makeShape("Rect", ShapeKind::Rectangle);
+        const LayerId id = shape->id();
+        QVERIFY(doc.addLayer(std::move(shape)));
+
+        QSignalSpy spy(&doc, &Document::layerPropertyChanged);
+        QVERIFY(spy.isValid());
+
+        // 1. setShapeFill: altera cor de preenchimento
+        const quint64 rev0 = doc.revision();
+        QVERIFY(doc.setShapeFill(id, QColor(Qt::red)));
+        QCOMPARE(spy.count(), 1);
+        QVERIFY(doc.revision() > rev0);
+        auto* s = static_cast<ShapeLayer*>(doc.findLayer(id));
+        QCOMPARE(s->fill, QColor(Qt::red));
+
+        // Mesmo valor: no-op, não deve emitir sinal nem alterar revisão
+        const quint64 rev1 = doc.revision();
+        QVERIFY(doc.setShapeFill(id, QColor(Qt::red)));
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(doc.revision(), rev1);
+
+        // 2. setShapeStroke: altera cor do contorno
+        QVERIFY(doc.setShapeStroke(id, QColor(Qt::blue)));
+        QCOMPARE(spy.count(), 2);
+        QVERIFY(doc.revision() > rev1);
+        QCOMPARE(s->stroke, QColor(Qt::blue));
+
+        // Mesmo stroke: no-op
+        const quint64 rev2 = doc.revision();
+        QVERIFY(doc.setShapeStroke(id, QColor(Qt::blue)));
+        QCOMPARE(spy.count(), 2);
+        QCOMPARE(doc.revision(), rev2);
+
+        // 3. setShapeStrokeWidth: altera espessura e clamp >= 0
+        QVERIFY(doc.setShapeStrokeWidth(id, 4.5));
+        QCOMPARE(spy.count(), 3);
+        QCOMPARE(s->strokeWidth, 4.5);
+
+        // Mesma espessura: no-op
+        const quint64 rev3 = doc.revision();
+        QVERIFY(doc.setShapeStrokeWidth(id, 4.5));
+        QCOMPARE(spy.count(), 3);
+        QCOMPARE(doc.revision(), rev3);
+
+        // Valor negativo: deve ser clamped para 0.0
+        QVERIFY(doc.setShapeStrokeWidth(id, -5.0));
+        QCOMPARE(spy.count(), 4);
+        QCOMPARE(s->strokeWidth, 0.0);
+
+        // 4. setShapeCornerRadius: altera raio dos cantos
+        QVERIFY(doc.setShapeCornerRadius(id, 12.0));
+        QCOMPARE(spy.count(), 5);
+        QCOMPARE(s->cornerRadius, 12.0);
+
+        // Mesmo raio: no-op
+        const quint64 rev4 = doc.revision();
+        QVERIFY(doc.setShapeCornerRadius(id, 12.0));
+        QCOMPARE(spy.count(), 5);
+        QCOMPARE(doc.revision(), rev4);
+
+        // Valor negativo: clamped para 0.0
+        QVERIFY(doc.setShapeCornerRadius(id, -10.0));
+        QCOMPARE(spy.count(), 6);
+        QCOMPARE(s->cornerRadius, 0.0);
+
+        // 5. Rejeita IDs desconhecidos ou camadas que não sejam ShapeLayer
+        auto text = makeText("T");
+        const LayerId textId = text->id();
+        QVERIFY(doc.addLayer(std::move(text)));
+
+        QVERIFY(!doc.setShapeFill(textId, QColor(Qt::green)));
+        QVERIFY(!doc.setShapeStroke(textId, QColor(Qt::green)));
+        QVERIFY(!doc.setShapeStrokeWidth(textId, 2.0));
+        QVERIFY(!doc.setShapeCornerRadius(textId, 5.0));
+
+        QVERIFY(!doc.setShapeFill(newLayerId(), QColor(Qt::green)));
+        QCOMPARE(spy.count(), 6);
     }
 };
 
