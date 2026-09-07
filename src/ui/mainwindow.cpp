@@ -188,7 +188,7 @@ void MainWindow::buildCentralWidget()
 
 void MainWindow::buildLayersDock()
 {
-    m_layersPanel = new LayersPanel(m_i18n, this);
+    m_layersPanel = new LayersPanel(m_i18n, m_history.get(), this);
     m_layersPanel->setDocument(m_document.get());
 
     m_layersDock = new QDockWidget(QString(), this);

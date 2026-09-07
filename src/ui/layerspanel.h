@@ -7,20 +7,30 @@
 
 class QListWidget;
 class QListWidgetItem;
+class QComboBox;
+class QSlider;
+class QSpinBox;
+class QLabel;
 
 namespace cc {
 
 class I18nService;
+class CommandStack;
 
-/// Adobe-Express-style layer list: top layer first, drag to reorder,
-/// eye toggles visibility, right-click for layer actions.
+/// Lista de camadas estilo Adobe Express / Figma:
+/// - Controles superiores de Modo de Mesclagem (Blend Mode) e Opacidade (0-100%)
+/// - Lista de camadas com ordenação por arrastar e soltar (drag & drop)
+/// - Ícone de olho para visibilidade e cadeado para bloqueio
+/// - Menu de contexto com ações rápidas da camada
 class LayersPanel final : public QWidget
 {
     Q_OBJECT
 public:
-    explicit LayersPanel(I18nService* i18n, QWidget* parent = nullptr);
+    explicit LayersPanel(I18nService* i18n, CommandStack* history = nullptr,
+                         QWidget* parent = nullptr);
 
     void setDocument(Document* document);
+    void setHistory(CommandStack* history);
     void refresh();
     void setSelectedLayer(const LayerId& id);
 
@@ -34,6 +44,7 @@ private:
     void buildUi();
     void retranslateUi();
     void rebuild();
+    void updateControlsForSelection();
     void onCurrentRowChanged(int row);
     void onItemChanged(QListWidgetItem* item);
     void onMoved();
@@ -43,10 +54,19 @@ private:
     LayerId layerIdFromRow(int row) const;
 
     QPointer<Document> m_document;
+    CommandStack* m_history = nullptr;
     I18nService* m_i18n = nullptr;
     QListWidget* m_list = nullptr;
     bool m_updating = false;
     LayerId m_selectedId;
+    float m_opacityBeforeSlide = 1.0f;
+
+    // Controles superiores de mesclagem e opacidade
+    QLabel* m_blendLabel = nullptr;
+    QComboBox* m_blendCombo = nullptr;
+    QLabel* m_opacityLabel = nullptr;
+    QSlider* m_opacitySlider = nullptr;
+    QSpinBox* m_opacitySpin = nullptr;
 };
 
 } // namespace cc
