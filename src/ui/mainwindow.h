@@ -29,6 +29,7 @@ class SettingsService;
 class CanvasView;
 class LayersPanel;
 class TextInspector;
+class ShapeInspector;
 class StartScreen;
 
 class MainWindow final : public QMainWindow
@@ -60,6 +61,7 @@ private:
     void exportImage();
     void flipLayer(bool horizontal);
     void addText();
+    void addShape(ShapeKind kind);
     void deleteSelectedLayer();
     bool saveDocument();
     bool saveDocumentAs();
@@ -86,8 +88,10 @@ private:
     CanvasView* m_canvas = nullptr;
     LayersPanel* m_layersPanel = nullptr;
     TextInspector* m_textInspector = nullptr;
+    ShapeInspector* m_shapeInspector = nullptr;
     QDockWidget* m_layersDock = nullptr;
     QDockWidget* m_textDock = nullptr;
+    QDockWidget* m_shapeDock = nullptr;
     LayerId m_selectedId;
     QString m_currentFilePath;
     bool m_modified = false;
@@ -102,6 +106,11 @@ private:
     QAction* m_undoAction = nullptr;
     QAction* m_redoAction = nullptr;
     QAction* m_addTextAction = nullptr;
+    QMenu* m_addShapeMenu = nullptr;
+    QAction* m_addRectAction = nullptr;
+    QAction* m_addRoundedRectAction = nullptr;
+    QAction* m_addEllipseAction = nullptr;
+    QAction* m_addLineAction = nullptr;
     QAction* m_flipHAction = nullptr;
     QAction* m_flipVAction = nullptr;
     QAction* m_deleteAction = nullptr;

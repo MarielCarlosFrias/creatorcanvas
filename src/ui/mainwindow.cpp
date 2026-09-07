@@ -16,6 +16,7 @@
 #include "services/autosaveservice.h"
 #include "services/recentfiles.h"
 #include "ui/textinspector.h"
+#include "ui/shapeinspector.h"
 
 #include <QApplication>
 #include <QCloseEvent>
@@ -145,6 +146,18 @@ void MainWindow::buildCentralWidget()
                     m_layersPanel->setSelectedLayer(id);
                 if (m_textInspector)
                     m_textInspector->setSelectedLayer(id);
+                if (m_shapeInspector)
+                    m_shapeInspector->setSelectedLayer(id);
+
+                // Alterna automaticamente a aba ativa do dock de propriedades para o tipo da camada
+                if (m_document) {
+                    const Layer* layer = m_document->findLayer(id);
+                    if (layer && layer->type() == LayerType::Shape && m_shapeDock) {
+                        m_shapeDock->raise();
+                    } else if (layer && layer->type() == LayerType::Text && m_textDock) {
+                        m_textDock->raise();
+                    }
+                }
             });
     connect(m_canvas, &CanvasView::transformCommitted, this,
             [this](const LayerId& id, const AffineTransform& oldValue,
@@ -206,6 +219,16 @@ void MainWindow::buildLayersDock()
                             | QDockWidget::DockWidgetFloatable);
     addDockWidget(Qt::RightDockWidgetArea, m_textDock);
     m_textDock->hide();
+
+    // Cria o inspetor de formas e tabifica junto ao inspetor de texto na barra lateral direita
+    m_shapeInspector = new ShapeInspector(m_i18n, m_document.get(), m_history.get(), this);
+    m_shapeDock = new QDockWidget(QString(), this);
+    m_shapeDock->setWidget(m_shapeInspector);
+    m_shapeDock->setFeatures(QDockWidget::DockWidgetMovable
+                             | QDockWidget::DockWidgetFloatable);
+    addDockWidget(Qt::RightDockWidgetArea, m_shapeDock);
+    tabifyDockWidget(m_textDock, m_shapeDock);
+    m_shapeDock->hide();
 }
 
 void MainWindow::buildActions()
@@ -259,6 +282,30 @@ void MainWindow::buildActions()
     m_addTextAction = new QAction(this);
     m_addTextAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+T")));
     connect(m_addTextAction, &QAction::triggered, this, &MainWindow::addText);
+
+    // Ações para adicionar formas geométricas com atalhos padrão
+    m_addRectAction = new QAction(this);
+    m_addRectAction->setShortcut(QKeySequence(QStringLiteral("R")));
+    connect(m_addRectAction, &QAction::triggered, this, [this] {
+        addShape(ShapeKind::Rectangle);
+    });
+
+    m_addRoundedRectAction = new QAction(this);
+    connect(m_addRoundedRectAction, &QAction::triggered, this, [this] {
+        addShape(ShapeKind::RoundedRect);
+    });
+
+    m_addEllipseAction = new QAction(this);
+    m_addEllipseAction->setShortcut(QKeySequence(QStringLiteral("O")));
+    connect(m_addEllipseAction, &QAction::triggered, this, [this] {
+        addShape(ShapeKind::Ellipse);
+    });
+
+    m_addLineAction = new QAction(this);
+    m_addLineAction->setShortcut(QKeySequence(QStringLiteral("L")));
+    connect(m_addLineAction, &QAction::triggered, this, [this] {
+        addShape(ShapeKind::Line);
+    });
 
     m_flipHAction = new QAction(this);
     connect(m_flipHAction, &QAction::triggered,
@@ -320,6 +367,14 @@ void MainWindow::buildMenus()
 
     m_layerMenu = menuBar()->addMenu(QString());
     m_layerMenu->addAction(m_addTextAction);
+
+    // Submenu para adicionar diferentes tipos de formas geométricas
+    m_addShapeMenu = m_layerMenu->addMenu(QString());
+    m_addShapeMenu->addAction(m_addRectAction);
+    m_addShapeMenu->addAction(m_addRoundedRectAction);
+    m_addShapeMenu->addAction(m_addEllipseAction);
+    m_addShapeMenu->addAction(m_addLineAction);
+
     m_layerMenu->addAction(m_flipHAction);
     m_layerMenu->addAction(m_flipVAction);
     m_layerMenu->addSeparator();
@@ -352,6 +407,7 @@ void MainWindow::showStartScreen()
     m_centralStack->setCurrentWidget(m_startScreen);
     if (m_layersDock) m_layersDock->hide();
     if (m_textDock) m_textDock->hide();
+    if (m_shapeDock) m_shapeDock->hide();
     if (m_startScreen) m_startScreen->refreshRecents();
 }
 
@@ -360,6 +416,7 @@ void MainWindow::enterEditor()
     m_centralStack->setCurrentWidget(m_canvas);
     if (m_layersDock) m_layersDock->show();
     if (m_textDock) m_textDock->show();
+    if (m_shapeDock) m_shapeDock->show();
     updateWindowTitle();
 }
 
@@ -380,6 +437,8 @@ void MainWindow::startFromPreset(const NewDocumentSpec& spec)
         m_layersPanel->setDocument(m_document.get());
     if (m_textInspector)
         m_textInspector->setDocument(m_document.get());
+    if (m_shapeInspector)
+        m_shapeInspector->setDocument(m_document.get());
     connectDocumentSignals();
     enterEditor();
     updateWindowTitle();
@@ -414,6 +473,8 @@ void MainWindow::openFromPath(const QString& path)
         m_layersPanel->setDocument(m_document.get());
     if (m_textInspector)
         m_textInspector->setDocument(m_document.get());
+    if (m_shapeInspector)
+        m_shapeInspector->setDocument(m_document.get());
     connectDocumentSignals();
     if (m_recentFiles)
         m_recentFiles->push(path);
@@ -444,6 +505,8 @@ void MainWindow::newDocument()
         m_layersPanel->setDocument(m_document.get());
     if (m_textInspector)
         m_textInspector->setDocument(m_document.get());
+    if (m_shapeInspector)
+        m_shapeInspector->setDocument(m_document.get());
     connectDocumentSignals();
     updateWindowTitle();
     enterEditor();
@@ -525,6 +588,84 @@ void MainWindow::addText()
         std::make_unique<AddLayerCommand>(*m_document, std::move(layer)));
     m_canvas->setSelectedLayer(id);
     m_canvas->beginTextEdit(id);
+}
+
+void MainWindow::addShape(ShapeKind kind)
+{
+    if (!m_document || !m_i18n)
+        return;
+
+    auto layer = std::make_unique<ShapeLayer>();
+    layer->kind = kind;
+
+    // Dimensões do documento para calcular proporções adequadas
+    const double docW = m_document->width();
+    const double docH = m_document->height();
+
+    // Centraliza a nova forma no meio do documento
+    layer->transform.position = QPointF(docW / 2.0, docH / 2.0);
+
+    switch (kind) {
+    case ShapeKind::Rectangle: {
+        // Remove '&' do mnemônico da tradução para o nome da camada ficar limpo
+        layer->name = m_i18n->t("common", "menu.layer.shape.rect").remove('&');
+        const double w = std::clamp(docW * 0.3, 100.0, 400.0);
+        const double h = std::clamp(docH * 0.25, 80.0, 300.0);
+        layer->points = QPolygonF{
+            QPointF(0, 0), QPointF(w, 0), QPointF(w, h), QPointF(0, h)
+        };
+        layer->fill = QColor(64, 128, 255);
+        layer->stroke = QColor(30, 30, 30);
+        layer->strokeWidth = 2.0;
+        break;
+    }
+    case ShapeKind::RoundedRect: {
+        layer->name = m_i18n->t("common", "menu.layer.shape.roundedRect").remove('&');
+        const double w = std::clamp(docW * 0.3, 100.0, 400.0);
+        const double h = std::clamp(docH * 0.25, 80.0, 300.0);
+        layer->points = QPolygonF{
+            QPointF(0, 0), QPointF(w, 0), QPointF(w, h), QPointF(0, h)
+        };
+        layer->cornerRadius = 16.0;
+        layer->fill = QColor(64, 128, 255);
+        layer->stroke = QColor(30, 30, 30);
+        layer->strokeWidth = 2.0;
+        break;
+    }
+    case ShapeKind::Ellipse: {
+        layer->name = m_i18n->t("common", "menu.layer.shape.ellipse").remove('&');
+        const double size = std::clamp(std::min(docW, docH) * 0.25, 100.0, 300.0);
+        layer->points = QPolygonF{
+            QPointF(0, 0), QPointF(size, 0), QPointF(size, size), QPointF(0, size)
+        };
+        layer->fill = QColor(255, 105, 180);
+        layer->stroke = QColor(30, 30, 30);
+        layer->strokeWidth = 2.0;
+        break;
+    }
+    case ShapeKind::Line: {
+        layer->name = m_i18n->t("common", "menu.layer.shape.line").remove('&');
+        const double len = std::clamp(docW * 0.35, 100.0, 500.0);
+        layer->points = QPolygonF{
+            QPointF(0, 0), QPointF(len, 0)
+        };
+        layer->stroke = QColor(30, 30, 30);
+        layer->strokeWidth = 4.0;
+        layer->fill = Qt::transparent;
+        break;
+    }
+    default:
+        break;
+    }
+
+    const LayerId id = layer->id();
+
+    // Adiciona a forma através do histórico (suporte a Desfazer/Refazer)
+    m_history->execute(
+        std::make_unique<AddLayerCommand>(*m_document, std::move(layer)));
+
+    // Seleciona a camada recém-criada
+    m_canvas->setSelectedLayer(id);
 }
 
 void MainWindow::exportImage()
@@ -721,6 +862,8 @@ void MainWindow::checkForRecoveryFile()
         m_layersPanel->setDocument(m_document.get());
     if (m_textInspector)
         m_textInspector->setDocument(m_document.get());
+    if (m_shapeInspector)
+        m_shapeInspector->setDocument(m_document.get());
     m_autosave->setDocument(m_document.get());
     connectDocumentSignals();
     updateWindowTitle();
@@ -779,6 +922,16 @@ void MainWindow::retranslateUi()
     m_undoAction->setText(m_i18n->t("common", "menu.edit.undo"));
     m_redoAction->setText(m_i18n->t("common", "menu.edit.redo"));
     m_addTextAction->setText(m_i18n->t("common", "menu.layer.addText"));
+    if (m_addShapeMenu)
+        m_addShapeMenu->setTitle(m_i18n->t("common", "menu.layer.addShape"));
+    if (m_addRectAction)
+        m_addRectAction->setText(m_i18n->t("common", "menu.layer.shape.rect"));
+    if (m_addRoundedRectAction)
+        m_addRoundedRectAction->setText(m_i18n->t("common", "menu.layer.shape.roundedRect"));
+    if (m_addEllipseAction)
+        m_addEllipseAction->setText(m_i18n->t("common", "menu.layer.shape.ellipse"));
+    if (m_addLineAction)
+        m_addLineAction->setText(m_i18n->t("common", "menu.layer.shape.line"));
     m_flipHAction->setText(m_i18n->t("common", "menu.layer.flipH"));
     m_flipVAction->setText(m_i18n->t("common", "menu.layer.flipV"));
     m_deleteAction->setText(m_i18n->t("common", "menu.layer.delete"));
@@ -797,6 +950,8 @@ void MainWindow::retranslateUi()
         m_layersDock->setWindowTitle(m_i18n->t("common", "panel.layers"));
     if (m_textDock)
         m_textDock->setWindowTitle(m_i18n->t("editor", "text.title"));
+    if (m_shapeDock)
+        m_shapeDock->setWindowTitle(m_i18n->t("editor", "shape.title"));
 
     updateZoomLabel();
     updatePositionLabel(m_lastCursorPos);

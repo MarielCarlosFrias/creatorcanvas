@@ -100,6 +100,8 @@ add_executable(creatorcanvas
     ui/settingsdialog.cpp
     ui/startscreen.h
     ui/startscreen.cpp
+    ui/shapeinspector.h
+    ui/shapeinspector.cpp
 )
 target_link_libraries(creatorcanvas
     PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets
