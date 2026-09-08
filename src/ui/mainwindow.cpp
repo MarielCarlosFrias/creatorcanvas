@@ -539,7 +539,7 @@ void MainWindow::buildToolBars()
     m_cropAspectCombo->addItem(QStringLiteral("4:3 (Standard)"), 4.0 / 3.0);
     m_cropAspectCombo->addItem(QStringLiteral("9:16 (Stories/Reels)"), 9.0 / 16.0);
     connect(m_cropAspectCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
-        if (m_canvas) {
+        if (m_canvas && index >= 0) {
             double ratio = m_cropAspectCombo->itemData(index).toDouble();
             m_canvas->setCropAspectRatio(ratio);
         }
@@ -574,7 +574,7 @@ void MainWindow::buildToolBars()
     m_scissorsModeCombo->addItem(QStringLiteral("Keep Inside (Cutout)"), true);
     m_scissorsModeCombo->addItem(QStringLiteral("Erase Inside (Hole)"), false);
     connect(m_scissorsModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
-        if (m_canvas) {
+        if (m_canvas && index >= 0) {
             bool keep = m_scissorsModeCombo->itemData(index).toBool();
             m_canvas->setScissorsKeepInside(keep);
         }

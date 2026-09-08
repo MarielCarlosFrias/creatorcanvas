@@ -199,6 +199,20 @@ void CanvasView::selectLayer(const LayerId& id)
     if (m_selectedId == id)
         return;
     m_selectedId = id;
+
+    if (m_tool == CanvasTool::Crop && m_document && !m_selectedId.isNull()) {
+        Layer* layer = m_document->findLayer(m_selectedId);
+        if (layer && layer->type() == LayerType::Image) {
+            auto* img = static_cast<ImageLayer*>(layer);
+            if (m_cropAspectRatio > 0.0) {
+                m_cropRect = ImageProcessing::calculateAspectCropRect(
+                    QSize(img->naturalWidth, img->naturalHeight), m_cropAspectRatio);
+            } else {
+                m_cropRect = QRectF(0, 0, img->naturalWidth, img->naturalHeight);
+            }
+        }
+    }
+
     emit selectionChanged(m_selectedId);
     update();
 }
@@ -458,24 +472,39 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
                     }
                 }
             }
+            Layer* hit = hitTestLayer(docPos);
+            if (hit && hit->type() == LayerType::Image) {
+                selectLayer(hit->id());
+                event->accept();
+                return;
+            }
             event->accept();
             return;
         }
 
         // Interação do Corte com Tesoura (Scissors Cut)
         if (m_tool == CanvasTool::Scissors) {
-            if (!m_selectedId.isNull()) {
-                Layer* layer = m_document->findLayer(m_selectedId);
-                if (layer && layer->type() == LayerType::Image) {
-                    const QTransform matrix = layer->transform.matrix(layer->contentBounds());
-                    const QPointF localPos = matrix.inverted().map(docPos);
-                    m_scissorsPolygon << localPos;
-                    m_scissorsCurrentHover = localPos;
-                    m_isScissorsDrawing = true;
-                    update();
-                    event->accept();
-                    return;
+            Layer* layer = nullptr;
+            if (!m_selectedId.isNull())
+                layer = m_document->findLayer(m_selectedId);
+
+            if (!layer || layer->type() != LayerType::Image) {
+                Layer* hit = hitTestLayer(docPos);
+                if (hit && hit->type() == LayerType::Image) {
+                    selectLayer(hit->id());
+                    layer = hit;
                 }
+            }
+
+            if (layer && layer->type() == LayerType::Image) {
+                const QTransform matrix = layer->transform.matrix(layer->contentBounds());
+                const QPointF localPos = matrix.inverted().map(docPos);
+                m_scissorsPolygon << localPos;
+                m_scissorsCurrentHover = localPos;
+                m_isScissorsDrawing = true;
+                update();
+                event->accept();
+                return;
             }
             event->accept();
             return;
@@ -1245,12 +1274,20 @@ void CanvasView::setTool(CanvasTool tool)
     if (m_tool == tool)
         return;
 
-    if (m_tool == CanvasTool::Crop)
-        cancelCrop();
-    else if (m_tool == CanvasTool::Scissors)
-        cancelScissorsCut();
-
+    const CanvasTool prevTool = m_tool;
     m_tool = tool;
+
+    // Limpa estado da ferramenta anterior sem chamar setTool para evitar recursão
+    if (prevTool == CanvasTool::Crop) {
+        m_cropRect = QRectF();
+        m_activeCropHandle = -1;
+    } else if (prevTool == CanvasTool::Scissors) {
+        m_scissorsPolygon.clear();
+        m_isScissorsDrawing = false;
+    } else if (prevTool == CanvasTool::CloneStamp) {
+        m_isCloning = false;
+        m_cloneWorkingImage = QImage();
+    }
 
     // Ao ativar a ferramenta de corte, calcula o retângulo inicial da camada de imagem
     if (m_tool == CanvasTool::Crop) {
@@ -1293,32 +1330,32 @@ void CanvasView::setCropAspectRatio(double ratio)
 void CanvasView::applyCrop()
 {
     if (!m_document || m_selectedId.isNull() || m_cropRect.isEmpty()) {
-        setTool(CanvasTool::Select);
+        cancelCrop();
         return;
     }
 
     Layer* layer = m_document->findLayer(m_selectedId);
     if (!layer || layer->type() != LayerType::Image) {
-        setTool(CanvasTool::Select);
+        cancelCrop();
         return;
     }
 
     auto* img = static_cast<ImageLayer*>(layer);
     QImage orig = m_document->assets().decodedImage(img->assetId);
     if (orig.isNull()) {
-        setTool(CanvasTool::Select);
+        cancelCrop();
         return;
     }
 
     const QRect cropR = m_cropRect.toRect().intersected(orig.rect());
     if (cropR.isEmpty()) {
-        setTool(CanvasTool::Select);
+        cancelCrop();
         return;
     }
 
     QImage cropped = ImageProcessing::cropImage(orig, cropR);
     if (cropped.isNull()) {
-        setTool(CanvasTool::Select);
+        cancelCrop();
         return;
     }
 
@@ -1342,16 +1379,18 @@ void CanvasView::applyCrop()
                             newAssetId, cropped.width(), cropped.height(), newTransform,
                             QStringLiteral("Crop Image"));
 
-    setTool(CanvasTool::Select);
+    cancelCrop();
 }
 
 void CanvasView::cancelCrop()
 {
     m_cropRect = QRectF();
     m_activeCropHandle = -1;
-    if (m_tool == CanvasTool::Crop)
+    if (m_tool == CanvasTool::Crop) {
         setTool(CanvasTool::Select);
-    update();
+    } else {
+        update();
+    }
 }
 
 void CanvasView::setScissorsKeepInside(bool keepInside)
@@ -1422,9 +1461,11 @@ void CanvasView::cancelScissorsCut()
 {
     m_scissorsPolygon.clear();
     m_isScissorsDrawing = false;
-    if (m_tool == CanvasTool::Scissors)
+    if (m_tool == CanvasTool::Scissors) {
         setTool(CanvasTool::Select);
-    update();
+    } else {
+        update();
+    }
 }
 
 void CanvasView::setWandTolerance(int tolerance)
@@ -1457,12 +1498,26 @@ void CanvasView::applyMagicWand(const QPointF& docPos)
     }
 
     auto* img = static_cast<ImageLayer*>(layer);
-    const QTransform matrix = layer->transform.matrix(layer->contentBounds());
-    const QPointF localPos = matrix.inverted().map(docPos);
-    const QPoint seedPt = localPos.toPoint();
+    QTransform matrix = layer->transform.matrix(layer->contentBounds());
+    QPointF localPos = matrix.inverted().map(docPos);
+    QPoint seedPt = localPos.toPoint();
 
-    if (!QRect(0, 0, img->naturalWidth, img->naturalHeight).contains(seedPt))
-        return;
+    // Se o ponto clicado não está na imagem selecionada, verifica se clicou em outra camada de imagem
+    if (!QRect(0, 0, img->naturalWidth, img->naturalHeight).contains(seedPt)) {
+        Layer* hit = hitTestLayer(docPos);
+        if (hit && hit->type() == LayerType::Image && hit != layer) {
+            selectLayer(hit->id());
+            layer = hit;
+            img = static_cast<ImageLayer*>(layer);
+            matrix = layer->transform.matrix(layer->contentBounds());
+            localPos = matrix.inverted().map(docPos);
+            seedPt = localPos.toPoint();
+            if (!QRect(0, 0, img->naturalWidth, img->naturalHeight).contains(seedPt))
+                return;
+        } else {
+            return;
+        }
+    }
 
     QImage orig = m_document->assets().decodedImage(img->assetId);
     if (orig.isNull())
@@ -1553,11 +1608,10 @@ void CanvasView::drawCropOverlay(QPainter* painter)
 
     const QRectF fullRect(0, 0, img->naturalWidth, img->naturalHeight);
 
-    QPainterPath outerPath;
-    outerPath.addRect(layerToDevice.mapRect(fullRect));
-    QPainterPath cropPath;
-    cropPath.addRect(layerToDevice.mapRect(m_cropRect));
-    QPainterPath darkPath = outerPath.subtracted(cropPath);
+    QPainterPath darkPath;
+    darkPath.setFillRule(Qt::OddEvenFill);
+    darkPath.addPolygon(layerToDevice.map(QPolygonF(fullRect)));
+    darkPath.addPolygon(layerToDevice.map(QPolygonF(m_cropRect)));
     painter->fillPath(darkPath, QColor(0, 0, 0, 160));
 
     const QRectF screenCrop = layerToDevice.mapRect(m_cropRect);

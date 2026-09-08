@@ -93,17 +93,17 @@ QImage ImageProcessing::removeBackground(const QImage& source, const QPoint& see
         return result;
     }
 
-    // Modo contiguo: BFS flood-fill a partir do ponto clicado (seedPoint)
+    // Modo contiguo: flood-fill baseado em pilha (DFS) com pop_back para consumo minimo de memoria
     std::vector<uint8_t> visited(w * h, 0);
-    std::vector<QPoint> queue;
-    queue.reserve(std::min(w * h, 4096));
+    std::vector<QPoint> stack;
+    stack.reserve(std::min(w * h, 65536));
 
-    queue.push_back(seedPoint);
+    stack.push_back(seedPoint);
     visited[seedPoint.y() * w + seedPoint.x()] = 1;
 
-    size_t head = 0;
-    while (head < queue.size()) {
-        const QPoint pt = queue[head++];
+    while (!stack.empty()) {
+        const QPoint pt = stack.back();
+        stack.pop_back();
         const int px = pt.x();
         const int py = pt.y();
 
@@ -128,7 +128,7 @@ QImage ImageProcessing::removeBackground(const QImage& source, const QPoint& see
                     visited[idx] = 1;
                     const QRgb neighborPixel = reinterpret_cast<const QRgb*>(result.constScanLine(ny))[nx];
                     if (matches(neighborPixel)) {
-                        queue.push_back(QPoint(nx, ny));
+                        stack.push_back(QPoint(nx, ny));
                     }
                 }
             }
