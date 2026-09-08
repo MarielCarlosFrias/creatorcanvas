@@ -176,6 +176,8 @@ creatorcanvas/
 
 See `DOCUMENTATION.md` for the complete conventions, architecture, and API reference.
 
+## Note
+I have to take a break on this project for now but i will try add more things for next version 🫥.
 ## License
 
 MIT — see `LICENSE`.
