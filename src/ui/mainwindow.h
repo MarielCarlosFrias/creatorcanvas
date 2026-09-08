@@ -62,6 +62,12 @@ private:
     void flipLayer(bool horizontal);
     void addText();
     void addShape(ShapeKind kind);
+    enum class AlignTarget {
+        Left, CenterX, Right,
+        Top, CenterY, Bottom,
+        CenterBoth
+    };
+    void alignSelectedLayer(AlignTarget target);
     void deleteSelectedLayer();
     bool saveDocument();
     bool saveDocumentAs();
@@ -111,6 +117,14 @@ private:
     QAction* m_addRoundedRectAction = nullptr;
     QAction* m_addEllipseAction = nullptr;
     QAction* m_addLineAction = nullptr;
+    QMenu* m_alignMenu = nullptr;
+    QAction* m_alignLeftAction = nullptr;
+    QAction* m_alignCenterXAction = nullptr;
+    QAction* m_alignRightAction = nullptr;
+    QAction* m_alignTopAction = nullptr;
+    QAction* m_alignCenterYAction = nullptr;
+    QAction* m_alignBottomAction = nullptr;
+    QAction* m_alignCenterBothAction = nullptr;
     QAction* m_flipHAction = nullptr;
     QAction* m_flipVAction = nullptr;
     QAction* m_deleteAction = nullptr;

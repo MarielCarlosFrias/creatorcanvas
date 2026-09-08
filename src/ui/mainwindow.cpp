@@ -316,6 +316,42 @@ void MainWindow::buildActions()
         addShape(ShapeKind::Line);
     });
 
+    // Ações para alinhamento rápido da camada selecionada na tela
+    m_alignLeftAction = new QAction(this);
+    connect(m_alignLeftAction, &QAction::triggered, this, [this] {
+        alignSelectedLayer(AlignTarget::Left);
+    });
+
+    m_alignCenterXAction = new QAction(this);
+    connect(m_alignCenterXAction, &QAction::triggered, this, [this] {
+        alignSelectedLayer(AlignTarget::CenterX);
+    });
+
+    m_alignRightAction = new QAction(this);
+    connect(m_alignRightAction, &QAction::triggered, this, [this] {
+        alignSelectedLayer(AlignTarget::Right);
+    });
+
+    m_alignTopAction = new QAction(this);
+    connect(m_alignTopAction, &QAction::triggered, this, [this] {
+        alignSelectedLayer(AlignTarget::Top);
+    });
+
+    m_alignCenterYAction = new QAction(this);
+    connect(m_alignCenterYAction, &QAction::triggered, this, [this] {
+        alignSelectedLayer(AlignTarget::CenterY);
+    });
+
+    m_alignBottomAction = new QAction(this);
+    connect(m_alignBottomAction, &QAction::triggered, this, [this] {
+        alignSelectedLayer(AlignTarget::Bottom);
+    });
+
+    m_alignCenterBothAction = new QAction(this);
+    connect(m_alignCenterBothAction, &QAction::triggered, this, [this] {
+        alignSelectedLayer(AlignTarget::CenterBoth);
+    });
+
     m_flipHAction = new QAction(this);
     connect(m_flipHAction, &QAction::triggered,
             this, [this] { flipLayer(true); });
@@ -383,6 +419,18 @@ void MainWindow::buildMenus()
     m_addShapeMenu->addAction(m_addRoundedRectAction);
     m_addShapeMenu->addAction(m_addEllipseAction);
     m_addShapeMenu->addAction(m_addLineAction);
+
+    // Submenu de alinhamento rápido da camada em relação à tela
+    m_alignMenu = m_layerMenu->addMenu(QString());
+    m_alignMenu->addAction(m_alignLeftAction);
+    m_alignMenu->addAction(m_alignCenterXAction);
+    m_alignMenu->addAction(m_alignRightAction);
+    m_alignMenu->addSeparator();
+    m_alignMenu->addAction(m_alignTopAction);
+    m_alignMenu->addAction(m_alignCenterYAction);
+    m_alignMenu->addAction(m_alignBottomAction);
+    m_alignMenu->addSeparator();
+    m_alignMenu->addAction(m_alignCenterBothAction);
 
     m_layerMenu->addAction(m_flipHAction);
     m_layerMenu->addAction(m_flipVAction);
@@ -677,6 +725,70 @@ void MainWindow::addShape(ShapeKind kind)
     m_canvas->setSelectedLayer(id);
 }
 
+void MainWindow::alignSelectedLayer(AlignTarget target)
+{
+    if (!m_document || m_selectedId.isNull())
+        return;
+
+    Layer* layer = m_document->findLayer(m_selectedId);
+    // Não alinha camadas inexistentes ou bloqueadas
+    if (!layer || layer->locked)
+        return;
+
+    // Obtém os limites locais da camada (dimensões intrínsecas)
+    const QRectF local = layer->contentBounds();
+    if (local.isEmpty())
+        return;
+
+    // Calcula os limites reais da camada em coordenadas da tela (documento), levando em conta rotação e escala
+    const QRectF docBounds = layer->transform.matrix(local).mapRect(local);
+    const double docW = m_document->width();
+    const double docH = m_document->height();
+
+    double dx = 0.0;
+    double dy = 0.0;
+
+    // Calcula o deslocamento necessário conforme o alvo de alinhamento
+    switch (target) {
+    case AlignTarget::Left:
+        dx = -docBounds.left();
+        break;
+    case AlignTarget::CenterX:
+        dx = (docW / 2.0) - docBounds.center().x();
+        break;
+    case AlignTarget::Right:
+        dx = docW - docBounds.right();
+        break;
+    case AlignTarget::Top:
+        dy = -docBounds.top();
+        break;
+    case AlignTarget::CenterY:
+        dy = (docH / 2.0) - docBounds.center().y();
+        break;
+    case AlignTarget::Bottom:
+        dy = docH - docBounds.bottom();
+        break;
+    case AlignTarget::CenterBoth:
+        dx = (docW / 2.0) - docBounds.center().x();
+        dy = (docH / 2.0) - docBounds.center().y();
+        break;
+    }
+
+    // Se a camada já está perfeitamente alinhada, não faz nada
+    if (qFuzzyIsNull(dx) && qFuzzyIsNull(dy))
+        return;
+
+    const AffineTransform oldT = layer->transform;
+    AffineTransform newT = oldT;
+    newT.position += QPointF(dx, dy);
+
+    // Registra a alteração através do histórico (Ctrl+Z / Ctrl+Y)
+    if (m_history) {
+        m_history->execute(std::make_unique<SetLayerTransformCommand>(
+            *m_document, m_selectedId, oldT, newT));
+    }
+}
+
 void MainWindow::exportImage()
 {
     if (!m_i18n || !m_document)
@@ -941,6 +1053,22 @@ void MainWindow::retranslateUi()
         m_addEllipseAction->setText(m_i18n->t("common", "menu.layer.shape.ellipse"));
     if (m_addLineAction)
         m_addLineAction->setText(m_i18n->t("common", "menu.layer.shape.line"));
+    if (m_alignMenu)
+        m_alignMenu->setTitle(m_i18n->t("common", "menu.layer.align"));
+    if (m_alignLeftAction)
+        m_alignLeftAction->setText(m_i18n->t("common", "menu.layer.align.left"));
+    if (m_alignCenterXAction)
+        m_alignCenterXAction->setText(m_i18n->t("common", "menu.layer.align.centerX"));
+    if (m_alignRightAction)
+        m_alignRightAction->setText(m_i18n->t("common", "menu.layer.align.right"));
+    if (m_alignTopAction)
+        m_alignTopAction->setText(m_i18n->t("common", "menu.layer.align.top"));
+    if (m_alignCenterYAction)
+        m_alignCenterYAction->setText(m_i18n->t("common", "menu.layer.align.centerY"));
+    if (m_alignBottomAction)
+        m_alignBottomAction->setText(m_i18n->t("common", "menu.layer.align.bottom"));
+    if (m_alignCenterBothAction)
+        m_alignCenterBothAction->setText(m_i18n->t("common", "menu.layer.align.centerBoth"));
     m_flipHAction->setText(m_i18n->t("common", "menu.layer.flipH"));
     m_flipVAction->setText(m_i18n->t("common", "menu.layer.flipV"));
     m_deleteAction->setText(m_i18n->t("common", "menu.layer.delete"));
