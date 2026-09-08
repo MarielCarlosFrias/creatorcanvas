@@ -519,35 +519,52 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
 
         // Interação do Carimbo de Clonagem (Clone Stamp)
         if (m_tool == CanvasTool::CloneStamp) {
-            if (!m_selectedId.isNull()) {
-                Layer* layer = m_document->findLayer(m_selectedId);
-                if (layer && layer->type() == LayerType::Image) {
-                    auto* img = static_cast<ImageLayer*>(layer);
-                    const QTransform matrix = layer->transform.matrix(layer->contentBounds());
-                    const QPointF localPos = matrix.inverted().map(docPos);
+            Layer* layer = nullptr;
+            if (!m_selectedId.isNull())
+                layer = m_document->findLayer(m_selectedId);
 
-                    if (event->modifiers() & Qt::AltModifier) {
-                        m_cloneSrcPoint = localPos.toPoint();
-                        m_cloneSrcLayerId = layer->id();
-                        m_hasCloneSrc = true;
-                        emit statusMessageRequested(QStringLiteral("Origem do carimbo definida. Arraste para clonar."));
-                        update();
-                        event->accept();
-                        return;
-                    } else if (m_hasCloneSrc) {
-                        m_cloneLastDstPoint = localPos.toPoint();
-                        m_cloneWorkingImage = m_document->assets().decodedImage(img->assetId);
-                        m_isCloning = true;
-
-                        m_cloneWorkingImage = ImageProcessing::cloneStamp(
-                            m_cloneWorkingImage, m_cloneWorkingImage,
-                            m_cloneSrcPoint, m_cloneLastDstPoint,
-                            m_cloneRadius, m_cloneOpacity, m_cloneHardness);
-                        update();
-                        event->accept();
-                        return;
-                    }
+            if (!layer || layer->type() != LayerType::Image) {
+                Layer* hit = hitTestLayer(docPos);
+                if (hit && hit->type() == LayerType::Image) {
+                    selectLayer(hit->id());
+                    layer = hit;
                 }
+            }
+
+            if (layer && layer->type() == LayerType::Image) {
+                auto* img = static_cast<ImageLayer*>(layer);
+                const QTransform matrix = layer->transform.matrix(layer->contentBounds());
+                const QPointF localPos = matrix.inverted().map(docPos);
+
+                if (event->modifiers() & Qt::AltModifier) {
+                    m_cloneSrcPoint = localPos.toPoint();
+                    m_cloneSrcLayerId = layer->id();
+                    m_hasCloneSrc = true;
+                    emit statusMessageRequested(QStringLiteral("Origem do carimbo definida em (%1, %2). Agora arraste para clonar.")
+                        .arg(m_cloneSrcPoint.x()).arg(m_cloneSrcPoint.y()));
+                    update();
+                    event->accept();
+                    return;
+                } else if (m_hasCloneSrc) {
+                    m_cloneLastDstPoint = localPos.toPoint();
+                    m_cloneWorkingImage = m_document->assets().decodedImage(img->assetId);
+                    m_isCloning = true;
+
+                    m_cloneWorkingImage = ImageProcessing::cloneStamp(
+                        m_cloneWorkingImage, m_cloneWorkingImage,
+                        m_cloneSrcPoint, m_cloneLastDstPoint,
+                        m_cloneRadius, m_cloneOpacity, m_cloneHardness);
+                    update();
+                    event->accept();
+                    return;
+                } else {
+                    emit statusMessageRequested(QStringLiteral("⚠️ Origem não definida! Segure a tecla Alt e clique na imagem para definir a origem antes de clonar."));
+                    update();
+                    event->accept();
+                    return;
+                }
+            } else {
+                emit statusMessageRequested(QStringLiteral("Clique sobre uma imagem para usar o Carimbo de Clonagem."));
             }
             event->accept();
             return;
@@ -794,10 +811,11 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event)
     }
 
     // Pintura contínua do Carimbo de Clonagem (Clone Stamp)
-    if (m_tool == CanvasTool::CloneStamp && m_document && !m_selectedId.isNull()) {
+    if (m_tool == CanvasTool::CloneStamp && m_document) {
         const QPointF docNow = deviceToDoc().map(QPointF(event->pos()));
         m_cloneHoverDocPos = docNow;
-        if (m_isCloning) {
+        m_cloneHoverValid = true;
+        if (m_isCloning && !m_selectedId.isNull()) {
             Layer* layer = m_document->findLayer(m_selectedId);
             if (layer && layer->type() == LayerType::Image) {
                 const QTransform matrix = layer->transform.matrix(layer->contentBounds());
@@ -1101,6 +1119,16 @@ void CanvasView::keyPressEvent(QKeyEvent* event)
         }
     }
 
+    if (m_tool == CanvasTool::CloneStamp) {
+        if (event->key() == Qt::Key_Escape) {
+            m_hasCloneSrc = false;
+            emit statusMessageRequested(QStringLiteral("Origem do carimbo redefinida."));
+            update();
+            event->accept();
+            return;
+        }
+    }
+
     if ((event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace)
         && !m_selectedId.isNull()) {
         emit deleteRequested(m_selectedId);
@@ -1244,6 +1272,13 @@ void CanvasView::resizeEvent(QResizeEvent* event)
         update();
 }
 
+void CanvasView::leaveEvent(QEvent* event)
+{
+    m_cloneHoverValid = false;
+    update();
+    QWidget::leaveEvent(event);
+}
+
 void CanvasView::dragEnterEvent(QDragEnterEvent* event)
 {
     if (event->mimeData()->hasUrls())
@@ -1303,6 +1338,10 @@ void CanvasView::setTool(CanvasTool tool)
                 }
             }
         }
+    }
+
+    if (m_tool == CanvasTool::CloneStamp) {
+        emit statusMessageRequested(QStringLiteral("Carimbo de Clonagem: Segure Alt e clique na imagem para definir a origem, depois arraste para pintar."));
     }
 
     update();
@@ -1715,38 +1754,73 @@ void CanvasView::drawScissorsOverlay(QPainter* painter)
 
 void CanvasView::drawCloneOverlay(QPainter* painter)
 {
-    if (!m_document || m_selectedId.isNull())
+    if (!m_document)
         return;
-    Layer* layer = m_document->findLayer(m_selectedId);
-    if (!layer || layer->type() != LayerType::Image)
-        return;
-
-    const QTransform layerToDoc = layer->transform.matrix(layer->contentBounds());
-    const QTransform layerToDevice = layerToDoc * docToDevice();
 
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing, true);
 
+    // Se houver origem definida, desenha o marcador de origem (mira vermelha)
     if (m_hasCloneSrc) {
-        QPointF srcScreen = layerToDevice.map(QPointF(m_cloneSrcPoint));
-        QPen srcPen(QColor(255, 60, 60), 1.5);
-        srcPen.setCosmetic(true);
-        painter->setPen(srcPen);
-        painter->setBrush(Qt::NoBrush);
-        painter->drawEllipse(srcScreen, 6, 6);
-        painter->drawLine(srcScreen.x() - 10, srcScreen.y(), srcScreen.x() + 10, srcScreen.y());
-        painter->drawLine(srcScreen.x(), srcScreen.y() - 10, srcScreen.x(), srcScreen.y() + 10);
+        Layer* srcLayer = m_document->findLayer(m_cloneSrcLayerId);
+        if (!srcLayer && !m_selectedId.isNull())
+            srcLayer = m_document->findLayer(m_selectedId);
+
+        if (srcLayer && srcLayer->type() == LayerType::Image) {
+            const QTransform layerToDoc = srcLayer->transform.matrix(srcLayer->contentBounds());
+            const QTransform layerToDevice = layerToDoc * docToDevice();
+            const QPointF srcScreen = layerToDevice.map(QPointF(m_cloneSrcPoint));
+
+            QPen srcPen(QColor(255, 60, 60), 2.0);
+            srcPen.setCosmetic(true);
+            painter->setPen(srcPen);
+            painter->setBrush(Qt::NoBrush);
+            painter->drawEllipse(srcScreen, 6, 6);
+            painter->drawLine(srcScreen.x() - 10, srcScreen.y(), srcScreen.x() + 10, srcScreen.y());
+            painter->drawLine(srcScreen.x(), srcScreen.y() - 10, srcScreen.x(), srcScreen.y() + 10);
+        }
     }
 
-    if (m_cloneHoverDocPos.x() > 0 || m_cloneHoverDocPos.y() > 0) {
-        QPointF hoverScreen = docToDevice().map(m_cloneHoverDocPos);
-        double screenRadius = m_cloneRadius * m_zoom;
+    // Desenha o círculo tracejado do pincel no cursor
+    if (m_cloneHoverValid) {
+        const QPointF hoverScreen = docToDevice().map(m_cloneHoverDocPos);
+        const double screenRadius = m_cloneRadius * m_zoom;
 
-        QPen brushPen(Qt::white, 1.5, Qt::DashLine);
+        QPen brushPen(QColor(255, 255, 255, 220), 1.5, Qt::DashLine);
         brushPen.setCosmetic(true);
         painter->setPen(brushPen);
-        painter->setBrush(QColor(255, 255, 255, 20));
+        painter->setBrush(QColor(255, 255, 255, 25));
         painter->drawEllipse(hoverScreen, screenRadius, screenRadius);
+    }
+
+    // Banner de instrução no topo do Canvas
+    const int bannerWidth = 460;
+    const int bannerHeight = 32;
+    const QRect bannerRect(width() / 2 - bannerWidth / 2, 14, bannerWidth, bannerHeight);
+
+    painter->setPen(Qt::NoPen);
+    if (!m_hasCloneSrc) {
+        painter->setBrush(QColor(20, 24, 30, 215));
+        painter->drawRoundedRect(bannerRect, 6, 6);
+
+        painter->setPen(QColor(255, 210, 80));
+        QFont font = painter->font();
+        font.setPointSize(9);
+        font.setBold(true);
+        painter->setFont(font);
+        painter->drawText(bannerRect, Qt::AlignCenter,
+            QStringLiteral("ℹ️ Segure Alt e clique na imagem para definir a origem"));
+    } else {
+        painter->setBrush(QColor(20, 30, 25, 200));
+        painter->drawRoundedRect(bannerRect, 6, 6);
+
+        painter->setPen(QColor(130, 240, 160));
+        QFont font = painter->font();
+        font.setPointSize(9);
+        font.setBold(false);
+        painter->setFont(font);
+        painter->drawText(bannerRect, Qt::AlignCenter,
+            QStringLiteral("✓ Origem definida! Clique e arraste para clonar (Alt+Clique redefine)"));
     }
 
     painter->restore();

@@ -103,6 +103,7 @@ protected:
     void keyPressEvent(QKeyEvent*) override;
     void keyReleaseEvent(QKeyEvent*) override;
     void resizeEvent(QResizeEvent*) override;
+    void leaveEvent(QEvent*) override;
     void dragEnterEvent(QDragEnterEvent*) override;
     void dragMoveEvent(QDragMoveEvent*) override;
     void dropEvent(QDropEvent*) override;
@@ -199,6 +200,7 @@ private:
     QImage m_cloneWorkingImage;
     bool m_isCloning = false;
     QPointF m_cloneHoverDocPos;
+    bool m_cloneHoverValid = false;
 };
 
 } // namespace cc
