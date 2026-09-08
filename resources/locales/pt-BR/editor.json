@@ -59,5 +59,30 @@
         "success.title": "Exportação concluída",
         "success": "Exportado para %1",
         "error.title": "Falha na exportação"
+    },
+    "tools": {
+        "select": "Selecionar",
+        "crop": "Cortar",
+        "scissors": "Corte com Tesoura",
+        "wand": "Varinha Mágica",
+        "clone": "Carimbo de Clonagem",
+        "crop.apply": "Aplicar",
+        "crop.cancel": "Cancelar",
+        "crop.aspect": "Proporção",
+        "crop.free": "Livre",
+        "crop.square": "1:1 Quadrado",
+        "crop.widescreen": "16:9 Widescreen",
+        "crop.standard": "4:3 Padrão",
+        "crop.portrait": "9:16 Stories/Reels",
+        "scissors.keepInside": "Manter Interior (Recorte)",
+        "scissors.eraseInside": "Apagar Interior (Furo)",
+        "scissors.autoCrop": "Ajustar Caixa Delimitadora",
+        "scissors.apply": "Cortar",
+        "scissors.cancel": "Limpar",
+        "wand.tolerance": "Tolerância",
+        "wand.contiguous": "Contíguo",
+        "clone.radius": "Raio",
+        "clone.hardness": "Dureza",
+        "clone.opacity": "Opacidade"
     }
 }

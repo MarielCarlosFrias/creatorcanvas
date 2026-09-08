@@ -1,5 +1,6 @@
 #include "canvasview.h"
 
+#include "core/image/ImageProcessing.h"
 #include "rendering/CanvasRenderer.h"
 
 #include <QContextMenuEvent>
@@ -13,6 +14,7 @@
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPen>
 #include <QPolygonF>
 #include <QUrl>
@@ -360,6 +362,18 @@ void CanvasView::updateCursor(const QPointF& widgetPos)
 {
     if (m_panning || m_gesture != Gesture::None)
         return;
+
+    if (m_tool == CanvasTool::Crop) {
+        const int ch = cropHandleAt(widgetPos);
+        setCursor(ch >= 0 ? (ch == 8 ? Qt::SizeAllCursor : handleCursor(ch)) : Qt::CrossCursor);
+        return;
+    }
+
+    if (m_tool == CanvasTool::Scissors || m_tool == CanvasTool::MagicWand || m_tool == CanvasTool::CloneStamp) {
+        setCursor(Qt::CrossCursor);
+        return;
+    }
+
     const int handle = handleAt(widgetPos);
     setCursor(handle >= 0 ? handleCursor(handle) : Qt::ArrowCursor);
 }
@@ -378,8 +392,28 @@ void CanvasView::paintEvent(QPaintEvent*)
     RenderOptions options;
     renderDocument(*m_document, &painter, docToDevice(), options);
 
-    if (!m_selectedId.isNull())
-        drawSelectionOverlay(&painter);
+    // Feedback visual ao vivo para pintura do Carimbo de Clonagem
+    if (m_tool == CanvasTool::CloneStamp && m_isCloning && !m_cloneWorkingImage.isNull() && !m_selectedId.isNull()) {
+        Layer* layer = m_document->findLayer(m_selectedId);
+        if (layer && layer->type() == LayerType::Image) {
+            painter.save();
+            painter.setTransform(layer->transform.matrix(layer->contentBounds()) * docToDevice());
+            painter.drawImage(0, 0, m_cloneWorkingImage);
+            painter.restore();
+        }
+    }
+
+    if (m_tool == CanvasTool::Crop) {
+        drawCropOverlay(&painter);
+    } else if (m_tool == CanvasTool::Scissors) {
+        drawScissorsOverlay(&painter);
+    } else if (m_tool == CanvasTool::CloneStamp) {
+        drawCloneOverlay(&painter);
+    } else {
+        if (!m_selectedId.isNull())
+            drawSelectionOverlay(&painter);
+    }
+
     drawSnapGuides(&painter);
 }
 
@@ -407,6 +441,88 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
 
     if (event->button() == Qt::LeftButton && m_document) {
         const QPointF docPos = deviceToDoc().map(QPointF(event->pos()));
+
+        // Interação da ferramenta de Corte (Crop)
+        if (m_tool == CanvasTool::Crop) {
+            if (!m_selectedId.isNull()) {
+                Layer* layer = m_document->findLayer(m_selectedId);
+                if (layer && layer->type() == LayerType::Image) {
+                    const int cropH = cropHandleAt(event->pos());
+                    if (cropH >= 0) {
+                        m_activeCropHandle = cropH;
+                        m_cropStartRect = m_cropRect;
+                        const QTransform matrix = layer->transform.matrix(layer->contentBounds());
+                        m_cropDragStartLocal = matrix.inverted().map(docPos);
+                        event->accept();
+                        return;
+                    }
+                }
+            }
+            event->accept();
+            return;
+        }
+
+        // Interação do Corte com Tesoura (Scissors Cut)
+        if (m_tool == CanvasTool::Scissors) {
+            if (!m_selectedId.isNull()) {
+                Layer* layer = m_document->findLayer(m_selectedId);
+                if (layer && layer->type() == LayerType::Image) {
+                    const QTransform matrix = layer->transform.matrix(layer->contentBounds());
+                    const QPointF localPos = matrix.inverted().map(docPos);
+                    m_scissorsPolygon << localPos;
+                    m_scissorsCurrentHover = localPos;
+                    m_isScissorsDrawing = true;
+                    update();
+                    event->accept();
+                    return;
+                }
+            }
+            event->accept();
+            return;
+        }
+
+        // Interação da Varinha Mágica (Magic Wand)
+        if (m_tool == CanvasTool::MagicWand) {
+            applyMagicWand(docPos);
+            event->accept();
+            return;
+        }
+
+        // Interação do Carimbo de Clonagem (Clone Stamp)
+        if (m_tool == CanvasTool::CloneStamp) {
+            if (!m_selectedId.isNull()) {
+                Layer* layer = m_document->findLayer(m_selectedId);
+                if (layer && layer->type() == LayerType::Image) {
+                    auto* img = static_cast<ImageLayer*>(layer);
+                    const QTransform matrix = layer->transform.matrix(layer->contentBounds());
+                    const QPointF localPos = matrix.inverted().map(docPos);
+
+                    if (event->modifiers() & Qt::AltModifier) {
+                        m_cloneSrcPoint = localPos.toPoint();
+                        m_cloneSrcLayerId = layer->id();
+                        m_hasCloneSrc = true;
+                        emit statusMessageRequested(QStringLiteral("Origem do carimbo definida. Arraste para clonar."));
+                        update();
+                        event->accept();
+                        return;
+                    } else if (m_hasCloneSrc) {
+                        m_cloneLastDstPoint = localPos.toPoint();
+                        m_cloneWorkingImage = m_document->assets().decodedImage(img->assetId);
+                        m_isCloning = true;
+
+                        m_cloneWorkingImage = ImageProcessing::cloneStamp(
+                            m_cloneWorkingImage, m_cloneWorkingImage,
+                            m_cloneSrcPoint, m_cloneLastDstPoint,
+                            m_cloneRadius, m_cloneOpacity, m_cloneHardness);
+                        update();
+                        event->accept();
+                        return;
+                    }
+                }
+            }
+            event->accept();
+            return;
+        }
 
         const int handle = handleAt(event->pos());
         if (handle >= 0) {
@@ -560,6 +676,121 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event)
         const QPoint delta = event->pos() - m_lastMousePos;
         m_lastMousePos = event->pos();
         m_panOffset += QPointF(delta);
+        update();
+        event->accept();
+        return;
+    }
+
+    // Movimentação/redimensionamento interativo da ferramenta de Corte (Crop)
+    if (m_tool == CanvasTool::Crop && m_activeCropHandle >= 0 && m_document && !m_selectedId.isNull()) {
+        Layer* layer = m_document->findLayer(m_selectedId);
+        if (layer && layer->type() == LayerType::Image) {
+            auto* img = static_cast<ImageLayer*>(layer);
+            const QPointF docNow = deviceToDoc().map(QPointF(event->pos()));
+            const QTransform matrix = layer->transform.matrix(layer->contentBounds());
+            const QPointF localNow = matrix.inverted().map(docNow);
+            const double dx = localNow.x() - m_cropDragStartLocal.x();
+            const double dy = localNow.y() - m_cropDragStartLocal.y();
+
+            QRectF r = m_cropStartRect;
+            const double maxW = img->naturalWidth;
+            const double maxH = img->naturalHeight;
+
+            if (m_activeCropHandle == 8) {
+                r.translate(dx, dy);
+                if (r.left() < 0) r.moveLeft(0);
+                if (r.top() < 0) r.moveTop(0);
+                if (r.right() > maxW) r.moveRight(maxW);
+                if (r.bottom() > maxH) r.moveBottom(maxH);
+            } else {
+                double left = r.left();
+                double top = r.top();
+                double right = r.right();
+                double bottom = r.bottom();
+
+                switch (m_activeCropHandle) {
+                case 0: left += dx; top += dy; break; // TL
+                case 1: right += dx; top += dy; break; // TR
+                case 2: right += dx; bottom += dy; break; // BR
+                case 3: left += dx; bottom += dy; break; // BL
+                case 4: top += dy; break; // T
+                case 5: right += dx; break; // R
+                case 6: bottom += dy; break; // B
+                case 7: left += dx; break; // L
+                default: break;
+                }
+
+                left = std::clamp(left, 0.0, std::max(0.0, right - 10.0));
+                top = std::clamp(top, 0.0, std::max(0.0, bottom - 10.0));
+                right = std::clamp(right, left + 10.0, maxW);
+                bottom = std::clamp(bottom, top + 10.0, maxH);
+
+                if (m_cropAspectRatio > 0.0) {
+                    double currentW = right - left;
+                    double currentH = bottom - top;
+                    if (m_activeCropHandle == 4 || m_activeCropHandle == 6) {
+                        currentW = currentH * m_cropAspectRatio;
+                        right = std::min(maxW, left + currentW);
+                    } else {
+                        currentH = currentW / m_cropAspectRatio;
+                        bottom = std::min(maxH, top + currentH);
+                    }
+                }
+                r = QRectF(QPointF(left, top), QPointF(right, bottom));
+            }
+            m_cropRect = r;
+            update();
+            event->accept();
+            return;
+        }
+    }
+
+    // Desenho interativo do Corte com Tesoura (Scissors Cut)
+    if (m_tool == CanvasTool::Scissors && m_document && !m_selectedId.isNull()) {
+        Layer* layer = m_document->findLayer(m_selectedId);
+        if (layer && layer->type() == LayerType::Image) {
+            const QPointF docNow = deviceToDoc().map(QPointF(event->pos()));
+            const QTransform matrix = layer->transform.matrix(layer->contentBounds());
+            m_scissorsCurrentHover = matrix.inverted().map(docNow);
+            if (m_isScissorsDrawing && (event->buttons() & Qt::LeftButton)) {
+                if (m_scissorsPolygon.isEmpty() ||
+                    QLineF(m_scissorsPolygon.last(), m_scissorsCurrentHover).length() > 4.0) {
+                    m_scissorsPolygon << m_scissorsCurrentHover;
+                }
+            }
+            update();
+            event->accept();
+            return;
+        }
+    }
+
+    // Pintura contínua do Carimbo de Clonagem (Clone Stamp)
+    if (m_tool == CanvasTool::CloneStamp && m_document && !m_selectedId.isNull()) {
+        const QPointF docNow = deviceToDoc().map(QPointF(event->pos()));
+        m_cloneHoverDocPos = docNow;
+        if (m_isCloning) {
+            Layer* layer = m_document->findLayer(m_selectedId);
+            if (layer && layer->type() == LayerType::Image) {
+                const QTransform matrix = layer->transform.matrix(layer->contentBounds());
+                const QPoint dstPt = matrix.inverted().map(docNow).toPoint();
+                const int dist = std::max(std::abs(dstPt.x() - m_cloneLastDstPoint.x()),
+                                          std::abs(dstPt.y() - m_cloneLastDstPoint.y()));
+                const int steps = std::max(1, dist / std::max(1, static_cast<int>(m_cloneRadius * 0.3)));
+                for (int s = 1; s <= steps; ++s) {
+                    const double frac = static_cast<double>(s) / steps;
+                    const QPoint curDst(
+                        m_cloneLastDstPoint.x() + qRound(frac * (dstPt.x() - m_cloneLastDstPoint.x())),
+                        m_cloneLastDstPoint.y() + qRound(frac * (dstPt.y() - m_cloneLastDstPoint.y()))
+                    );
+                    const QPoint curSrc = m_cloneSrcPoint + (curDst - m_cloneLastDstPoint);
+                    m_cloneWorkingImage = ImageProcessing::cloneStamp(
+                        m_cloneWorkingImage, m_cloneWorkingImage,
+                        curSrc, curDst,
+                        m_cloneRadius, m_cloneOpacity, m_cloneHardness);
+                }
+                m_cloneLastDstPoint = dstPt;
+            }
+        }
         update();
         event->accept();
         return;
@@ -744,11 +975,50 @@ void CanvasView::mouseReleaseEvent(QMouseEvent* event)
         event->accept();
         return;
     }
+
+    if (m_tool == CanvasTool::Crop) {
+        m_activeCropHandle = -1;
+        event->accept();
+        return;
+    }
+
+    if (m_tool == CanvasTool::CloneStamp) {
+        if (m_isCloning && m_document && !m_selectedId.isNull()) {
+            m_isCloning = false;
+            Layer* layer = m_document->findLayer(m_selectedId);
+            if (layer && layer->type() == LayerType::Image && !m_cloneWorkingImage.isNull()) {
+                auto* img = static_cast<ImageLayer*>(layer);
+                LayerId newAssetId = m_document->assets().addImage(m_cloneWorkingImage);
+                emit imageLayerModified(img->id(),
+                                        img->assetId, img->naturalWidth, img->naturalHeight, layer->transform,
+                                        newAssetId, img->naturalWidth, img->naturalHeight, layer->transform,
+                                        QStringLiteral("Clone Stamp"));
+                m_cloneWorkingImage = QImage();
+            }
+        }
+        update();
+        event->accept();
+        return;
+    }
+
     event->ignore();
 }
 
 void CanvasView::mouseDoubleClickEvent(QMouseEvent* event)
 {
+    if (event->button() == Qt::LeftButton) {
+        if (m_tool == CanvasTool::Scissors) {
+            applyScissorsCut();
+            event->accept();
+            return;
+        }
+        if (m_tool == CanvasTool::Crop) {
+            applyCrop();
+            event->accept();
+            return;
+        }
+    }
+
     if (event->button() == Qt::LeftButton && m_document) {
         const QPointF docPos = deviceToDoc().map(QPointF(event->pos()));
         Layer* layer = hitTestLayer(docPos);
@@ -776,6 +1046,32 @@ bool CanvasView::eventFilter(QObject* watched, QEvent* event)
 
 void CanvasView::keyPressEvent(QKeyEvent* event)
 {
+    if (m_tool == CanvasTool::Crop) {
+        if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+            applyCrop();
+            event->accept();
+            return;
+        }
+        if (event->key() == Qt::Key_Escape) {
+            cancelCrop();
+            event->accept();
+            return;
+        }
+    }
+
+    if (m_tool == CanvasTool::Scissors) {
+        if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+            applyScissorsCut();
+            event->accept();
+            return;
+        }
+        if (event->key() == Qt::Key_Escape) {
+            cancelScissorsCut();
+            event->accept();
+            return;
+        }
+    }
+
     if ((event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace)
         && !m_selectedId.isNull()) {
         emit deleteRequested(m_selectedId);
@@ -942,6 +1238,464 @@ void CanvasView::dropEvent(QDropEvent* event)
             return;
         }
     }
+}
+
+void CanvasView::setTool(CanvasTool tool)
+{
+    if (m_tool == tool)
+        return;
+
+    if (m_tool == CanvasTool::Crop)
+        cancelCrop();
+    else if (m_tool == CanvasTool::Scissors)
+        cancelScissorsCut();
+
+    m_tool = tool;
+
+    // Ao ativar a ferramenta de corte, calcula o retângulo inicial da camada de imagem
+    if (m_tool == CanvasTool::Crop) {
+        if (m_document && !m_selectedId.isNull()) {
+            Layer* layer = m_document->findLayer(m_selectedId);
+            if (layer && layer->type() == LayerType::Image) {
+                auto* img = static_cast<ImageLayer*>(layer);
+                if (m_cropAspectRatio > 0.0) {
+                    m_cropRect = ImageProcessing::calculateAspectCropRect(
+                        QSize(img->naturalWidth, img->naturalHeight), m_cropAspectRatio);
+                } else {
+                    m_cropRect = QRectF(0, 0, img->naturalWidth, img->naturalHeight);
+                }
+            }
+        }
+    }
+
+    update();
+    emit toolChanged(m_tool);
+}
+
+void CanvasView::setCropAspectRatio(double ratio)
+{
+    m_cropAspectRatio = ratio;
+    if (m_tool == CanvasTool::Crop && m_document && !m_selectedId.isNull()) {
+        Layer* layer = m_document->findLayer(m_selectedId);
+        if (layer && layer->type() == LayerType::Image) {
+            auto* img = static_cast<ImageLayer*>(layer);
+            if (m_cropAspectRatio > 0.0) {
+                m_cropRect = ImageProcessing::calculateAspectCropRect(
+                    QSize(img->naturalWidth, img->naturalHeight), m_cropAspectRatio);
+            } else {
+                m_cropRect = QRectF(0, 0, img->naturalWidth, img->naturalHeight);
+            }
+            update();
+        }
+    }
+}
+
+void CanvasView::applyCrop()
+{
+    if (!m_document || m_selectedId.isNull() || m_cropRect.isEmpty()) {
+        setTool(CanvasTool::Select);
+        return;
+    }
+
+    Layer* layer = m_document->findLayer(m_selectedId);
+    if (!layer || layer->type() != LayerType::Image) {
+        setTool(CanvasTool::Select);
+        return;
+    }
+
+    auto* img = static_cast<ImageLayer*>(layer);
+    QImage orig = m_document->assets().decodedImage(img->assetId);
+    if (orig.isNull()) {
+        setTool(CanvasTool::Select);
+        return;
+    }
+
+    const QRect cropR = m_cropRect.toRect().intersected(orig.rect());
+    if (cropR.isEmpty()) {
+        setTool(CanvasTool::Select);
+        return;
+    }
+
+    QImage cropped = ImageProcessing::cropImage(orig, cropR);
+    if (cropped.isNull()) {
+        setTool(CanvasTool::Select);
+        return;
+    }
+
+    LayerId newAssetId = m_document->assets().addImage(cropped);
+
+    // Ajusta o centro no espaço de coordenadas do documento
+    const QPointF oldCenter(img->naturalWidth / 2.0, img->naturalHeight / 2.0);
+    const QPointF cropCenter = cropR.center();
+    const QPointF deltaCenter = cropCenter - oldCenter;
+
+    QTransform rotScale;
+    rotScale.rotate(layer->transform.rotationDeg);
+    rotScale.scale(layer->transform.scaleX, layer->transform.scaleY);
+    const QPointF worldDelta = rotScale.map(deltaCenter);
+
+    AffineTransform newTransform = layer->transform;
+    newTransform.position = layer->transform.position + worldDelta;
+
+    emit imageLayerModified(img->id(),
+                            img->assetId, img->naturalWidth, img->naturalHeight, layer->transform,
+                            newAssetId, cropped.width(), cropped.height(), newTransform,
+                            QStringLiteral("Crop Image"));
+
+    setTool(CanvasTool::Select);
+}
+
+void CanvasView::cancelCrop()
+{
+    m_cropRect = QRectF();
+    m_activeCropHandle = -1;
+    if (m_tool == CanvasTool::Crop)
+        setTool(CanvasTool::Select);
+    update();
+}
+
+void CanvasView::setScissorsKeepInside(bool keepInside)
+{
+    m_scissorsKeepInside = keepInside;
+    update();
+}
+
+void CanvasView::setScissorsAutoCrop(bool autoCrop)
+{
+    m_scissorsAutoCrop = autoCrop;
+    update();
+}
+
+void CanvasView::applyScissorsCut()
+{
+    if (!m_document || m_selectedId.isNull() || m_scissorsPolygon.size() < 3) {
+        cancelScissorsCut();
+        return;
+    }
+
+    Layer* layer = m_document->findLayer(m_selectedId);
+    if (!layer || layer->type() != LayerType::Image) {
+        cancelScissorsCut();
+        return;
+    }
+
+    auto* img = static_cast<ImageLayer*>(layer);
+    QImage orig = m_document->assets().decodedImage(img->assetId);
+    if (orig.isNull()) {
+        cancelScissorsCut();
+        return;
+    }
+
+    ScissorsCutResult result = ImageProcessing::scissorsCut(orig, m_scissorsPolygon,
+                                                           m_scissorsKeepInside, m_scissorsAutoCrop);
+    if (result.image.isNull()) {
+        cancelScissorsCut();
+        return;
+    }
+
+    LayerId newAssetId = m_document->assets().addImage(result.image);
+
+    AffineTransform newTransform = layer->transform;
+    if (m_scissorsKeepInside && m_scissorsAutoCrop && (result.image.size() != orig.size())) {
+        const QPointF oldCenter(img->naturalWidth / 2.0, img->naturalHeight / 2.0);
+        const QRect bounding = m_scissorsPolygon.boundingRect().toAlignedRect().intersected(orig.rect());
+        const QPointF newCenter = bounding.center();
+        const QPointF deltaCenter = newCenter - oldCenter;
+
+        QTransform rotScale;
+        rotScale.rotate(layer->transform.rotationDeg);
+        rotScale.scale(layer->transform.scaleX, layer->transform.scaleY);
+        const QPointF worldDelta = rotScale.map(deltaCenter);
+
+        newTransform.position = layer->transform.position + worldDelta;
+    }
+
+    emit imageLayerModified(img->id(),
+                            img->assetId, img->naturalWidth, img->naturalHeight, layer->transform,
+                            newAssetId, result.image.width(), result.image.height(), newTransform,
+                            QStringLiteral("Scissors Cut"));
+
+    cancelScissorsCut();
+}
+
+void CanvasView::cancelScissorsCut()
+{
+    m_scissorsPolygon.clear();
+    m_isScissorsDrawing = false;
+    if (m_tool == CanvasTool::Scissors)
+        setTool(CanvasTool::Select);
+    update();
+}
+
+void CanvasView::setWandTolerance(int tolerance)
+{
+    m_wandTolerance = std::clamp(tolerance, 0, 100);
+}
+
+void CanvasView::setWandContiguous(bool contiguous)
+{
+    m_wandContiguous = contiguous;
+}
+
+void CanvasView::applyMagicWand(const QPointF& docPos)
+{
+    if (!m_document)
+        return;
+
+    Layer* layer = nullptr;
+    if (!m_selectedId.isNull())
+        layer = m_document->findLayer(m_selectedId);
+
+    if (!layer || layer->type() != LayerType::Image) {
+        Layer* hit = hitTestLayer(docPos);
+        if (hit && hit->type() == LayerType::Image) {
+            selectLayer(hit->id());
+            layer = hit;
+        } else {
+            return;
+        }
+    }
+
+    auto* img = static_cast<ImageLayer*>(layer);
+    const QTransform matrix = layer->transform.matrix(layer->contentBounds());
+    const QPointF localPos = matrix.inverted().map(docPos);
+    const QPoint seedPt = localPos.toPoint();
+
+    if (!QRect(0, 0, img->naturalWidth, img->naturalHeight).contains(seedPt))
+        return;
+
+    QImage orig = m_document->assets().decodedImage(img->assetId);
+    if (orig.isNull())
+        return;
+
+    QImage result = ImageProcessing::removeBackground(orig, seedPt, m_wandTolerance, m_wandContiguous);
+    if (result.isNull())
+        return;
+
+    LayerId newAssetId = m_document->assets().addImage(result);
+
+    emit imageLayerModified(img->id(),
+                            img->assetId, img->naturalWidth, img->naturalHeight, layer->transform,
+                            newAssetId, img->naturalWidth, img->naturalHeight, layer->transform,
+                            QStringLiteral("Magic Wand Background Removal"));
+    update();
+}
+
+void CanvasView::setCloneRadius(int radius)
+{
+    m_cloneRadius = std::clamp(radius, 1, 200);
+    update();
+}
+
+void CanvasView::setCloneHardness(qreal hardness)
+{
+    m_cloneHardness = std::clamp(hardness, 0.0, 1.0);
+}
+
+void CanvasView::setCloneOpacity(qreal opacity)
+{
+    m_cloneOpacity = std::clamp(opacity, 0.0, 1.0);
+}
+
+int CanvasView::cropHandleAt(const QPointF& widgetPos) const
+{
+    if (!m_document || m_selectedId.isNull() || m_cropRect.isEmpty())
+        return -1;
+    Layer* layer = m_document->findLayer(m_selectedId);
+    if (!layer || layer->type() != LayerType::Image)
+        return -1;
+
+    const QTransform layerToDoc = layer->transform.matrix(layer->contentBounds());
+    const QTransform layerToDevice = layerToDoc * docToDevice();
+
+    const double w = m_cropRect.width();
+    const double h = m_cropRect.height();
+    const double x = m_cropRect.x();
+    const double y = m_cropRect.y();
+
+    const QPointF pts[8] = {
+        layerToDevice.map(m_cropRect.topLeft()),
+        layerToDevice.map(m_cropRect.topRight()),
+        layerToDevice.map(m_cropRect.bottomRight()),
+        layerToDevice.map(m_cropRect.bottomLeft()),
+        layerToDevice.map(QPointF(x + w / 2.0, y)),
+        layerToDevice.map(QPointF(x + w, y + h / 2.0)),
+        layerToDevice.map(QPointF(x + w / 2.0, y + h)),
+        layerToDevice.map(QPointF(x, y + h / 2.0))
+    };
+
+    for (int i = 0; i < 8; ++i) {
+        if (QLineF(widgetPos, pts[i]).length() <= 8.0)
+            return i;
+    }
+
+    const QPointF localPos = layerToDevice.inverted().map(widgetPos);
+    if (m_cropRect.contains(localPos))
+        return 8;
+
+    return -1;
+}
+
+void CanvasView::drawCropOverlay(QPainter* painter)
+{
+    if (!m_document || m_selectedId.isNull() || m_cropRect.isEmpty())
+        return;
+    Layer* layer = m_document->findLayer(m_selectedId);
+    if (!layer || layer->type() != LayerType::Image)
+        return;
+
+    auto* img = static_cast<ImageLayer*>(layer);
+    const QTransform layerToDoc = layer->transform.matrix(layer->contentBounds());
+    const QTransform layerToDevice = layerToDoc * docToDevice();
+
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing, true);
+
+    const QRectF fullRect(0, 0, img->naturalWidth, img->naturalHeight);
+
+    QPainterPath outerPath;
+    outerPath.addRect(layerToDevice.mapRect(fullRect));
+    QPainterPath cropPath;
+    cropPath.addRect(layerToDevice.mapRect(m_cropRect));
+    QPainterPath darkPath = outerPath.subtracted(cropPath);
+    painter->fillPath(darkPath, QColor(0, 0, 0, 160));
+
+    const QRectF screenCrop = layerToDevice.mapRect(m_cropRect);
+    QPen borderPen(Qt::white, 2.0);
+    borderPen.setCosmetic(true);
+    painter->setPen(borderPen);
+    painter->drawRect(screenCrop);
+
+    QPen gridPen(QColor(255, 255, 255, 120), 1.0);
+    gridPen.setStyle(Qt::DashLine);
+    gridPen.setCosmetic(true);
+    painter->setPen(gridPen);
+
+    const double sw = screenCrop.width();
+    const double sh = screenCrop.height();
+    const double sx = screenCrop.x();
+    const double sy = screenCrop.y();
+
+    painter->drawLine(QPointF(sx + sw / 3.0, sy), QPointF(sx + sw / 3.0, sy + sh));
+    painter->drawLine(QPointF(sx + 2.0 * sw / 3.0, sy), QPointF(sx + 2.0 * sw / 3.0, sy + sh));
+    painter->drawLine(QPointF(sx, sy + sh / 3.0), QPointF(sx + sw, sy + sh / 3.0));
+    painter->drawLine(QPointF(sx, sy + 2.0 * sh / 3.0), QPointF(sx + sw, sy + 2.0 * sh / 3.0));
+
+    const double w = m_cropRect.width();
+    const double h = m_cropRect.height();
+    const double x = m_cropRect.x();
+    const double y = m_cropRect.y();
+
+    const QPointF pts[8] = {
+        layerToDevice.map(m_cropRect.topLeft()),
+        layerToDevice.map(m_cropRect.topRight()),
+        layerToDevice.map(m_cropRect.bottomRight()),
+        layerToDevice.map(m_cropRect.bottomLeft()),
+        layerToDevice.map(QPointF(x + w / 2.0, y)),
+        layerToDevice.map(QPointF(x + w, y + h / 2.0)),
+        layerToDevice.map(QPointF(x + w / 2.0, y + h)),
+        layerToDevice.map(QPointF(x, y + h / 2.0))
+    };
+
+    painter->setPen(QPen(Qt::black, 1));
+    painter->setBrush(Qt::white);
+    for (int i = 0; i < 8; ++i) {
+        painter->drawRect(QRectF(pts[i].x() - 5, pts[i].y() - 5, 10, 10));
+    }
+
+    painter->restore();
+}
+
+void CanvasView::drawScissorsOverlay(QPainter* painter)
+{
+    if (!m_document || m_selectedId.isNull())
+        return;
+    Layer* layer = m_document->findLayer(m_selectedId);
+    if (!layer || layer->type() != LayerType::Image)
+        return;
+
+    const QTransform layerToDoc = layer->transform.matrix(layer->contentBounds());
+    const QTransform layerToDevice = layerToDoc * docToDevice();
+
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing, true);
+
+    if (m_scissorsPolygon.size() > 0) {
+        QPolygonF screenPoly;
+        for (const QPointF& pt : m_scissorsPolygon) {
+            screenPoly << layerToDevice.map(pt);
+        }
+
+        if (screenPoly.size() >= 3) {
+            painter->setBrush(QColor(0, 220, 255, 45));
+            painter->setPen(Qt::NoPen);
+            painter->drawPolygon(screenPoly);
+        }
+
+        QPen shadowPen(QColor(0, 0, 0, 180), 3.0);
+        shadowPen.setCosmetic(true);
+        painter->setPen(shadowPen);
+        painter->drawPolyline(screenPoly);
+
+        QPen linePen(QColor(0, 220, 255), 1.5, Qt::DashLine);
+        linePen.setCosmetic(true);
+        painter->setPen(linePen);
+        painter->drawPolyline(screenPoly);
+
+        if (m_isScissorsDrawing) {
+            QPointF lastPt = screenPoly.last();
+            QPointF hoverPt = layerToDevice.map(m_scissorsCurrentHover);
+            painter->setPen(QPen(QColor(255, 255, 255, 200), 1.0, Qt::DotLine));
+            painter->drawLine(lastPt, hoverPt);
+        }
+
+        painter->setBrush(Qt::white);
+        painter->setPen(QPen(QColor(0, 180, 220), 1.5));
+        for (const QPointF& pt : screenPoly) {
+            painter->drawEllipse(pt, 3.5, 3.5);
+        }
+    }
+
+    painter->restore();
+}
+
+void CanvasView::drawCloneOverlay(QPainter* painter)
+{
+    if (!m_document || m_selectedId.isNull())
+        return;
+    Layer* layer = m_document->findLayer(m_selectedId);
+    if (!layer || layer->type() != LayerType::Image)
+        return;
+
+    const QTransform layerToDoc = layer->transform.matrix(layer->contentBounds());
+    const QTransform layerToDevice = layerToDoc * docToDevice();
+
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing, true);
+
+    if (m_hasCloneSrc) {
+        QPointF srcScreen = layerToDevice.map(QPointF(m_cloneSrcPoint));
+        QPen srcPen(QColor(255, 60, 60), 1.5);
+        srcPen.setCosmetic(true);
+        painter->setPen(srcPen);
+        painter->setBrush(Qt::NoBrush);
+        painter->drawEllipse(srcScreen, 6, 6);
+        painter->drawLine(srcScreen.x() - 10, srcScreen.y(), srcScreen.x() + 10, srcScreen.y());
+        painter->drawLine(srcScreen.x(), srcScreen.y() - 10, srcScreen.x(), srcScreen.y() + 10);
+    }
+
+    if (m_cloneHoverDocPos.x() > 0 || m_cloneHoverDocPos.y() > 0) {
+        QPointF hoverScreen = docToDevice().map(m_cloneHoverDocPos);
+        double screenRadius = m_cloneRadius * m_zoom;
+
+        QPen brushPen(Qt::white, 1.5, Qt::DashLine);
+        brushPen.setCosmetic(true);
+        painter->setPen(brushPen);
+        painter->setBrush(QColor(255, 255, 255, 20));
+        painter->drawEllipse(hoverScreen, screenRadius, screenRadius);
+    }
+
+    painter->restore();
 }
 
 } // namespace cc
