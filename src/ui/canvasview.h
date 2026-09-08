@@ -58,6 +58,10 @@ public:
     void setCloneHardness(qreal hardness);
     void setCloneOpacity(qreal opacity);
 
+    // Remoção de Fundo com IA
+    void openAiBackgroundRemoval(const cc::LayerId& id);
+    void removeBackgroundAiQuick(const cc::LayerId& id);
+
     double zoom() const { return m_zoom; }
     QPointF panOffset() const { return m_panOffset; }
     void centerOn(const QPointF& documentPos);

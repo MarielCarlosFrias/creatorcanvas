@@ -12,6 +12,20 @@ add_library(miniz STATIC
 )
 target_include_directories(miniz SYSTEM PUBLIC ${PROJECT_SOURCE_DIR}/3rdparty/miniz)
 
+# -------------------------------------------------------- 3rdparty: onnxruntime --
+set(ONNX_DIR "${PROJECT_SOURCE_DIR}/3rdparty/onnxruntime")
+add_library(onnxruntime SHARED IMPORTED)
+if(WIN32)
+    set_target_properties(onnxruntime PROPERTIES
+        IMPORTED_LOCATION "${ONNX_DIR}/lib/onnxruntime.dll"
+        IMPORTED_IMPLIB "${ONNX_DIR}/lib/onnxruntime.lib"
+    )
+else()
+    set_target_properties(onnxruntime PROPERTIES
+        IMPORTED_LOCATION "${ONNX_DIR}/lib/libonnxruntime.so"
+    )
+endif()
+
 # --------------------------------------------------------------------- core --
 add_library(cc_core STATIC
     core/layers/Layer.h
@@ -34,12 +48,15 @@ add_library(cc_core STATIC
     core/assets/AssetStore.cpp
     core/image/ImageProcessing.h
     core/image/ImageProcessing.cpp
+    core/image/BackgroundRemover.h
+    core/image/BackgroundRemover.cpp
     imageio/ImageImporter.h
     imageio/ImageImporter.cpp
     imageio/DocumentExporter.h
     imageio/DocumentExporter.cpp
 )
-target_link_libraries(cc_core PUBLIC Qt6::Core Qt6::Gui miniz)
+target_link_libraries(cc_core PUBLIC Qt6::Core Qt6::Gui miniz onnxruntime)
+target_include_directories(cc_core SYSTEM PRIVATE ${ONNX_DIR}/include)
 target_compile_definitions(cc_core PRIVATE CC_PROJECT_VERSION="${PROJECT_VERSION}")
 target_include_directories(cc_core PUBLIC ${PROJECT_SOURCE_DIR}/src)
 cc_enable_warnings(cc_core)
@@ -104,16 +121,30 @@ add_executable(creatorcanvas
     ui/startscreen.cpp
     ui/shapeinspector.h
     ui/shapeinspector.cpp
+    ui/maskeditcanvas.h
+    ui/maskeditcanvas.cpp
+    ui/aibackgrounddialog.h
+    ui/aibackgrounddialog.cpp
 )
 target_link_libraries(creatorcanvas
     PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets
             cc_core cc_rendering cc_services cc_localization)
 target_include_directories(creatorcanvas PRIVATE ${PROJECT_SOURCE_DIR}/src)
 target_compile_definitions(creatorcanvas PRIVATE APP_VERSION="${PROJECT_VERSION}")
-set_target_properties(creatorcanvas PROPERTIES
-    OUTPUT_NAME "CreatorCanvas"
-    WIN32_EXECUTABLE $<BOOL:WIN32>
-    MACOSX_BUNDLE TRUE)
+if(NOT WIN32)
+    set_target_properties(creatorcanvas PROPERTIES
+        OUTPUT_NAME "CreatorCanvas"
+        WIN32_EXECUTABLE $<BOOL:WIN32>
+        MACOSX_BUNDLE TRUE
+        BUILD_RPATH "${ONNX_DIR}/lib"
+        INSTALL_RPATH "$ORIGIN/../lib/creatorcanvas"
+    )
+else()
+    set_target_properties(creatorcanvas PROPERTIES
+        OUTPUT_NAME "CreatorCanvas"
+        WIN32_EXECUTABLE $<BOOL:WIN32>
+        MACOSX_BUNDLE TRUE)
+endif()
 cc_enable_warnings(creatorcanvas)
 
 # ===================================================================

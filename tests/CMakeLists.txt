@@ -2,6 +2,11 @@ function(cc_add_test name)
     add_executable(${name} ${ARGN})
     target_link_libraries(${name} PRIVATE Qt6::Test cc_core cc_rendering cc_services cc_localization miniz)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/src)
+    if(NOT WIN32)
+        set_target_properties(${name} PROPERTIES
+            BUILD_RPATH "${PROJECT_SOURCE_DIR}/3rdparty/onnxruntime/lib"
+        )
+    endif()
     cc_enable_warnings(${name})
     add_test(NAME ${name} COMMAND ${name})
 endfunction()

@@ -139,6 +139,8 @@ private:
     QAction* m_startScreenAction = nullptr;
     QAction* m_aboutAction = nullptr;
     QAction* m_aboutQtAction = nullptr;
+    QAction* m_removeBgAiAction = nullptr;
+    QAction* m_removeBgAiQuickAction = nullptr;
 
     QMenu* m_fileMenu = nullptr;
     QMenu* m_editMenu = nullptr;

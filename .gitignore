@@ -39,3 +39,7 @@ Thumbs.db
 # Local logs / recovery data (never ship a user's local state)
 *.log
 project_dump.txt
+
+# Neural models and prebuilt runtimes
+3rdparty/onnxruntime/
+resources/models/*.onnx

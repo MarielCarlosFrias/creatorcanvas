@@ -441,6 +441,20 @@ void MainWindow::buildActions()
         QMessageBox::aboutQt(this);
     });
 
+    m_removeBgAiAction = new QAction(this);
+    connect(m_removeBgAiAction, &QAction::triggered, this, [this] {
+        if (m_canvas && m_document && !m_selectedId.isNull()) {
+            m_canvas->openAiBackgroundRemoval(m_selectedId);
+        }
+    });
+
+    m_removeBgAiQuickAction = new QAction(this);
+    connect(m_removeBgAiQuickAction, &QAction::triggered, this, [this] {
+        if (m_canvas && m_document && !m_selectedId.isNull()) {
+            m_canvas->removeBackgroundAiQuick(m_selectedId);
+        }
+    });
+
     // Grupo de ferramentas exclusivas
     m_toolGroup = new QActionGroup(this);
     m_toolGroup->setExclusive(true);
@@ -753,6 +767,9 @@ void MainWindow::buildMenus()
 
     m_layerMenu->addAction(m_flipHAction);
     m_layerMenu->addAction(m_flipVAction);
+    m_layerMenu->addSeparator();
+    m_layerMenu->addAction(m_removeBgAiAction);
+    m_layerMenu->addAction(m_removeBgAiQuickAction);
     m_layerMenu->addSeparator();
     m_layerMenu->addAction(m_deleteAction);
 
@@ -1406,6 +1423,17 @@ void MainWindow::retranslateUi()
     m_startScreenAction->setText(m_i18n->t("common", "start.screenAction"));
     m_aboutAction->setText(m_i18n->t("common", "menu.help.about"));
     m_aboutQtAction->setText(m_i18n->t("common", "menu.help.aboutQt"));
+
+    if (m_removeBgAiAction) {
+        m_removeBgAiAction->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
+            ? QStringLiteral("Remover Fundo com IA...")
+            : QStringLiteral("Remove Background with AI..."));
+    }
+    if (m_removeBgAiQuickAction) {
+        m_removeBgAiQuickAction->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
+            ? QStringLiteral("Remover Fundo Rápido (1-Clique)")
+            : QStringLiteral("Quick Remove Background (1-Click)"));
+    }
 
     m_fileMenu->setTitle(m_i18n->t("common", "menu.file"));
     m_editMenu->setTitle(m_i18n->t("common", "menu.edit"));

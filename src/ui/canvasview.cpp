@@ -1,7 +1,10 @@
 #include "canvasview.h"
 
+#include "aibackgrounddialog.h"
+#include "core/image/BackgroundRemover.h"
 #include "core/image/ImageProcessing.h"
 #include "rendering/CanvasRenderer.h"
+#include <QThread>
 
 #include <QContextMenuEvent>
 #include <QDragEnterEvent>
@@ -1252,12 +1255,24 @@ void CanvasView::contextMenuEvent(QContextMenuEvent* event)
     menu.addSeparator();
     QAction* lockAction = menu.addAction(lockText);
 
+    QAction* removeBgAiDialogAction = nullptr;
+    QAction* removeBgAiQuickAction = nullptr;
+    if (layer->type() == LayerType::Image) {
+        menu.addSeparator();
+        removeBgAiDialogAction = menu.addAction(QStringLiteral("✨ Remover Fundo com IA..."));
+        removeBgAiQuickAction = menu.addAction(QStringLiteral("⚡ Remover Fundo Rápido (1-Clique)"));
+    }
+
     QAction* chosen = menu.exec(event->globalPos());
     if (!chosen)
         return;
 
     const LayerId id = layer->id();
-    if (chosen == duplicateAction) {
+    if (chosen == removeBgAiDialogAction) {
+        openAiBackgroundRemoval(id);
+    } else if (chosen == removeBgAiQuickAction) {
+        removeBackgroundAiQuick(id);
+    } else if (chosen == duplicateAction) {
         emit duplicateRequested(id);
     } else if (chosen == deleteAction) {
         emit deleteRequested(id);
@@ -1858,6 +1873,77 @@ void CanvasView::drawCloneOverlay(QPainter* painter)
     }
 
     painter->restore();
+}
+
+void CanvasView::openAiBackgroundRemoval(const LayerId& id)
+{
+    if (!m_document)
+        return;
+    Layer* layer = m_document->findLayer(id);
+    if (!layer || layer->type() != LayerType::Image)
+        return;
+
+    auto* imgLayer = static_cast<ImageLayer*>(layer);
+    const QImage srcImg = m_document->assets().decodedImage(imgLayer->assetId);
+    if (srcImg.isNull())
+        return;
+
+    AiBackgroundDialog dlg(srcImg, this);
+    if (dlg.exec() == QDialog::Accepted) {
+        const QImage result = dlg.finalImage();
+        if (!result.isNull()) {
+            LayerId newAssetId = m_document->assets().addImage(result);
+            emit imageLayerModified(imgLayer->id(),
+                                    imgLayer->assetId, imgLayer->naturalWidth, imgLayer->naturalHeight, layer->transform,
+                                    newAssetId, result.width(), result.height(), layer->transform,
+                                    QStringLiteral("AI Background Removal"));
+            update();
+        }
+    }
+}
+
+void CanvasView::removeBackgroundAiQuick(const LayerId& id)
+{
+    if (!m_document)
+        return;
+    Layer* layer = m_document->findLayer(id);
+    if (!layer || layer->type() != LayerType::Image)
+        return;
+
+    auto* imgLayer = static_cast<ImageLayer*>(layer);
+    const QImage srcImg = m_document->assets().decodedImage(imgLayer->assetId);
+    if (srcImg.isNull())
+        return;
+
+    emit statusMessageRequested(QStringLiteral("⏳ Removendo fundo com IA em segundo plano..."));
+
+    const LayerId layerId = id;
+    const LayerId oldAssetId = imgLayer->assetId;
+    const int oldW = imgLayer->naturalWidth;
+    const int oldH = imgLayer->naturalHeight;
+    const AffineTransform oldT = layer->transform;
+
+    auto* thread = QThread::create([this, layerId, oldAssetId, oldW, oldH, oldT, srcImg]() {
+        BackgroundRemover remover;
+        const QImage result = remover.removeBackground(srcImg);
+
+        QMetaObject::invokeMethod(this, [this, layerId, oldAssetId, oldW, oldH, oldT, result]() {
+            if (!m_document || result.isNull()) {
+                emit statusMessageRequested(QStringLiteral("Falha ao processar remoção de fundo com IA."));
+                return;
+            }
+            LayerId newAssetId = m_document->assets().addImage(result);
+            emit imageLayerModified(layerId,
+                                    oldAssetId, oldW, oldH, oldT,
+                                    newAssetId, result.width(), result.height(), oldT,
+                                    QStringLiteral("AI Background Removal (Quick)"));
+            emit statusMessageRequested(QStringLiteral("✓ Fundo removido com sucesso pela IA!"));
+            update();
+        });
+    });
+
+    connect(thread, &QThread::finished, thread, &QObject::deleteLater);
+    thread->start();
 }
 
 } // namespace cc
