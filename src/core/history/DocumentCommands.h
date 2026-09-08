@@ -299,4 +299,52 @@ using SetShapeStrokeCommand       = LayerPropertyCommand<QColor>;
 using SetShapeStrokeWidthCommand  = LayerPropertyCommand<double>;
 using SetShapeCornerRadiusCommand = LayerPropertyCommand<double>;
 
+/// Comando reversível para modificações de conteúdo em camadas de imagem (corte, varinha mágica, tesoura, clone stamp).
+/// Preserva o asset anterior e novo, dimensões naturais e transformações (posição/escala) para suporte completo a Desfazer/Refazer.
+class ModifyImageLayerCommand final : public Command
+{
+public:
+    ModifyImageLayerCommand(Document& doc, const LayerId& id,
+                            LayerId oldAssetId, int oldWidth, int oldHeight, AffineTransform oldTransform,
+                            LayerId newAssetId, int newWidth, int newHeight, AffineTransform newTransform,
+                            QString commandName = QStringLiteral("image.modify"))
+        : Command(std::move(commandName))
+        , m_doc(&doc)
+        , m_id(id)
+        , m_oldAssetId(oldAssetId)
+        , m_oldWidth(oldWidth)
+        , m_oldHeight(oldHeight)
+        , m_oldTransform(std::move(oldTransform))
+        , m_newAssetId(newAssetId)
+        , m_newWidth(newWidth)
+        , m_newHeight(newHeight)
+        , m_newTransform(std::move(newTransform))
+    {
+    }
+
+    void redo() override
+    {
+        m_doc->setImageLayerAsset(m_id, m_newAssetId, m_newWidth, m_newHeight);
+        m_doc->setLayerTransform(m_id, m_newTransform);
+    }
+
+    void undo() override
+    {
+        m_doc->setImageLayerAsset(m_id, m_oldAssetId, m_oldWidth, m_oldHeight);
+        m_doc->setLayerTransform(m_id, m_oldTransform);
+    }
+
+private:
+    Document* m_doc;
+    LayerId m_id;
+    LayerId m_oldAssetId;
+    int m_oldWidth;
+    int m_oldHeight;
+    AffineTransform m_oldTransform;
+    LayerId m_newAssetId;
+    int m_newWidth;
+    int m_newHeight;
+    AffineTransform m_newTransform;
+};
+
 } // namespace cc

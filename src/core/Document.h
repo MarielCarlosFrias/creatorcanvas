@@ -65,6 +65,9 @@ public:
     bool setShapeStrokeWidth(const LayerId& id, double width);
     bool setShapeCornerRadius(const LayerId& id, double radius);
 
+    // Atualiza o asset associado a uma camada de imagem (ImageLayer), com dimensões naturais
+    bool setImageLayerAsset(const LayerId& id, const LayerId& newAssetId, int naturalWidth, int naturalHeight);
+
     quint64 revision() const { return m_revision; }
 
 signals:

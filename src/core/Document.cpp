@@ -352,4 +352,19 @@ bool Document::setShapeCornerRadius(const LayerId& id, double radius)
     return true;
 }
 
+// Atualiza o asset associado a uma camada de imagem (ImageLayer), com dimensões naturais
+bool Document::setImageLayerAsset(const LayerId& id, const LayerId& newAssetId, int naturalWidth, int naturalHeight)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Image)
+        return false;
+    auto* img = static_cast<ImageLayer*>(layer);
+    img->assetId = newAssetId;
+    img->naturalWidth = naturalWidth;
+    img->naturalHeight = naturalHeight;
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
 } // namespace cc

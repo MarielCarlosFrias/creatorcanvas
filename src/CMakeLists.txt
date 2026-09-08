@@ -32,6 +32,8 @@ add_library(cc_core STATIC
     core/geometry/AffineTransform.h
     core/assets/AssetStore.h
     core/assets/AssetStore.cpp
+    core/image/ImageProcessing.h
+    core/image/ImageProcessing.cpp
     imageio/ImageImporter.h
     imageio/ImageImporter.cpp
     imageio/DocumentExporter.h

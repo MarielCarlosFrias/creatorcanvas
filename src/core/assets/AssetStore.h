@@ -26,6 +26,7 @@ class AssetStore
 {
 public:
     LayerId add(const QByteArray& encoded, const QString& format);
+    LayerId addImage(const QImage& image, const QString& format = QStringLiteral("png"));
     void restore(const Asset& asset);
     const Asset* find(const LayerId& id) const;
     QImage decodedImage(const LayerId& id) const;

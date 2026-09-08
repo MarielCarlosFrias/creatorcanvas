@@ -1,8 +1,33 @@
 #include "AssetStore.h"
 
+#include <QBuffer>
 #include <QCryptographicHash>
 
 namespace cc {
+
+LayerId AssetStore::addImage(const QImage& image, const QString& format)
+{
+    if (image.isNull())
+        return {};
+
+    QByteArray encoded;
+    QBuffer buffer(&encoded);
+    buffer.open(QIODevice::WriteOnly);
+    image.save(&buffer, format.toLatin1().constData());
+
+    Asset asset;
+    asset.id = newLayerId();
+    asset.format = format;
+    asset.width = image.width();
+    asset.height = image.height();
+    asset.encoded = encoded;
+    asset.sha256 = QString::fromLatin1(
+        QCryptographicHash::hash(encoded, QCryptographicHash::Sha256).toHex());
+    asset.decoded = image;
+
+    m_assets.append(asset);
+    return asset.id;
+}
 
 LayerId AssetStore::add(const QByteArray& encoded, const QString& format)
 {
