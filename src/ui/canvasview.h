@@ -18,7 +18,9 @@ enum class CanvasTool {
     Crop,
     Scissors,
     MagicWand,
-    CloneStamp
+    CloneStamp,
+    Paint,
+    FloodFill
 };
 
 /// Interactive document viewport: pan, zoom, selection with transform
@@ -57,6 +59,12 @@ public:
     void setCloneRadius(int radius);
     void setCloneHardness(qreal hardness);
     void setCloneOpacity(qreal opacity);
+
+    // Configurações de Pintura Estilo Paint
+    void setPaintBrush(int brushType); // ImageProcessing::BrushType
+    void setPaintColor(const QColor& color);
+    void setPaintSize(int size);
+    void setPaintOpacity(qreal opacity);
 
     // Remoção de Fundo com IA
     void openAiBackgroundRemoval(const cc::LayerId& id);
@@ -205,6 +213,20 @@ private:
     bool m_isCloning = false;
     QPointF m_cloneHoverDocPos;
     bool m_cloneHoverValid = false;
+
+    // Pintura Estilo Paint & Balde de Tinta
+    int m_paintBrushType = 0; // 0: Brush, 1: Pencil, 2: Highlighter, 3: Airbrush, 4: Eraser
+    QColor m_paintColor = QColor(47, 111, 237);
+    int m_paintSize = 12;
+    qreal m_paintOpacity = 1.0;
+    bool m_isPainting = false;
+    QPointF m_paintPrevPoint;
+    QImage m_paintWorkingImage;
+    LayerId m_paintActiveLayerId;
+    LayerId m_paintOrigAssetId;
+    int m_paintOrigWidth = 0;
+    int m_paintOrigHeight = 0;
+    AffineTransform m_paintOrigTransform;
 };
 
 } // namespace cc

@@ -17,11 +17,13 @@
 #include "services/recentfiles.h"
 #include "ui/textinspector.h"
 #include "ui/shapeinspector.h"
+#include "ui/imageinspector.h"
 
 #include <QActionGroup>
 #include <QApplication>
 #include <QCheckBox>
 #include <QCloseEvent>
+#include <QColorDialog>
 #include <QComboBox>
 #include <QDockWidget>
 #include <QFileDialog>
@@ -164,6 +166,8 @@ void MainWindow::buildCentralWidget()
                     m_textInspector->setSelectedLayer(id);
                 if (m_shapeInspector)
                     m_shapeInspector->setSelectedLayer(id);
+                if (m_imageInspector)
+                    m_imageInspector->setSelectedLayer(id);
 
                 // Alterna automaticamente a aba ativa do dock de propriedades para o tipo da camada
                 if (m_document) {
@@ -172,6 +176,8 @@ void MainWindow::buildCentralWidget()
                         m_shapeDock->raise();
                     } else if (layer && layer->type() == LayerType::Text && m_textDock) {
                         m_textDock->raise();
+                    } else if (layer && layer->type() == LayerType::Image && m_imageDock) {
+                        m_imageDock->raise();
                     }
                 }
             });
@@ -237,6 +243,12 @@ void MainWindow::buildCentralWidget()
                     case CanvasTool::CloneStamp:
                         if (m_toolCloneAction) m_toolCloneAction->setChecked(true);
                         break;
+                    case CanvasTool::Paint:
+                        if (m_toolPaintAction) m_toolPaintAction->setChecked(true);
+                        break;
+                    case CanvasTool::FloodFill:
+                        if (m_toolFloodAction) m_toolFloodAction->setChecked(true);
+                        break;
                     }
                 }
             });
@@ -287,6 +299,16 @@ void MainWindow::buildLayersDock()
     addDockWidget(Qt::RightDockWidgetArea, m_shapeDock);
     tabifyDockWidget(m_textDock, m_shapeDock);
     m_shapeDock->hide();
+
+    // Cria o inspetor de imagens e tabifica junto aos outros inspetores na barra lateral direita
+    m_imageInspector = new ImageInspector(m_i18n, m_document.get(), m_history.get(), this);
+    m_imageDock = new QDockWidget(QString(), this);
+    m_imageDock->setWidget(m_imageInspector);
+    m_imageDock->setFeatures(QDockWidget::DockWidgetMovable
+                             | QDockWidget::DockWidgetFloatable);
+    addDockWidget(Qt::RightDockWidgetArea, m_imageDock);
+    tabifyDockWidget(m_shapeDock, m_imageDock);
+    m_imageDock->hide();
 }
 
 void MainWindow::buildActions()
@@ -499,6 +521,22 @@ void MainWindow::buildActions()
     connect(m_toolCloneAction, &QAction::triggered, this, [this] {
         if (m_canvas) m_canvas->setTool(CanvasTool::CloneStamp);
     });
+
+    m_toolPaintAction = new QAction(this);
+    m_toolPaintAction->setCheckable(true);
+    m_toolPaintAction->setShortcut(QKeySequence(QStringLiteral("B")));
+    m_toolGroup->addAction(m_toolPaintAction);
+    connect(m_toolPaintAction, &QAction::triggered, this, [this] {
+        if (m_canvas) m_canvas->setTool(CanvasTool::Paint);
+    });
+
+    m_toolFloodAction = new QAction(this);
+    m_toolFloodAction->setCheckable(true);
+    m_toolFloodAction->setShortcut(QKeySequence(QStringLiteral("G")));
+    m_toolGroup->addAction(m_toolFloodAction);
+    connect(m_toolFloodAction, &QAction::triggered, this, [this] {
+        if (m_canvas) m_canvas->setTool(CanvasTool::FloodFill);
+    });
 }
 
 void MainWindow::buildToolBars()
@@ -516,6 +554,8 @@ void MainWindow::buildToolBars()
     m_toolsBar->addAction(m_toolScissorsAction);
     m_toolsBar->addAction(m_toolWandAction);
     m_toolsBar->addAction(m_toolCloneAction);
+    m_toolsBar->addAction(m_toolPaintAction);
+    m_toolsBar->addAction(m_toolFloodAction);
     m_toolsBar->addSeparator();
     m_toolsBar->addAction(m_addTextAction);
     m_toolsBar->addAction(m_addRectAction);
@@ -720,6 +760,112 @@ void MainWindow::buildToolBars()
     cloneLayout->addStretch();
     m_toolOptionsStack->addWidget(clonePage);
 
+    // --- Página 5: Pintura (Paint Tool) ---
+    QWidget* paintPage = new QWidget(this);
+    QHBoxLayout* paintLayout = new QHBoxLayout(paintPage);
+    paintLayout->setContentsMargins(8, 2, 8, 2);
+    paintLayout->setSpacing(8);
+
+    m_paintBrushLabel = new QLabel(this);
+    m_paintBrushCombo = new QComboBox(this);
+    m_paintBrushCombo->addItem(QStringLiteral("Pincel"), 0);
+    m_paintBrushCombo->addItem(QStringLiteral("Lápis"), 1);
+    m_paintBrushCombo->addItem(QStringLiteral("Marca-Texto"), 2);
+    m_paintBrushCombo->addItem(QStringLiteral("Aerógrafo"), 3);
+    m_paintBrushCombo->addItem(QStringLiteral("Borracha"), 4);
+    connect(m_paintBrushCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
+        if (m_canvas && idx >= 0) m_canvas->setPaintBrush(idx);
+    });
+
+    m_paintColorBtn = new QPushButton(this);
+    m_paintColorBtn->setFixedSize(28, 24);
+    m_paintColorBtn->setStyleSheet(QStringLiteral("background-color: %1; border: 1px solid #555; border-radius: 3px;").arg(m_currentPaintColor.name()));
+    connect(m_paintColorBtn, &QPushButton::clicked, this, [this] {
+        const QColor chosen = QColorDialog::getColor(m_currentPaintColor, this);
+        if (chosen.isValid()) {
+            m_currentPaintColor = chosen;
+            m_paintColorBtn->setStyleSheet(QStringLiteral("background-color: %1; border: 1px solid #555; border-radius: 3px;").arg(chosen.name()));
+            if (m_floodColorBtn)
+                m_floodColorBtn->setStyleSheet(QStringLiteral("background-color: %1; border: 1px solid #555; border-radius: 3px;").arg(chosen.name()));
+            if (m_canvas) m_canvas->setPaintColor(chosen);
+        }
+    });
+
+    m_paintSizeLabel = new QLabel(this);
+    m_paintSizeSlider = new QSlider(Qt::Horizontal, this);
+    m_paintSizeSlider->setRange(1, 200);
+    m_paintSizeSlider->setValue(20);
+    m_paintSizeSlider->setFixedWidth(100);
+    m_paintSizeValueLabel = new QLabel(QStringLiteral("20px"), this);
+    m_paintSizeValueLabel->setFixedWidth(36);
+    connect(m_paintSizeSlider, &QSlider::valueChanged, this, [this](int val) {
+        m_paintSizeValueLabel->setText(QString::number(val) + QStringLiteral("px"));
+        if (m_canvas) m_canvas->setPaintSize(val);
+    });
+
+    m_paintOpacityLabel = new QLabel(this);
+    m_paintOpacitySlider = new QSlider(Qt::Horizontal, this);
+    m_paintOpacitySlider->setRange(10, 100);
+    m_paintOpacitySlider->setValue(100);
+    m_paintOpacitySlider->setFixedWidth(100);
+    m_paintOpacityValueLabel = new QLabel(QStringLiteral("100%"), this);
+    m_paintOpacityValueLabel->setFixedWidth(40);
+    connect(m_paintOpacitySlider, &QSlider::valueChanged, this, [this](int val) {
+        m_paintOpacityValueLabel->setText(QString::number(val) + QStringLiteral("%"));
+        if (m_canvas) m_canvas->setPaintOpacity(val / 100.0);
+    });
+
+    paintLayout->addWidget(m_paintBrushLabel);
+    paintLayout->addWidget(m_paintBrushCombo);
+    paintLayout->addWidget(m_paintColorBtn);
+    paintLayout->addWidget(m_paintSizeLabel);
+    paintLayout->addWidget(m_paintSizeSlider);
+    paintLayout->addWidget(m_paintSizeValueLabel);
+    paintLayout->addWidget(m_paintOpacityLabel);
+    paintLayout->addWidget(m_paintOpacitySlider);
+    paintLayout->addWidget(m_paintOpacityValueLabel);
+    paintLayout->addStretch();
+    m_toolOptionsStack->addWidget(paintPage);
+
+    // --- Página 6: Preenchimento (Flood Fill Tool) ---
+    QWidget* floodPage = new QWidget(this);
+    QHBoxLayout* floodLayout = new QHBoxLayout(floodPage);
+    floodLayout->setContentsMargins(8, 2, 8, 2);
+    floodLayout->setSpacing(8);
+
+    m_floodColorBtn = new QPushButton(this);
+    m_floodColorBtn->setFixedSize(28, 24);
+    m_floodColorBtn->setStyleSheet(QStringLiteral("background-color: %1; border: 1px solid #555; border-radius: 3px;").arg(m_currentPaintColor.name()));
+    connect(m_floodColorBtn, &QPushButton::clicked, this, [this] {
+        const QColor chosen = QColorDialog::getColor(m_currentPaintColor, this);
+        if (chosen.isValid()) {
+            m_currentPaintColor = chosen;
+            m_floodColorBtn->setStyleSheet(QStringLiteral("background-color: %1; border: 1px solid #555; border-radius: 3px;").arg(chosen.name()));
+            if (m_paintColorBtn)
+                m_paintColorBtn->setStyleSheet(QStringLiteral("background-color: %1; border: 1px solid #555; border-radius: 3px;").arg(chosen.name()));
+            if (m_canvas) m_canvas->setPaintColor(chosen);
+        }
+    });
+
+    m_floodTolLabel = new QLabel(this);
+    m_floodTolSlider = new QSlider(Qt::Horizontal, this);
+    m_floodTolSlider->setRange(0, 100);
+    m_floodTolSlider->setValue(25);
+    m_floodTolSlider->setFixedWidth(120);
+    m_floodTolValueLabel = new QLabel(QStringLiteral("25%"), this);
+    m_floodTolValueLabel->setFixedWidth(36);
+    connect(m_floodTolSlider, &QSlider::valueChanged, this, [this](int val) {
+        m_floodTolValueLabel->setText(QString::number(val) + QStringLiteral("%"));
+        if (m_canvas) m_canvas->setWandTolerance(val);
+    });
+
+    floodLayout->addWidget(m_floodColorBtn);
+    floodLayout->addWidget(m_floodTolLabel);
+    floodLayout->addWidget(m_floodTolSlider);
+    floodLayout->addWidget(m_floodTolValueLabel);
+    floodLayout->addStretch();
+    m_toolOptionsStack->addWidget(floodPage);
+
     m_toolOptionsBar->addWidget(m_toolOptionsStack);
 
     m_toolsBar->hide();
@@ -779,6 +925,8 @@ void MainWindow::buildMenus()
     m_toolsMenu->addAction(m_toolScissorsAction);
     m_toolsMenu->addAction(m_toolWandAction);
     m_toolsMenu->addAction(m_toolCloneAction);
+    m_toolsMenu->addAction(m_toolPaintAction);
+    m_toolsMenu->addAction(m_toolFloodAction);
 
     m_settingsMenu = menuBar()->addMenu(QString());
     m_settingsMenu->addAction(m_settingsAction);
@@ -808,6 +956,7 @@ void MainWindow::showStartScreen()
     if (m_layersDock) m_layersDock->hide();
     if (m_textDock) m_textDock->hide();
     if (m_shapeDock) m_shapeDock->hide();
+    if (m_imageDock) m_imageDock->hide();
     if (m_toolsBar) m_toolsBar->hide();
     if (m_toolOptionsBar) m_toolOptionsBar->hide();
     if (m_startScreen) m_startScreen->refreshRecents();
@@ -819,6 +968,7 @@ void MainWindow::enterEditor()
     if (m_layersDock) m_layersDock->show();
     if (m_textDock) m_textDock->show();
     if (m_shapeDock) m_shapeDock->show();
+    if (m_imageDock) m_imageDock->show();
     if (m_toolsBar) m_toolsBar->show();
     if (m_toolOptionsBar) m_toolOptionsBar->show();
     updateWindowTitle();
@@ -843,6 +993,8 @@ void MainWindow::startFromPreset(const NewDocumentSpec& spec)
         m_textInspector->setDocument(m_document.get());
     if (m_shapeInspector)
         m_shapeInspector->setDocument(m_document.get());
+    if (m_imageInspector)
+        m_imageInspector->setDocument(m_document.get());
     connectDocumentSignals();
     enterEditor();
     updateWindowTitle();
@@ -879,6 +1031,8 @@ void MainWindow::openFromPath(const QString& path)
         m_textInspector->setDocument(m_document.get());
     if (m_shapeInspector)
         m_shapeInspector->setDocument(m_document.get());
+    if (m_imageInspector)
+        m_imageInspector->setDocument(m_document.get());
     connectDocumentSignals();
     if (m_recentFiles)
         m_recentFiles->push(path);
@@ -1447,6 +1601,10 @@ void MainWindow::retranslateUi()
         m_textDock->setWindowTitle(m_i18n->t("editor", "text.title"));
     if (m_shapeDock)
         m_shapeDock->setWindowTitle(m_i18n->t("editor", "shape.title"));
+    if (m_imageDock)
+        m_imageDock->setWindowTitle(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
+            ? QStringLiteral("Propriedades da Imagem")
+            : QStringLiteral("Image Properties"));
 
     // Retradução das ferramentas da barra e opções
     if (m_toolSelectAction)
@@ -1459,14 +1617,22 @@ void MainWindow::retranslateUi()
         m_toolWandAction->setText(m_i18n->t("editor", "tools.wand"));
     if (m_toolCloneAction)
         m_toolCloneAction->setText(m_i18n->t("editor", "tools.clone"));
+    if (m_toolPaintAction)
+        m_toolPaintAction->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
+            ? QStringLiteral("Pintura / Pincel")
+            : QStringLiteral("Paint / Brush"));
+    if (m_toolFloodAction)
+        m_toolFloodAction->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
+            ? QStringLiteral("Balde de Tinta")
+            : QStringLiteral("Paint Bucket (Fill)"));
 
     if (m_toolsMenu)
         m_toolsMenu->setTitle(m_i18n->t("editor", "tools.title"));
 
     if (m_selectHintLabel)
         m_selectHintLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
-            ? QStringLiteral("Dica: V = Selecionar | C = Cortar | X = Tesoura | W = Varinha Mágica | S = Carimbo de Clonagem")
-            : QStringLiteral("Hint: V = Select | C = Crop | X = Scissors Cut | W = Magic Wand | S = Clone Stamp"));
+            ? QStringLiteral("Dica: V = Selecionar | C = Cortar | X = Tesoura | W = Varinha | S = Carimbo | B = Pincel | G = Balde de Tinta")
+            : QStringLiteral("Hint: V = Select | C = Crop | X = Scissors | W = Magic Wand | S = Clone Stamp | B = Paint | G = Flood Fill"));
 
     if (m_cropAspectLabel)
         m_cropAspectLabel->setText(m_i18n->t("editor", "tools.crop.aspect") + QStringLiteral(":"));
@@ -1519,6 +1685,15 @@ void MainWindow::retranslateUi()
         m_cloneHintLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
             ? QStringLiteral("Botão Direito ou Shift+Clique define a origem. Arraste para clonar.")
             : QStringLiteral("Right-Click or Shift+Click sets source. Drag to clone."));
+
+    if (m_paintBrushLabel)
+        m_paintBrushLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Pincel:") : QStringLiteral("Brush:"));
+    if (m_paintSizeLabel)
+        m_paintSizeLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Tamanho:") : QStringLiteral("Size:"));
+    if (m_paintOpacityLabel)
+        m_paintOpacityLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Opacidade:") : QStringLiteral("Opacity:"));
+    if (m_floodTolLabel)
+        m_floodTolLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Tolerância:") : QStringLiteral("Tolerance:"));
 
     updateZoomLabel();
     updatePositionLabel(m_lastCursorPos);

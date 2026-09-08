@@ -51,6 +51,44 @@ public:
     static QImage cloneStamp(const QImage& target, const QImage& source,
                              const QPoint& srcPoint, const QPoint& dstPoint,
                              int radius, qreal opacity = 1.0, qreal hardness = 0.8);
+
+    // Tipos de Pincel Estilo Paint
+    enum class BrushType {
+        Brush,        // Pincel redondo suave (antialiased)
+        Pencil,       // Lápis / Caneta precisa (pixelado/duro)
+        Highlighter,  // Marcador translúcido
+        Airbrush,     // Spray / Aerógrafo com dispersão estocástica
+        Eraser        // Borracha (limpa pixels para transparente)
+    };
+
+    /// Pinta um traço contínuo entre prevPoint e curPoint com o pincel selecionado.
+    static QImage paintStroke(const QImage& target, const QPointF& prevPoint, const QPointF& curPoint,
+                             BrushType brush, const QColor& color, int size, qreal opacity = 1.0);
+
+    /// Balde de Tinta (Flood Fill): preenche uma área contígua de mesma cor com fillColor.
+    static QImage floodFill(const QImage& source, const QPoint& seedPoint,
+                            const QColor& fillColor, int tolerance = 20);
+
+    // Ajustes Rápidos de Imagem e Correção de Cor
+    /// Aplica ajustes de brilho (-100 a +100), contraste (-100 a +100), saturação (-100 a +100) e temperatura de cor (-100 a +100).
+    static QImage adjustColors(const QImage& source, double brightness, double contrast,
+                              double saturation, double temperature);
+
+    /// Aplica desfoque gaussiano / suavização rápida.
+    static QImage applyBlur(const QImage& source, double radius);
+
+    /// Aplica nitidez (Sharpen).
+    static QImage applySharpen(const QImage& source, double amount);
+
+    enum class PresetFilter {
+        Grayscale,    // P&B / Preto e Branco
+        Sepia,        // Sépia clássico
+        Vintage,      // Retrô / Vintage quente
+        HighContrast  // Alto contraste dinâmico
+    };
+
+    /// Aplica filtros rápidos em 1 clique.
+    static QImage applyPresetFilter(const QImage& source, PresetFilter preset);
 };
 
 } // namespace cc

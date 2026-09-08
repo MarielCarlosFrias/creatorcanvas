@@ -36,6 +36,7 @@ class CanvasView;
 class LayersPanel;
 class TextInspector;
 class ShapeInspector;
+class ImageInspector;
 class StartScreen;
 
 class MainWindow final : public QMainWindow
@@ -102,9 +103,11 @@ private:
     LayersPanel* m_layersPanel = nullptr;
     TextInspector* m_textInspector = nullptr;
     ShapeInspector* m_shapeInspector = nullptr;
+    ImageInspector* m_imageInspector = nullptr;
     QDockWidget* m_layersDock = nullptr;
     QDockWidget* m_textDock = nullptr;
     QDockWidget* m_shapeDock = nullptr;
+    QDockWidget* m_imageDock = nullptr;
     LayerId m_selectedId;
     QString m_currentFilePath;
     bool m_modified = false;
@@ -157,6 +160,8 @@ private:
     QAction* m_toolScissorsAction = nullptr;
     QAction* m_toolWandAction = nullptr;
     QAction* m_toolCloneAction = nullptr;
+    QAction* m_toolPaintAction = nullptr;
+    QAction* m_toolFloodAction = nullptr;
     QMenu* m_toolsMenu = nullptr;
 
     QStackedWidget* m_toolOptionsStack = nullptr;
@@ -190,6 +195,22 @@ private:
     QSlider* m_cloneOpacitySlider = nullptr;
     QLabel* m_cloneOpacityValueLabel = nullptr;
     QLabel* m_cloneHintLabel = nullptr;
+
+    QLabel* m_paintBrushLabel = nullptr;
+    QComboBox* m_paintBrushCombo = nullptr;
+    QPushButton* m_paintColorBtn = nullptr;
+    QLabel* m_paintSizeLabel = nullptr;
+    QSlider* m_paintSizeSlider = nullptr;
+    QLabel* m_paintSizeValueLabel = nullptr;
+    QLabel* m_paintOpacityLabel = nullptr;
+    QSlider* m_paintOpacitySlider = nullptr;
+    QLabel* m_paintOpacityValueLabel = nullptr;
+    QColor m_currentPaintColor{230, 50, 50};
+
+    QLabel* m_floodTolLabel = nullptr;
+    QSlider* m_floodTolSlider = nullptr;
+    QLabel* m_floodTolValueLabel = nullptr;
+    QPushButton* m_floodColorBtn = nullptr;
 
     QLabel* m_zoomLabel = nullptr;
     QLabel* m_positionLabel = nullptr;

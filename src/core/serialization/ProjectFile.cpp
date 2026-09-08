@@ -127,6 +127,8 @@ QJsonObject writeLayer(const Layer& layer)
     o.insert(QStringLiteral("rotation"), layer.transform.rotationDeg);
     o.insert(QStringLiteral("scaleX"), layer.transform.scaleX);
     o.insert(QStringLiteral("scaleY"), layer.transform.scaleY);
+    o.insert(QStringLiteral("shearX"), layer.transform.shearX);
+    o.insert(QStringLiteral("shearY"), layer.transform.shearY);
 
     switch (layer.type()) {
     case LayerType::Group: {
@@ -177,6 +179,14 @@ QJsonObject writeLayer(const Layer& layer)
         shadow.insert(QStringLiteral("offsetY"), text.effects.shadow.offsetY);
         shadow.insert(QStringLiteral("blur"), text.effects.shadow.blur);
         effects.insert(QStringLiteral("shadow"), shadow);
+
+        QJsonObject gradient;
+        gradient.insert(QStringLiteral("enabled"), text.effects.gradient.enabled);
+        gradient.insert(QStringLiteral("type"), text.effects.gradient.type);
+        gradient.insert(QStringLiteral("startColor"), colorToString(text.effects.gradient.startColor));
+        gradient.insert(QStringLiteral("endColor"), colorToString(text.effects.gradient.endColor));
+        gradient.insert(QStringLiteral("angleDeg"), text.effects.gradient.angleDeg);
+        effects.insert(QStringLiteral("gradient"), gradient);
 
         o.insert(QStringLiteral("effects"), effects);
         break;
@@ -510,6 +520,14 @@ private:
         text->effects.shadow.offsetX = shadow.value(QStringLiteral("offsetX")).toDouble(4.0);
         text->effects.shadow.offsetY = shadow.value(QStringLiteral("offsetY")).toDouble(4.0);
         text->effects.shadow.blur = shadow.value(QStringLiteral("blur")).toDouble(6.0);
+
+        const QJsonObject gradient = effects.value(QStringLiteral("gradient")).toObject();
+        text->effects.gradient.enabled = gradient.value(QStringLiteral("enabled")).toBool(false);
+        text->effects.gradient.type = gradient.value(QStringLiteral("type")).toInt(0);
+        text->effects.gradient.startColor = colorFromString(gradient.value(QStringLiteral("startColor")).toString());
+        text->effects.gradient.endColor = colorFromString(gradient.value(QStringLiteral("endColor")).toString());
+        text->effects.gradient.angleDeg = gradient.value(QStringLiteral("angleDeg")).toDouble(0.0);
+
         finishLayer(*text, o, id);
         *out = std::move(text);
         return true;
@@ -574,6 +592,10 @@ private:
             o.value(QStringLiteral("scaleX")).toDouble(1.0);
         layer.transform.scaleY =
             o.value(QStringLiteral("scaleY")).toDouble(1.0);
+        layer.transform.shearX =
+            o.value(QStringLiteral("shearX")).toDouble(0.0);
+        layer.transform.shearY =
+            o.value(QStringLiteral("shearY")).toDouble(0.0);
     }
 
     QJsonObject m_root;

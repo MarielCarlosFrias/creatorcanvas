@@ -386,7 +386,9 @@ void CanvasView::updateCursor(const QPointF& widgetPos)
         return;
     }
 
-    if (m_tool == CanvasTool::Scissors || m_tool == CanvasTool::MagicWand || m_tool == CanvasTool::CloneStamp) {
+    if (m_tool == CanvasTool::Scissors || m_tool == CanvasTool::MagicWand
+        || m_tool == CanvasTool::CloneStamp || m_tool == CanvasTool::Paint
+        || m_tool == CanvasTool::FloodFill) {
         setCursor(Qt::CrossCursor);
         return;
     }
@@ -416,6 +418,17 @@ void CanvasView::paintEvent(QPaintEvent*)
             painter.save();
             painter.setTransform(layer->transform.matrix(layer->contentBounds()) * docToDevice());
             painter.drawImage(0, 0, m_cloneWorkingImage);
+            painter.restore();
+        }
+    }
+
+    // Feedback visual ao vivo para a Ferramenta de Pintura
+    if (m_tool == CanvasTool::Paint && m_isPainting && !m_paintWorkingImage.isNull() && !m_paintActiveLayerId.isNull()) {
+        Layer* layer = m_document->findLayer(m_paintActiveLayerId);
+        if (layer && layer->type() == LayerType::Image) {
+            painter.save();
+            painter.setTransform(layer->transform.matrix(layer->contentBounds()) * docToDevice());
+            painter.drawImage(0, 0, m_paintWorkingImage);
             painter.restore();
         }
     }
@@ -597,6 +610,110 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
                 }
             } else {
                 emit statusMessageRequested(QStringLiteral("Clique sobre uma imagem para usar o Carimbo de Clonagem."));
+            }
+            event->accept();
+            return;
+        }
+
+        // Interação da Ferramenta de Pintura Estilo Paint (Paint Tool)
+        if (m_tool == CanvasTool::Paint) {
+            Layer* layer = nullptr;
+            if (!m_selectedId.isNull())
+                layer = m_document->findLayer(m_selectedId);
+
+            // Se a camada selecionada não for ImageLayer, procura uma camada raster sob o cursor
+            if (!layer || layer->type() != LayerType::Image) {
+                Layer* hit = hitTestLayer(docPos);
+                if (hit && hit->type() == LayerType::Image) {
+                    selectLayer(hit->id());
+                    layer = hit;
+                }
+            }
+
+            // Se ainda não houver camada de imagem, cria automaticamente uma nova camada transparente
+            if (!layer || layer->type() != LayerType::Image) {
+                auto newImgLayer = std::make_unique<ImageLayer>();
+                newImgLayer->name = QStringLiteral("Pintura");
+                newImgLayer->naturalWidth = m_document->width();
+                newImgLayer->naturalHeight = m_document->height();
+                newImgLayer->transform.position = QPointF(m_document->width() / 2.0, m_document->height() / 2.0);
+
+                QImage blank(m_document->width(), m_document->height(), QImage::Format_ARGB32_Premultiplied);
+                blank.fill(Qt::transparent);
+                LayerId assetId = m_document->assets().addImage(blank);
+                newImgLayer->assetId = assetId;
+
+                const LayerId createdId = newImgLayer->id();
+                m_document->addLayer(std::move(newImgLayer));
+                selectLayer(createdId);
+                layer = m_document->findLayer(createdId);
+            }
+
+            if (layer && layer->type() == LayerType::Image) {
+                auto* img = static_cast<ImageLayer*>(layer);
+                const QTransform matrix = layer->transform.matrix(layer->contentBounds());
+                const QPointF localPos = matrix.inverted().map(docPos);
+
+                m_paintActiveLayerId = layer->id();
+                m_paintOrigAssetId = img->assetId;
+                m_paintOrigWidth = img->naturalWidth;
+                m_paintOrigHeight = img->naturalHeight;
+                m_paintOrigTransform = layer->transform;
+
+                m_paintWorkingImage = m_document->assets().decodedImage(img->assetId);
+                if (m_paintWorkingImage.isNull()) {
+                    m_paintWorkingImage = QImage(img->naturalWidth > 0 ? img->naturalWidth : m_document->width(),
+                                                img->naturalHeight > 0 ? img->naturalHeight : m_document->height(),
+                                                QImage::Format_ARGB32_Premultiplied);
+                    m_paintWorkingImage.fill(Qt::transparent);
+                }
+
+                m_paintPrevPoint = localPos;
+                m_isPainting = true;
+
+                // Pinta o primeiro ponto imediatamente
+                m_paintWorkingImage = ImageProcessing::paintStroke(
+                    m_paintWorkingImage, m_paintPrevPoint, localPos,
+                    static_cast<ImageProcessing::BrushType>(m_paintBrushType),
+                    m_paintColor, m_paintSize, m_paintOpacity);
+
+                update();
+            }
+            event->accept();
+            return;
+        }
+
+        // Interação do Balde de Tinta (Flood Fill)
+        if (m_tool == CanvasTool::FloodFill) {
+            Layer* layer = nullptr;
+            if (!m_selectedId.isNull())
+                layer = m_document->findLayer(m_selectedId);
+
+            if (!layer || layer->type() != LayerType::Image) {
+                Layer* hit = hitTestLayer(docPos);
+                if (hit && hit->type() == LayerType::Image) {
+                    selectLayer(hit->id());
+                    layer = hit;
+                }
+            }
+
+            if (layer && layer->type() == LayerType::Image) {
+                auto* img = static_cast<ImageLayer*>(layer);
+                const QTransform matrix = layer->transform.matrix(layer->contentBounds());
+                const QPoint seedPt = matrix.inverted().map(docPos).toPoint();
+
+                QImage orig = m_document->assets().decodedImage(img->assetId);
+                if (!orig.isNull() && orig.rect().contains(seedPt)) {
+                    QImage filled = ImageProcessing::floodFill(orig, seedPt, m_paintColor, m_wandTolerance);
+                    LayerId newAssetId = m_document->assets().addImage(filled);
+                    emit imageLayerModified(img->id(),
+                                            img->assetId, img->naturalWidth, img->naturalHeight, layer->transform,
+                                            newAssetId, img->naturalWidth, img->naturalHeight, layer->transform,
+                                            QStringLiteral("Balde de Tinta"));
+                    update();
+                }
+            } else {
+                emit statusMessageRequested(QStringLiteral("Clique sobre uma imagem para preencher com o Balde de Tinta."));
             }
             event->accept();
             return;
@@ -875,6 +992,26 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event)
         return;
     }
 
+    // Pintura contínua com a Ferramenta de Pintura (Paint Tool)
+    if (m_tool == CanvasTool::Paint && m_document && m_isPainting && !m_paintActiveLayerId.isNull()) {
+        Layer* layer = m_document->findLayer(m_paintActiveLayerId);
+        if (layer && layer->type() == LayerType::Image) {
+            const QPointF docNow = deviceToDoc().map(QPointF(event->pos()));
+            const QTransform matrix = layer->transform.matrix(layer->contentBounds());
+            const QPointF curPt = matrix.inverted().map(docNow);
+
+            m_paintWorkingImage = ImageProcessing::paintStroke(
+                m_paintWorkingImage, m_paintPrevPoint, curPt,
+                static_cast<ImageProcessing::BrushType>(m_paintBrushType),
+                m_paintColor, m_paintSize, m_paintOpacity);
+
+            m_paintPrevPoint = curPt;
+            update();
+        }
+        event->accept();
+        return;
+    }
+
     if (m_gesture != Gesture::None && m_document) {
         if (m_document && !m_selectedId.isNull()) {
             Layer* layer = m_document->findLayer(m_selectedId);
@@ -1073,6 +1210,25 @@ void CanvasView::mouseReleaseEvent(QMouseEvent* event)
                                         newAssetId, img->naturalWidth, img->naturalHeight, layer->transform,
                                         QStringLiteral("Clone Stamp"));
                 m_cloneWorkingImage = QImage();
+            }
+        }
+        update();
+        event->accept();
+        return;
+    }
+
+    if (m_tool == CanvasTool::Paint) {
+        if (m_isPainting && m_document && !m_paintActiveLayerId.isNull()) {
+            m_isPainting = false;
+            Layer* layer = m_document->findLayer(m_paintActiveLayerId);
+            if (layer && layer->type() == LayerType::Image && !m_paintWorkingImage.isNull()) {
+                auto* img = static_cast<ImageLayer*>(layer);
+                LayerId newAssetId = m_document->assets().addImage(m_paintWorkingImage);
+                emit imageLayerModified(img->id(),
+                                        m_paintOrigAssetId, m_paintOrigWidth, m_paintOrigHeight, m_paintOrigTransform,
+                                        newAssetId, img->naturalWidth, img->naturalHeight, layer->transform,
+                                        QStringLiteral("Pintura"));
+                m_paintWorkingImage = QImage();
             }
         }
         update();
@@ -1638,6 +1794,32 @@ void CanvasView::setCloneHardness(qreal hardness)
 void CanvasView::setCloneOpacity(qreal opacity)
 {
     m_cloneOpacity = std::clamp(opacity, 0.0, 1.0);
+}
+
+void CanvasView::setPaintBrush(int brushType)
+{
+    m_paintBrushType = std::clamp(brushType, 0, 4);
+    update();
+}
+
+void CanvasView::setPaintColor(const QColor& color)
+{
+    if (color.isValid()) {
+        m_paintColor = color;
+        update();
+    }
+}
+
+void CanvasView::setPaintSize(int size)
+{
+    m_paintSize = std::clamp(size, 1, 300);
+    update();
+}
+
+void CanvasView::setPaintOpacity(qreal opacity)
+{
+    m_paintOpacity = std::clamp(opacity, 0.0, 1.0);
+    update();
 }
 
 int CanvasView::cropHandleAt(const QPointF& widgetPos) const

@@ -91,6 +91,20 @@ void TextInspector::refresh()
     m_shadowX->setValue(fx.shadow.offsetX);
     m_shadowY->setValue(fx.shadow.offsetY);
     m_shadowBlur->setValue(fx.shadow.blur);
+
+    const TextGradient& grad = fx.gradient;
+    m_gradientOn->setChecked(grad.enabled);
+    m_gradientType->setCurrentIndex(grad.type);
+    const QString gradStartHex = grad.startColor.name(QColor::HexRgb);
+    m_gradientStartColor->setText(gradStartHex);
+    m_gradientStartColor->setStyleSheet(QStringLiteral("background: %1;").arg(gradStartHex));
+    const QString gradEndHex = grad.endColor.name(QColor::HexRgb);
+    m_gradientEndColor->setText(gradEndHex);
+    m_gradientEndColor->setStyleSheet(QStringLiteral("background: %1;").arg(gradEndHex));
+    m_gradientAngle->setValue(grad.angleDeg);
+
+    m_tiltX->setValue(layer->transform.shearX);
+    m_tiltY->setValue(layer->transform.shearY);
     m_loading = false;
 }
 
@@ -251,6 +265,48 @@ void TextInspector::buildUi()
     shadowRow->addStretch();
     form->addRow(QString(), shadowRow);
 
+    m_gradientOn = new QCheckBox(group);
+    m_gradientType = new QComboBox(group);
+    m_gradientType->addItem(QStringLiteral("Linear"), 0);
+    m_gradientType->addItem(QStringLiteral("Radial"), 1);
+    m_gradientStartColor = new QPushButton(group);
+    m_gradientEndColor = new QPushButton(group);
+    m_gradientAngle = new QDoubleSpinBox(group);
+    m_gradientAngle->setRange(0.0, 360.0);
+    m_gradientAngle->setSingleStep(5.0);
+    m_gradientAngle->setSuffix(QStringLiteral("°"));
+
+    auto* gradientRow = new QHBoxLayout;
+    gradientRow->addWidget(m_gradientOn);
+    gradientRow->addWidget(m_gradientType);
+    gradientRow->addWidget(m_gradientStartColor);
+    gradientRow->addWidget(m_gradientEndColor);
+    gradientRow->addWidget(new QLabel(QStringLiteral("∠"), group));
+    gradientRow->addWidget(m_gradientAngle);
+    gradientRow->addStretch();
+    form->addRow(QString(), gradientRow);
+
+    m_perspectiveLabel = new QLabel(group);
+    form->addRow(m_perspectiveLabel);
+
+    m_tiltX = new QDoubleSpinBox(group);
+    m_tiltX->setRange(-2.0, 2.0);
+    m_tiltX->setSingleStep(0.05);
+    m_tiltX->setDecimals(2);
+
+    m_tiltY = new QDoubleSpinBox(group);
+    m_tiltY->setRange(-2.0, 2.0);
+    m_tiltY->setSingleStep(0.05);
+    m_tiltY->setDecimals(2);
+
+    auto* tiltRow = new QHBoxLayout;
+    tiltRow->addWidget(new QLabel(QStringLiteral("X:"), group));
+    tiltRow->addWidget(m_tiltX);
+    tiltRow->addWidget(new QLabel(QStringLiteral("Y:"), group));
+    tiltRow->addWidget(m_tiltY);
+    tiltRow->addStretch();
+    form->addRow(QString(), tiltRow);
+
     connect(m_outlineOn, &QCheckBox::toggled, this, [this](bool on) {
         TextLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
@@ -313,6 +369,62 @@ void TextInspector::buildUi()
         layer->effects.shadow.blur = value;
         touch();
     });
+    connect(m_gradientOn, &QCheckBox::toggled, this, [this](bool on) {
+        TextLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->effects.gradient.enabled = on;
+        touch();
+    });
+    connect(m_gradientType, qOverload<int>(&QComboBox::currentIndexChanged), this,
+            [this](int index) {
+        TextLayer* layer = nullptr;
+        if (m_loading || index < 0 || !editingLayer(&layer)) return;
+        layer->effects.gradient.type = index;
+        touch();
+    });
+    connect(m_gradientStartColor, &QPushButton::clicked, this, [this] {
+        TextLayer* layer = nullptr;
+        if (!editingLayer(&layer)) return;
+        const QColor chosen = QColorDialog::getColor(layer->effects.gradient.startColor, this);
+        if (!chosen.isValid()) return;
+        layer->effects.gradient.startColor = chosen;
+        const QString hex = chosen.name(QColor::HexRgb);
+        m_gradientStartColor->setText(hex);
+        m_gradientStartColor->setStyleSheet(QStringLiteral("background: %1;").arg(hex));
+        touch();
+    });
+    connect(m_gradientEndColor, &QPushButton::clicked, this, [this] {
+        TextLayer* layer = nullptr;
+        if (!editingLayer(&layer)) return;
+        const QColor chosen = QColorDialog::getColor(layer->effects.gradient.endColor, this);
+        if (!chosen.isValid()) return;
+        layer->effects.gradient.endColor = chosen;
+        const QString hex = chosen.name(QColor::HexRgb);
+        m_gradientEndColor->setText(hex);
+        m_gradientEndColor->setStyleSheet(QStringLiteral("background: %1;").arg(hex));
+        touch();
+    });
+    connect(m_gradientAngle, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
+            [this](double value) {
+        TextLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->effects.gradient.angleDeg = value;
+        touch();
+    });
+    connect(m_tiltX, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
+            [this](double value) {
+        TextLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->transform.shearX = value;
+        touch();
+    });
+    connect(m_tiltY, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
+            [this](double value) {
+        TextLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->transform.shearY = value;
+        touch();
+    });
 }
 
 void TextInspector::retranslateUi()
@@ -328,6 +440,8 @@ void TextInspector::retranslateUi()
     m_effectsLabel->setText(m_i18n->t("editor", "effects.title"));
     m_outlineOn->setText(m_i18n->t("editor", "effects.outline"));
     m_shadowOn->setText(m_i18n->t("editor", "effects.shadow"));
+    m_gradientOn->setText(m_i18n ? m_i18n->t("editor", "effects.gradient") : QStringLiteral("Gradient"));
+    m_perspectiveLabel->setText(m_i18n ? m_i18n->t("editor", "effects.perspective") : QStringLiteral("3D Tilt / Perspective"));
 
     m_loading = true;
     m_align->clear();

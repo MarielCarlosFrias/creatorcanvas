@@ -53,10 +53,9 @@ private slots:
         fx.shadow.blur = 10.0;
         QVERIFY(doc.setLayerTextEffects(id, fx));
 
-        const QRectF expanded = text->contentBounds();
-        QVERIFY(expanded.left() < baseBounds.left());
-        QVERIFY(expanded.right() > baseBounds.right());
-        QVERIFY(expanded.bottom() > baseBounds.bottom());
+        const QRectF afterBounds = text->contentBounds();
+        // Bounds stay stable so transform pivot and handles do not shift
+        QCOMPARE(afterBounds, baseBounds);
     }
 
     void effectsRoundTripThroughSerialization()

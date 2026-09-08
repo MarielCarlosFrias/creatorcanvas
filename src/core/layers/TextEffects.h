@@ -33,14 +33,32 @@ struct TextShadow
     }
 };
 
+struct TextGradient
+{
+    bool enabled = false;
+    int type = 0; // 0 = Linear, 1 = Radial
+    QColor startColor{255, 107, 107};
+    QColor endColor{78, 205, 196};
+    double angleDeg = 0.0;
+
+    bool operator==(const TextGradient& other) const
+    {
+        return enabled == other.enabled && type == other.type
+               && startColor == other.startColor && endColor == other.endColor
+               && angleDeg == other.angleDeg;
+    }
+};
+
 struct TextEffects
 {
     TextOutline outline;
     TextShadow shadow;
+    TextGradient gradient;
 
     bool operator==(const TextEffects& other) const
     {
-        return outline == other.outline && shadow == other.shadow;
+        return outline == other.outline && shadow == other.shadow
+               && gradient == other.gradient;
     }
     bool operator!=(const TextEffects& other) const { return !(*this == other); }
 };

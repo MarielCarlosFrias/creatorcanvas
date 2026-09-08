@@ -24,6 +24,13 @@ QJsonObject ProjectSerializer::layerToJson(const Layer& layer)
     obj["locked"] = layer.locked;
     obj["opacity"] = layer.opacity();
     obj["blendMode"] = static_cast<int>(layer.blendMode);
+    obj["transformX"] = layer.transform.position.x();
+    obj["transformY"] = layer.transform.position.y();
+    obj["rotation"] = layer.transform.rotationDeg;
+    obj["scaleX"] = layer.transform.scaleX;
+    obj["scaleY"] = layer.transform.scaleY;
+    obj["shearX"] = layer.transform.shearX;
+    obj["shearY"] = layer.transform.shearY;
 
     switch (layer.type()) {
     case LayerType::Group: {
@@ -53,6 +60,33 @@ QJsonObject ProjectSerializer::layerToJson(const Layer& layer)
         obj["letterSpacingPx"] = txt.letterSpacingPx;
         obj["lineHeightMult"] = txt.lineHeightMult;
         obj["align"] = static_cast<int>(txt.align);
+        obj["boxW"] = txt.box.width();
+        obj["boxH"] = txt.box.height();
+
+        QJsonObject effects;
+        QJsonObject outline;
+        outline["enabled"] = txt.effects.outline.enabled;
+        outline["color"] = txt.effects.outline.color.name();
+        outline["width"] = txt.effects.outline.width;
+        effects["outline"] = outline;
+
+        QJsonObject shadow;
+        shadow["enabled"] = txt.effects.shadow.enabled;
+        shadow["color"] = txt.effects.shadow.color.name();
+        shadow["offsetX"] = txt.effects.shadow.offsetX;
+        shadow["offsetY"] = txt.effects.shadow.offsetY;
+        shadow["blur"] = txt.effects.shadow.blur;
+        effects["shadow"] = shadow;
+
+        QJsonObject gradient;
+        gradient["enabled"] = txt.effects.gradient.enabled;
+        gradient["type"] = txt.effects.gradient.type;
+        gradient["startColor"] = txt.effects.gradient.startColor.name();
+        gradient["endColor"] = txt.effects.gradient.endColor.name();
+        gradient["angleDeg"] = txt.effects.gradient.angleDeg;
+        effects["gradient"] = gradient;
+
+        obj["effects"] = effects;
         break;
     }
     case LayerType::Shape: {
@@ -116,6 +150,13 @@ std::unique_ptr<Layer> ProjectSerializer::layerFromJson(const QJsonObject& obj, 
     layer->locked = obj["locked"].toBool(false);
     layer->setOpacity(obj["opacity"].toDouble(1.0));
     layer->blendMode = static_cast<BlendMode>(obj["blendMode"].toInt(0));
+    layer->transform.position = QPointF(obj["transformX"].toDouble(0.0),
+                                        obj["transformY"].toDouble(0.0));
+    layer->transform.rotationDeg = obj["rotation"].toDouble(0.0);
+    layer->transform.scaleX = obj["scaleX"].toDouble(1.0);
+    layer->transform.scaleY = obj["scaleY"].toDouble(1.0);
+    layer->transform.shearX = obj["shearX"].toDouble(0.0);
+    layer->transform.shearY = obj["shearY"].toDouble(0.0);
 
     switch (type) {
     case LayerType::Group: {
@@ -152,6 +193,27 @@ std::unique_ptr<Layer> ProjectSerializer::layerFromJson(const QJsonObject& obj, 
         txt->letterSpacingPx = obj["letterSpacingPx"].toDouble(0.0);
         txt->lineHeightMult = obj["lineHeightMult"].toDouble(1.0);
         txt->align = static_cast<TextAlignment>(obj["align"].toInt(0));
+        txt->box = QSizeF(obj["boxW"].toDouble(0.0), obj["boxH"].toDouble(0.0));
+
+        const QJsonObject effects = obj["effects"].toObject();
+        const QJsonObject outline = effects["outline"].toObject();
+        txt->effects.outline.enabled = outline["enabled"].toBool(false);
+        txt->effects.outline.color = QColor(outline["color"].toString("#000000"));
+        txt->effects.outline.width = outline["width"].toDouble(4.0);
+
+        const QJsonObject shadow = effects["shadow"].toObject();
+        txt->effects.shadow.enabled = shadow["enabled"].toBool(false);
+        txt->effects.shadow.color = QColor(shadow["color"].toString("#000000"));
+        txt->effects.shadow.offsetX = shadow["offsetX"].toDouble(4.0);
+        txt->effects.shadow.offsetY = shadow["offsetY"].toDouble(4.0);
+        txt->effects.shadow.blur = shadow["blur"].toDouble(6.0);
+
+        const QJsonObject gradient = effects["gradient"].toObject();
+        txt->effects.gradient.enabled = gradient["enabled"].toBool(false);
+        txt->effects.gradient.type = gradient["type"].toInt(0);
+        txt->effects.gradient.startColor = QColor(gradient["startColor"].toString("#ff6b6b"));
+        txt->effects.gradient.endColor = QColor(gradient["endColor"].toString("#4ecdc4"));
+        txt->effects.gradient.angleDeg = gradient["angleDeg"].toDouble(0.0);
         break;
     }
     case LayerType::Shape: {

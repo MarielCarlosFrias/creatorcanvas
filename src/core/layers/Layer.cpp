@@ -111,20 +111,16 @@ QRectF TextLayer::contentBounds() const
         font.setBold(bold);
         font.setItalic(italic);
         font.setPointSizeF(sizePt > 0 ? sizePt : 1.0);
-        base = QFontMetrics(font).boundingRect(content);
+        const QFontMetrics metrics(font);
+        const QStringList lines = content.split(QLatin1Char('\n'));
+        double maxWidth = 0.0;
+        for (const QString& line : lines) {
+            maxWidth = qMax(maxWidth, double(metrics.horizontalAdvance(line)));
+        }
+        const double totalHeight = qMax(double(metrics.height()), double(lines.size()) * metrics.lineSpacing());
+        base = QRectF(0, 0, maxWidth > 0 ? maxWidth : 20.0, totalHeight > 0 ? totalHeight : 20.0);
     }
 
-    // Effects spill outside the glyph area: outline half-width, shadow
-    // offset + blur spread.
-    double spill = 0.0;
-    if (effects.outline.enabled)
-        spill = qMax(spill, effects.outline.width / 2.0);
-    if (effects.shadow.enabled)
-        spill = qMax(spill, qMax(qAbs(effects.shadow.offsetX),
-                                 qAbs(effects.shadow.offsetY))
-                                  + effects.shadow.blur * 2.0);
-    if (spill > 0.0)
-        base = base.adjusted(-spill, -spill, spill, spill);
     return base;
 }
 

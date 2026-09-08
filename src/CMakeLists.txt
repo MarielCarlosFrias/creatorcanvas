@@ -121,6 +121,8 @@ add_executable(creatorcanvas
     ui/startscreen.cpp
     ui/shapeinspector.h
     ui/shapeinspector.cpp
+    ui/imageinspector.h
+    ui/imageinspector.cpp
     ui/maskeditcanvas.h
     ui/maskeditcanvas.cpp
     ui/aibackgrounddialog.h

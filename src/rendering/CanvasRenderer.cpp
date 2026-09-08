@@ -138,8 +138,9 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
         const bool hasOutline = text.effects.outline.enabled
                                 && text.effects.outline.width > 0.0;
         const bool hasShadow = text.effects.shadow.enabled;
+        const bool hasGradient = text.effects.gradient.enabled;
 
-        if (!hasOutline && !hasShadow) {
+        if (!hasOutline && !hasShadow && !hasGradient) {
             // Fast path: identical to the pre-effects behavior.
             painter->setFont(font);
             painter->setPen(text.color);
@@ -154,10 +155,7 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
         }
 
         // Effects path: build the glyph outline(s), then draw
-        // shadow (blurred silhouette) -> outline stroke -> fill.
-        // Note: word-wrap via `box` is not applied here yet, only
-        // manual newlines - combining box-wrap with effects is a
-        // follow-up (needs QTextLayout instead of QPainterPath::addText).
+        // shadow (blurred silhouette) -> outline stroke -> fill/gradient.
         const QFontMetrics metrics(font);
         const QStringList lines = text.content.split(QLatin1Char('\n'));
         QPainterPath path;
@@ -204,7 +202,28 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
             painter->strokePath(path, outlinePen);
         }
 
-        painter->fillPath(path, text.color);
+        if (hasGradient) {
+            const auto& grad = text.effects.gradient;
+            const QRectF b = path.boundingRect();
+            if (grad.type == 1) { // Radial
+                QRadialGradient rg(b.center(), qMax(b.width(), b.height()) / 2.0);
+                rg.setColorAt(0.0, grad.startColor);
+                rg.setColorAt(1.0, grad.endColor);
+                painter->fillPath(path, rg);
+            } else { // Linear
+                const double rad = qDegreesToRadians(grad.angleDeg);
+                const QPointF c = b.center();
+                const double halfDiag = std::hypot(b.width(), b.height()) / 2.0;
+                const QPointF p1 = c - QPointF(std::cos(rad) * halfDiag, std::sin(rad) * halfDiag);
+                const QPointF p2 = c + QPointF(std::cos(rad) * halfDiag, std::sin(rad) * halfDiag);
+                QLinearGradient lg(p1, p2);
+                lg.setColorAt(0.0, grad.startColor);
+                lg.setColorAt(1.0, grad.endColor);
+                painter->fillPath(path, lg);
+            }
+        } else {
+            painter->fillPath(path, text.color);
+        }
         break;
     }
     case LayerType::Image: {

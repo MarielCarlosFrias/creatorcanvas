@@ -36,7 +36,6 @@ public:
 private:
     void buildUi();
     void retranslateUi();
-    void loadFromLayer();
     bool editingLayer(TextLayer** out) const;
     void touch();
 
@@ -70,6 +69,18 @@ private:
     QDoubleSpinBox* m_shadowX = nullptr;
     QDoubleSpinBox* m_shadowY = nullptr;
     QDoubleSpinBox* m_shadowBlur = nullptr;
+
+    // Gradiente de Texto
+    QCheckBox* m_gradientOn = nullptr;
+    QComboBox* m_gradientType = nullptr;
+    QPushButton* m_gradientStartColor = nullptr;
+    QPushButton* m_gradientEndColor = nullptr;
+    QDoubleSpinBox* m_gradientAngle = nullptr;
+
+    // Perspectiva 3D / Inclinação (Tilt / Shear)
+    QLabel* m_perspectiveLabel = nullptr;
+    QDoubleSpinBox* m_tiltX = nullptr;
+    QDoubleSpinBox* m_tiltY = nullptr;
 };
 
 } // namespace cc

@@ -260,4 +260,318 @@ QImage ImageProcessing::cloneStamp(const QImage& target, const QImage& source,
     return result;
 }
 
+QImage ImageProcessing::paintStroke(const QImage& target, const QPointF& prevPoint, const QPointF& curPoint,
+                                   BrushType brush, const QColor& color, int size, qreal opacity)
+{
+    if (target.isNull())
+        return target;
+
+    QImage result = target;
+    if (result.format() != QImage::Format_ARGB32_Premultiplied && result.format() != QImage::Format_ARGB32)
+        result = result.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+
+    QPainter painter(&result);
+
+    const int clampedSize = std::clamp(size, 1, 300);
+    const qreal clampedOpacity = std::clamp(opacity, 0.0, 1.0);
+
+    switch (brush) {
+    case BrushType::Eraser: {
+        painter.setCompositionMode(QPainter::CompositionMode_Clear);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        QPen pen(Qt::transparent, clampedSize, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+        painter.setPen(pen);
+        painter.drawLine(prevPoint, curPoint);
+        break;
+    }
+    case BrushType::Pencil: {
+        painter.setRenderHint(QPainter::Antialiasing, false);
+        QColor c = color;
+        c.setAlphaF(clampedOpacity);
+        QPen pen(c, clampedSize, Qt::SolidLine, Qt::SquareCap, Qt::MiterJoin);
+        painter.setPen(pen);
+        painter.drawLine(prevPoint, curPoint);
+        break;
+    }
+    case BrushType::Highlighter: {
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        QColor c = color;
+        c.setAlphaF(std::min(0.4, clampedOpacity * 0.4));
+        QPen pen(c, clampedSize * 1.5, Qt::SolidLine, Qt::FlatCap, Qt::RoundJoin);
+        painter.setPen(pen);
+        painter.drawLine(prevPoint, curPoint);
+        break;
+    }
+    case BrushType::Airbrush: {
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        const double dist = QLineF(prevPoint, curPoint).length();
+        const int steps = std::max(1, static_cast<int>(dist / 2.0));
+        QColor c = color;
+        c.setAlphaF(std::min(1.0, clampedOpacity * 0.15));
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(c);
+
+        for (int s = 0; s <= steps; ++s) {
+            const double t = steps > 0 ? (static_cast<double>(s) / steps) : 0.0;
+            const QPointF pt = prevPoint + (curPoint - prevPoint) * t;
+            const int drops = std::clamp(clampedSize * 2, 8, 80);
+            for (int d = 0; d < drops; ++d) {
+                const double angle = (static_cast<double>(rand()) / RAND_MAX) * 2.0 * M_PI;
+                const double r = std::sqrt(static_cast<double>(rand()) / RAND_MAX) * (clampedSize / 2.0);
+                const QPointF dropPt = pt + QPointF(std::cos(angle) * r, std::sin(angle) * r);
+                painter.drawEllipse(dropPt, 1.0, 1.0);
+            }
+        }
+        break;
+    }
+    case BrushType::Brush:
+    default: {
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        QColor c = color;
+        c.setAlphaF(clampedOpacity);
+        QPen pen(c, clampedSize, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+        painter.setPen(pen);
+        painter.drawLine(prevPoint, curPoint);
+        break;
+    }
+    }
+
+    return result;
+}
+
+QImage ImageProcessing::floodFill(const QImage& source, const QPoint& seedPoint,
+                                  const QColor& fillColor, int tolerance)
+{
+    if (source.isNull() || !source.rect().contains(seedPoint))
+        return source;
+
+    QImage result = source.convertToFormat(QImage::Format_ARGB32);
+    const int w = result.width();
+    const int h = result.height();
+
+    const QRgb targetRgb = result.pixel(seedPoint);
+    const QRgb replacementRgb = fillColor.rgba();
+    if (targetRgb == replacementRgb)
+        return result;
+
+    const int tr = qRed(targetRgb);
+    const int tg = qGreen(targetRgb);
+    const int tb = qBlue(targetRgb);
+    const int ta = qAlpha(targetRgb);
+
+    const double maxDist = std::sqrt(255.0 * 255.0 * 4.0);
+    const double tolDistance = (tolerance / 100.0) * maxDist;
+
+    std::vector<bool> visited(w * h, false);
+    std::vector<QPoint> queue;
+    queue.reserve(w * 8);
+    queue.push_back(seedPoint);
+    visited[seedPoint.y() * w + seedPoint.x()] = true;
+
+    auto colorMatch = [&](QRgb px) -> bool {
+        const double d = std::sqrt(
+            std::pow(qRed(px) - tr, 2) +
+            std::pow(qGreen(px) - tg, 2) +
+            std::pow(qBlue(px) - tb, 2) +
+            std::pow(qAlpha(px) - ta, 2));
+        return d <= tolDistance;
+    };
+
+    size_t head = 0;
+    while (head < queue.size()) {
+        const QPoint p = queue[head++];
+        reinterpret_cast<QRgb*>(result.scanLine(p.y()))[p.x()] = replacementRgb;
+
+        const QPoint neighbors[4] = {
+            QPoint(p.x() + 1, p.y()),
+            QPoint(p.x() - 1, p.y()),
+            QPoint(p.x(), p.y() + 1),
+            QPoint(p.x(), p.y() - 1)
+        };
+
+        for (const QPoint& n : neighbors) {
+            if (n.x() >= 0 && n.x() < w && n.y() >= 0 && n.y() < h) {
+                const int idx = n.y() * w + n.x();
+                if (!visited[idx]) {
+                    visited[idx] = true;
+                    const QRgb neighborColor = reinterpret_cast<const QRgb*>(result.constScanLine(n.y()))[n.x()];
+                    if (colorMatch(neighborColor)) {
+                        queue.push_back(n);
+                    }
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
+QImage ImageProcessing::adjustColors(const QImage& source, double brightness, double contrast,
+                                    double saturation, double temperature)
+{
+    if (source.isNull())
+        return source;
+
+    QImage result = source.convertToFormat(QImage::Format_ARGB32);
+    const int w = result.width();
+    const int h = result.height();
+
+    // Fatores normalizados
+    const double bFactor = (brightness / 100.0) * 255.0; // [-255, 255]
+    const double cFactor = (contrast >= 0)
+        ? (1.0 + contrast / 100.0 * 2.0)
+        : (1.0 + contrast / 100.0); // [0.0, 3.0]
+    const double sFactor = 1.0 + saturation / 100.0; // [0.0, 2.0]
+    const double tFactor = (temperature / 100.0) * 30.0; // [-30, 30]
+
+    for (int y = 0; y < h; ++y) {
+        QRgb* line = reinterpret_cast<QRgb*>(result.scanLine(y));
+        for (int x = 0; x < w; ++x) {
+            const QRgb px = line[x];
+            const int a = qAlpha(px);
+            if (a == 0) continue;
+
+            double r = qRed(px);
+            double g = qGreen(px);
+            double b = qBlue(px);
+
+            // 1. Brilho
+            r += bFactor;
+            g += bFactor;
+            b += bFactor;
+
+            // 2. Contraste (em torno de 128)
+            r = (r - 128.0) * cFactor + 128.0;
+            g = (g - 128.0) * cFactor + 128.0;
+            b = (b - 128.0) * cFactor + 128.0;
+
+            // 3. Balanço de Temperatura
+            r += tFactor;
+            b -= tFactor;
+
+            // 4. Saturação
+            const double gray = 0.299 * r + 0.587 * g + 0.114 * b;
+            r = gray + (r - gray) * sFactor;
+            g = gray + (g - gray) * sFactor;
+            b = gray + (b - gray) * sFactor;
+
+            line[x] = qRgba(std::clamp(static_cast<int>(std::round(r)), 0, 255),
+                            std::clamp(static_cast<int>(std::round(g)), 0, 255),
+                            std::clamp(static_cast<int>(std::round(b)), 0, 255),
+                            a);
+        }
+    }
+
+    return result;
+}
+
+QImage ImageProcessing::applyBlur(const QImage& source, double radius)
+{
+    if (source.isNull() || radius <= 0.1)
+        return source;
+
+    const int k = std::clamp(static_cast<int>(std::round(radius * 1.5)), 2, 30);
+    QImage small = source.scaled(
+        std::max(1, source.width() / k),
+        std::max(1, source.height() / k),
+        Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+
+    return small.scaled(source.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+}
+
+QImage ImageProcessing::applySharpen(const QImage& source, double amount)
+{
+    if (source.isNull() || amount <= 0.0)
+        return source;
+
+    QImage result = source.convertToFormat(QImage::Format_ARGB32);
+    const QImage orig = result;
+    const int w = result.width();
+    const int h = result.height();
+    const double factor = std::clamp(amount / 50.0, 0.1, 2.0);
+
+    for (int y = 1; y < h - 1; ++y) {
+        QRgb* dstLine = reinterpret_cast<QRgb*>(result.scanLine(y));
+        const QRgb* prevLine = reinterpret_cast<const QRgb*>(orig.constScanLine(y - 1));
+        const QRgb* currLine = reinterpret_cast<const QRgb*>(orig.constScanLine(y));
+        const QRgb* nextLine = reinterpret_cast<const QRgb*>(orig.constScanLine(y + 1));
+
+        for (int x = 1; x < w - 1; ++x) {
+            const QRgb c = currLine[x];
+            const QRgb n = prevLine[x];
+            const QRgb s = nextLine[x];
+            const QRgb w_px = currLine[x - 1];
+            const QRgb e = currLine[x + 1];
+
+            auto sharpChannel = [factor](int cv, int nv, int sv, int wv, int ev) -> int {
+                const int lap = 4 * cv - nv - sv - wv - ev;
+                return std::clamp(static_cast<int>(cv + lap * factor), 0, 255);
+            };
+
+            dstLine[x] = qRgba(sharpChannel(qRed(c), qRed(n), qRed(s), qRed(w_px), qRed(e)),
+                               sharpChannel(qGreen(c), qGreen(n), qGreen(s), qGreen(w_px), qGreen(e)),
+                               sharpChannel(qBlue(c), qBlue(n), qBlue(s), qBlue(w_px), qBlue(e)),
+                               qAlpha(c));
+        }
+    }
+
+    return result;
+}
+
+QImage ImageProcessing::applyPresetFilter(const QImage& source, PresetFilter preset)
+{
+    if (source.isNull())
+        return source;
+
+    QImage result = source.convertToFormat(QImage::Format_ARGB32);
+    const int w = result.width();
+    const int h = result.height();
+
+    for (int y = 0; y < h; ++y) {
+        QRgb* line = reinterpret_cast<QRgb*>(result.scanLine(y));
+        for (int x = 0; x < w; ++x) {
+            const QRgb px = line[x];
+            const int a = qAlpha(px);
+            if (a == 0) continue;
+
+            const int r = qRed(px);
+            const int g = qGreen(px);
+            const int b = qBlue(px);
+
+            switch (preset) {
+            case PresetFilter::Grayscale: {
+                const int gray = qRound(0.299 * r + 0.587 * g + 0.114 * b);
+                line[x] = qRgba(gray, gray, gray, a);
+                break;
+            }
+            case PresetFilter::Sepia: {
+                const int sr = std::clamp(qRound(0.393 * r + 0.769 * g + 0.189 * b), 0, 255);
+                const int sg = std::clamp(qRound(0.349 * r + 0.686 * g + 0.168 * b), 0, 255);
+                const int sb = std::clamp(qRound(0.272 * r + 0.534 * g + 0.131 * b), 0, 255);
+                line[x] = qRgba(sr, sg, sb, a);
+                break;
+            }
+            case PresetFilter::Vintage: {
+                int vr = std::clamp(qRound(r * 1.1 + 15), 0, 255);
+                int vg = std::clamp(qRound(g * 0.95), 0, 255);
+                int vb = std::clamp(qRound(b * 0.8), 0, 255);
+                line[x] = qRgba(vr, vg, vb, a);
+                break;
+            }
+            case PresetFilter::HighContrast: {
+                auto hc = [](int val) -> int {
+                    const double norm = val / 255.0;
+                    const double res = (norm < 0.5) ? (2.0 * norm * norm) : (1.0 - 2.0 * (1.0 - norm) * (1.0 - norm));
+                    return std::clamp(qRound(res * 255.0), 0, 255);
+                };
+                line[x] = qRgba(hc(r), hc(g), hc(b), a);
+                break;
+            }
+            }
+        }
+    }
+
+    return result;
+}
+
 } // namespace cc
