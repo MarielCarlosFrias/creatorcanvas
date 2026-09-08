@@ -61,9 +61,11 @@
         "error.title": "Falha na exportação"
     },
     "tools": {
+        "title": "Ferramentas",
         "select": "Selecionar",
         "crop": "Cortar",
         "scissors": "Corte com Tesoura",
+        "scissors.mode": "Modo",
         "wand": "Varinha Mágica",
         "clone": "Carimbo de Clonagem",
         "crop.apply": "Aplicar",

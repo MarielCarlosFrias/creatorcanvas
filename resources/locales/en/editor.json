@@ -61,9 +61,11 @@
         "error.title": "Export failed"
     },
     "tools": {
+        "title": "Tools",
         "select": "Select",
         "crop": "Crop",
         "scissors": "Scissors Cut",
+        "scissors.mode": "Mode",
         "wand": "Magic Wand",
         "clone": "Clone Stamp",
         "crop.apply": "Apply",

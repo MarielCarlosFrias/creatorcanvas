@@ -20,7 +20,13 @@ class QDockWidget;
 class QLabel;
 class QMenu;
 class QAction;
+class QActionGroup;
 class QStackedWidget;
+class QToolBar;
+class QComboBox;
+class QCheckBox;
+class QPushButton;
+class QSlider;
 
 namespace cc {
 
@@ -49,6 +55,7 @@ private:
     void buildCentralWidget();
     void buildLayersDock();
     void buildActions();
+    void buildToolBars();
     void buildMenus();
     void buildStatusBar();
     void showStartScreen();
@@ -138,6 +145,49 @@ private:
     QMenu* m_layerMenu = nullptr;
     QMenu* m_settingsMenu = nullptr;
     QMenu* m_helpMenu = nullptr;
+
+    // Ferramentas da barra de ferramentas e opções de ferramentas
+    QToolBar* m_toolsBar = nullptr;
+    QToolBar* m_toolOptionsBar = nullptr;
+    QActionGroup* m_toolGroup = nullptr;
+    QAction* m_toolSelectAction = nullptr;
+    QAction* m_toolCropAction = nullptr;
+    QAction* m_toolScissorsAction = nullptr;
+    QAction* m_toolWandAction = nullptr;
+    QAction* m_toolCloneAction = nullptr;
+    QMenu* m_toolsMenu = nullptr;
+
+    QStackedWidget* m_toolOptionsStack = nullptr;
+    QLabel* m_selectHintLabel = nullptr;
+
+    QLabel* m_cropAspectLabel = nullptr;
+    QComboBox* m_cropAspectCombo = nullptr;
+    QPushButton* m_cropApplyBtn = nullptr;
+    QPushButton* m_cropCancelBtn = nullptr;
+
+    QLabel* m_scissorsModeLabel = nullptr;
+    QComboBox* m_scissorsModeCombo = nullptr;
+    QCheckBox* m_scissorsAutoCropCheck = nullptr;
+    QPushButton* m_scissorsApplyBtn = nullptr;
+    QPushButton* m_scissorsCancelBtn = nullptr;
+    QLabel* m_scissorsHintLabel = nullptr;
+
+    QLabel* m_wandTolLabel = nullptr;
+    QSlider* m_wandTolSlider = nullptr;
+    QLabel* m_wandTolValueLabel = nullptr;
+    QCheckBox* m_wandContiguousCheck = nullptr;
+    QLabel* m_wandHintLabel = nullptr;
+
+    QLabel* m_cloneRadiusLabel = nullptr;
+    QSlider* m_cloneRadiusSlider = nullptr;
+    QLabel* m_cloneRadiusValueLabel = nullptr;
+    QLabel* m_cloneHardnessLabel = nullptr;
+    QSlider* m_cloneHardnessSlider = nullptr;
+    QLabel* m_cloneHardnessValueLabel = nullptr;
+    QLabel* m_cloneOpacityLabel = nullptr;
+    QSlider* m_cloneOpacitySlider = nullptr;
+    QLabel* m_cloneOpacityValueLabel = nullptr;
+    QLabel* m_cloneHintLabel = nullptr;
 
     QLabel* m_zoomLabel = nullptr;
     QLabel* m_positionLabel = nullptr;

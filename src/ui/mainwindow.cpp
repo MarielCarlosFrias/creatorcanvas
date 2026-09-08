@@ -18,20 +18,26 @@
 #include "ui/textinspector.h"
 #include "ui/shapeinspector.h"
 
+#include <QActionGroup>
 #include <QApplication>
+#include <QCheckBox>
 #include <QCloseEvent>
+#include <QComboBox>
 #include <QDockWidget>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QHBoxLayout>
 #include <QKeySequence>
 #include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QSlider>
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QStackedWidget>
+#include <QToolBar>
 
 namespace cc {
 
@@ -62,6 +68,7 @@ MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
     buildLayersDock();
     connectDocumentSignals();
     buildActions();
+    buildToolBars();
     buildMenus();
     buildStatusBar();
     updateWindowTitle();
@@ -191,6 +198,48 @@ void MainWindow::buildCentralWidget()
             });
     connect(m_canvas, &CanvasView::deleteRequested,
             this, &MainWindow::deleteSelectedLayer);
+    connect(m_canvas, &CanvasView::imageLayerModified, this,
+            [this](const LayerId& id,
+                   const LayerId& oldAssetId, int oldWidth, int oldHeight,
+                   const AffineTransform& oldTransform,
+                   const LayerId& newAssetId, int newWidth, int newHeight,
+                   const AffineTransform& newTransform,
+                   const QString& actionName) {
+                if (m_history && m_document)
+                    m_history->execute(std::make_unique<ModifyImageLayerCommand>(
+                        *m_document, id,
+                        oldAssetId, oldWidth, oldHeight, oldTransform,
+                        newAssetId, newWidth, newHeight, newTransform,
+                        actionName));
+            });
+    connect(m_canvas, &CanvasView::statusMessageRequested, this,
+            [this](const QString& message) {
+                statusBar()->showMessage(message, 3000);
+            });
+    connect(m_canvas, &CanvasView::toolChanged, this,
+            [this](CanvasTool tool) {
+                if (m_toolOptionsStack)
+                    m_toolOptionsStack->setCurrentIndex(static_cast<int>(tool));
+                if (m_toolGroup) {
+                    switch (tool) {
+                    case CanvasTool::Select:
+                        if (m_toolSelectAction) m_toolSelectAction->setChecked(true);
+                        break;
+                    case CanvasTool::Crop:
+                        if (m_toolCropAction) m_toolCropAction->setChecked(true);
+                        break;
+                    case CanvasTool::Scissors:
+                        if (m_toolScissorsAction) m_toolScissorsAction->setChecked(true);
+                        break;
+                    case CanvasTool::MagicWand:
+                        if (m_toolWandAction) m_toolWandAction->setChecked(true);
+                        break;
+                    case CanvasTool::CloneStamp:
+                        if (m_toolCloneAction) m_toolCloneAction->setChecked(true);
+                        break;
+                    }
+                }
+            });
 
     setCentralWidget(m_centralStack);
 }
@@ -391,6 +440,276 @@ void MainWindow::buildActions()
     connect(m_aboutQtAction, &QAction::triggered, this, [this] {
         QMessageBox::aboutQt(this);
     });
+
+    // Grupo de ferramentas exclusivas
+    m_toolGroup = new QActionGroup(this);
+    m_toolGroup->setExclusive(true);
+
+    m_toolSelectAction = new QAction(this);
+    m_toolSelectAction->setCheckable(true);
+    m_toolSelectAction->setChecked(true);
+    m_toolSelectAction->setShortcut(QKeySequence(QStringLiteral("V")));
+    m_toolGroup->addAction(m_toolSelectAction);
+    connect(m_toolSelectAction, &QAction::triggered, this, [this] {
+        if (m_canvas) m_canvas->setTool(CanvasTool::Select);
+    });
+
+    m_toolCropAction = new QAction(this);
+    m_toolCropAction->setCheckable(true);
+    m_toolCropAction->setShortcut(QKeySequence(QStringLiteral("C")));
+    m_toolGroup->addAction(m_toolCropAction);
+    connect(m_toolCropAction, &QAction::triggered, this, [this] {
+        if (m_canvas) m_canvas->setTool(CanvasTool::Crop);
+    });
+
+    m_toolScissorsAction = new QAction(this);
+    m_toolScissorsAction->setCheckable(true);
+    m_toolScissorsAction->setShortcut(QKeySequence(QStringLiteral("X")));
+    m_toolGroup->addAction(m_toolScissorsAction);
+    connect(m_toolScissorsAction, &QAction::triggered, this, [this] {
+        if (m_canvas) m_canvas->setTool(CanvasTool::Scissors);
+    });
+
+    m_toolWandAction = new QAction(this);
+    m_toolWandAction->setCheckable(true);
+    m_toolWandAction->setShortcut(QKeySequence(QStringLiteral("W")));
+    m_toolGroup->addAction(m_toolWandAction);
+    connect(m_toolWandAction, &QAction::triggered, this, [this] {
+        if (m_canvas) m_canvas->setTool(CanvasTool::MagicWand);
+    });
+
+    m_toolCloneAction = new QAction(this);
+    m_toolCloneAction->setCheckable(true);
+    m_toolCloneAction->setShortcut(QKeySequence(QStringLiteral("S")));
+    m_toolGroup->addAction(m_toolCloneAction);
+    connect(m_toolCloneAction, &QAction::triggered, this, [this] {
+        if (m_canvas) m_canvas->setTool(CanvasTool::CloneStamp);
+    });
+}
+
+void MainWindow::buildToolBars()
+{
+    // Barra de Ferramentas Principal (Lateral Esquerda, estilo Adobe Express / GIMP / Photoshop)
+    m_toolsBar = new QToolBar(QStringLiteral("Tools"), this);
+    m_toolsBar->setObjectName(QStringLiteral("ToolsToolBar"));
+    m_toolsBar->setMovable(false);
+    m_toolsBar->setFloatable(false);
+    m_toolsBar->setOrientation(Qt::Vertical);
+    addToolBar(Qt::LeftToolBarArea, m_toolsBar);
+
+    m_toolsBar->addAction(m_toolSelectAction);
+    m_toolsBar->addAction(m_toolCropAction);
+    m_toolsBar->addAction(m_toolScissorsAction);
+    m_toolsBar->addAction(m_toolWandAction);
+    m_toolsBar->addAction(m_toolCloneAction);
+    m_toolsBar->addSeparator();
+    m_toolsBar->addAction(m_addTextAction);
+    m_toolsBar->addAction(m_addRectAction);
+
+    // Barra Superior de Opções de Ferramentas (Tool Options Bar)
+    m_toolOptionsBar = new QToolBar(QStringLiteral("ToolOptions"), this);
+    m_toolOptionsBar->setObjectName(QStringLiteral("ToolOptionsBar"));
+    m_toolOptionsBar->setMovable(false);
+    m_toolOptionsBar->setFloatable(false);
+    addToolBar(Qt::TopToolBarArea, m_toolOptionsBar);
+
+    m_toolOptionsStack = new QStackedWidget(this);
+
+    // --- Página 0: Seleção (Select) ---
+    QWidget* selectPage = new QWidget(this);
+    QHBoxLayout* selectLayout = new QHBoxLayout(selectPage);
+    selectLayout->setContentsMargins(8, 2, 8, 2);
+    m_selectHintLabel = new QLabel(this);
+    m_selectHintLabel->setStyleSheet(QStringLiteral("color: #888888; font-size: 11px;"));
+    selectLayout->addWidget(m_selectHintLabel);
+    selectLayout->addStretch();
+    m_toolOptionsStack->addWidget(selectPage);
+
+    // --- Página 1: Corte Retangular/Proporção (Crop) ---
+    QWidget* cropPage = new QWidget(this);
+    QHBoxLayout* cropLayout = new QHBoxLayout(cropPage);
+    cropLayout->setContentsMargins(8, 2, 8, 2);
+    cropLayout->setSpacing(8);
+
+    m_cropAspectLabel = new QLabel(this);
+    m_cropAspectCombo = new QComboBox(this);
+    m_cropAspectCombo->addItem(QStringLiteral("Free"), 0.0);
+    m_cropAspectCombo->addItem(QStringLiteral("1:1 (Square)"), 1.0);
+    m_cropAspectCombo->addItem(QStringLiteral("16:9 (Widescreen)"), 16.0 / 9.0);
+    m_cropAspectCombo->addItem(QStringLiteral("4:3 (Standard)"), 4.0 / 3.0);
+    m_cropAspectCombo->addItem(QStringLiteral("9:16 (Stories/Reels)"), 9.0 / 16.0);
+    connect(m_cropAspectCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
+        if (m_canvas) {
+            double ratio = m_cropAspectCombo->itemData(index).toDouble();
+            m_canvas->setCropAspectRatio(ratio);
+        }
+    });
+
+    m_cropApplyBtn = new QPushButton(this);
+    m_cropApplyBtn->setStyleSheet(QStringLiteral("background-color: #2b78e4; color: white; font-weight: bold; padding: 4px 12px; border-radius: 4px;"));
+    connect(m_cropApplyBtn, &QPushButton::clicked, this, [this] {
+        if (m_canvas) m_canvas->applyCrop();
+    });
+
+    m_cropCancelBtn = new QPushButton(this);
+    connect(m_cropCancelBtn, &QPushButton::clicked, this, [this] {
+        if (m_canvas) m_canvas->cancelCrop();
+    });
+
+    cropLayout->addWidget(m_cropAspectLabel);
+    cropLayout->addWidget(m_cropAspectCombo);
+    cropLayout->addWidget(m_cropApplyBtn);
+    cropLayout->addWidget(m_cropCancelBtn);
+    cropLayout->addStretch();
+    m_toolOptionsStack->addWidget(cropPage);
+
+    // --- Página 2: Corte com Tesoura (Scissors Cut) ---
+    QWidget* scissorsPage = new QWidget(this);
+    QHBoxLayout* scissorsLayout = new QHBoxLayout(scissorsPage);
+    scissorsLayout->setContentsMargins(8, 2, 8, 2);
+    scissorsLayout->setSpacing(8);
+
+    m_scissorsModeLabel = new QLabel(this);
+    m_scissorsModeCombo = new QComboBox(this);
+    m_scissorsModeCombo->addItem(QStringLiteral("Keep Inside (Cutout)"), true);
+    m_scissorsModeCombo->addItem(QStringLiteral("Erase Inside (Hole)"), false);
+    connect(m_scissorsModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
+        if (m_canvas) {
+            bool keep = m_scissorsModeCombo->itemData(index).toBool();
+            m_canvas->setScissorsKeepInside(keep);
+        }
+    });
+
+    m_scissorsAutoCropCheck = new QCheckBox(this);
+    m_scissorsAutoCropCheck->setChecked(true);
+    connect(m_scissorsAutoCropCheck, &QCheckBox::toggled, this, [this](bool checked) {
+        if (m_canvas) m_canvas->setScissorsAutoCrop(checked);
+    });
+
+    m_scissorsApplyBtn = new QPushButton(this);
+    m_scissorsApplyBtn->setStyleSheet(QStringLiteral("background-color: #00bcd4; color: black; font-weight: bold; padding: 4px 12px; border-radius: 4px;"));
+    connect(m_scissorsApplyBtn, &QPushButton::clicked, this, [this] {
+        if (m_canvas) m_canvas->applyScissorsCut();
+    });
+
+    m_scissorsCancelBtn = new QPushButton(this);
+    connect(m_scissorsCancelBtn, &QPushButton::clicked, this, [this] {
+        if (m_canvas) m_canvas->cancelScissorsCut();
+    });
+
+    m_scissorsHintLabel = new QLabel(this);
+    m_scissorsHintLabel->setStyleSheet(QStringLiteral("color: #888888; font-size: 11px;"));
+
+    scissorsLayout->addWidget(m_scissorsModeLabel);
+    scissorsLayout->addWidget(m_scissorsModeCombo);
+    scissorsLayout->addWidget(m_scissorsAutoCropCheck);
+    scissorsLayout->addWidget(m_scissorsApplyBtn);
+    scissorsLayout->addWidget(m_scissorsCancelBtn);
+    scissorsLayout->addWidget(m_scissorsHintLabel);
+    scissorsLayout->addStretch();
+    m_toolOptionsStack->addWidget(scissorsPage);
+
+    // --- Página 3: Varinha Mágica (Magic Wand) ---
+    QWidget* wandPage = new QWidget(this);
+    QHBoxLayout* wandLayout = new QHBoxLayout(wandPage);
+    wandLayout->setContentsMargins(8, 2, 8, 2);
+    wandLayout->setSpacing(8);
+
+    m_wandTolLabel = new QLabel(this);
+    m_wandTolSlider = new QSlider(Qt::Horizontal, this);
+    m_wandTolSlider->setRange(0, 100);
+    m_wandTolSlider->setValue(25);
+    m_wandTolSlider->setFixedWidth(120);
+    m_wandTolValueLabel = new QLabel(QStringLiteral("25%"), this);
+    m_wandTolValueLabel->setFixedWidth(36);
+
+    connect(m_wandTolSlider, &QSlider::valueChanged, this, [this](int val) {
+        m_wandTolValueLabel->setText(QString::number(val) + QStringLiteral("%"));
+        if (m_canvas) m_canvas->setWandTolerance(val);
+    });
+
+    m_wandContiguousCheck = new QCheckBox(this);
+    m_wandContiguousCheck->setChecked(true);
+    connect(m_wandContiguousCheck, &QCheckBox::toggled, this, [this](bool checked) {
+        if (m_canvas) m_canvas->setWandContiguous(checked);
+    });
+
+    m_wandHintLabel = new QLabel(this);
+    m_wandHintLabel->setStyleSheet(QStringLiteral("color: #888888; font-size: 11px;"));
+
+    wandLayout->addWidget(m_wandTolLabel);
+    wandLayout->addWidget(m_wandTolSlider);
+    wandLayout->addWidget(m_wandTolValueLabel);
+    wandLayout->addWidget(m_wandContiguousCheck);
+    wandLayout->addWidget(m_wandHintLabel);
+    wandLayout->addStretch();
+    m_toolOptionsStack->addWidget(wandPage);
+
+    // --- Página 4: Carimbo de Clonagem (Clone Stamp) ---
+    QWidget* clonePage = new QWidget(this);
+    QHBoxLayout* cloneLayout = new QHBoxLayout(clonePage);
+    cloneLayout->setContentsMargins(8, 2, 8, 2);
+    cloneLayout->setSpacing(8);
+
+    m_cloneRadiusLabel = new QLabel(this);
+    m_cloneRadiusSlider = new QSlider(Qt::Horizontal, this);
+    m_cloneRadiusSlider->setRange(1, 100);
+    m_cloneRadiusSlider->setValue(20);
+    m_cloneRadiusSlider->setFixedWidth(100);
+    m_cloneRadiusValueLabel = new QLabel(QStringLiteral("20px"), this);
+    m_cloneRadiusValueLabel->setFixedWidth(36);
+
+    connect(m_cloneRadiusSlider, &QSlider::valueChanged, this, [this](int val) {
+        m_cloneRadiusValueLabel->setText(QString::number(val) + QStringLiteral("px"));
+        if (m_canvas) m_canvas->setCloneRadius(val);
+    });
+
+    m_cloneHardnessLabel = new QLabel(this);
+    m_cloneHardnessSlider = new QSlider(Qt::Horizontal, this);
+    m_cloneHardnessSlider->setRange(0, 100);
+    m_cloneHardnessSlider->setValue(80);
+    m_cloneHardnessSlider->setFixedWidth(100);
+    m_cloneHardnessValueLabel = new QLabel(QStringLiteral("80%"), this);
+    m_cloneHardnessValueLabel->setFixedWidth(36);
+
+    connect(m_cloneHardnessSlider, &QSlider::valueChanged, this, [this](int val) {
+        m_cloneHardnessValueLabel->setText(QString::number(val) + QStringLiteral("%"));
+        if (m_canvas) m_canvas->setCloneHardness(val / 100.0);
+    });
+
+    m_cloneOpacityLabel = new QLabel(this);
+    m_cloneOpacitySlider = new QSlider(Qt::Horizontal, this);
+    m_cloneOpacitySlider->setRange(10, 100);
+    m_cloneOpacitySlider->setValue(100);
+    m_cloneOpacitySlider->setFixedWidth(100);
+    m_cloneOpacityValueLabel = new QLabel(QStringLiteral("100%"), this);
+    m_cloneOpacityValueLabel->setFixedWidth(40);
+
+    connect(m_cloneOpacitySlider, &QSlider::valueChanged, this, [this](int val) {
+        m_cloneOpacityValueLabel->setText(QString::number(val) + QStringLiteral("%"));
+        if (m_canvas) m_canvas->setCloneOpacity(val / 100.0);
+    });
+
+    m_cloneHintLabel = new QLabel(this);
+    m_cloneHintLabel->setStyleSheet(QStringLiteral("color: #888888; font-size: 11px;"));
+
+    cloneLayout->addWidget(m_cloneRadiusLabel);
+    cloneLayout->addWidget(m_cloneRadiusSlider);
+    cloneLayout->addWidget(m_cloneRadiusValueLabel);
+    cloneLayout->addWidget(m_cloneHardnessLabel);
+    cloneLayout->addWidget(m_cloneHardnessSlider);
+    cloneLayout->addWidget(m_cloneHardnessValueLabel);
+    cloneLayout->addWidget(m_cloneOpacityLabel);
+    cloneLayout->addWidget(m_cloneOpacitySlider);
+    cloneLayout->addWidget(m_cloneOpacityValueLabel);
+    cloneLayout->addWidget(m_cloneHintLabel);
+    cloneLayout->addStretch();
+    m_toolOptionsStack->addWidget(clonePage);
+
+    m_toolOptionsBar->addWidget(m_toolOptionsStack);
+
+    m_toolsBar->hide();
+    m_toolOptionsBar->hide();
 }
 
 void MainWindow::buildMenus()
@@ -437,6 +756,13 @@ void MainWindow::buildMenus()
     m_layerMenu->addSeparator();
     m_layerMenu->addAction(m_deleteAction);
 
+    m_toolsMenu = menuBar()->addMenu(QString());
+    m_toolsMenu->addAction(m_toolSelectAction);
+    m_toolsMenu->addAction(m_toolCropAction);
+    m_toolsMenu->addAction(m_toolScissorsAction);
+    m_toolsMenu->addAction(m_toolWandAction);
+    m_toolsMenu->addAction(m_toolCloneAction);
+
     m_settingsMenu = menuBar()->addMenu(QString());
     m_settingsMenu->addAction(m_settingsAction);
     m_fileMenu->addSeparator();
@@ -465,6 +791,8 @@ void MainWindow::showStartScreen()
     if (m_layersDock) m_layersDock->hide();
     if (m_textDock) m_textDock->hide();
     if (m_shapeDock) m_shapeDock->hide();
+    if (m_toolsBar) m_toolsBar->hide();
+    if (m_toolOptionsBar) m_toolOptionsBar->hide();
     if (m_startScreen) m_startScreen->refreshRecents();
 }
 
@@ -474,6 +802,8 @@ void MainWindow::enterEditor()
     if (m_layersDock) m_layersDock->show();
     if (m_textDock) m_textDock->show();
     if (m_shapeDock) m_shapeDock->show();
+    if (m_toolsBar) m_toolsBar->show();
+    if (m_toolOptionsBar) m_toolOptionsBar->show();
     updateWindowTitle();
 }
 
@@ -1089,6 +1419,78 @@ void MainWindow::retranslateUi()
         m_textDock->setWindowTitle(m_i18n->t("editor", "text.title"));
     if (m_shapeDock)
         m_shapeDock->setWindowTitle(m_i18n->t("editor", "shape.title"));
+
+    // Retradução das ferramentas da barra e opções
+    if (m_toolSelectAction)
+        m_toolSelectAction->setText(m_i18n->t("editor", "tools.select"));
+    if (m_toolCropAction)
+        m_toolCropAction->setText(m_i18n->t("editor", "tools.crop"));
+    if (m_toolScissorsAction)
+        m_toolScissorsAction->setText(m_i18n->t("editor", "tools.scissors"));
+    if (m_toolWandAction)
+        m_toolWandAction->setText(m_i18n->t("editor", "tools.wand"));
+    if (m_toolCloneAction)
+        m_toolCloneAction->setText(m_i18n->t("editor", "tools.clone"));
+
+    if (m_toolsMenu)
+        m_toolsMenu->setTitle(m_i18n->t("editor", "tools.title"));
+
+    if (m_selectHintLabel)
+        m_selectHintLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
+            ? QStringLiteral("Dica: V = Selecionar | C = Cortar | X = Tesoura | W = Varinha Mágica | S = Carimbo de Clonagem")
+            : QStringLiteral("Hint: V = Select | C = Crop | X = Scissors Cut | W = Magic Wand | S = Clone Stamp"));
+
+    if (m_cropAspectLabel)
+        m_cropAspectLabel->setText(m_i18n->t("editor", "tools.crop.aspect") + QStringLiteral(":"));
+    if (m_cropApplyBtn)
+        m_cropApplyBtn->setText(m_i18n->t("editor", "tools.crop.apply") + QStringLiteral(" (Enter)"));
+    if (m_cropCancelBtn)
+        m_cropCancelBtn->setText(m_i18n->t("editor", "tools.crop.cancel") + QStringLiteral(" (Esc)"));
+
+    if (m_cropAspectCombo && m_cropAspectCombo->count() >= 5) {
+        m_cropAspectCombo->setItemText(0, m_i18n->t("editor", "tools.crop.free"));
+        m_cropAspectCombo->setItemText(1, m_i18n->t("editor", "tools.crop.square"));
+        m_cropAspectCombo->setItemText(2, m_i18n->t("editor", "tools.crop.widescreen"));
+        m_cropAspectCombo->setItemText(3, m_i18n->t("editor", "tools.crop.standard"));
+        m_cropAspectCombo->setItemText(4, m_i18n->t("editor", "tools.crop.portrait"));
+    }
+
+    if (m_scissorsModeLabel)
+        m_scissorsModeLabel->setText(m_i18n->t("editor", "tools.scissors.mode") + QStringLiteral(":"));
+    if (m_scissorsModeCombo && m_scissorsModeCombo->count() >= 2) {
+        m_scissorsModeCombo->setItemText(0, m_i18n->t("editor", "tools.scissors.keepInside"));
+        m_scissorsModeCombo->setItemText(1, m_i18n->t("editor", "tools.scissors.eraseInside"));
+    }
+    if (m_scissorsAutoCropCheck)
+        m_scissorsAutoCropCheck->setText(m_i18n->t("editor", "tools.scissors.autoCrop"));
+    if (m_scissorsApplyBtn)
+        m_scissorsApplyBtn->setText(m_i18n->t("editor", "tools.scissors.apply") + QStringLiteral(" (Enter)"));
+    if (m_scissorsCancelBtn)
+        m_scissorsCancelBtn->setText(m_i18n->t("editor", "tools.scissors.cancel") + QStringLiteral(" (Esc)"));
+    if (m_scissorsHintLabel)
+        m_scissorsHintLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
+            ? QStringLiteral("Clique ou arraste para contornar. Dê dois cliques ou Enter para cortar.")
+            : QStringLiteral("Click or drag to outline. Double-click or press Enter to cut."));
+
+    if (m_wandTolLabel)
+        m_wandTolLabel->setText(m_i18n->t("editor", "tools.wand.tolerance") + QStringLiteral(":"));
+    if (m_wandContiguousCheck)
+        m_wandContiguousCheck->setText(m_i18n->t("editor", "tools.wand.contiguous"));
+    if (m_wandHintLabel)
+        m_wandHintLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
+            ? QStringLiteral("Clique em uma cor na imagem para torná-la transparente.")
+            : QStringLiteral("Click a color on the image to make it transparent."));
+
+    if (m_cloneRadiusLabel)
+        m_cloneRadiusLabel->setText(m_i18n->t("editor", "tools.clone.radius") + QStringLiteral(":"));
+    if (m_cloneHardnessLabel)
+        m_cloneHardnessLabel->setText(m_i18n->t("editor", "tools.clone.hardness") + QStringLiteral(":"));
+    if (m_cloneOpacityLabel)
+        m_cloneOpacityLabel->setText(m_i18n->t("editor", "tools.clone.opacity") + QStringLiteral(":"));
+    if (m_cloneHintLabel)
+        m_cloneHintLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
+            ? QStringLiteral("Segure Alt e clique para definir a origem. Arraste para clonar.")
+            : QStringLiteral("Hold Alt and click to set source. Drag to clone pixels."));
 
     updateZoomLabel();
     updatePositionLabel(m_lastCursorPos);

@@ -23,6 +23,9 @@ private slots:
     void testScissorsCutKeepInside();
     void testScissorsCutEraseInside();
     void testCloneStamp();
+    void testCloneStampHardnessAndOpacity();
+    void testMagicWandTolerance();
+    void testScissorsCutFreehand();
     void testAssetStoreAddImage();
     void testModifyImageLayerCommand();
 };
@@ -183,6 +186,69 @@ void TestImageProcessing::testCloneStamp()
     QCOMPARE(result.pixelColor(80, 80), QColor(Qt::red));
     // Areas fora do raio devem permanecer brancas
     QCOMPARE(result.pixelColor(10, 10), QColor(Qt::white));
+}
+
+void TestImageProcessing::testCloneStampHardnessAndOpacity()
+{
+    // Testa mistura ponderada por opacidade (50% alpha blend)
+    QImage src(50, 50, QImage::Format_ARGB32);
+    src.fill(QColor(255, 0, 0)); // Vermelho 255
+
+    QImage dst(50, 50, QImage::Format_ARGB32);
+    dst.fill(QColor(0, 0, 0)); // Preto 0
+
+    // Opacidade 0.5: 255 * 0.5 + 0 * 0.5 ~= 128
+    QImage result = ImageProcessing::cloneStamp(dst, src, QPoint(25, 25), QPoint(25, 25), 10, 0.5, 1.0);
+    const QColor centerCol = result.pixelColor(25, 25);
+    QVERIFY(std::abs(centerCol.red() - 128) <= 2);
+    QCOMPARE(centerCol.green(), 0);
+    QCOMPARE(centerCol.blue(), 0);
+}
+
+void TestImageProcessing::testMagicWandTolerance()
+{
+    // Testa limiares de tolerância de cor
+    QImage img(60, 60, QImage::Format_ARGB32);
+    img.fill(QColor(255, 0, 0)); // Vermelho puro (255, 0, 0)
+    {
+        QPainter p(&img);
+        p.fillRect(20, 0, 20, 60, QColor(235, 0, 0)); // Vermelho próximo (delta R = 20)
+        p.fillRect(40, 0, 20, 60, QColor(0, 0, 255));   // Azul distante
+    }
+
+    // Com tolerância baixa (2%), delta 20 NÃO deve ser removido
+    QImage lowTol = ImageProcessing::removeBackground(img, QPoint(5, 30), 2, false);
+    QCOMPARE(lowTol.pixelColor(5, 30).alpha(), 0);       // Vermelho puro removido
+    QCOMPARE(lowTol.pixelColor(25, 30).alpha(), 255);    // Vermelho próximo preservado
+    QCOMPARE(lowTol.pixelColor(45, 30).alpha(), 255);    // Azul preservado
+
+    // Com tolerância moderada (10%), delta 20 DEVE ser removido, mas azul preservado
+    QImage midTol = ImageProcessing::removeBackground(img, QPoint(5, 30), 10, false);
+    QCOMPARE(midTol.pixelColor(5, 30).alpha(), 0);       // Vermelho puro removido
+    QCOMPARE(midTol.pixelColor(25, 30).alpha(), 0);      // Vermelho próximo removido
+    QCOMPARE(midTol.pixelColor(45, 30).alpha(), 255);    // Azul permanece intacto
+}
+
+void TestImageProcessing::testScissorsCutFreehand()
+{
+    // Testa polígono livre de corte com 6 vértices
+    QImage img(120, 120, QImage::Format_ARGB32);
+    img.fill(Qt::magenta);
+
+    QPolygonF poly;
+    poly << QPointF(20, 20) << QPointF(60, 10) << QPointF(100, 30)
+         << QPointF(90, 80) << QPointF(50, 100) << QPointF(15, 70);
+
+    ScissorsCutResult res = ImageProcessing::scissorsCut(img, poly, true, true);
+    QVERIFY(!res.image.isNull());
+    QCOMPARE(res.offset.x(), 15);
+    QCOMPARE(res.offset.y(), 10);
+    QCOMPARE(res.image.width(), 85);
+    QCOMPARE(res.image.height(), 90);
+
+    // Centro do polígono deve ser mantido opaco
+    QPoint localCenter = (QPointF(60, 50) - QPointF(res.offset)).toPoint();
+    QVERIFY(res.image.pixelColor(localCenter.x(), localCenter.y()).alpha() > 200);
 }
 
 void TestImageProcessing::testAssetStoreAddImage()
