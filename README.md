@@ -4,11 +4,11 @@ A fast, layer-based image editor for content creators — YouTube thumbnails, so
 
 Cross-platform by design: **Windows 10/11** and **Linux** today, with the architecture kept macOS-ready for later.
 
-> **Status:** Phase 1 (core editor) is functionally complete through **M14** (packaging). **M15 — Smart guides & snapping** has its engine implemented and unit-tested; canvas interaction wiring is still pending. See [Milestones](#milestones) below and `DOCUMENTATION.md` for the full technical reference.
+> **Status:** **v0.2.0** released — Phase 1 (core editor) + Phase 2 (creative tools). See [What's New in v0.2.0](#whats-new-in-v020) below and `DOCUMENTATION.md` for the full technical reference.
 
 ---
 
-## Features (Phase 1)
+## Features (Phase 1 — Core Editor)
 
 - **Layer-based editing** — image, text, shape, group and background layers, with visibility/lock/opacity/rename/reorder/duplicate
 - **Undo/redo** — every mutation goes through a command stack; no operation bypasses history
@@ -21,9 +21,34 @@ Cross-platform by design: **Windows 10/11** and **Linux** today, with the archit
 - **Autosave & recovery** — configurable interval, crash-recovery prompt on next launch
 - **Start screen** — creator-focused canvas presets (YouTube thumbnail/banner/Shorts, Instagram post/story, TikTok, Facebook, X, and a transparent canvas), plus recent projects
 - **Localization** — full English and Brazilian Portuguese (pt-BR), JSON catalogs, no hardcoded UI strings, live language switching
-- **Smart guides & snapping engine** — alignment/snap logic implemented and unit-tested; not yet wired into canvas gestures (`m15-engine-only`)
+- **Smart guides & snapping engine** — alignment/snap logic implemented and unit-tested; not yet wired into canvas gestures
 
-Deliberately **not** in Phase 1 (by design, not by omission — no dead buttons exist for these): brush/eraser tools, blend-mode UI, layer effects/adjustments, background removal, AI features, styled templates (only canvas *sizes* ship now). See the [Roadmap](#roadmap) in `DOCUMENTATION.md`.
+---
+
+## What's New in v0.2.0
+
+### 🎨 Paint & Flood Fill Tools
+- **Paint tool** (`B`) — 5 brush types: **Brush**, **Pencil**, **Highlighter**, **Airbrush**, and **Eraser**, with adjustable size, opacity, and color
+- **Flood Fill tool** (`G`) — BFS-based bucket fill with adjustable tolerance
+
+### ✨ Text Gradient Effects
+- **Linear**, **Radial**, and **Conical** gradient types on text layers
+- Two-color gradient with configurable angle
+- Toggle on/off via checkbox in the Text Inspector
+
+### 🧊 3D Perspective / Tilt (Shear)
+- **Shear X / Shear Y** controls for both text and image layers
+- Applied as part of the affine transform matrix for correct compositing
+- Available in both the Text Inspector and the new Image Inspector
+
+### 🖼️ Image Inspector (New Panel)
+- **Color adjustments**: Brightness, Contrast, Saturation, Temperature, Blur, and Sharpen sliders
+- **1-click preset filters**: Grayscale, Sepia, Vintage, High Contrast
+- **3D tilt controls** for image layers
+
+### 🤖 AI Background Removal
+- ONNX Runtime integration for ML-powered background removal
+- Raster tools: Crop, Scissors, Magic Wand, Clone Stamp
 
 ## Tech stack
 
@@ -35,7 +60,8 @@ Deliberately **not** in Phase 1 (by design, not by omission — no dead buttons 
 | Rendering | Custom `IRenderer` interface; software renderer (QPainter) in Phase 1, GPU renderer reserved behind the same interface |
 | Imaging | `QImage` + Qt image plugins (PNG/JPEG/WebP) |
 | Project container | ZIP (vendored `miniz`) holding `manifest.json` + `media/` |
-| Testing | QTest, 16 unit-test suites |
+| Testing | QTest, 17 unit-test suites |
+| AI / ML | ONNX Runtime 1.19 (background removal inference) |
 | Packaging | AppImage + DEB (Linux), portable ZIP / NSIS stub (Windows) |
 
 Full rationale for the stack choice (and the alternatives that were rejected — Electron, Rust+Tauri, Rust+egui, Python+PySide6, Flutter/Avalonia) is in `DOCUMENTATION.md`.
@@ -90,7 +116,7 @@ packaging/windows/build_portable.ps1  # Windows portable ZIP
 
 ## Milestones
 
-Phase 1 (core editor) is complete through packaging; Phase 1.5 (smart guides) is in progress.
+Phase 1 (core editor) is complete. Phase 2 (creative tools) shipped in **v0.2.0**.
 
 | # | Milestone | Status |
 |---|---|---|
@@ -110,8 +136,11 @@ Phase 1 (core editor) is complete through packaging; Phase 1.5 (smart guides) is
 | M13 | Start screen (presets + recents) | ✅ Done |
 | M14 | Packaging (AppImage, DEB, Windows portable) | ✅ Done |
 | M15 | Smart guides & snapping | 🟡 Engine + tests done, canvas wiring pending |
-
-Full per-milestone detail (what shipped, what was verified, known follow-ups) is in `DOCUMENTATION.md`.
+| **M16** | **Paint & Flood Fill tools** | ✅ **v0.2.0** |
+| **M17** | **Text gradient effects** | ✅ **v0.2.0** |
+| **M18** | **3D Perspective / Tilt (Shear)** | ✅ **v0.2.0** |
+| **M19** | **Image Inspector (adjustments + presets)** | ✅ **v0.2.0** |
+| **M20** | **AI background removal + raster tools** | ✅ **v0.2.0** |
 
 ## Project structure
 
@@ -131,7 +160,7 @@ creatorcanvas/
 │   ├── locales/{en,pt-BR}/{common,editor,settings,templates}.json
 │   ├── presets/builtin.json
 │   └── icons/
-├── tests/unit/            # 16 QTest suites
+├── tests/unit/            # 17 QTest suites
 ├── packaging/{linux,windows,debroot}/
 └── DOCUMENTATION.md
 ```
@@ -151,4 +180,4 @@ See `DOCUMENTATION.md` for the complete conventions, architecture, and API refer
 
 MIT — see `LICENSE`.
 
-Third-party runtime components: Qt 6 (LGPLv3 — dynamically linked, notices shipped with installers) and `miniz` (public domain, vendored at packaging time). See `NOTICE.md` for full details and distribution obligations.
+Third-party runtime components: Qt 6 (LGPLv3 — dynamically linked, notices shipped with installers), ONNX Runtime (MIT — dynamically linked), and `miniz` (public domain, vendored at packaging time). See `NOTICE.md` for full details and distribution obligations.
