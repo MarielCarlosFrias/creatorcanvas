@@ -1489,8 +1489,8 @@ void MainWindow::retranslateUi()
         m_cloneOpacityLabel->setText(m_i18n->t("editor", "tools.clone.opacity") + QStringLiteral(":"));
     if (m_cloneHintLabel)
         m_cloneHintLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
-            ? QStringLiteral("Segure Alt e clique para definir a origem. Arraste para clonar.")
-            : QStringLiteral("Hold Alt and click to set source. Drag to clone pixels."));
+            ? QStringLiteral("Botão Direito ou Shift+Clique define a origem. Arraste para clonar.")
+            : QStringLiteral("Right-Click or Shift+Click sets source. Drag to clone."));
 
     updateZoomLabel();
     updatePositionLabel(m_lastCursorPos);

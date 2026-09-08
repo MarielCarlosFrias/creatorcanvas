@@ -453,6 +453,34 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
         return;
     }
 
+    if (event->button() == Qt::RightButton && m_tool == CanvasTool::CloneStamp && m_document) {
+        const QPointF docPos = deviceToDoc().map(QPointF(event->pos()));
+        Layer* layer = nullptr;
+        if (!m_selectedId.isNull())
+            layer = m_document->findLayer(m_selectedId);
+
+        if (!layer || layer->type() != LayerType::Image) {
+            Layer* hit = hitTestLayer(docPos);
+            if (hit && hit->type() == LayerType::Image) {
+                selectLayer(hit->id());
+                layer = hit;
+            }
+        }
+
+        if (layer && layer->type() == LayerType::Image) {
+            const QTransform matrix = layer->transform.matrix(layer->contentBounds());
+            const QPointF localPos = matrix.inverted().map(docPos);
+            m_cloneSrcPoint = localPos.toPoint();
+            m_cloneSrcLayerId = layer->id();
+            m_hasCloneSrc = true;
+            emit statusMessageRequested(QStringLiteral("Origem do carimbo definida em (%1, %2). Agora clique e arraste para pintar.")
+                .arg(m_cloneSrcPoint.x()).arg(m_cloneSrcPoint.y()));
+            update();
+            event->accept();
+            return;
+        }
+    }
+
     if (event->button() == Qt::LeftButton && m_document) {
         const QPointF docPos = deviceToDoc().map(QPointF(event->pos()));
 
@@ -536,7 +564,8 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
                 const QTransform matrix = layer->transform.matrix(layer->contentBounds());
                 const QPointF localPos = matrix.inverted().map(docPos);
 
-                if (event->modifiers() & Qt::AltModifier) {
+                const bool isSourceModifier = (event->modifiers() & (Qt::AltModifier | Qt::ShiftModifier | Qt::ControlModifier));
+                if (isSourceModifier) {
                     m_cloneSrcPoint = localPos.toPoint();
                     m_cloneSrcLayerId = layer->id();
                     m_hasCloneSrc = true;
@@ -558,7 +587,7 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
                     event->accept();
                     return;
                 } else {
-                    emit statusMessageRequested(QStringLiteral("⚠️ Origem não definida! Segure a tecla Alt e clique na imagem para definir a origem antes de clonar."));
+                    emit statusMessageRequested(QStringLiteral("⚠️ Origem não definida! Clique com Botão Direito (ou Shift+Clique) na imagem para definir a origem antes de clonar."));
                     update();
                     event->accept();
                     return;
@@ -1185,6 +1214,11 @@ void CanvasView::contextMenuEvent(QContextMenuEvent* event)
     if (!m_document)
         return;
 
+    if (m_tool == CanvasTool::CloneStamp) {
+        event->accept();
+        return;
+    }
+
     const QPointF docPos = deviceToDoc().map(QPointF(event->pos()));
     Layer* layer = hitTestLayer(docPos);
     if (!layer || layer->type() == LayerType::Background)
@@ -1341,7 +1375,7 @@ void CanvasView::setTool(CanvasTool tool)
     }
 
     if (m_tool == CanvasTool::CloneStamp) {
-        emit statusMessageRequested(QStringLiteral("Carimbo de Clonagem: Segure Alt e clique na imagem para definir a origem, depois arraste para pintar."));
+        emit statusMessageRequested(QStringLiteral("Carimbo de Clonagem: Clique com o Botão Direito ou Shift+Clique para definir a origem, depois arraste para pintar."));
     }
 
     update();
@@ -1794,7 +1828,7 @@ void CanvasView::drawCloneOverlay(QPainter* painter)
     }
 
     // Banner de instrução no topo do Canvas
-    const int bannerWidth = 460;
+    const int bannerWidth = 480;
     const int bannerHeight = 32;
     const QRect bannerRect(width() / 2 - bannerWidth / 2, 14, bannerWidth, bannerHeight);
 
@@ -1809,7 +1843,7 @@ void CanvasView::drawCloneOverlay(QPainter* painter)
         font.setBold(true);
         painter->setFont(font);
         painter->drawText(bannerRect, Qt::AlignCenter,
-            QStringLiteral("ℹ️ Segure Alt e clique na imagem para definir a origem"));
+            QStringLiteral("ℹ️ Clique com Botão Direito (ou Shift+Clique) para definir a origem"));
     } else {
         painter->setBrush(QColor(20, 30, 25, 200));
         painter->drawRoundedRect(bannerRect, 6, 6);
@@ -1820,7 +1854,7 @@ void CanvasView::drawCloneOverlay(QPainter* painter)
         font.setBold(false);
         painter->setFont(font);
         painter->drawText(bannerRect, Qt::AlignCenter,
-            QStringLiteral("✓ Origem definida! Clique e arraste para clonar (Alt+Clique redefine)"));
+            QStringLiteral("✓ Origem definida! Clique e arraste para clonar (Botão Direito redefine)"));
     }
 
     painter->restore();
