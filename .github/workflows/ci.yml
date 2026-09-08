@@ -32,6 +32,21 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y ninja-build
 
+      - name: Download ONNX Runtime (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          curl -sL https://github.com/microsoft/onnxruntime/releases/download/v1.19.0/onnxruntime-linux-x64-1.19.0.tgz -o /tmp/ort.tgz
+          tar xzf /tmp/ort.tgz -C /tmp
+          mv /tmp/onnxruntime-linux-x64-1.19.0 3rdparty/onnxruntime
+
+      - name: Download ONNX Runtime (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/microsoft/onnxruntime/releases/download/v1.19.0/onnxruntime-win-x64-1.19.0.zip" -OutFile "$env:TEMP\ort.zip"
+          Expand-Archive -Path "$env:TEMP\ort.zip" -DestinationPath "$env:TEMP\ort"
+          Move-Item "$env:TEMP\ort\onnxruntime-win-x64-1.19.0" "3rdparty\onnxruntime"
+
       - name: Configure
         run: cmake --preset ${{ matrix.preset }}
 
