@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(CreatorCanvas
-    VERSION 0.1.0
+    VERSION 0.2.0
     LANGUAGES C CXX
     DESCRIPTION "Fast, layer-based image editor for content creators")
 

@@ -18,6 +18,9 @@
   <url type="homepage">https://example.com/creatorcanvas</url>
   <content_rating type="oars-1.0"/>
   <releases>
+    <release version="0.2.0" date="2026-09-08">
+      <description>Phase 2 release: AI background removal, raster tools (Crop, Scissors, Wand, Clone Stamp), Paint &amp; Flood Fill brushes, text gradients, 3D tilt perspective, and color adjustments.</description>
+    </release>
     <release version="0.1.0" date="2026-08-26">
       <description>Initial release. Layers, image import, text, shapes,
       presets, undo/redo, export.</description>
