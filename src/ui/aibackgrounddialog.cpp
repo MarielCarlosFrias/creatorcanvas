@@ -1,5 +1,6 @@
 #include "aibackgrounddialog.h"
 #include "core/image/BackgroundRemover.h"
+#include "localization/i18nservice.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -14,11 +15,12 @@
 
 namespace cc {
 
-AiBackgroundDialog::AiBackgroundDialog(const QImage& sourceImage, QWidget* parent)
+AiBackgroundDialog::AiBackgroundDialog(const QImage& sourceImage, I18nService* i18n, QWidget* parent)
     : QDialog(parent),
-      m_originalImage(sourceImage)
+      m_originalImage(sourceImage),
+      m_i18n(i18n)
 {
-    setWindowTitle(QStringLiteral("Remoção de Fundo com IA - CreatorCanvas"));
+    setWindowTitle(m_i18n ? m_i18n->t("editor", "aiBackground.title") : QStringLiteral("Remoção de Fundo com IA - CreatorCanvas"));
     setMinimumSize(920, 640);
     resize(1000, 700);
 
@@ -45,20 +47,20 @@ void AiBackgroundDialog::setupUi()
     topLayout->setContentsMargins(12, 8, 12, 8);
     topLayout->setSpacing(12);
 
-    auto* modelLabel = new QLabel(QStringLiteral("Modelo de IA:"), this);
+    auto* modelLabel = new QLabel(m_i18n ? m_i18n->t("editor", "aiBackground.model") : QStringLiteral("Modelo de IA:"), this);
     modelLabel->setStyleSheet(QStringLiteral("font-weight: bold; color: #E0E0E0;"));
     topLayout->addWidget(modelLabel);
 
     m_modelCombo = new QComboBox(this);
-    m_modelCombo->addItem(QStringLiteral("U²-Netp (Ultraleve e Rápido)"), QStringLiteral("u2netp.onnx"));
+    m_modelCombo->addItem(m_i18n ? m_i18n->t("editor", "aiBackground.model.u2netp") : QStringLiteral("U²-Netp (Ultraleve e Rápido)"), QStringLiteral("u2netp.onnx"));
 
     const QString u2netPath = BackgroundRemover::findModelPath(QStringLiteral("u2net.onnx"));
     if (!u2netPath.isEmpty() && QFileInfo::exists(u2netPath)) {
-        m_modelCombo->addItem(QStringLiteral("U²-Net (Alta Precisão)"), QStringLiteral("u2net.onnx"));
+        m_modelCombo->addItem(m_i18n ? m_i18n->t("editor", "aiBackground.model.u2net") : QStringLiteral("U²-Net (Alta Precisão)"), QStringLiteral("u2net.onnx"));
     }
     topLayout->addWidget(m_modelCombo);
 
-    m_runAiButton = new QPushButton(QStringLiteral("✨ Recortar com IA"), this);
+    m_runAiButton = new QPushButton(m_i18n ? m_i18n->t("editor", "aiBackground.runAi") : QStringLiteral("✨ Recortar com IA"), this);
     m_runAiButton->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #0078D4; color: white; font-weight: bold; padding: 6px 16px; border-radius: 4px; }"
         "QPushButton:hover { background-color: #1084E3; }"
@@ -76,14 +78,14 @@ void AiBackgroundDialog::setupUi()
 
     topLayout->addStretch();
 
-    auto* bgPreviewLabel = new QLabel(QStringLiteral("Fundo:"), this);
+    auto* bgPreviewLabel = new QLabel(m_i18n ? m_i18n->t("editor", "aiBackground.background") : QStringLiteral("Fundo:"), this);
     bgPreviewLabel->setStyleSheet(QStringLiteral("color: #BBB;"));
     topLayout->addWidget(bgPreviewLabel);
 
     m_bgColorCombo = new QComboBox(this);
-    m_bgColorCombo->addItem(QStringLiteral("Xadrez Transparente"));
-    m_bgColorCombo->addItem(QStringLiteral("Branco"));
-    m_bgColorCombo->addItem(QStringLiteral("Preto"));
+    m_bgColorCombo->addItem(m_i18n ? m_i18n->t("editor", "aiBackground.bg.checker") : QStringLiteral("Xadrez Transparente"));
+    m_bgColorCombo->addItem(m_i18n ? m_i18n->t("editor", "aiBackground.bg.white") : QStringLiteral("Branco"));
+    m_bgColorCombo->addItem(m_i18n ? m_i18n->t("editor", "aiBackground.bg.black") : QStringLiteral("Preto"));
     connect(m_bgColorCombo, &QComboBox::currentIndexChanged, this, &AiBackgroundDialog::onBgColorChanged);
     topLayout->addWidget(m_bgColorCombo);
 
@@ -96,11 +98,11 @@ void AiBackgroundDialog::setupUi()
     toolsLayout->setContentsMargins(10, 6, 10, 6);
     toolsLayout->setSpacing(10);
 
-    auto* toolsHeader = new QLabel(QStringLiteral("Pincel de Retoque:"), this);
+    auto* toolsHeader = new QLabel(m_i18n ? m_i18n->t("editor", "aiBackground.touchup") : QStringLiteral("Pincel de Retoque:"), this);
     toolsHeader->setStyleSheet(QStringLiteral("color: #888; font-size: 11px; font-weight: bold;"));
     toolsLayout->addWidget(toolsHeader);
 
-    m_restoreBtn = new QPushButton(QStringLiteral("🖌️ Restaurar"), this);
+    m_restoreBtn = new QPushButton(m_i18n ? m_i18n->t("editor", "aiBackground.restore") : QStringLiteral("🖌️ Restaurar"), this);
     m_restoreBtn->setCheckable(true);
     m_restoreBtn->setChecked(true);
     m_restoreBtn->setStyleSheet(QStringLiteral(
@@ -110,7 +112,7 @@ void AiBackgroundDialog::setupUi()
     connect(m_restoreBtn, &QPushButton::clicked, this, &AiBackgroundDialog::onModeRestore);
     toolsLayout->addWidget(m_restoreBtn);
 
-    m_eraseBtn = new QPushButton(QStringLiteral("🧹 Apagar"), this);
+    m_eraseBtn = new QPushButton(m_i18n ? m_i18n->t("editor", "aiBackground.erase") : QStringLiteral("🧹 Apagar"), this);
     m_eraseBtn->setCheckable(true);
     m_eraseBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background: #2A2D34; color: #EEE; padding: 4px 10px; border-radius: 4px; }"
@@ -119,7 +121,7 @@ void AiBackgroundDialog::setupUi()
     connect(m_eraseBtn, &QPushButton::clicked, this, &AiBackgroundDialog::onModeErase);
     toolsLayout->addWidget(m_eraseBtn);
 
-    auto* sizeLabel = new QLabel(QStringLiteral("Tamanho:"), this);
+    auto* sizeLabel = new QLabel(m_i18n ? m_i18n->t("editor", "aiBackground.brushSize") : QStringLiteral("Tamanho:"), this);
     sizeLabel->setStyleSheet(QStringLiteral("color: #BBB; font-size: 11px;"));
     toolsLayout->addWidget(sizeLabel);
 
@@ -139,11 +141,11 @@ void AiBackgroundDialog::setupUi()
         m_editCanvas->setBrushRadius(val);
     });
 
-    m_undoBtn = new QPushButton(QStringLiteral("↺ Desfazer"), this);
+    m_undoBtn = new QPushButton(m_i18n ? m_i18n->t("common", "action.undo") : QStringLiteral("↺ Desfazer"), this);
     connect(m_undoBtn, &QPushButton::clicked, m_editCanvas, &MaskEditCanvas::undo);
     toolsLayout->addWidget(m_undoBtn);
 
-    m_resetBtn = new QPushButton(QStringLiteral("Restaurar Tudo"), this);
+    m_resetBtn = new QPushButton(m_i18n ? m_i18n->t("editor", "aiBackground.resetAll") : QStringLiteral("Restaurar Tudo"), this);
     connect(m_resetBtn, &QPushButton::clicked, m_editCanvas, &MaskEditCanvas::clearEdits);
     toolsLayout->addWidget(m_resetBtn);
 
@@ -157,16 +159,16 @@ void AiBackgroundDialog::setupUi()
 
     // --- Rodapé: Status e Botões de Confirmação ---
     auto* footerLayout = new QHBoxLayout();
-    m_statusLabel = new QLabel(QStringLiteral("💡 Dica: Passe o pincel para recuperar ou apagar áreas da imagem."), this);
+    m_statusLabel = new QLabel(m_i18n ? m_i18n->t("editor", "aiBackground.tip") : QStringLiteral("💡 Dica: Passe o pincel para recuperar ou apagar áreas da imagem."), this);
     m_statusLabel->setStyleSheet(QStringLiteral("color: #888; font-size: 11px;"));
     footerLayout->addWidget(m_statusLabel);
     footerLayout->addStretch();
 
-    auto* cancelBtn = new QPushButton(QStringLiteral("Cancelar"), this);
+    auto* cancelBtn = new QPushButton(m_i18n ? m_i18n->t("common", "action.cancel") : QStringLiteral("Cancelar"), this);
     connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
     footerLayout->addWidget(cancelBtn);
 
-    auto* applyBtn = new QPushButton(QStringLiteral("✓ Aplicar ao Canvas"), this);
+    auto* applyBtn = new QPushButton(m_i18n ? m_i18n->t("editor", "aiBackground.apply") : QStringLiteral("✓ Aplicar ao Canvas"), this);
     applyBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #2E7D32; color: white; font-weight: bold; padding: 6px 18px; border-radius: 4px; }"
         "QPushButton:hover { background-color: #388E3C; }"
@@ -211,14 +213,15 @@ void AiBackgroundDialog::runAiInference()
     const QString modelPath = BackgroundRemover::findModelPath(modelFile);
 
     if (modelPath.isEmpty() || !QFileInfo::exists(modelPath)) {
-        QMessageBox::warning(this, QStringLiteral("Modelo não encontrado"),
-                             QStringLiteral("Não foi possível encontrar o arquivo do modelo ONNX (%1).").arg(modelFile));
+        QMessageBox::warning(this,
+                             m_i18n ? m_i18n->t("editor", "aiBackground.modelNotFound.title") : QStringLiteral("Modelo não encontrado"),
+                             m_i18n ? m_i18n->t("editor", "aiBackground.modelNotFound.body", {modelFile}) : QStringLiteral("Não foi possível encontrar o arquivo do modelo ONNX (%1).").arg(modelFile));
         return;
     }
 
     m_runAiButton->setEnabled(false);
     m_progressBar->setVisible(true);
-    m_statusLabel->setText(QStringLiteral("⏳ Processando imagem com a rede neural..."));
+    m_statusLabel->setText(m_i18n ? m_i18n->t("editor", "aiBackground.processing") : QStringLiteral("⏳ Processando imagem com a rede neural..."));
 
     const QImage input = m_originalImage;
 
@@ -232,7 +235,7 @@ void AiBackgroundDialog::runAiInference()
             m_editCanvas->setImage(m_originalImage, m_processedImage);
             m_progressBar->setVisible(false);
             m_runAiButton->setEnabled(true);
-            m_statusLabel->setText(QStringLiteral("✓ Recorte concluído! Se desejar, faça ajustes com o pincel e clique em Aplicar."));
+            m_statusLabel->setText(m_i18n ? m_i18n->t("editor", "aiBackground.done") : QStringLiteral("✓ Recorte concluído! Se desejar, faça ajustes com o pincel e clique em Aplicar."));
         });
     });
 

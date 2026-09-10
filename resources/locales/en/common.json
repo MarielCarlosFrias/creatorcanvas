@@ -90,5 +90,11 @@
         "open": "Open project...",
         "recent": "Recent projects",
         "screenAction": "Start Screen"
+    },
+    "action": {
+        "apply": "Apply",
+        "reset": "Reset",
+        "cancel": "Cancel",
+        "undo": "Undo"
     }
 }

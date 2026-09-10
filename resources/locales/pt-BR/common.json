@@ -90,5 +90,11 @@
         "open": "Abrir projeto...",
         "recent": "Projetos recentes",
         "screenAction": "Tela Inicial"
+    },
+    "action": {
+        "apply": "Aplicar",
+        "reset": "Redefinir",
+        "cancel": "Cancelar",
+        "undo": "Desfazer"
     }
 }

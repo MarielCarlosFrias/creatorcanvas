@@ -2070,7 +2070,7 @@ void CanvasView::openAiBackgroundRemoval(const LayerId& id)
     if (srcImg.isNull())
         return;
 
-    AiBackgroundDialog dlg(srcImg, this);
+    AiBackgroundDialog dlg(srcImg, m_i18n, this);
     if (dlg.exec() == QDialog::Accepted) {
         const QImage result = dlg.finalImage();
         if (!result.isNull()) {

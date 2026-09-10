@@ -4,6 +4,8 @@
 #include <QPointer>
 #include "core/Document.h"
 
+#include <QTimer>
+
 class QDoubleSpinBox;
 class QSlider;
 class QLabel;
@@ -39,11 +41,16 @@ private:
     void applyAdjustments();
     void applyPreset(int presetIndex);
     void resetAdjustments();
+    void schedulePreview();
+    void onPreviewTimeout();
 
     I18nService* m_i18n = nullptr;
     QPointer<Document> m_document;
     CommandStack* m_history = nullptr;
     LayerId m_id;
+    LayerId m_originalAssetId;
+    LayerId m_currentPreviewAssetId;
+    QTimer m_previewTimer;
     bool m_loading = false;
 
     // Perspectiva 3D / Tilt

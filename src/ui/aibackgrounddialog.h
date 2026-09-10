@@ -13,12 +13,13 @@ class QProgressBar;
 namespace cc {
 
 class BackgroundRemover;
+class I18nService;
 
 class AiBackgroundDialog : public QDialog
 {
     Q_OBJECT
 public:
-    explicit AiBackgroundDialog(const QImage& sourceImage, QWidget* parent = nullptr);
+    explicit AiBackgroundDialog(const QImage& sourceImage, I18nService* i18n = nullptr, QWidget* parent = nullptr);
     ~AiBackgroundDialog() override;
 
     QImage finalImage() const;
@@ -48,6 +49,7 @@ private:
     QPushButton* m_undoBtn = nullptr;
     QPushButton* m_resetBtn = nullptr;
     QLabel* m_statusLabel = nullptr;
+    I18nService* m_i18n = nullptr;
 };
 
 } // namespace cc
