@@ -79,6 +79,18 @@ bool ZipArchive::hasFile(const QString& name) const
 QByteArray ZipArchive::readFile(const QString& name) const
 {
     if (!m_zip || !m_reading) return QByteArray();
+
+    int fileIndex = mz_zip_reader_locate_file(m_zip, name.toUtf8().constData(), nullptr, 0);
+    if (fileIndex < 0) return QByteArray();
+
+    mz_zip_archive_file_stat stat;
+    if (!mz_zip_reader_file_stat(m_zip, static_cast<mz_uint>(fileIndex), &stat))
+        return QByteArray();
+
+    constexpr mz_uint64 kMaxSafeFileSize = 64ULL * 1024ULL * 1024ULL; // 64 MB
+    if (stat.m_uncomp_size > kMaxSafeFileSize)
+        return QByteArray();
+
     size_t size = 0;
     void* data = mz_zip_reader_extract_file_to_heap(m_zip,
                                                     name.toUtf8().constData(),

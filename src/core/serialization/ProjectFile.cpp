@@ -35,6 +35,10 @@ constexpr auto kDocumentKey = "document";
 constexpr auto kLayersKey   = "layers";
 constexpr auto kAssetsKey   = "assets";
 
+constexpr mz_uint kMaxProjectEntries           = 1000;
+constexpr mz_uint64 kMaxSingleAssetSize        = 64ULL * 1024ULL * 1024ULL;  // 64 MB
+constexpr mz_uint64 kMaxTotalUncompressedBytes = 256ULL * 1024ULL * 1024ULL; // 256 MB
+
 QString blendModeToString(BlendMode mode)
 {
     switch (mode) {
@@ -262,16 +266,23 @@ bool writeArchive(const QString& filePath, const QByteArray& jsonBytes,
                   const Document& doc, QString* error)
 {
     const QFileInfo info(filePath);
-    if (!QDir().mkpath(info.absolutePath())) {
+    const QDir targetDir = info.dir();
+    if (!targetDir.mkpath(QStringLiteral("."))) {
         *error = QStringLiteral("Could not create the destination folder.");
         return false;
     }
 
+    // Gravação atômica: cria um arquivo temporário no mesmo diretório
+    const QString tempFileName = QStringLiteral(".%1.tmp.%2")
+                                     .arg(info.fileName(),
+                                          QUuid::createUuid().toString(QUuid::WithoutBraces));
+    const QString tempFilePath = targetDir.filePath(tempFileName);
+
     mz_zip_archive zip;
     std::memset(&zip, 0, sizeof(zip));
 
-    if (!mz_zip_writer_init_file(&zip, QFile::encodeName(filePath).constData(), 0)) {
-        *error = QStringLiteral("Could not create the project file.");
+    if (!mz_zip_writer_init_file(&zip, QFile::encodeName(tempFilePath).constData(), 0)) {
+        *error = QStringLiteral("Could not create the temporary project file.");
         return false;
     }
 
@@ -298,12 +309,28 @@ bool writeArchive(const QString& filePath, const QByteArray& jsonBytes,
 
     if (!assetsOk || !mz_zip_writer_finalize_archive(&zip)) {
         mz_zip_writer_end(&zip);
-        QFile::remove(filePath); // never leave a broken file behind
+        QFile::remove(tempFilePath);
         *error = QStringLiteral("Could not write the project contents.");
         return false;
     }
 
     mz_zip_writer_end(&zip);
+
+    // Substituição atômica: se o arquivo de destino já existe, remove-o de forma segura e move o temporário
+    if (QFile::exists(filePath)) {
+        if (!QFile::remove(filePath)) {
+            QFile::remove(tempFilePath);
+            *error = QStringLiteral("Could not overwrite the existing project file.");
+            return false;
+        }
+    }
+
+    if (!QFile::rename(tempFilePath, filePath)) {
+        QFile::remove(tempFilePath);
+        *error = QStringLiteral("Could not finalize the project file rename.");
+        return false;
+    }
+
     return true;
 }
 
@@ -633,17 +660,40 @@ std::unique_ptr<Document> loadDocument(const QString& filePath,
     QByteArray bytes;
     QHash<QString, QByteArray> media;
     {
-        const int entryCount = mz_zip_reader_get_num_files(&zip);
-        for (int i = 0; i < entryCount; ++i) {
-            char name[512];
-            if (!mz_zip_reader_get_filename(&zip, static_cast<mz_uint>(i),
-                                            name, sizeof(name)))
+        const mz_uint entryCount = mz_zip_reader_get_num_files(&zip);
+        if (entryCount > kMaxProjectEntries) {
+            mz_zip_reader_end(&zip);
+            return loadFail(errorMessage, QStringLiteral(
+                "The project archive contains too many files (possible corrupted file or zip bomb)."));
+        }
+
+        mz_uint64 totalUncompressedBytes = 0;
+
+        for (mz_uint i = 0; i < entryCount; ++i) {
+            mz_zip_archive_file_stat stat;
+            if (!mz_zip_reader_file_stat(&zip, i, &stat))
                 continue;
-            const QString entryName = QString::fromUtf8(name);
+
+            if (stat.m_is_directory)
+                continue;
+
+            if (stat.m_uncomp_size > kMaxSingleAssetSize) {
+                mz_zip_reader_end(&zip);
+                return loadFail(errorMessage, QStringLiteral(
+                    "A file in the project archive exceeds safety size limits."));
+            }
+
+            totalUncompressedBytes += stat.m_uncomp_size;
+            if (totalUncompressedBytes > kMaxTotalUncompressedBytes) {
+                mz_zip_reader_end(&zip);
+                return loadFail(errorMessage, QStringLiteral(
+                    "Total uncompressed size of the project exceeds safety limits."));
+            }
+
+            const QString entryName = QString::fromUtf8(stat.m_filename);
 
             size_t size = 0;
-            if (void* data = mz_zip_reader_extract_to_heap(
-                    &zip, static_cast<mz_uint>(i), &size, 0)) {
+            if (void* data = mz_zip_reader_extract_to_heap(&zip, i, &size, 0)) {
                 const QByteArray entryBytes(static_cast<const char*>(data),
                                             static_cast<qint64>(size));
                 if (entryName == QLatin1String(kEntryName))
