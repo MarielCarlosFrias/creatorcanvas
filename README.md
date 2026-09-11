@@ -81,6 +81,7 @@ Full rationale for the stack choice (and the alternatives that were rejected —
 sudo apt install build-essential cmake ninja-build \
     qt6-base-dev qt6-base-dev-tools libgl1-mesa-dev
 
+./scripts/fetch_onnx.sh
 cmake --preset linux-debug
 cmake --build --preset linux-debug
 ctest --test-dir build/linux-debug --output-on-failure
@@ -90,6 +91,7 @@ ctest --test-dir build/linux-debug --output-on-failure
 ## Build & test — Windows (VS 2022 developer prompt, Qt installed)
 
 ```bat
+scripts\fetch_onnx.bat
 cmake --preset windows-debug
 cmake --build --preset windows-debug --config Debug
 ctest --test-dir build/windows-debug -C Debug --output-on-failure
