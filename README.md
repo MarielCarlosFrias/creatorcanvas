@@ -42,13 +42,21 @@ Cross-platform by design: **Windows 10/11** and **Linux** today, with the archit
 - Available in both the Text Inspector and the new Image Inspector
 
 ### 🖼️ Image Inspector (New Panel)
-- **Color adjustments**: Brightness, Contrast, Saturation, Temperature, Blur, and Sharpen sliders
-- **1-click preset filters**: Grayscale, Sepia, Vintage, High Contrast
+- **Color adjustments**: Brightness, Contrast, Saturation, Temperature, Blur, and Sharpen sliders with **live canvas preview**
+- **1-click preset filters**: Grayscale, Sepia, Vintage, High Contrast synced directly to inspector sliders
 - **3D tilt controls** for image layers
 
 ### 🤖 AI Background Removal
 - ONNX Runtime integration for ML-powered background removal
+- Automated setup scripts (`scripts/fetch_onnx.sh` & `scripts/fetch_onnx.bat`) for libraries and models
 - Raster tools: Crop, Scissors, Magic Wand, Clone Stamp
+
+### 🛡️ Reliability, Security & Experience
+- **Visual project previews**: thumbnails automatically generated upon save and displayed in the Recent Projects list
+- **Atomic saving**: projects saved to temporary files and atomically renamed, eliminating risk of project corruption on unexpected exits
+- **Zip bomb & resource protection**: strict size and decompression limits when loading `.creatorcanvas` archives
+- **Full internationalization (i18n)**: complete English and Brazilian Portuguese (pt-BR) coverage across all dialogs and tools without hardcoded strings
+
 
 ## Tech stack
 
