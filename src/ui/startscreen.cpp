@@ -2,9 +2,12 @@
 #include "localization/i18nservice.h"
 #include "services/presetstore.h"
 #include "services/recentfiles.h"
+#include "core/serialization/ProjectFile.h"
 
 #include <QFileInfo>
 #include <QFont>
+#include <QIcon>
+#include <QPixmap>
 #include <QGridLayout>
 #include <QLabel>
 #include <QListWidget>
@@ -82,7 +85,8 @@ StartScreen::StartScreen(I18nService* i18n, PresetStore* presets,
     layout->addWidget(m_recentLabel);
 
     m_recentList = new QListWidget(this);
-    m_recentList->setMaximumHeight(160);
+    m_recentList->setMaximumHeight(180);
+    m_recentList->setIconSize(QSize(48, 48));
     connect(m_recentList, &QListWidget::itemActivated, this,
             [this](QListWidgetItem* item) {
                 if (item)
@@ -107,6 +111,11 @@ void StartScreen::populateRecents()
         auto* item = new QListWidgetItem(QFileInfo(path).fileName(), m_recentList);
         item->setData(Qt::UserRole, path);
         item->setToolTip(path);
+
+        const QImage thumb = loadProjectThumbnail(path);
+        if (!thumb.isNull()) {
+            item->setIcon(QIcon(QPixmap::fromImage(thumb)));
+        }
     }
 }
 

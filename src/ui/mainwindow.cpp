@@ -6,6 +6,7 @@
 #include "core/serialization/ProjectFile.h"
 #include "imageio/ImageImporter.h"
 #include "imageio/DocumentExporter.h"
+#include "rendering/CanvasRenderer.h"
 #include "localization/i18nservice.h"
 #include "ui/canvasview.h"
 #include "ui/exportdialog.h"
@@ -34,6 +35,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QPainter>
 #include <QPushButton>
 #include <QSlider>
 #include <QStandardPaths>
@@ -42,6 +44,37 @@
 #include <QToolBar>
 
 namespace cc {
+namespace {
+
+QImage generateThumbnail(const Document& doc)
+{
+    if (doc.width() <= 0 || doc.height() <= 0)
+        return {};
+
+    constexpr int maxThumbW = 320;
+    constexpr int maxThumbH = 180;
+    const double scale = qMin(static_cast<double>(maxThumbW) / doc.width(),
+                              static_cast<double>(maxThumbH) / doc.height());
+    const int thumbW = qMax(1, static_cast<int>(std::round(doc.width() * scale)));
+    const int thumbH = qMax(1, static_cast<int>(std::round(doc.height() * scale)));
+
+    QImage thumb(thumbW, thumbH, QImage::Format_ARGB32_Premultiplied);
+    thumb.fill(Qt::transparent);
+    {
+        QPainter p(&thumb);
+        p.setRenderHint(QPainter::Antialiasing, true);
+        p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+        QTransform t;
+        t.scale(scale, scale);
+        RenderOptions opt;
+        opt.drawCheckerboard = false;
+        opt.canvasBorder = Qt::transparent;
+        renderDocument(doc, &p, t, opt);
+    }
+    return thumb;
+}
+
+} // namespace
 
 MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
                        QWidget* parent)
@@ -1363,7 +1396,8 @@ bool MainWindow::saveDocument()
         return saveDocumentAs();
 
     QString error;
-    if (!cc::saveDocument(*m_document, m_currentFilePath, &error)) {
+    const QImage thumb = generateThumbnail(*m_document);
+    if (!cc::saveDocument(*m_document, m_currentFilePath, &error, &thumb)) {
         if (m_i18n)
             QMessageBox::warning(this,
                                  m_i18n->t("common", "dialog.saveError.title"),
@@ -1392,7 +1426,8 @@ bool MainWindow::saveDocumentAs()
         path += QLatin1String(".creatorcanvas");
 
     QString error;
-    if (!cc::saveDocument(*m_document, path, &error)) {
+    const QImage thumb = generateThumbnail(*m_document);
+    if (!cc::saveDocument(*m_document, path, &error, &thumb)) {
         QMessageBox::warning(this,
                              m_i18n->t("common", "dialog.saveError.title"), error);
         return false;

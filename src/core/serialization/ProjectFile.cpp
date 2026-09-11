@@ -12,6 +12,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
+#include <QBuffer>
+#include <QImage>
 #include <QLoggingCategory>
 #include <QCryptographicHash>
 
@@ -263,7 +265,8 @@ QJsonObject buildProjectJson(const Document& doc)
 }
 
 bool writeArchive(const QString& filePath, const QByteArray& jsonBytes,
-                  const Document& doc, QString* error)
+                  const Document& doc, QString* error,
+                  const QImage* thumbnail = nullptr)
 {
     const QFileInfo info(filePath);
     const QDir targetDir = info.dir();
@@ -304,6 +307,20 @@ bool writeArchive(const QString& filePath, const QByteArray& jsonBytes,
                 assetsOk = false;
                 break;
             }
+        }
+    }
+
+    if (assetsOk && thumbnail && !thumbnail->isNull()) {
+        QByteArray thumbBytes;
+        QBuffer buffer(&thumbBytes);
+        buffer.open(QIODevice::WriteOnly);
+        thumbnail->save(&buffer, "PNG");
+        buffer.close();
+
+        if (!thumbBytes.isEmpty()) {
+            mz_zip_writer_add_mem(&zip, "thumbnail.png", thumbBytes.constData(),
+                                  static_cast<size_t>(thumbBytes.size()),
+                                  MZ_DEFAULT_LEVEL);
         }
     }
 
@@ -629,13 +646,14 @@ private:
 };
 
 bool saveDocument(const Document& doc, const QString& filePath,
-                  QString* errorMessage)
+                  QString* errorMessage,
+                  const QImage* thumbnail)
 {
     const QByteArray bytes =
         QJsonDocument(buildProjectJson(doc)).toJson(QJsonDocument::Indented);
 
     QString localError;
-    if (!writeArchive(filePath, bytes, doc, &localError)) {
+    if (!writeArchive(filePath, bytes, doc, &localError, thumbnail)) {
         qCWarning(lcSerialization) << "saveDocument failed:" << localError
                                    << filePath;
         if (errorMessage)
@@ -731,6 +749,48 @@ std::unique_ptr<Document> loadDocument(const QString& filePath,
         return nullptr;
     }
     return document;
+}
+
+QImage loadProjectThumbnail(const QString& filePath)
+{
+    if (!QFile::exists(filePath))
+        return {};
+
+    mz_zip_archive zip;
+    std::memset(&zip, 0, sizeof(zip));
+
+    if (!mz_zip_reader_init_file(&zip, QFile::encodeName(filePath).constData(), 0))
+        return {};
+
+    int fileIndex = mz_zip_reader_locate_file(&zip, "thumbnail.png", nullptr, 0);
+    if (fileIndex < 0) {
+        mz_zip_reader_end(&zip);
+        return {};
+    }
+
+    mz_zip_archive_file_stat stat;
+    if (!mz_zip_reader_file_stat(&zip, static_cast<mz_uint>(fileIndex), &stat)) {
+        mz_zip_reader_end(&zip);
+        return {};
+    }
+
+    // Limite de segurança: thumbnail não deve ter mais que 8 MB
+    if (stat.m_uncomp_size > 8ULL * 1024ULL * 1024ULL) {
+        mz_zip_reader_end(&zip);
+        return {};
+    }
+
+    size_t size = 0;
+    void* data = mz_zip_reader_extract_to_heap(&zip, static_cast<mz_uint>(fileIndex), &size, 0);
+    mz_zip_reader_end(&zip);
+
+    if (!data)
+        return {};
+
+    QImage img;
+    img.loadFromData(static_cast<const uchar*>(data), static_cast<int>(size), "PNG");
+    mz_free(data);
+    return img;
 }
 
 } // namespace cc
