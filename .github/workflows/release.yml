@@ -1,0 +1,110 @@
+name: Release
+run-name: Release ${{ github.ref_name }}
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    name: Build Linux (.deb)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.*'
+          cache: true
+
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build dpkg-dev
+
+      - name: Download ONNX Runtime (Linux)
+        run: |
+          curl -sL https://github.com/microsoft/onnxruntime/releases/download/v1.19.0/onnxruntime-linux-x64-1.19.0.tgz -o /tmp/ort.tgz
+          tar xzf /tmp/ort.tgz -C /tmp
+          mv /tmp/onnxruntime-linux-x64-1.19.0 3rdparty/onnxruntime
+
+      - name: Configure CMake
+        run: cmake --preset linux-release
+
+      - name: Build & Package DEB
+        run: |
+          chmod +x packaging/linux/build_deb.sh
+          packaging/linux/build_deb.sh build/linux-release
+
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: creatorcanvas-linux-deb
+          path: build/linux-release/packages/*.deb
+
+  build-windows:
+    name: Build Windows (Portable ZIP)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.*'
+          cache: true
+
+      - name: Download ONNX Runtime (Windows)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/microsoft/onnxruntime/releases/download/v1.19.0/onnxruntime-win-x64-1.19.0.zip" -OutFile "$env:TEMP\ort.zip"
+          Expand-Archive -Path "$env:TEMP\ort.zip" -DestinationPath "$env:TEMP\ort"
+          Move-Item "$env:TEMP\ort\onnxruntime-win-x64-1.19.0" "3rdparty\onnxruntime"
+
+      - name: Configure CMake
+        run: cmake --preset windows-release
+
+      - name: Build
+        run: cmake --build --preset windows-release --config Release
+
+      - name: Package Portable ZIP
+        shell: pwsh
+        run: |
+          powershell -File packaging\windows\build_portable.ps1 -BuildDir build\windows-release
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: creatorcanvas-windows-portable
+          path: CreatorCanvas-portable.zip
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Organize Release Assets
+        run: |
+          mkdir -p release_assets
+          find artifacts -type f \( -name "*.deb" -o -name "*.zip" \) -exec cp {} release_assets/ \;
+          ls -la release_assets/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: release_assets/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false
