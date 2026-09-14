@@ -144,7 +144,9 @@
         "apply": "✓ Apply to Canvas",
         "cancel": "Cancel",
         "modelNotFound.title": "Model not found",
-        "modelNotFound.body": "Could not find ONNX model file (%1).",
+        "modelNotFound.body": "Could not find ONNX model file (%1). You can select a model file manually.",
+        "browseModel": "Browse...",
+        "selectModelTitle": "Select ONNX Model File",
         "processing": "⏳ Processing image with neural network...",
         "done": "✓ Cutout completed! Adjust with the brush if needed and click Apply."
     }

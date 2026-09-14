@@ -144,7 +144,9 @@
         "apply": "✓ Aplicar ao Canvas",
         "cancel": "Cancelar",
         "modelNotFound.title": "Modelo não encontrado",
-        "modelNotFound.body": "Não foi possível encontrar o arquivo do modelo ONNX (%1).",
+        "modelNotFound.body": "Não foi possível encontrar o arquivo do modelo ONNX (%1). Você pode selecionar o arquivo manualmente.",
+        "browseModel": "Procurar...",
+        "selectModelTitle": "Selecionar Arquivo de Modelo ONNX",
         "processing": "⏳ Processando imagem com a rede neural...",
         "done": "✓ Recorte concluído! Se desejar, faça ajustes com o pincel e clique em Aplicar."
     }

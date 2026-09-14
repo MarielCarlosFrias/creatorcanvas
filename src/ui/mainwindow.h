@@ -47,6 +47,8 @@ public:
                         I18nService* i18n,
                         QWidget* parent = nullptr);
 
+    void openFromPath(const QString& path);
+
 protected:
     void closeEvent(QCloseEvent*) override;
 
@@ -62,7 +64,6 @@ private:
     void showStartScreen();
     void enterEditor();
     void startFromPreset(const NewDocumentSpec& spec);
-    void openFromPath(const QString& path);
     void newDocument();
     void importImageViaDialog();
     void importImage(const QString& filePath);

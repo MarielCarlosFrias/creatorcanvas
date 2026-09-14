@@ -9,6 +9,7 @@ class QSlider;
 class QLabel;
 class QPushButton;
 class QProgressBar;
+class QThread;
 
 namespace cc {
 
@@ -27,6 +28,7 @@ public:
 private slots:
     void runAiInference();
     void onModelChanged(int index);
+    void onBrowseModel();
     void onBgColorChanged(int index);
     void onModeRestore();
     void onModeErase();
@@ -39,6 +41,7 @@ private:
 
     MaskEditCanvas* m_editCanvas = nullptr;
     QComboBox* m_modelCombo = nullptr;
+    QPushButton* m_browseModelBtn = nullptr;
     QPushButton* m_runAiButton = nullptr;
     QProgressBar* m_progressBar = nullptr;
     QPushButton* m_restoreBtn = nullptr;
@@ -50,6 +53,7 @@ private:
     QPushButton* m_resetBtn = nullptr;
     QLabel* m_statusLabel = nullptr;
     I18nService* m_i18n = nullptr;
+    QThread* m_workerThread = nullptr;
 };
 
 } // namespace cc

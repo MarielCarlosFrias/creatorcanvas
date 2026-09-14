@@ -9,6 +9,9 @@ function(cc_add_test name)
     endif()
     cc_enable_warnings(${name})
     add_test(NAME ${name} COMMAND ${name})
+    set_tests_properties(${name} PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    )
 endfunction()
 
 cc_add_test(test_settings      unit/test_settings.cpp)

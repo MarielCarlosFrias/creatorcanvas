@@ -181,11 +181,20 @@ install(FILES ${PROJECT_SOURCE_DIR}/packaging/linux/creatorcanvas.appdata.xml
         RENAME creatorcanvas.appdata.xml
         OPTIONAL)
 
+install(DIRECTORY ${ONNX_DIR}/lib/
+        DESTINATION lib/creatorcanvas
+        OPTIONAL
+        FILES_MATCHING PATTERN "libonnxruntime*.so*")
+
 add_custom_target(stage ALL
         COMMAND ${CMAKE_COMMAND} -E make_directory
                 ${CC_STAGING_DIR}/bin
+                ${CC_STAGING_DIR}/lib/creatorcanvas
                 ${CC_STAGING_DIR}/share/creatorcanvas
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 $<TARGET_FILE:creatorcanvas>
                 ${CC_STAGING_DIR}/bin/creatorcanvas
+        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
+                ${ONNX_DIR}/lib
+                ${CC_STAGING_DIR}/lib/creatorcanvas
         COMMENT "Staging CreatorCanvas for packaging")

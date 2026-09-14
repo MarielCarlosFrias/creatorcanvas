@@ -11,7 +11,10 @@
 #include <QThread>
 #include <QTimer>
 #include <QFileInfo>
+#include <QFileDialog>
 #include <QMessageBox>
+#include <QPointer>
+#include <QCoreApplication>
 
 namespace cc {
 
@@ -32,7 +35,15 @@ AiBackgroundDialog::AiBackgroundDialog(const QImage& sourceImage, I18nService* i
     QTimer::singleShot(150, this, &AiBackgroundDialog::runAiInference);
 }
 
-AiBackgroundDialog::~AiBackgroundDialog() = default;
+AiBackgroundDialog::~AiBackgroundDialog()
+{
+    if (m_workerThread) {
+        if (m_workerThread->isRunning()) {
+            m_workerThread->requestInterruption();
+            m_workerThread->wait(2000);
+        }
+    }
+}
 
 void AiBackgroundDialog::setupUi()
 {
@@ -58,7 +69,16 @@ void AiBackgroundDialog::setupUi()
     if (!u2netPath.isEmpty() && QFileInfo::exists(u2netPath)) {
         m_modelCombo->addItem(m_i18n ? m_i18n->t("editor", "aiBackground.model.u2net") : QStringLiteral("U²-Net (Alta Precisão)"), QStringLiteral("u2net.onnx"));
     }
+    connect(m_modelCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, &AiBackgroundDialog::onModelChanged);
     topLayout->addWidget(m_modelCombo);
+
+    m_browseModelBtn = new QPushButton(m_i18n ? m_i18n->t("editor", "aiBackground.browseModel") : QStringLiteral("Procurar..."), this);
+    m_browseModelBtn->setStyleSheet(QStringLiteral(
+        "QPushButton { background-color: #2A2D34; color: #EEE; padding: 5px 10px; border-radius: 4px; }"
+        "QPushButton:hover { background-color: #3C3F46; }"
+    ));
+    connect(m_browseModelBtn, &QPushButton::clicked, this, &AiBackgroundDialog::onBrowseModel);
+    topLayout->addWidget(m_browseModelBtn);
 
     m_runAiButton = new QPushButton(m_i18n ? m_i18n->t("editor", "aiBackground.runAi") : QStringLiteral("✨ Recortar com IA"), this);
     m_runAiButton->setStyleSheet(QStringLiteral(
@@ -198,6 +218,32 @@ void AiBackgroundDialog::onModelChanged(int)
     runAiInference();
 }
 
+void AiBackgroundDialog::onBrowseModel()
+{
+    const QString title = m_i18n ? m_i18n->t("editor", "aiBackground.selectModelTitle") : QStringLiteral("Selecionar Arquivo de Modelo ONNX");
+    const QString path = QFileDialog::getOpenFileName(this, title, QString(), QStringLiteral("ONNX Models (*.onnx);;All Files (*.*)"));
+    if (path.isEmpty())
+        return;
+
+    const QFileInfo fi(path);
+    const QString displayName = fi.fileName();
+
+    int existingIdx = -1;
+    for (int i = 0; i < m_modelCombo->count(); ++i) {
+        if (m_modelCombo->itemData(i).toString() == path) {
+            existingIdx = i;
+            break;
+        }
+    }
+
+    if (existingIdx >= 0) {
+        m_modelCombo->setCurrentIndex(existingIdx);
+    } else {
+        m_modelCombo->addItem(displayName, path);
+        m_modelCombo->setCurrentIndex(m_modelCombo->count() - 1);
+    }
+}
+
 void AiBackgroundDialog::onBgColorChanged(int index)
 {
     switch (index) {
@@ -209,13 +255,27 @@ void AiBackgroundDialog::onBgColorChanged(int index)
 
 void AiBackgroundDialog::runAiInference()
 {
-    const QString modelFile = m_modelCombo->currentData().toString();
-    const QString modelPath = BackgroundRemover::findModelPath(modelFile);
+    if (m_workerThread && m_workerThread->isRunning())
+        return;
+
+    const QString modelData = m_modelCombo->currentData().toString();
+    QString modelPath;
+    if (QFileInfo::exists(modelData)) {
+        modelPath = modelData;
+    } else {
+        modelPath = BackgroundRemover::findModelPath(modelData);
+    }
 
     if (modelPath.isEmpty() || !QFileInfo::exists(modelPath)) {
-        QMessageBox::warning(this,
-                             m_i18n ? m_i18n->t("editor", "aiBackground.modelNotFound.title") : QStringLiteral("Modelo não encontrado"),
-                             m_i18n ? m_i18n->t("editor", "aiBackground.modelNotFound.body", {modelFile}) : QStringLiteral("Não foi possível encontrar o arquivo do modelo ONNX (%1).").arg(modelFile));
+        const QMessageBox::StandardButton reply = QMessageBox::warning(
+            this,
+            m_i18n ? m_i18n->t("editor", "aiBackground.modelNotFound.title") : QStringLiteral("Modelo não encontrado"),
+            m_i18n ? m_i18n->t("editor", "aiBackground.modelNotFound.body", {modelData}) : QStringLiteral("Não foi possível encontrar o arquivo do modelo ONNX (%1). Você pode selecionar o arquivo manualmente.").arg(modelData),
+            QMessageBox::Open | QMessageBox::Cancel,
+            QMessageBox::Open);
+        if (reply == QMessageBox::Open) {
+            onBrowseModel();
+        }
         return;
     }
 
@@ -224,23 +284,26 @@ void AiBackgroundDialog::runAiInference()
     m_statusLabel->setText(m_i18n ? m_i18n->t("editor", "aiBackground.processing") : QStringLiteral("⏳ Processando imagem com a rede neural..."));
 
     const QImage input = m_originalImage;
+    QPointer<AiBackgroundDialog> self(this);
 
-    // Executa inferencia em background thread para manter a interface 100% responsiva
-    auto* thread = QThread::create([this, input, modelPath]() {
+    m_workerThread = QThread::create([self, input, modelPath]() {
         BackgroundRemover remover(modelPath);
         QImage result = remover.removeBackground(input);
 
-        QMetaObject::invokeMethod(this, [this, result]() {
-            m_processedImage = result;
-            m_editCanvas->setImage(m_originalImage, m_processedImage);
-            m_progressBar->setVisible(false);
-            m_runAiButton->setEnabled(true);
-            m_statusLabel->setText(m_i18n ? m_i18n->t("editor", "aiBackground.done") : QStringLiteral("✓ Recorte concluído! Se desejar, faça ajustes com o pincel e clique em Aplicar."));
+        QMetaObject::invokeMethod(qApp, [self, result]() {
+            if (!self)
+                return;
+            self->m_processedImage = result;
+            self->m_editCanvas->setImage(self->m_originalImage, self->m_processedImage);
+            self->m_progressBar->setVisible(false);
+            self->m_runAiButton->setEnabled(true);
+            self->m_statusLabel->setText(self->m_i18n ? self->m_i18n->t("editor", "aiBackground.done") : QStringLiteral("✓ Recorte concluído! Se desejar, faça ajustes com o pincel e clique em Aplicar."));
+            self->m_workerThread = nullptr;
         });
     });
 
-    connect(thread, &QThread::finished, thread, &QObject::deleteLater);
-    thread->start();
+    connect(m_workerThread, &QThread::finished, m_workerThread, &QObject::deleteLater);
+    m_workerThread->start();
 }
 
 QImage AiBackgroundDialog::finalImage() const

@@ -37,6 +37,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           curl -sL https://github.com/microsoft/onnxruntime/releases/download/v1.19.0/onnxruntime-linux-x64-1.19.0.tgz -o /tmp/ort.tgz
+          echo "8627cae49b51544ed15bb70c8ecf25b187f22a301c99c1ced5f4f3af5c36b44c  /tmp/ort.tgz" | sha256sum -c -
           tar xzf /tmp/ort.tgz -C /tmp
           mv /tmp/onnxruntime-linux-x64-1.19.0 3rdparty/onnxruntime
 
@@ -45,6 +46,10 @@ jobs:
         shell: pwsh
         run: |
           Invoke-WebRequest -Uri "https://github.com/microsoft/onnxruntime/releases/download/v1.19.0/onnxruntime-win-x64-1.19.0.zip" -OutFile "$env:TEMP\ort.zip"
+          $hash = (Get-FileHash -Algorithm SHA256 "$env:TEMP\ort.zip").Hash.ToLower()
+          if ($hash -ne "1d796da7001e4843858d0587aa8232976abf9e0ae7fba8deb7fa8156e440efb7") {
+            throw "Hash mismatch for onnxruntime-win-x64-1.19.0.zip"
+          }
           Expand-Archive -Path "$env:TEMP\ort.zip" -DestinationPath "$env:TEMP\ort"
           Move-Item "$env:TEMP\ort\onnxruntime-win-x64-1.19.0" "3rdparty\onnxruntime"
 

@@ -21,7 +21,7 @@ Cross-platform by design: **Windows 10/11** and **Linux** today, with the archit
 - **Autosave & recovery** — configurable interval, crash-recovery prompt on next launch
 - **Start screen** — creator-focused canvas presets (YouTube thumbnail/banner/Shorts, Instagram post/story, TikTok, Facebook, X, and a transparent canvas), plus recent projects
 - **Localization** — full English and Brazilian Portuguese (pt-BR), JSON catalogs, no hardcoded UI strings, live language switching
-- **Smart guides & snapping engine** — alignment/snap logic implemented and unit-tested; not yet wired into canvas gestures
+- **Smart guides & snapping engine** — alignment and snap logic with magnetic visual guides wired into canvas selection and transform gestures
 
 ---
 
@@ -46,10 +46,17 @@ Cross-platform by design: **Windows 10/11** and **Linux** today, with the archit
 - **1-click preset filters**: Grayscale, Sepia, Vintage, High Contrast synced directly to inspector sliders
 - **3D tilt controls** for image layers
 
-### 🤖 AI Background Removal
-- ONNX Runtime integration for ML-powered background removal
-- Automated setup scripts (`scripts/fetch_onnx.sh` & `scripts/fetch_onnx.bat`) for libraries and models
-- Raster tools: Crop, Scissors, Magic Wand, Clone Stamp
+### 🤖 AI Background Removal (Local & Offline)
+- **100% Offline & Private**: Powered by ONNX Runtime; no photos or data ever leave your machine.
+- **Model Support**:
+  - `u2netp.onnx` (~4.5 MB): Ultralight, fast segmentation bundled with releases.
+  - `u2net.onnx` (~176 MB): High-precision model.
+- **Automatic Model Resolution**:
+  1. Application bundle / installation directory (`/usr/share/creatorcanvas/models/` or Windows `models/`)
+  2. User data folder (`~/.local/share/CreatorCanvas/models/` or `%APPDATA%\CreatorCanvas\models\`)
+  3. Interactive fallback: Built-in **"Browse..." / "Procurar..."** file selector to load any `.onnx` model on disk.
+- **Automated setup scripts**: `scripts/fetch_onnx.sh` (Linux) and `scripts/fetch_onnx.bat` (Windows) for one-click setup.
+- **Interactive Mask Touch-Up**: Restore / Erase brush with undo support to fine-tune cutout masks before applying.
 
 ### 🛡️ Reliability, Security & Experience
 - **Visual project previews**: thumbnails automatically generated upon save and displayed in the Recent Projects list
@@ -145,7 +152,7 @@ Phase 1 (core editor) is complete. Phase 2 (creative tools) shipped in **v0.2.0*
 | M12 | Autosave + crash recovery | ✅ Done |
 | M13 | Start screen (presets + recents) | ✅ Done |
 | M14 | Packaging (AppImage, DEB, Windows portable) | ✅ Done |
-| M15 | Smart guides & snapping | 🟡 Engine + tests done, canvas wiring pending |
+| M15 | Smart guides & snapping | ✅ Done |
 | **M16** | **Paint & Flood Fill tools** | ✅ **v0.2.0** |
 | **M17** | **Text gradient effects** | ✅ **v0.2.0** |
 | **M18** | **3D Perspective / Tilt (Shear)** | ✅ **v0.2.0** |
@@ -185,6 +192,15 @@ creatorcanvas/
 - Free functions living in the `cc::` namespace should be called with explicit `cc::` qualification where a member function of the same name could otherwise shadow them.
 
 See `DOCUMENTATION.md` for the complete conventions, architecture, and API reference.
+
+## Release checklist
+
+Before tagging a new release:
+1. **Unit tests**: `ctest --output-on-failure` passes 100% across all 17 test suites.
+2. **Clean packaging**: Build `.deb` (Linux) and portable ZIP (Windows); verify `libonnxruntime` is staged inside the package.
+3. **Smoke testing**: Run `creatorcanvas --smoke-test` on the installed package in headless mode (`QT_QPA_PLATFORM=offscreen`).
+4. **Model resolution**: Verify `u2netp.onnx` is bundled in `share/creatorcanvas/models/` or prompt works cleanly.
+5. **Consistency**: Ensure CMake project version, installer versions, and changelogs are synchronized.
 
 ## Note
 I have to take a break on this project for now but i will try add more things for next version 🫥.

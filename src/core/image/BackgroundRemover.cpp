@@ -4,12 +4,15 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QImage>
+#include <QLoggingCategory>
+#include <QStandardPaths>
 #include <algorithm>
 #include <cmath>
-#include <iostream>
 #include <vector>
 
 namespace cc {
+
+Q_LOGGING_CATEGORY(lcBgRemover, "cc.ai.bgremover")
 
 static constexpr float MEAN[3] = {0.485f, 0.456f, 0.406f};
 static constexpr float STD[3]  = {0.229f, 0.224f, 0.225f};
@@ -149,7 +152,7 @@ BackgroundRemover::BackgroundRemover(const QString& modelPath)
         try {
             m_impl = std::make_unique<BackgroundRemoverImpl>(path.toStdString());
         } catch (const std::exception& e) {
-            std::cerr << "[BackgroundRemover] Erro ao carregar ONNX: " << e.what() << std::endl;
+            qCWarning(lcBgRemover) << "Erro ao carregar ONNX:" << e.what();
             m_impl.reset();
         }
     }
@@ -169,31 +172,40 @@ QImage BackgroundRemover::removeBackground(const QImage& input)
     try {
         return m_impl->process(input);
     } catch (const std::exception& e) {
-        std::cerr << "[BackgroundRemover] Erro durante inferencia ONNX: " << e.what() << std::endl;
+        qCWarning(lcBgRemover) << "Erro durante inferência ONNX:" << e.what();
         return input;
     }
 }
 
 QString BackgroundRemover::findModelPath(const QString& preferredName)
 {
+    const QString appDir = QCoreApplication::applicationDirPath();
+    const QString appDataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+
     const QStringList candidateDirs = {
-        QCoreApplication::applicationDirPath() + QStringLiteral("/../share/creatorcanvas/models"),
-        QCoreApplication::applicationDirPath() + QStringLiteral("/models"),
-        QStringLiteral("/home/theking1x/creatorcanvas/resources/models"),
-        QStringLiteral("/home/theking1x/projetos/bg-remover")
+        appDir + QStringLiteral("/../share/creatorcanvas/models"),
+        appDir + QStringLiteral("/share/creatorcanvas/models"),
+        appDir + QStringLiteral("/models"),
+        appDir,
+        appDataDir + QStringLiteral("/models"),
+        appDataDir
     };
 
     for (const QString& dir : candidateDirs) {
-        QString full = dir + QStringLiteral("/") + preferredName;
+        const QString full = dir + QStringLiteral("/") + preferredName;
         if (QFileInfo::exists(full))
             return full;
     }
 
-    // Fallback: search for any *.onnx in resources/models
-    QDir resModels(QStringLiteral("/home/theking1x/creatorcanvas/resources/models"));
-    auto list = resModels.entryList({QStringLiteral("*.onnx")}, QDir::Files);
-    if (!list.isEmpty()) {
-        return resModels.absoluteFilePath(list.first());
+    // Fallback: search for any *.onnx in candidate directories
+    for (const QString& dir : candidateDirs) {
+        QDir qdir(dir);
+        if (qdir.exists()) {
+            const QStringList list = qdir.entryList({QStringLiteral("*.onnx")}, QDir::Files);
+            if (!list.isEmpty()) {
+                return qdir.absoluteFilePath(list.first());
+            }
+        }
     }
 
     return QString();

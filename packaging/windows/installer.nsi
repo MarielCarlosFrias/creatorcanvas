@@ -6,7 +6,7 @@
 
 ; General Configuration
 Name "CreatorCanvas"
-OutFile "CreatorCanvas-0.1.0-Setup.exe"
+OutFile "CreatorCanvas-0.2.0-Setup.exe"
 InstallDir "$PROGRAMFILES64\CreatorCanvas"
 InstallDirRegKey HKLM "Software\CreatorCanvas" "Install_Dir"
 RequestExecutionLevel admin
@@ -42,15 +42,15 @@ Section "CreatorCanvas Core" SecCore
     
     ; Add or Remove Programs (Windows Control Panel & Settings)
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\CreatorCanvas" "DisplayName" "CreatorCanvas"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\CreatorCanvas" "DisplayVersion" "0.1.0"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\CreatorCanvas" "DisplayVersion" "0.2.0"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\CreatorCanvas" "DisplayIcon" "$INSTDIR\CreatorCanvas.exe"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\CreatorCanvas" "Publisher" "CreatorCanvas Team"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\CreatorCanvas" "UninstallString" '"$INSTDIR\uninstall.exe"'
     WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\CreatorCanvas" "NoModify" 1
     WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\CreatorCanvas" "NoRepair" 1
 
-    ; Register .ccproject file association
-    WriteRegStr HKCR ".ccproject" "" "CreatorCanvas.Project"
+    ; Register .creatorcanvas file association
+    WriteRegStr HKCR ".creatorcanvas" "" "CreatorCanvas.Project"
     WriteRegStr HKCR "CreatorCanvas.Project" "" "CreatorCanvas Project File"
     WriteRegStr HKCR "CreatorCanvas.Project\DefaultIcon" "" "$INSTDIR\CreatorCanvas.exe,0"
     WriteRegStr HKCR "CreatorCanvas.Project\shell\open\command" "" '"$INSTDIR\CreatorCanvas.exe" "%1"'
@@ -71,7 +71,7 @@ Section "Uninstall"
     ; Remove registry keys
     DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\CreatorCanvas"
     DeleteRegKey HKLM "Software\CreatorCanvas"
-    DeleteRegKey HKCR ".ccproject"
+    DeleteRegKey HKCR ".creatorcanvas"
     DeleteRegKey HKCR "CreatorCanvas.Project"
 
     ; Remove shortcuts

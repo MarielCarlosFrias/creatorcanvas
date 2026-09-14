@@ -17,6 +17,12 @@ if (Test-Path "3rdparty\onnxruntime\lib\onnxruntime.dll") {
     Copy-Item "$BuildDir\bin\Release\onnxruntime.dll" $OutDir
 }
 
+# Copy default models if available
+if (Test-Path "resources\models") {
+    New-Item -ItemType Directory -Force -Path "$OutDir\models" | Out-Null
+    Copy-Item "resources\models\*.*" "$OutDir\models"
+}
+
 # Bundle Qt DLLs + plugins (platforms, styles, imageformats)
 windeployqt --release --no-translations --no-system-d3d-compiler `
     --no-opengl-sw --dir $OutDir "$OutDir\CreatorCanvas.exe"

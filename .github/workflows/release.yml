@@ -29,8 +29,15 @@ jobs:
       - name: Download ONNX Runtime (Linux)
         run: |
           curl -sL https://github.com/microsoft/onnxruntime/releases/download/v1.19.0/onnxruntime-linux-x64-1.19.0.tgz -o /tmp/ort.tgz
+          echo "8627cae49b51544ed15bb70c8ecf25b187f22a301c99c1ced5f4f3af5c36b44c  /tmp/ort.tgz" | sha256sum -c -
           tar xzf /tmp/ort.tgz -C /tmp
           mv /tmp/onnxruntime-linux-x64-1.19.0 3rdparty/onnxruntime
+
+      - name: Download AI Model (u2netp.onnx)
+        run: |
+          mkdir -p resources/models
+          curl -sL https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx -o resources/models/u2netp.onnx
+          echo "309c8469258dda742793dce0ebea8e6dd393174f89934733ecc8b14c76f4ddd8  resources/models/u2netp.onnx" | sha256sum -c -
 
       - name: Configure CMake
         run: cmake --preset linux-release
@@ -39,6 +46,12 @@ jobs:
         run: |
           chmod +x packaging/linux/build_deb.sh
           packaging/linux/build_deb.sh build/linux-release
+
+      - name: Smoke Test (.deb)
+        run: |
+          sudo dpkg -i build/linux-release/packages/*.deb
+          creatorcanvas --version
+          QT_QPA_PLATFORM=offscreen creatorcanvas --smoke-test
 
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
@@ -62,8 +75,22 @@ jobs:
         shell: pwsh
         run: |
           Invoke-WebRequest -Uri "https://github.com/microsoft/onnxruntime/releases/download/v1.19.0/onnxruntime-win-x64-1.19.0.zip" -OutFile "$env:TEMP\ort.zip"
+          $hash = (Get-FileHash -Algorithm SHA256 "$env:TEMP\ort.zip").Hash.ToLower()
+          if ($hash -ne "1d796da7001e4843858d0587aa8232976abf9e0ae7fba8deb7fa8156e440efb7") {
+            throw "Hash mismatch for onnxruntime-win-x64-1.19.0.zip"
+          }
           Expand-Archive -Path "$env:TEMP\ort.zip" -DestinationPath "$env:TEMP\ort"
           Move-Item "$env:TEMP\ort\onnxruntime-win-x64-1.19.0" "3rdparty\onnxruntime"
+
+      - name: Download AI Model (u2netp.onnx)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path resources\models | Out-Null
+          Invoke-WebRequest -Uri "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx" -OutFile "resources\models\u2netp.onnx"
+          $hash = (Get-FileHash -Algorithm SHA256 "resources\models\u2netp.onnx").Hash.ToLower()
+          if ($hash -ne "309c8469258dda742793dce0ebea8e6dd393174f89934733ecc8b14c76f4ddd8") {
+            throw "Hash mismatch for u2netp.onnx"
+          }
 
       - name: Configure CMake
         run: cmake --preset windows-release
@@ -75,6 +102,14 @@ jobs:
         shell: pwsh
         run: |
           powershell -File packaging\windows\build_portable.ps1 -BuildDir build\windows-release
+
+      - name: Smoke Test (Portable ZIP)
+        shell: pwsh
+        run: |
+          $exe = "packaging\windows\CreatorCanvas-portable\CreatorCanvas.exe"
+          $env:QT_QPA_PLATFORM = "offscreen"
+          & $exe --version
+          & $exe --smoke-test
 
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4

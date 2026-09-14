@@ -30,12 +30,24 @@ mkdir -p "$DEBROOT/usr/share/creatorcanvas"
 mkdir -p "$DEBROOT/usr/share/applications"
 mkdir -p "$DEBROOT/usr/share/metainfo"
 mkdir -p "$DEBROOT/usr/share/icons/hicolor/scalable/apps"
+mkdir -p "$DEBROOT/usr/lib/creatorcanvas"
 
 install -m 0755 "$STAGING/bin/creatorcanvas" "$DEBROOT/usr/bin/creatorcanvas"
+
+if [ -d "$STAGING/lib/creatorcanvas" ]; then
+    cp -d -r "$STAGING/lib/creatorcanvas/." \
+          "$DEBROOT/usr/lib/creatorcanvas/"
+fi
 
 if [ -d "$STAGING/share/creatorcanvas" ]; then
     cp -r "$STAGING/share/creatorcanvas/." \
           "$DEBROOT/usr/share/creatorcanvas/"
+fi
+
+if [ -d "$PROJECT_DIR/resources/models" ]; then
+    mkdir -p "$DEBROOT/usr/share/creatorcanvas/models"
+    cp -r "$PROJECT_DIR/resources/models/." \
+          "$DEBROOT/usr/share/creatorcanvas/models/"
 fi
 
 install -m 0644 "$PROJECT_DIR/packaging/linux/creatorcanvas.desktop" \
