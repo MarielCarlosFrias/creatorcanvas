@@ -140,17 +140,22 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
         const bool hasShadow = text.effects.shadow.enabled;
         const bool hasGradient = text.effects.gradient.enabled;
 
+        Qt::Alignment alignFlag = Qt::AlignLeft;
+        if (text.align == TextAlignment::Center)
+            alignFlag = Qt::AlignHCenter;
+        else if (text.align == TextAlignment::Right)
+            alignFlag = Qt::AlignRight;
+
+        const QRectF drawRect = text.box.isEmpty()
+            ? text.contentBounds()
+            : QRectF(QPointF(0, 0), text.box);
+
         if (!hasOutline && !hasShadow && !hasGradient) {
-            // Fast path: identical to the pre-effects behavior.
             painter->setFont(font);
             painter->setPen(text.color);
-            if (!text.box.isEmpty()) {
-                painter->drawText(QRectF(QPointF(0, 0), text.box),
-                                  Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap,
-                                  text.content);
-            } else {
-                painter->drawText(QPointF(0, 0), text.content);
-            }
+            painter->drawText(drawRect,
+                              alignFlag | Qt::AlignTop | Qt::TextWordWrap,
+                              text.content);
             break;
         }
 
@@ -161,7 +166,14 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
         QPainterPath path;
         double lineY = metrics.ascent();
         for (const QString& lineText : lines) {
-            path.addText(QPointF(0, lineY), font, lineText);
+            double lineX = 0.0;
+            const double lw = metrics.horizontalAdvance(lineText);
+            if (alignFlag == Qt::AlignHCenter)
+                lineX = qMax(0.0, (drawRect.width() - lw) / 2.0);
+            else if (alignFlag == Qt::AlignRight)
+                lineX = qMax(0.0, drawRect.width() - lw);
+
+            path.addText(QPointF(lineX, lineY), font, lineText);
             lineY += metrics.lineSpacing();
         }
 
