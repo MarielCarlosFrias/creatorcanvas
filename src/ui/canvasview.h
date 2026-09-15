@@ -72,6 +72,7 @@ public:
     // Remoção de Fundo com IA
     void openAiBackgroundRemoval(const cc::LayerId& id);
     void removeBackgroundAiQuick(const cc::LayerId& id);
+    bool isQuickAiRunning() const;
 
     double zoom() const { return m_zoom; }
     QPointF panOffset() const { return m_panOffset; }
@@ -106,6 +107,7 @@ signals:
                             const cc::AffineTransform& newTransform,
                             const QString& actionName);
     void statusMessageRequested(const QString& message);
+    void quickAiBusyChanged(bool busy);
 
 protected:
     void paintEvent(QPaintEvent*) override;
@@ -234,6 +236,7 @@ private:
     // AI Quick Background Removal cancel flag and thread tracking
     std::shared_ptr<std::atomic<bool>> m_quickAiCancelFlag;
     QPointer<QThread> m_quickAiThread;
+    LayerId m_pendingQuickAiLayerId;
 };
 
 } // namespace cc

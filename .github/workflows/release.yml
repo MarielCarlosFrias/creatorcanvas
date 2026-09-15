@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build-linux:
-    name: Build Linux (.deb)
+    name: Build Linux (.deb + AppImage)
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -24,7 +24,7 @@ jobs:
           cache: true
 
       - name: Install build tools
-        run: sudo apt-get update && sudo apt-get install -y ninja-build dpkg-dev
+        run: sudo apt-get update && sudo apt-get install -y ninja-build dpkg-dev fuse libfuse2
 
       - name: Download ONNX Runtime (Linux)
         run: |
@@ -53,14 +53,37 @@ jobs:
           creatorcanvas --version
           QT_QPA_PLATFORM=offscreen creatorcanvas --smoke-test
 
-      - name: Upload Linux Artifact
+      - name: Download linuxdeploy and Qt plugin
+        run: |
+          curl -sL https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage -o /usr/local/bin/linuxdeploy
+          curl -sL https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage -o /usr/local/bin/linuxdeploy-plugin-qt
+          chmod +x /usr/local/bin/linuxdeploy /usr/local/bin/linuxdeploy-plugin-qt
+          curl -sL https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -o /usr/local/bin/appimagetool
+          chmod +x /usr/local/bin/appimagetool
+
+      - name: Build AppImage
+        env:
+          QMAKE: ${{ env.QT_ROOT_DIR }}/bin/qmake
+        run: |
+          chmod +x packaging/linux/build_appimage.sh packaging/linux/AppRun.sh
+          packaging/linux/build_appimage.sh build/linux-release
+
+      - name: Smoke Test (AppImage)
+        run: |
+          APPIMAGE=$(ls build/linux-release/CreatorCanvas-*.AppImage | head -1)
+          chmod +x "$APPIMAGE"
+          QT_QPA_PLATFORM=offscreen "$APPIMAGE" --appimage-extract-and-run --smoke-test
+
+      - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: creatorcanvas-linux-deb
-          path: build/linux-release/packages/*.deb
+          name: creatorcanvas-linux
+          path: |
+            build/linux-release/packages/*.deb
+            build/linux-release/CreatorCanvas-*.AppImage
 
   build-windows:
-    name: Build Windows (Portable ZIP)
+    name: Build Windows (Portable ZIP + Installer)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -119,6 +142,41 @@ jobs:
           popd
           Move-Item packaging\windows\CreatorCanvas-0.2.0-Setup.exe .
 
+      - name: Smoke Test (NSIS Installer - silent install/uninstall)
+        shell: pwsh
+        run: |
+          $setup = "CreatorCanvas-0.2.0-Setup.exe"
+          $installDir = "$env:ProgramFiles\CreatorCanvas"
+
+          # Silent install
+          Write-Host "Installing silently..."
+          Start-Process -FilePath $setup -ArgumentList "/S" -Wait -NoNewWindow
+
+          # Verify installed binary exists
+          $installedExe = Join-Path $installDir "CreatorCanvas.exe"
+          if (-not (Test-Path $installedExe)) {
+            throw "Installation failed: $installedExe not found"
+          }
+          Write-Host "Installation verified: $installedExe"
+
+          # Smoke-test the installed binary
+          $env:QT_QPA_PLATFORM = "offscreen"
+          & $installedExe --version
+          & $installedExe --smoke-test
+
+          # Silent uninstall
+          $uninstaller = Join-Path $installDir "Uninstall.exe"
+          if (Test-Path $uninstaller) {
+            Write-Host "Uninstalling silently..."
+            Start-Process -FilePath $uninstaller -ArgumentList "/S" -Wait -NoNewWindow
+          }
+
+          # Verify uninstall removed the binary
+          if (Test-Path $installedExe) {
+            throw "Uninstall failed: $installedExe still exists"
+          }
+          Write-Host "Uninstall verified: binary removed successfully."
+
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -142,7 +200,7 @@ jobs:
       - name: Organize Release Assets
         run: |
           mkdir -p release_assets
-          find artifacts -type f \( -name "*.deb" -o -name "*.zip" -o -name "*.exe" \) -exec cp {} release_assets/ \;
+          find artifacts -type f \( -name "*.deb" -o -name "*.AppImage" -o -name "*.zip" -o -name "*.exe" \) -exec cp {} release_assets/ \;
           ls -la release_assets/
 
       - name: Create GitHub Release
@@ -153,3 +211,4 @@ jobs:
           generate_release_notes: true
           draft: false
           prerelease: false
+

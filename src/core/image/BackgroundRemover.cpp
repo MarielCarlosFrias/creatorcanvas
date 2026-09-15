@@ -183,10 +183,10 @@ bool BackgroundRemover::isLoaded() const
 
 QImage BackgroundRemover::removeBackground(const QImage& input, const std::atomic<bool>* cancelFlag)
 {
-    if (!m_impl || input.isNull())
-        return input;
     if (cancelFlag && cancelFlag->load())
         return QImage();
+    if (!m_impl || input.isNull())
+        return input;
     try {
         QImage result = m_impl->process(input, cancelFlag);
         if (result.isNull() && cancelFlag && cancelFlag->load())

@@ -65,7 +65,7 @@ CanvasView::~CanvasView()
         m_quickAiCancelFlag->store(true);
     }
     if (m_quickAiThread && m_quickAiThread->isRunning()) {
-        m_quickAiThread->wait(2000);
+        m_quickAiThread->wait(1000);
     }
 }
 
@@ -2117,6 +2117,10 @@ void CanvasView::openAiBackgroundRemoval(const LayerId& id)
         }
     }
 }
+bool CanvasView::isQuickAiRunning() const
+{
+    return m_quickAiThread && m_quickAiThread->isRunning();
+}
 
 void CanvasView::removeBackgroundAiQuick(const LayerId& id)
 {
@@ -2131,16 +2135,20 @@ void CanvasView::removeBackgroundAiQuick(const LayerId& id)
     if (srcImg.isNull())
         return;
 
-    // Se já havia uma tarefa em execução, cancela e aguarda
-    if (m_quickAiCancelFlag) {
-        m_quickAiCancelFlag->store(true);
-    }
+    // Se já havia uma tarefa em execução, cancela cooperativamente e agenda a próxima sem travar a UI
     if (m_quickAiThread && m_quickAiThread->isRunning()) {
-        m_quickAiThread->wait(1000);
+        m_pendingQuickAiLayerId = id;
+        if (m_quickAiCancelFlag) {
+            m_quickAiCancelFlag->store(true);
+        }
+        return;
     }
 
+    m_pendingQuickAiLayerId = LayerId();
     m_quickAiCancelFlag = std::make_shared<std::atomic<bool>>(false);
     auto cancelFlag = m_quickAiCancelFlag;
+
+    emit quickAiBusyChanged(true);
 
     const QString processingMsg = m_i18n ? m_i18n->t("editor", "canvas.status.aiQuickProcessing")
                                          : QStringLiteral("⏳ Removing background with AI in background...");
@@ -2187,6 +2195,18 @@ void CanvasView::removeBackgroundAiQuick(const LayerId& id)
 
     m_quickAiThread = thread;
     connect(thread, &QThread::finished, thread, &QObject::deleteLater);
+    connect(thread, &QThread::finished, this, [self]() {
+        if (!self)
+            return;
+        self->m_quickAiThread = nullptr;
+        if (!self->m_pendingQuickAiLayerId.isNull()) {
+            const LayerId nextId = self->m_pendingQuickAiLayerId;
+            self->m_pendingQuickAiLayerId = LayerId();
+            self->removeBackgroundAiQuick(nextId);
+        } else {
+            emit self->quickAiBusyChanged(false);
+        }
+    });
     thread->start();
 }
 
