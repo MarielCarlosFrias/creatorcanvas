@@ -55,6 +55,18 @@
     "panel.back": "Enviar para Trás",
     "panel.duplicate": "Duplicar",
     "panel.delete": "Excluir",
+    "panel.addLayer": "Adicionar Camada",
+    "panel.moveUp": "Mover para Cima",
+    "panel.moveDown": "Mover para Baixo",
+    "panel.visibility": "Alternar Visibilidade",
+    "panel.lockToggle": "Alternar Bloqueio",
+    "panel.imageProperties": "Propriedades da Imagem",
+    "layer.typeText": "Camada de Texto",
+    "layer.typeImage": "Camada de Imagem",
+    "layer.typeShape": "Camada de Forma",
+    "layer.typePaint": "Camada de Pintura",
+    "layer.typeGroup": "Grupo",
+    "layer.typeBackground": "Plano de Fundo",
     "menu.layer.addText": "Adicionar &Texto",
     "menu.layer.addShape": "Adicionar &Forma",
     "menu.layer.shape.rect": "&Retângulo",
@@ -86,15 +98,22 @@
     },
     "start": {
         "createNew": "Criar novo",
+        "createDesign": "Criar Design",
+        "openProject": "Abrir Projeto...",
         "custom": "Tamanho personalizado...",
         "open": "Abrir projeto...",
+        "popular": "Formatos Populares",
         "recent": "Projetos recentes",
+        "emptyRecents": "Nenhum projeto recente ainda",
+        "emptyRecentsHint": "Crie um novo design ou abra um arquivo de projeto para começar a criar!",
+        "browseAll": "Mais Formatos...",
         "screenAction": "Tela Inicial"
     },
     "action": {
         "apply": "Aplicar",
         "reset": "Redefinir",
         "cancel": "Cancelar",
-        "undo": "Desfazer"
+        "undo": "Desfazer",
+        "rename": "Renomear"
     }
 }

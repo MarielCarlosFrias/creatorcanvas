@@ -44,3 +44,6 @@ project_dump.txt
 # Neural models and prebuilt runtimes
 3rdparty/onnxruntime/
 resources/models/*.onnx
+
+# CTest temporary output
+Testing/

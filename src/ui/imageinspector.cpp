@@ -1,5 +1,5 @@
 #include "imageinspector.h"
-
+#include "collapsiblesection.h"
 #include "core/history/CommandStack.h"
 #include "core/history/DocumentCommands.h"
 #include "core/image/ImageProcessing.h"
@@ -134,48 +134,44 @@ void ImageInspector::resetAdjustments()
 void ImageInspector::buildUi()
 {
     auto* mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(4, 4, 4, 4);
-    mainLayout->setSpacing(8);
+    mainLayout->setContentsMargins(2, 2, 2, 2);
+    mainLayout->setSpacing(4);
 
-    // --- Grupo 1: Perspectiva 3D & Inclinação (Tilt) ---
-    m_perspectiveGroup = new QGroupBox(this);
-    auto* persLayout = new QFormLayout(m_perspectiveGroup);
+    // --- 1. Filtros Rápidos (Aberto por padrão) ---
+    m_quickFiltersSection = new CollapsibleSection(QStringLiteral("Quick 1-Click Filters"), true, this);
+    auto* quickLayout = new QVBoxLayout;
+    quickLayout->setContentsMargins(4, 4, 4, 4);
 
-    m_tiltX = new QDoubleSpinBox(m_perspectiveGroup);
-    m_tiltX->setRange(-2.0, 2.0);
-    m_tiltX->setSingleStep(0.05);
-    m_tiltX->setDecimals(2);
+    m_presetLabel = new QLabel(this);
+    quickLayout->addWidget(m_presetLabel);
 
-    m_tiltY = new QDoubleSpinBox(m_perspectiveGroup);
-    m_tiltY->setRange(-2.0, 2.0);
-    m_tiltY->setSingleStep(0.05);
-    m_tiltY->setDecimals(2);
+    auto* presetGrid = new QHBoxLayout;
+    m_presetGrayscaleBtn = new QPushButton(QStringLiteral("P&B"), this);
+    m_presetSepiaBtn = new QPushButton(QStringLiteral("Sépia"), this);
+    m_presetVintageBtn = new QPushButton(QStringLiteral("Vintage"), this);
+    m_presetHighContrastBtn = new QPushButton(QStringLiteral("Contraste+"), this);
 
-    m_resetTiltBtn = new QPushButton(m_perspectiveGroup);
+    presetGrid->addWidget(m_presetGrayscaleBtn);
+    presetGrid->addWidget(m_presetSepiaBtn);
+    presetGrid->addWidget(m_presetVintageBtn);
+    presetGrid->addWidget(m_presetHighContrastBtn);
+    quickLayout->addLayout(presetGrid);
 
-    auto* tiltRow = new QHBoxLayout;
-    m_tiltXLabel = new QLabel(QStringLiteral("X:"), m_perspectiveGroup);
-    tiltRow->addWidget(m_tiltXLabel);
-    tiltRow->addWidget(m_tiltX);
-    m_tiltYLabel = new QLabel(QStringLiteral("Y:"), m_perspectiveGroup);
-    tiltRow->addWidget(m_tiltYLabel);
-    tiltRow->addWidget(m_tiltY);
-    tiltRow->addWidget(m_resetTiltBtn);
-    persLayout->addRow(tiltRow);
+    m_quickFiltersSection->setContentLayout(quickLayout);
+    mainLayout->addWidget(m_quickFiltersSection);
 
-    mainLayout->addWidget(m_perspectiveGroup);
-
-    // --- Grupo 2: Ajustes Rápidos & Correção de Cor ---
-    m_adjustGroup = new QGroupBox(this);
-    auto* adjLayout = new QFormLayout(m_adjustGroup);
+    // --- 2. Ajustes Manuais de Cor e Filtros (Recolhido por padrão) ---
+    m_adjustmentsSection = new CollapsibleSection(QStringLiteral("Color Adjustments & Filters"), false, this);
+    auto* adjLayout = new QFormLayout;
+    adjLayout->setContentsMargins(4, 4, 4, 4);
 
     auto makeSliderRow = [this](QLabel*& label, QSlider*& slider, QLabel*& valLabel,
                                 int minVal, int maxVal, int defaultVal, const QString& unit) {
-        label = new QLabel(m_adjustGroup);
-        slider = new QSlider(Qt::Horizontal, m_adjustGroup);
+        label = new QLabel(this);
+        slider = new QSlider(Qt::Horizontal, this);
         slider->setRange(minVal, maxVal);
         slider->setValue(defaultVal);
-        valLabel = new QLabel(QStringLiteral("%1%2").arg(defaultVal).arg(unit), m_adjustGroup);
+        valLabel = new QLabel(QStringLiteral("%1%2").arg(defaultVal).arg(unit), this);
         valLabel->setFixedWidth(38);
 
         connect(slider, &QSlider::valueChanged, this, [this, valLabel, unit](int val) {
@@ -190,50 +186,65 @@ void ImageInspector::buildUi()
         return row;
     };
 
-    m_brightnessLabel = new QLabel(m_adjustGroup);
+    m_brightnessLabel = new QLabel(this);
     adjLayout->addRow(m_brightnessLabel, makeSliderRow(m_brightnessLabel, m_brightnessSlider, m_brightnessValue, -100, 100, 0, QStringLiteral("%")));
 
-    m_contrastLabel = new QLabel(m_adjustGroup);
+    m_contrastLabel = new QLabel(this);
     adjLayout->addRow(m_contrastLabel, makeSliderRow(m_contrastLabel, m_contrastSlider, m_contrastValue, -100, 100, 0, QStringLiteral("%")));
 
-    m_saturationLabel = new QLabel(m_adjustGroup);
+    m_saturationLabel = new QLabel(this);
     adjLayout->addRow(m_saturationLabel, makeSliderRow(m_saturationLabel, m_saturationSlider, m_saturationValue, -100, 100, 0, QStringLiteral("%")));
 
-    m_temperatureLabel = new QLabel(m_adjustGroup);
+    m_temperatureLabel = new QLabel(this);
     adjLayout->addRow(m_temperatureLabel, makeSliderRow(m_temperatureLabel, m_temperatureSlider, m_temperatureValue, -100, 100, 0, QStringLiteral("%")));
 
-    m_blurLabel = new QLabel(m_adjustGroup);
+    m_blurLabel = new QLabel(this);
     adjLayout->addRow(m_blurLabel, makeSliderRow(m_blurLabel, m_blurSlider, m_blurValue, 0, 30, 0, QStringLiteral("px")));
 
-    m_sharpenLabel = new QLabel(m_adjustGroup);
+    m_sharpenLabel = new QLabel(this);
     adjLayout->addRow(m_sharpenLabel, makeSliderRow(m_sharpenLabel, m_sharpenSlider, m_sharpenValue, 0, 100, 0, QStringLiteral("%")));
 
-    // Botões de ação para os ajustes
     auto* btnRow = new QHBoxLayout;
-    m_applyAdjustBtn = new QPushButton(m_adjustGroup);
+    m_applyAdjustBtn = new QPushButton(this);
     m_applyAdjustBtn->setStyleSheet(QStringLiteral("background-color: #2b78e4; color: white; font-weight: bold; padding: 5px; border-radius: 4px;"));
-    m_resetAdjustBtn = new QPushButton(m_adjustGroup);
+    m_resetAdjustBtn = new QPushButton(this);
     btnRow->addWidget(m_applyAdjustBtn);
     btnRow->addWidget(m_resetAdjustBtn);
     adjLayout->addRow(btnRow);
 
-    // --- Subseção: Filtros Rápidos de 1 Clique ---
-    m_presetLabel = new QLabel(m_adjustGroup);
-    adjLayout->addRow(m_presetLabel);
+    m_adjustmentsSection->setContentLayout(adjLayout);
+    mainLayout->addWidget(m_adjustmentsSection);
 
-    auto* presetGrid = new QHBoxLayout;
-    m_presetGrayscaleBtn = new QPushButton(QStringLiteral("P&B"), m_adjustGroup);
-    m_presetSepiaBtn = new QPushButton(QStringLiteral("Sépia"), m_adjustGroup);
-    m_presetVintageBtn = new QPushButton(QStringLiteral("Vintage"), m_adjustGroup);
-    m_presetHighContrastBtn = new QPushButton(QStringLiteral("Contraste+"), m_adjustGroup);
+    // --- 3. Perspectiva 3D & Inclinação (Recolhido por padrão) ---
+    m_perspectiveSection = new CollapsibleSection(QStringLiteral("3D Tilt & Perspective"), false, this);
+    auto* persLayout = new QFormLayout;
+    persLayout->setContentsMargins(4, 4, 4, 4);
 
-    presetGrid->addWidget(m_presetGrayscaleBtn);
-    presetGrid->addWidget(m_presetSepiaBtn);
-    presetGrid->addWidget(m_presetVintageBtn);
-    presetGrid->addWidget(m_presetHighContrastBtn);
-    adjLayout->addRow(presetGrid);
+    m_tiltX = new QDoubleSpinBox(this);
+    m_tiltX->setRange(-2.0, 2.0);
+    m_tiltX->setSingleStep(0.05);
+    m_tiltX->setDecimals(2);
 
-    mainLayout->addWidget(m_adjustGroup);
+    m_tiltY = new QDoubleSpinBox(this);
+    m_tiltY->setRange(-2.0, 2.0);
+    m_tiltY->setSingleStep(0.05);
+    m_tiltY->setDecimals(2);
+
+    m_resetTiltBtn = new QPushButton(this);
+
+    auto* tiltRow = new QHBoxLayout;
+    m_tiltXLabel = new QLabel(QStringLiteral("X:"), this);
+    tiltRow->addWidget(m_tiltXLabel);
+    tiltRow->addWidget(m_tiltX);
+    m_tiltYLabel = new QLabel(QStringLiteral("Y:"), this);
+    tiltRow->addWidget(m_tiltYLabel);
+    tiltRow->addWidget(m_tiltY);
+    tiltRow->addWidget(m_resetTiltBtn);
+    persLayout->addRow(tiltRow);
+
+    m_perspectiveSection->setContentLayout(persLayout);
+    mainLayout->addWidget(m_perspectiveSection);
+
     mainLayout->addStretch();
 
     // Signal connections
@@ -412,13 +423,16 @@ void ImageInspector::applyPreset(int presetIndex)
 
 void ImageInspector::retranslateUi()
 {
-    if (m_perspectiveGroup)
-        m_perspectiveGroup->setTitle(m_i18n ? m_i18n->t("editor", "image.perspective") : QStringLiteral("3D Tilt / Perspective"));
+    if (m_quickFiltersSection)
+        m_quickFiltersSection->setTitle(m_i18n ? m_i18n->t("editor", "section.quickFilters") : QStringLiteral("Quick 1-Click Filters"));
+    if (m_adjustmentsSection)
+        m_adjustmentsSection->setTitle(m_i18n ? m_i18n->t("editor", "section.manualAdjustments") : QStringLiteral("Color Adjustments & Filters"));
+    if (m_perspectiveSection)
+        m_perspectiveSection->setTitle(m_i18n ? m_i18n->t("editor", "section.perspective") : QStringLiteral("3D Tilt & Perspective"));
+
     if (m_resetTiltBtn)
         m_resetTiltBtn->setText(m_i18n ? m_i18n->t("common", "action.reset") : QStringLiteral("Reset"));
 
-    if (m_adjustGroup)
-        m_adjustGroup->setTitle(m_i18n ? m_i18n->t("editor", "image.adjustments") : QStringLiteral("Color Adjustments & Filters"));
     if (m_brightnessLabel)
         m_brightnessLabel->setText(m_i18n ? m_i18n->t("editor", "image.brightness") : QStringLiteral("Brightness:"));
     if (m_contrastLabel)

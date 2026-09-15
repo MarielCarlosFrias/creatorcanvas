@@ -36,3 +36,9 @@ cc_add_test(test_ai_quick unit/test_ai_quick.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/aibackgrounddialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/maskeditcanvas.cpp
 )
+cc_add_test(test_ui_phase1 unit/test_ui_phase1.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/themeicons.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/collapsiblesection.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/startscreen.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/layerspanel.cpp
+)

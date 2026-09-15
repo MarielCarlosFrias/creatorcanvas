@@ -55,6 +55,18 @@
     "panel.back": "Send to Back",
     "panel.duplicate": "Duplicate",
     "panel.delete": "Delete",
+    "panel.addLayer": "Add Layer",
+    "panel.moveUp": "Move Up",
+    "panel.moveDown": "Move Down",
+    "panel.visibility": "Toggle Visibility",
+    "panel.lockToggle": "Toggle Lock",
+    "panel.imageProperties": "Image Properties",
+    "layer.typeText": "Text Layer",
+    "layer.typeImage": "Image Layer",
+    "layer.typeShape": "Shape Layer",
+    "layer.typePaint": "Paint Layer",
+    "layer.typeGroup": "Group",
+    "layer.typeBackground": "Background",
     "menu.layer.addText": "Add &Text",
     "menu.layer.addShape": "Add &Shape",
     "menu.layer.shape.rect": "&Rectangle",
@@ -86,15 +98,22 @@
     },
     "start": {
         "createNew": "Create new",
+        "createDesign": "Create Design",
+        "openProject": "Open Project...",
         "custom": "Custom size...",
         "open": "Open project...",
+        "popular": "Popular Formats",
         "recent": "Recent projects",
+        "emptyRecents": "No recent projects yet",
+        "emptyRecentsHint": "Create a new design or open a project file to start creating!",
+        "browseAll": "More Formats...",
         "screenAction": "Start Screen"
     },
     "action": {
         "apply": "Apply",
         "reset": "Reset",
         "cancel": "Cancel",
-        "undo": "Undo"
+        "undo": "Undo",
+        "rename": "Rename"
     }
 }

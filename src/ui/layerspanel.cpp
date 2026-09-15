@@ -1,43 +1,51 @@
 #include "layerspanel.h"
-
-// Inclusão dos serviços de internacionalização e pilha de comandos de histórico
+#include "themeicons.h"
 #include "localization/i18nservice.h"
 #include "core/history/CommandStack.h"
 #include "core/history/DocumentCommands.h"
+#include "core/layers/Layer.h"
 
-// Componentes gráficos Qt utilizados para a interface do painel de camadas
 #include <QComboBox>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
 #include <QMenu>
+#include <QPainter>
 #include <QSlider>
 #include <QSpinBox>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 namespace cc {
 
 namespace {
 
-// Retorna um nome descritivo padrão caso a camada não possua nome explícito
-QString fallbackName(const Layer& layer)
+QString fallbackName(const Layer& layer, I18nService* i18n)
 {
     if (!layer.name.isEmpty())
         return layer.name;
-    switch (layer.type()) {
-    case LayerType::Group:      return QStringLiteral("Group");
-    case LayerType::Image:      return QStringLiteral("Image");
-    case LayerType::Text:       return QStringLiteral("Text");
-    case LayerType::Shape:      return QStringLiteral("Shape");
-    case LayerType::Background: return QStringLiteral("Background");
+    if (!i18n) {
+        switch (layer.type()) {
+        case LayerType::Group:      return QStringLiteral("Group");
+        case LayerType::Image:      return QStringLiteral("Image");
+        case LayerType::Text:       return QStringLiteral("Text");
+        case LayerType::Shape:      return QStringLiteral("Shape");
+        case LayerType::Background: return QStringLiteral("Background");
+        }
+        return QStringLiteral("Layer");
     }
-    return QStringLiteral("Layer");
+
+    switch (layer.type()) {
+    case LayerType::Group:      return i18n->t("common", "layer.typeGroup");
+    case LayerType::Image:      return i18n->t("common", "layer.typeImage");
+    case LayerType::Text:       return i18n->t("common", "layer.typeText");
+    case LayerType::Shape:      return i18n->t("common", "layer.typeShape");
+    case LayerType::Background: return i18n->t("common", "layer.typeBackground");
+    }
+    return i18n->t("common", "layer.typeImage");
 }
 
-} // namespace
-
-// QListWidget customizado que emite o sinal moved() após o usuário soltar a camada reordenada
 class LayerListWidget final : public QListWidget
 {
     Q_OBJECT
@@ -55,6 +63,8 @@ protected:
     }
 };
 
+} // namespace
+
 LayersPanel::LayersPanel(I18nService* i18n, CommandStack* history, QWidget* parent)
     : QWidget(parent)
     , m_history(history)
@@ -62,7 +72,6 @@ LayersPanel::LayersPanel(I18nService* i18n, CommandStack* history, QWidget* pare
 {
     buildUi();
 
-    // Conecta atualização de idioma para traduzir labels e itens do combobox de mesclagem
     if (m_i18n) {
         connect(m_i18n, &I18nService::languageChanged,
                 this, &LayersPanel::retranslateUi);
@@ -81,14 +90,14 @@ void LayersPanel::buildUi()
     layout->setContentsMargins(4, 4, 4, 4);
     layout->setSpacing(6);
 
-    // Frame superior com controles de Modo de Mesclagem e Opacidade
+    // --- 1. Controles superiores: Modo de Mesclagem e Opacidade ---
     auto* controlsFrame = new QFrame(this);
     controlsFrame->setFrameShape(QFrame::NoFrame);
     auto* controlsLayout = new QVBoxLayout(controlsFrame);
     controlsLayout->setContentsMargins(2, 2, 2, 2);
     controlsLayout->setSpacing(4);
 
-    // Linha 1: Modo de Mesclagem (Normal, Multiplicação, Sobreposição, etc.)
+    // Linha 1: Modo de Mesclagem
     auto* blendRow = new QHBoxLayout;
     m_blendLabel = new QLabel(controlsFrame);
     m_blendCombo = new QComboBox(controlsFrame);
@@ -97,7 +106,7 @@ void LayersPanel::buildUi()
     blendRow->addWidget(m_blendCombo);
     controlsLayout->addLayout(blendRow);
 
-    // Linha 2: Opacidade (Slider de 0% a 100% acompanhado de SpinBox numérico)
+    // Linha 2: Opacidade
     auto* opacityRow = new QHBoxLayout;
     m_opacityLabel = new QLabel(controlsFrame);
     m_opacitySlider = new QSlider(Qt::Horizontal, controlsFrame);
@@ -117,22 +126,40 @@ void LayersPanel::buildUi()
 
     layout->addWidget(controlsFrame);
 
-    // Divisor horizontal sutil
     auto* separator = new QFrame(this);
     separator->setFrameShape(QFrame::HLine);
     separator->setFrameShadow(QFrame::Sunken);
     layout->addWidget(separator);
 
-    // Lista interativa de camadas
+    // --- 2. Lista interativa de camadas com miniaturas ---
     m_list = new LayerListWidget(this);
     m_list->setDragDropMode(QAbstractItemView::InternalMove);
     m_list->setSelectionMode(QAbstractItemView::SingleSelection);
     m_list->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_list->setStyleSheet(QStringLiteral(
+        "QListWidget {"
+        "  background-color: #1e222a;"
+        "  border: 1px solid #2d333f;"
+        "  border-radius: 6px;"
+        "  padding: 2px;"
+        "}"
+        "QListWidget::item {"
+        "  border-radius: 4px;"
+        "  border: 1px solid transparent;"
+        "  padding: 2px;"
+        "  margin: 1px 0px;"
+        "}"
+        "QListWidget::item:hover {"
+        "  background-color: #282d38;"
+        "}"
+        "QListWidget::item:selected {"
+        "  background-color: #2b3a52;"
+        "  border: 1px solid #2b78e4;"
+        "}"
+    ));
 
     connect(m_list, &QListWidget::currentRowChanged,
             this, &LayersPanel::onCurrentRowChanged);
-    connect(m_list, &QListWidget::itemChanged,
-            this, &LayersPanel::onItemChanged);
     connect(m_list, &QListWidget::itemDoubleClicked,
             this, &LayersPanel::onItemDoubleClicked);
     connect(static_cast<LayerListWidget*>(m_list), &LayerListWidget::moved,
@@ -142,7 +169,88 @@ void LayersPanel::buildUi()
 
     layout->addWidget(m_list);
 
-    // Eventos do Modo de Mesclagem (executado via CommandStack para Undo/Redo)
+    // --- 3. Barra de Ações Inferior das Camadas ---
+    auto* actionsBar = new QWidget(this);
+    auto* actionsLayout = new QHBoxLayout(actionsBar);
+    actionsLayout->setContentsMargins(2, 2, 2, 2);
+    actionsLayout->setSpacing(4);
+
+    auto makeActionBtn = [this](const QIcon& icon, const QString& tip) {
+        auto* btn = new QToolButton(this);
+        btn->setIcon(icon);
+        btn->setIconSize(QSize(18, 18));
+        btn->setToolTip(tip);
+        btn->setFixedSize(28, 28);
+        btn->setStyleSheet(QStringLiteral(
+            "QToolButton {"
+            "  border: 1px solid transparent;"
+            "  border-radius: 4px;"
+            "  background-color: transparent;"
+            "}"
+            "QToolButton:hover {"
+            "  background-color: #353b49;"
+            "  border-color: #4a5366;"
+            "}"
+            "QToolButton:pressed {"
+            "  background-color: #22262f;"
+            "}"
+        ));
+        return btn;
+    };
+
+    m_addLayerBtn = makeActionBtn(ThemeIcons::actionAdd(), QStringLiteral("Add Layer"));
+    m_addLayerBtn->setPopupMode(QToolButton::InstantPopup);
+    auto* addMenu = new QMenu(m_addLayerBtn);
+    auto* addTextAct = addMenu->addAction(ThemeIcons::layerTypeText(), QStringLiteral("Text Layer"));
+    auto* addShapeAct = addMenu->addAction(ThemeIcons::layerTypeShape(), QStringLiteral("Shape Layer"));
+    connect(addTextAct, &QAction::triggered, this, &LayersPanel::addTextRequested);
+    connect(addShapeAct, &QAction::triggered, this, &LayersPanel::addShapeRequested);
+    m_addLayerBtn->setMenu(addMenu);
+
+    m_duplicateBtn = makeActionBtn(ThemeIcons::actionDuplicate(), QStringLiteral("Duplicate Layer"));
+    connect(m_duplicateBtn, &QToolButton::clicked, this, [this] {
+        if (!m_selectedId.isNull())
+            emit duplicateRequested(m_selectedId);
+    });
+
+    m_moveUpBtn = makeActionBtn(ThemeIcons::actionMoveUp(), QStringLiteral("Move Up"));
+    connect(m_moveUpBtn, &QToolButton::clicked, this, [this] {
+        if (!m_document || m_selectedId.isNull()) return;
+        int row = m_list->currentRow();
+        if (row > 0) {
+            int newDocIdx = docIndexFromRow(row - 1);
+            m_document->reorderLayer(m_selectedId, m_document->rootGroup(), newDocIdx);
+            rebuild();
+        }
+    });
+
+    m_moveDownBtn = makeActionBtn(ThemeIcons::actionMoveDown(), QStringLiteral("Move Down"));
+    connect(m_moveDownBtn, &QToolButton::clicked, this, [this] {
+        if (!m_document || m_selectedId.isNull()) return;
+        int row = m_list->currentRow();
+        if (row >= 0 && row < m_list->count() - 1) {
+            int newDocIdx = docIndexFromRow(row + 1);
+            m_document->reorderLayer(m_selectedId, m_document->rootGroup(), newDocIdx);
+            rebuild();
+        }
+    });
+
+    m_deleteBtn = makeActionBtn(ThemeIcons::actionDelete(), QStringLiteral("Delete Layer"));
+    connect(m_deleteBtn, &QToolButton::clicked, this, [this] {
+        if (!m_selectedId.isNull())
+            emit deleteRequested(m_selectedId);
+    });
+
+    actionsLayout->addWidget(m_addLayerBtn);
+    actionsLayout->addWidget(m_duplicateBtn);
+    actionsLayout->addWidget(m_moveUpBtn);
+    actionsLayout->addWidget(m_moveDownBtn);
+    actionsLayout->addStretch();
+    actionsLayout->addWidget(m_deleteBtn);
+
+    layout->addWidget(actionsBar);
+
+    // Eventos do Modo de Mesclagem
     connect(m_blendCombo, qOverload<int>(&QComboBox::currentIndexChanged), this,
             [this](int index) {
         if (m_updating || !m_document || m_selectedId.isNull() || index < 0)
@@ -163,7 +271,6 @@ void LayersPanel::buildUi()
         }
     });
 
-    // Salva a opacidade inicial quando o usuário começa a arrastar o slider
     connect(m_opacitySlider, &QSlider::sliderPressed, this, [this] {
         if (!m_document || m_selectedId.isNull())
             return;
@@ -171,7 +278,6 @@ void LayersPanel::buildUi()
             m_opacityBeforeSlide = l->opacity();
     });
 
-    // Atualização fluida em tempo real da opacidade enquanto o slider se move
     connect(m_opacitySlider, &QSlider::valueChanged, this, [this](int value) {
         if (m_updating || !m_document || m_selectedId.isNull())
             return;
@@ -182,7 +288,6 @@ void LayersPanel::buildUi()
         m_document->setLayerOpacity(m_selectedId, static_cast<float>(value) / 100.0f);
     });
 
-    // Registra comando de histórico com Undo/Redo apenas quando o usuário solta o slider
     connect(m_opacitySlider, &QSlider::sliderReleased, this, [this] {
         if (!m_document || m_selectedId.isNull() || !m_history)
             return;
@@ -191,7 +296,6 @@ void LayersPanel::buildUi()
             return;
         const float newOp = l->opacity();
         if (!qFuzzyCompare(m_opacityBeforeSlide, newOp)) {
-            // Reverte momentaneamente para registrar old -> new no comando
             l->setOpacity(m_opacityBeforeSlide);
             m_history->execute(std::make_unique<LayerOpacityCommand>(
                 *m_document, m_selectedId, QStringLiteral("layer.opacity"),
@@ -199,7 +303,6 @@ void LayersPanel::buildUi()
         }
     });
 
-    // Mudança numérica direta no SpinBox
     connect(m_opacitySpin, qOverload<int>(&QSpinBox::valueChanged), this, [this](int value) {
         if (m_updating || !m_document || m_selectedId.isNull())
             return;
@@ -227,7 +330,58 @@ void LayersPanel::buildUi()
     updateControlsForSelection();
 }
 
-// Atualiza o estado habilitado/desabilitado e valores dos controles de acordo com a seleção
+QPixmap LayersPanel::renderLayerThumbnail(const Layer& layer, int size) const
+{
+    QPixmap pixmap(size, size);
+    pixmap.fill(QColor(32, 36, 44));
+
+    QPainter p(&pixmap);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+
+    // Fundo quadriculado sutil de transparência
+    const int checkSize = 4;
+    for (int y = 0; y < size; y += checkSize) {
+        for (int x = 0; x < size; x += checkSize) {
+            if (((x / checkSize) + (y / checkSize)) % 2 == 0) {
+                p.fillRect(x, y, checkSize, checkSize, QColor(42, 46, 56));
+            }
+        }
+    }
+
+    if (layer.type() == LayerType::Image) {
+        const auto* imgLayer = static_cast<const ImageLayer*>(&layer);
+        if (m_document) {
+            const QImage img = m_document->assets().decodedImage(imgLayer->assetId);
+            if (!img.isNull()) {
+                const QImage thumb = img.scaled(size - 4, size - 4, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                const int ox = (size - thumb.width()) / 2;
+                const int oy = (size - thumb.height()) / 2;
+                p.drawImage(ox, oy, thumb);
+            }
+        }
+    } else if (layer.type() == LayerType::Text) {
+        const auto* txtLayer = static_cast<const TextLayer*>(&layer);
+        p.setPen(txtLayer->color.isValid() ? txtLayer->color : QColor(240, 240, 240));
+        QFont f = p.font();
+        f.setPixelSize(size * 0.65);
+        f.setBold(true);
+        p.setFont(f);
+        p.drawText(QRect(0, 0, size, size), Qt::AlignCenter, QStringLiteral("T"));
+    } else if (layer.type() == LayerType::Shape) {
+        const auto* shapeLayer = static_cast<const ShapeLayer*>(&layer);
+        p.setPen(QPen(shapeLayer->stroke.isValid() ? shapeLayer->stroke : QColor(100, 100, 100), 1.5));
+        p.setBrush(shapeLayer->fill.isValid() ? shapeLayer->fill : QColor(200, 200, 200));
+        p.drawRoundedRect(QRectF(4, 4, size - 8, size - 8), 2.5, 2.5);
+    } else if (layer.type() == LayerType::Background) {
+        const auto* bgLayer = static_cast<const BackgroundLayer*>(&layer);
+        p.fillRect(QRect(0, 0, size, size), bgLayer->fill);
+    }
+
+    p.end();
+    return pixmap;
+}
+
 void LayersPanel::updateControlsForSelection()
 {
     Layer* layer = (m_document && !m_selectedId.isNull())
@@ -240,6 +394,11 @@ void LayersPanel::updateControlsForSelection()
     m_opacityLabel->setEnabled(hasSelection);
     m_opacitySlider->setEnabled(hasSelection);
     m_opacitySpin->setEnabled(hasSelection);
+
+    if (m_duplicateBtn) m_duplicateBtn->setEnabled(hasSelection);
+    if (m_deleteBtn) m_deleteBtn->setEnabled(hasSelection);
+    if (m_moveUpBtn) m_moveUpBtn->setEnabled(hasSelection);
+    if (m_moveDownBtn) m_moveDownBtn->setEnabled(hasSelection);
 
     if (hasSelection && layer) {
         const bool prevUpdating = m_updating;
@@ -273,21 +432,88 @@ void LayersPanel::rebuild()
 
     if (m_document) {
         const auto& children = m_document->rootGroup()->children;
-        // As camadas mais altas são exibidas no topo da lista (ordem inversa da renderização)
         for (auto it = children.rbegin(); it != children.rend(); ++it) {
             Layer* layer = it->get();
-            auto* item = new QListWidgetItem(fallbackName(*layer), m_list);
-            item->setData(Qt::UserRole, QVariant::fromValue(layer->id()));
-            item->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled
-                           | Qt::ItemIsDragEnabled | Qt::ItemIsUserCheckable);
-            item->setCheckState(layer->visible ? Qt::Checked : Qt::Unchecked);
-            if (layer->locked) {
-                item->setText(item->text() + QStringLiteral("  🔒"));
-                QFont font = item->font();
-                font.setItalic(true);
-                item->setFont(font);
+            const LayerId layerId = layer->id();
+
+            auto* item = new QListWidgetItem(m_list);
+            item->setData(Qt::UserRole, QVariant::fromValue(layerId));
+            item->setSizeHint(QSize(200, 42));
+
+            // Custom Widget for each layer row
+            auto* rowWidget = new QWidget(m_list);
+            auto* rowLayout = new QHBoxLayout(rowWidget);
+            rowLayout->setContentsMargins(4, 2, 6, 2);
+            rowLayout->setSpacing(6);
+
+            // Visibility Toggle Button
+            auto* visBtn = new QToolButton(rowWidget);
+            visBtn->setIcon(ThemeIcons::layerVisibility(layer->visible));
+            visBtn->setIconSize(QSize(18, 18));
+            visBtn->setFixedSize(22, 22);
+            visBtn->setStyleSheet(QStringLiteral("border: none; background: transparent;"));
+            visBtn->setToolTip(m_i18n ? m_i18n->t("common", "panel.visibility") : QStringLiteral("Toggle Visibility"));
+            connect(visBtn, &QToolButton::clicked, this, [this, layerId, layer] {
+                if (m_document) {
+                    m_document->setLayerVisible(layerId, !layer->visible);
+                    rebuild();
+                }
+            });
+
+            // Thumbnail Preview
+            auto* thumbLabel = new QLabel(rowWidget);
+            thumbLabel->setPixmap(renderLayerThumbnail(*layer, 32));
+            thumbLabel->setFixedSize(32, 32);
+            thumbLabel->setStyleSheet(QStringLiteral("border: 1px solid #333a46; border-radius: 4px;"));
+
+            // Type Badge Icon
+            auto* typeIcon = new QLabel(rowWidget);
+            QIcon badgeIcon;
+            switch (layer->type()) {
+            case LayerType::Text:       badgeIcon = ThemeIcons::layerTypeText(); break;
+            case LayerType::Shape:      badgeIcon = ThemeIcons::layerTypeShape(); break;
+            case LayerType::Image:      badgeIcon = ThemeIcons::layerTypeImage(); break;
+            case LayerType::Group:      badgeIcon = ThemeIcons::layerTypeGroup(); break;
+            case LayerType::Background: badgeIcon = ThemeIcons::layerTypeShape(); break;
             }
-            if (layer->id() == m_selectedId)
+            typeIcon->setPixmap(badgeIcon.pixmap(14, 14));
+            typeIcon->setFixedSize(14, 14);
+
+            // Layer Name Label
+            auto* nameLabel = new QLabel(fallbackName(*layer, m_i18n), rowWidget);
+            nameLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+            QFont nf = nameLabel->font();
+            if (layer->locked) {
+                nf.setItalic(true);
+                nameLabel->setStyleSheet(QStringLiteral("color: #7b889b;"));
+            } else {
+                nameLabel->setStyleSheet(QStringLiteral("color: #e5e9f0;"));
+            }
+            nameLabel->setFont(nf);
+
+            // Lock Toggle Button
+            auto* lockBtn = new QToolButton(rowWidget);
+            lockBtn->setIcon(ThemeIcons::layerLock(layer->locked));
+            lockBtn->setIconSize(QSize(16, 16));
+            lockBtn->setFixedSize(20, 20);
+            lockBtn->setStyleSheet(QStringLiteral("border: none; background: transparent;"));
+            lockBtn->setToolTip(m_i18n ? m_i18n->t("common", "panel.lockToggle") : QStringLiteral("Toggle Lock"));
+            connect(lockBtn, &QToolButton::clicked, this, [this, layerId, layer] {
+                if (m_document) {
+                    m_document->setLayerLocked(layerId, !layer->locked);
+                    rebuild();
+                }
+            });
+
+            rowLayout->addWidget(visBtn);
+            rowLayout->addWidget(thumbLabel);
+            rowLayout->addWidget(typeIcon);
+            rowLayout->addWidget(nameLabel);
+            rowLayout->addWidget(lockBtn);
+
+            m_list->setItemWidget(item, rowWidget);
+
+            if (layerId == m_selectedId)
                 m_list->setCurrentRow(m_list->count() - 1);
         }
     }
@@ -298,6 +524,7 @@ void LayersPanel::rebuild()
 
 int LayersPanel::docIndexFromRow(int row) const
 {
+    if (!m_document) return 0;
     const int count = static_cast<int>(m_document->rootGroup()->children.size());
     return count - 1 - row;
 }
@@ -338,16 +565,6 @@ void LayersPanel::onCurrentRowChanged(int row)
     updateControlsForSelection();
     if (!id.isNull())
         emit selectionRequested(id);
-}
-
-void LayersPanel::onItemChanged(QListWidgetItem* item)
-{
-    if (m_updating || !m_document || !item)
-        return;
-    const LayerId id = item->data(Qt::UserRole).value<LayerId>();
-    if (id.isNull())
-        return;
-    m_document->setLayerVisible(id, item->checkState() == Qt::Checked);
 }
 
 void LayersPanel::onItemDoubleClicked(QListWidgetItem* item)
@@ -420,7 +637,12 @@ void LayersPanel::retranslateUi()
     m_blendLabel->setText(m_i18n->t("common", "panel.blendMode"));
     m_opacityLabel->setText(m_i18n->t("common", "panel.opacity"));
 
-    // Atualiza os nomes traduzidos dos Modos de Mesclagem no ComboBox
+    if (m_addLayerBtn) m_addLayerBtn->setToolTip(m_i18n->t("common", "panel.addLayer"));
+    if (m_duplicateBtn) m_duplicateBtn->setToolTip(m_i18n->t("common", "panel.duplicate"));
+    if (m_moveUpBtn) m_moveUpBtn->setToolTip(m_i18n->t("common", "panel.moveUp"));
+    if (m_moveDownBtn) m_moveDownBtn->setToolTip(m_i18n->t("common", "panel.moveDown"));
+    if (m_deleteBtn) m_deleteBtn->setToolTip(m_i18n->t("common", "panel.delete"));
+
     const bool prevUpdating = m_updating;
     m_updating = true;
     const int currentIdx = m_blendCombo ? m_blendCombo->currentIndex() : 0;
@@ -435,6 +657,8 @@ void LayersPanel::retranslateUi()
     if (currentIdx >= 0 && currentIdx < m_blendCombo->count())
         m_blendCombo->setCurrentIndex(currentIdx);
     m_updating = prevUpdating;
+
+    rebuild();
 }
 
 } // namespace cc

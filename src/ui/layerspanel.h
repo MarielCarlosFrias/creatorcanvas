@@ -1,7 +1,6 @@
 #pragma once
 
 #include <QWidget>
-
 #include <QPointer>
 #include "core/Document.h"
 
@@ -11,17 +10,19 @@ class QComboBox;
 class QSlider;
 class QSpinBox;
 class QLabel;
+class QToolButton;
 
 namespace cc {
 
 class I18nService;
 class CommandStack;
 
-/// Lista de camadas estilo Adobe Express / Figma:
-/// - Controles superiores de Modo de Mesclagem (Blend Mode) e Opacidade (0-100%)
-/// - Lista de camadas com ordenação por arrastar e soltar (drag & drop)
-/// - Ícone de olho para visibilidade e cadeado para bloqueio
-/// - Menu de contexto com ações rápidas da camada
+/// Painel de camadas moderno estilo Photoshop / Figma:
+/// - Miniaturas de alta definição em tempo real
+/// - Ícones de identificação por tipo (Texto, Imagem, Forma, Pintura)
+/// - Controles visuais inline de Visibilidade (olho) e Bloqueio (cadeado)
+/// - Modos de Mesclagem e Opacidade com histórico Undo/Redo
+/// - Barra de ações inferior: Nova Camada (+), Duplicar, Subir, Descer, Excluir
 class LayersPanel final : public QWidget
 {
     Q_OBJECT
@@ -39,6 +40,8 @@ signals:
     void duplicateRequested(const cc::LayerId& id);
     void deleteRequested(const cc::LayerId& id);
     void focusRequested(const QPointF& documentPos);
+    void addTextRequested();
+    void addShapeRequested();
 
 private:
     void buildUi();
@@ -46,12 +49,12 @@ private:
     void rebuild();
     void updateControlsForSelection();
     void onCurrentRowChanged(int row);
-    void onItemChanged(QListWidgetItem* item);
+    void onItemDoubleClicked(QListWidgetItem* item);
     void onMoved();
     void showContextMenu(const QPoint& pos);
-    void onItemDoubleClicked(QListWidgetItem* item);
     int docIndexFromRow(int row) const;
     LayerId layerIdFromRow(int row) const;
+    QPixmap renderLayerThumbnail(const Layer& layer, int size = 32) const;
 
     QPointer<Document> m_document;
     CommandStack* m_history = nullptr;
@@ -67,6 +70,13 @@ private:
     QLabel* m_opacityLabel = nullptr;
     QSlider* m_opacitySlider = nullptr;
     QSpinBox* m_opacitySpin = nullptr;
+
+    // Barra de ações inferior
+    QToolButton* m_addLayerBtn = nullptr;
+    QToolButton* m_duplicateBtn = nullptr;
+    QToolButton* m_moveUpBtn = nullptr;
+    QToolButton* m_moveDownBtn = nullptr;
+    QToolButton* m_deleteBtn = nullptr;
 };
 
 } // namespace cc

@@ -81,6 +81,12 @@ private:
     QLabel* m_perspectiveLabel = nullptr;
     QDoubleSpinBox* m_tiltX = nullptr;
     QDoubleSpinBox* m_tiltY = nullptr;
+
+    // Seções recolhíveis
+    class CollapsibleSection* m_typographySection = nullptr;
+    class CollapsibleSection* m_effectsSection = nullptr;
+    class CollapsibleSection* m_gradientSection = nullptr;
+    class CollapsibleSection* m_perspectiveSection = nullptr;
 };
 
 } // namespace cc

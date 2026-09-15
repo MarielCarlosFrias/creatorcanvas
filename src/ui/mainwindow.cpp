@@ -19,6 +19,7 @@
 #include "ui/textinspector.h"
 #include "ui/shapeinspector.h"
 #include "ui/imageinspector.h"
+#include "ui/themeicons.h"
 
 #include <QActionGroup>
 #include <QApplication>
@@ -314,6 +315,12 @@ void MainWindow::buildLayersDock()
                     m_history->execute(
                         std::make_unique<DuplicateLayerCommand>(*m_document, id));
             });
+    connect(m_layersPanel, &LayersPanel::addTextRequested, this, [this] {
+        if (m_addTextAction) m_addTextAction->trigger();
+    });
+    connect(m_layersPanel, &LayersPanel::addShapeRequested, this, [this] {
+        if (m_addRectAction) m_addRectAction->trigger();
+    });
 
     m_textInspector = new TextInspector(m_i18n, m_document.get(), this);
     m_textDock = new QDockWidget(QString(), this);
@@ -574,13 +581,47 @@ void MainWindow::buildActions()
 
 void MainWindow::buildToolBars()
 {
-    // Barra de Ferramentas Principal (Lateral Esquerda, estilo Adobe Express / GIMP / Photoshop)
+    // Barra de Ferramentas Principal (Lateral Esquerda, estilo profissional com ícones)
     m_toolsBar = new QToolBar(QStringLiteral("Tools"), this);
     m_toolsBar->setObjectName(QStringLiteral("ToolsToolBar"));
     m_toolsBar->setMovable(false);
     m_toolsBar->setFloatable(false);
     m_toolsBar->setOrientation(Qt::Vertical);
+    m_toolsBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    m_toolsBar->setIconSize(QSize(24, 24));
+    m_toolsBar->setStyleSheet(QStringLiteral(
+        "QToolBar {"
+        "  background-color: #1e222a;"
+        "  border-right: 1px solid #2b303c;"
+        "  padding: 4px 2px;"
+        "  spacing: 4px;"
+        "}"
+        "QToolButton {"
+        "  background-color: transparent;"
+        "  border: 1px solid transparent;"
+        "  border-radius: 6px;"
+        "  padding: 5px;"
+        "}"
+        "QToolButton:hover {"
+        "  background-color: #2b303c;"
+        "  border-color: #3b4252;"
+        "}"
+        "QToolButton:checked {"
+        "  background-color: #2b78e4;"
+        "  border-color: #4b8df2;"
+        "}"
+    ));
     addToolBar(Qt::LeftToolBarArea, m_toolsBar);
+
+    m_toolSelectAction->setIcon(ThemeIcons::toolSelect());
+    m_toolCropAction->setIcon(ThemeIcons::toolCrop());
+    m_toolScissorsAction->setIcon(ThemeIcons::toolScissors());
+    m_toolWandAction->setIcon(ThemeIcons::toolWand());
+    m_toolCloneAction->setIcon(ThemeIcons::toolClone());
+    m_toolPaintAction->setIcon(ThemeIcons::toolPaint());
+    m_toolFloodAction->setIcon(ThemeIcons::toolFlood());
+    m_addTextAction->setIcon(ThemeIcons::toolText());
+    m_addRectAction->setIcon(ThemeIcons::toolShape());
 
     m_toolsBar->addAction(m_toolSelectAction);
     m_toolsBar->addAction(m_toolCropAction);
@@ -1637,37 +1678,49 @@ void MainWindow::retranslateUi()
     if (m_shapeDock)
         m_shapeDock->setWindowTitle(m_i18n->t("editor", "shape.title"));
     if (m_imageDock)
-        m_imageDock->setWindowTitle(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
-            ? QStringLiteral("Propriedades da Imagem")
-            : QStringLiteral("Image Properties"));
+        m_imageDock->setWindowTitle(m_i18n->t("common", "panel.imageProperties"));
 
-    // Retradução das ferramentas da barra e opções
-    if (m_toolSelectAction)
+    // Retradução das ferramentas da barra e opções com tooltips contendo atalhos
+    if (m_toolSelectAction) {
         m_toolSelectAction->setText(m_i18n->t("editor", "tools.select"));
-    if (m_toolCropAction)
+        m_toolSelectAction->setToolTip(QStringLiteral("%1 (V)").arg(m_i18n->t("editor", "tools.select")));
+    }
+    if (m_toolCropAction) {
         m_toolCropAction->setText(m_i18n->t("editor", "tools.crop"));
-    if (m_toolScissorsAction)
+        m_toolCropAction->setToolTip(QStringLiteral("%1 (C)").arg(m_i18n->t("editor", "tools.crop")));
+    }
+    if (m_toolScissorsAction) {
         m_toolScissorsAction->setText(m_i18n->t("editor", "tools.scissors"));
-    if (m_toolWandAction)
+        m_toolScissorsAction->setToolTip(QStringLiteral("%1 (X)").arg(m_i18n->t("editor", "tools.scissors")));
+    }
+    if (m_toolWandAction) {
         m_toolWandAction->setText(m_i18n->t("editor", "tools.wand"));
-    if (m_toolCloneAction)
+        m_toolWandAction->setToolTip(QStringLiteral("%1 (W)").arg(m_i18n->t("editor", "tools.wand")));
+    }
+    if (m_toolCloneAction) {
         m_toolCloneAction->setText(m_i18n->t("editor", "tools.clone"));
-    if (m_toolPaintAction)
-        m_toolPaintAction->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
-            ? QStringLiteral("Pintura / Pincel")
-            : QStringLiteral("Paint / Brush"));
-    if (m_toolFloodAction)
-        m_toolFloodAction->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
-            ? QStringLiteral("Balde de Tinta")
-            : QStringLiteral("Paint Bucket (Fill)"));
+        m_toolCloneAction->setToolTip(QStringLiteral("%1 (S)").arg(m_i18n->t("editor", "tools.clone")));
+    }
+    if (m_toolPaintAction) {
+        m_toolPaintAction->setText(m_i18n->t("editor", "tools.paintName"));
+        m_toolPaintAction->setToolTip(QStringLiteral("%1 (B)").arg(m_i18n->t("editor", "tools.paintName")));
+    }
+    if (m_toolFloodAction) {
+        m_toolFloodAction->setText(m_i18n->t("editor", "tools.floodName"));
+        m_toolFloodAction->setToolTip(QStringLiteral("%1 (G)").arg(m_i18n->t("editor", "tools.floodName")));
+    }
+    if (m_addTextAction) {
+        m_addTextAction->setToolTip(QStringLiteral("%1 (T)").arg(m_i18n->t("common", "menu.layer.addText")));
+    }
+    if (m_addRectAction) {
+        m_addRectAction->setToolTip(QStringLiteral("%1 (U)").arg(m_i18n->t("common", "menu.layer.shape.rect")));
+    }
 
     if (m_toolsMenu)
         m_toolsMenu->setTitle(m_i18n->t("editor", "tools.title"));
 
     if (m_selectHintLabel)
-        m_selectHintLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
-            ? QStringLiteral("Dica: V = Selecionar | C = Cortar | X = Tesoura | W = Varinha | S = Carimbo | B = Pincel | G = Balde de Tinta")
-            : QStringLiteral("Hint: V = Select | C = Crop | X = Scissors | W = Magic Wand | S = Clone Stamp | B = Paint | G = Flood Fill"));
+        m_selectHintLabel->setText(m_i18n->t("editor", "tools.selectHint"));
 
     if (m_cropAspectLabel)
         m_cropAspectLabel->setText(m_i18n->t("editor", "tools.crop.aspect") + QStringLiteral(":"));

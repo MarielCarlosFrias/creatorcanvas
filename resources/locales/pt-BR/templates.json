@@ -1,1 +1,22 @@
-{}
+{
+    "preset": {
+        "youtubeThumbnail": "Miniatura do YouTube",
+        "youtubeBanner": "Banner do YouTube",
+        "youtubeShorts": "YouTube Shorts",
+        "instagramSquare": "Post Quadrado (Instagram)",
+        "instagramPortrait": "Post Retrato (Instagram)",
+        "instagramStory": "Story do Instagram",
+        "tiktokVideo": "Vídeo do TikTok",
+        "facebookPost": "Post do Facebook",
+        "facebookStory": "Story do Facebook",
+        "xPost": "Post do X (Twitter)",
+        "xHeader": "Cabeçalho do X",
+        "transparent": "Transparente 1280x720"
+    },
+    "category": {
+        "popular": "Formatos Populares",
+        "social": "Redes Sociais",
+        "video": "Vídeo & Streaming",
+        "custom": "Tamanho Personalizado"
+    }
+}

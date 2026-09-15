@@ -95,6 +95,11 @@ private:
 
     QPushButton* m_applyAdjustBtn = nullptr;
     QPushButton* m_resetAdjustBtn = nullptr;
+
+    // Seções recolhíveis
+    class CollapsibleSection* m_quickFiltersSection = nullptr;
+    class CollapsibleSection* m_adjustmentsSection = nullptr;
+    class CollapsibleSection* m_perspectiveSection = nullptr;
 };
 
 } // namespace cc

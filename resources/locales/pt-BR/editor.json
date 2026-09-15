@@ -98,6 +98,7 @@
         "clone.hardness": "Dureza",
         "clone.opacity": "Opacidade",
         "paint": "Pintura",
+        "paintName": "Pintura / Pincel",
         "paint.brush": "Pincel",
         "paint.pencil": "Lápis",
         "paint.highlighter": "Marca-texto",
@@ -107,7 +108,19 @@
         "paint.opacity": "Opacidade",
         "paint.color": "Cor",
         "flood": "Preenchimento",
-        "flood.tolerance": "Tolerância"
+        "floodName": "Balde de Tinta",
+        "flood.tolerance": "Tolerância",
+        "selectHint": "Dica: V = Selecionar | C = Cortar | X = Tesoura | W = Varinha | S = Carimbo | B = Pincel | G = Balde de Tinta"
+    },
+    "section": {
+        "typography": "Tipografia",
+        "textEffects": "Efeitos de Texto",
+        "gradient": "Gradiente",
+        "perspective": "Inclinação 3D & Perspectiva",
+        "quickFilters": "Filtros Rápidos de 1 Clique",
+        "manualAdjustments": "Ajustes de Cor e Filtros",
+        "fillStroke": "Preenchimento e Contorno",
+        "geometry": "Geometria e Dimensões"
     },
     "image": {
         "perspective": "Inclinação 3D / Perspectiva",

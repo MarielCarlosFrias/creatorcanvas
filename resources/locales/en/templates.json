@@ -1,1 +1,22 @@
-{}
+{
+    "preset": {
+        "youtubeThumbnail": "YouTube Thumbnail",
+        "youtubeBanner": "YouTube Banner",
+        "youtubeShorts": "YouTube Shorts",
+        "instagramSquare": "Instagram Square Post",
+        "instagramPortrait": "Instagram Portrait Post",
+        "instagramStory": "Instagram Story",
+        "tiktokVideo": "TikTok Video",
+        "facebookPost": "Facebook Post",
+        "facebookStory": "Facebook Story",
+        "xPost": "X (Twitter) Post",
+        "xHeader": "X Header",
+        "transparent": "Transparent 1280x720"
+    },
+    "category": {
+        "popular": "Popular Formats",
+        "social": "Social Media",
+        "video": "Video & Streaming",
+        "custom": "Custom Size"
+    }
+}

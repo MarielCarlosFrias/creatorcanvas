@@ -127,6 +127,10 @@ add_executable(creatorcanvas
     ui/maskeditcanvas.cpp
     ui/aibackgrounddialog.h
     ui/aibackgrounddialog.cpp
+    ui/themeicons.h
+    ui/themeicons.cpp
+    ui/collapsiblesection.h
+    ui/collapsiblesection.cpp
 )
 target_link_libraries(creatorcanvas
     PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets

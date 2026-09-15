@@ -98,6 +98,7 @@
         "clone.hardness": "Hardness",
         "clone.opacity": "Opacity",
         "paint": "Paint",
+        "paintName": "Paint / Brush",
         "paint.brush": "Brush",
         "paint.pencil": "Pencil",
         "paint.highlighter": "Highlighter",
@@ -107,7 +108,19 @@
         "paint.opacity": "Opacity",
         "paint.color": "Color",
         "flood": "Flood Fill",
-        "flood.tolerance": "Tolerance"
+        "floodName": "Paint Bucket (Fill)",
+        "flood.tolerance": "Tolerance",
+        "selectHint": "Hint: V = Select | C = Crop | X = Scissors | W = Magic Wand | S = Clone Stamp | B = Paint | G = Flood Fill"
+    },
+    "section": {
+        "typography": "Typography",
+        "textEffects": "Text Effects",
+        "gradient": "Gradient",
+        "perspective": "3D Tilt & Perspective",
+        "quickFilters": "Quick 1-Click Filters",
+        "manualAdjustments": "Color Adjustments & Filters",
+        "fillStroke": "Fill & Stroke",
+        "geometry": "Geometry & Dimensions"
     },
     "image": {
         "perspective": "3D Tilt / Perspective",
