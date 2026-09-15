@@ -4,6 +4,8 @@
 #include <QWidget>
 
 #include <QPointer>
+#include <atomic>
+#include <memory>
 #include "core/Document.h"
 #include "core/snap/SnapEngine.h"
 
@@ -30,6 +32,7 @@ class CanvasView final : public QWidget
     Q_OBJECT
 public:
     explicit CanvasView(QWidget* parent = nullptr);
+    ~CanvasView() override;
 
     void setDocument(Document* document);
     void setI18n(I18nService* i18n);
@@ -227,6 +230,10 @@ private:
     int m_paintOrigWidth = 0;
     int m_paintOrigHeight = 0;
     AffineTransform m_paintOrigTransform;
+
+    // AI Quick Background Removal cancel flag and thread tracking
+    std::shared_ptr<std::atomic<bool>> m_quickAiCancelFlag;
+    QPointer<QThread> m_quickAiThread;
 };
 
 } // namespace cc

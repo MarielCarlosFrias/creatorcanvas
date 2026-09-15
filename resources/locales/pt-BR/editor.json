@@ -149,5 +149,28 @@
         "selectModelTitle": "Selecionar Arquivo de Modelo ONNX",
         "processing": "⏳ Processando imagem com a rede neural...",
         "done": "✓ Recorte concluído! Se desejar, faça ajustes com o pincel e clique em Aplicar."
+    },
+    "canvas": {
+        "context.aiDialog": "✨ Remover Fundo com IA...",
+        "context.aiQuick": "⚡ Remover Fundo Rápido (1-Clique)",
+        "status.aiQuickProcessing": "⏳ Removendo fundo com IA em segundo plano...",
+        "status.aiQuickSuccess": "✓ Fundo removido com sucesso pela IA!",
+        "status.aiQuickFailed": "Falha ao processar remoção de fundo com IA.",
+        "status.cloneOriginSet": "Origem do carimbo definida em (%1, %2). Agora arraste para pintar.",
+        "status.cloneOriginReset": "Origem do carimbo redefinida.",
+        "status.cloneNoOrigin": "⚠️ Origem não definida! Clique com Botão Direito (ou Shift+Clique) na imagem para definir a origem antes de clonar.",
+        "status.cloneClickImage": "Clique sobre uma imagem para usar o Carimbo de Clonagem.",
+        "status.cloneHelp": "Carimbo de Clonagem: Clique com o Botão Direito ou Shift+Clique para definir a origem, depois arraste para pintar.",
+        "status.clonePromptOrigin": "ℹ️ Clique com Botão Direito (ou Shift+Clique) para definir a origem",
+        "status.cloneOriginActive": "✓ Origem definida! Clique e arraste para clonar (Botão Direito redefine)",
+        "status.fillClickImage": "Clique sobre uma imagem para preencher com o Balde de Tinta.",
+        "layer.paint": "Pintura",
+        "command.cloneStamp": "Carimbo de Clonagem",
+        "command.cropImage": "Recortar Imagem",
+        "command.scissorsCut": "Recorte com Tesoura",
+        "command.magicWandRemoval": "Remoção de Fundo por Varinha Mágica",
+        "command.paintBucket": "Balde de Tinta",
+        "command.aiBackground": "Remoção de Fundo por IA",
+        "command.aiBackgroundQuick": "Remoção Rápida de Fundo por IA"
     }
 }

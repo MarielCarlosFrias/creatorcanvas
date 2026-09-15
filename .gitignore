@@ -22,6 +22,7 @@ ui_*.h
 packaging/debroot/*.deb
 packaging/debroot/creatorcanvas_*_amd64/usr/bin/CreatorCanvas
 packaging/appimage-build/
+packaging/AppDir/
 *.AppImage
 
 # Editor / IDE

@@ -149,5 +149,28 @@
         "selectModelTitle": "Select ONNX Model File",
         "processing": "⏳ Processing image with neural network...",
         "done": "✓ Cutout completed! Adjust with the brush if needed and click Apply."
+    },
+    "canvas": {
+        "context.aiDialog": "✨ Remove Background with AI...",
+        "context.aiQuick": "⚡ Quick Background Removal (1-Click)",
+        "status.aiQuickProcessing": "⏳ Removing background with AI in background...",
+        "status.aiQuickSuccess": "✓ Background removed successfully with AI!",
+        "status.aiQuickFailed": "Failed to remove background with AI.",
+        "status.cloneOriginSet": "Clone stamp origin set at (%1, %2). Now drag to paint.",
+        "status.cloneOriginReset": "Clone stamp origin reset.",
+        "status.cloneNoOrigin": "⚠️ Origin not set! Right-Click (or Shift+Click) on the image to set origin before cloning.",
+        "status.cloneClickImage": "Click on an image to use the Clone Stamp.",
+        "status.cloneHelp": "Clone Stamp: Right-Click or Shift+Click to set origin, then drag to paint.",
+        "status.clonePromptOrigin": "ℹ️ Right-Click (or Shift+Click) to set origin",
+        "status.cloneOriginActive": "✓ Origin set! Click and drag to clone (Right-Click resets)",
+        "status.fillClickImage": "Click on an image to fill with Paint Bucket.",
+        "layer.paint": "Painting",
+        "command.cloneStamp": "Clone Stamp",
+        "command.cropImage": "Crop Image",
+        "command.scissorsCut": "Scissors Cut",
+        "command.magicWandRemoval": "Magic Wand Background Removal",
+        "command.paintBucket": "Paint Bucket",
+        "command.aiBackground": "AI Background Removal",
+        "command.aiBackgroundQuick": "AI Background Removal (Quick)"
     }
 }

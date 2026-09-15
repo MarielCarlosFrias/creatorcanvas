@@ -59,6 +59,16 @@ CanvasView::CanvasView(QWidget* parent)
     setAcceptDrops(true);
 }
 
+CanvasView::~CanvasView()
+{
+    if (m_quickAiCancelFlag) {
+        m_quickAiCancelFlag->store(true);
+    }
+    if (m_quickAiThread && m_quickAiThread->isRunning()) {
+        m_quickAiThread->wait(2000);
+    }
+}
+
 void CanvasView::setDocument(Document* document)
 {
     if (m_document == document)
@@ -489,8 +499,10 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
             m_cloneSrcPoint = localPos.toPoint();
             m_cloneSrcLayerId = layer->id();
             m_hasCloneSrc = true;
-            emit statusMessageRequested(QStringLiteral("Origem do carimbo definida em (%1, %2). Agora clique e arraste para pintar.")
-                .arg(m_cloneSrcPoint.x()).arg(m_cloneSrcPoint.y()));
+            const QString msg = m_i18n ? m_i18n->t("editor", "canvas.status.cloneOriginSet").arg(m_cloneSrcPoint.x()).arg(m_cloneSrcPoint.y())
+                                       : QStringLiteral("Clone stamp origin set at (%1, %2). Now drag to paint.")
+                                             .arg(m_cloneSrcPoint.x()).arg(m_cloneSrcPoint.y());
+            emit statusMessageRequested(msg);
             update();
             event->accept();
             return;
@@ -585,8 +597,10 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
                     m_cloneSrcPoint = localPos.toPoint();
                     m_cloneSrcLayerId = layer->id();
                     m_hasCloneSrc = true;
-                    emit statusMessageRequested(QStringLiteral("Origem do carimbo definida em (%1, %2). Agora arraste para clonar.")
-                        .arg(m_cloneSrcPoint.x()).arg(m_cloneSrcPoint.y()));
+                    const QString msg = m_i18n ? m_i18n->t("editor", "canvas.status.cloneOriginSet").arg(m_cloneSrcPoint.x()).arg(m_cloneSrcPoint.y())
+                                               : QStringLiteral("Clone stamp origin set at (%1, %2). Now drag to paint.")
+                                                     .arg(m_cloneSrcPoint.x()).arg(m_cloneSrcPoint.y());
+                    emit statusMessageRequested(msg);
                     update();
                     event->accept();
                     return;
@@ -603,13 +617,17 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
                     event->accept();
                     return;
                 } else {
-                    emit statusMessageRequested(QStringLiteral("⚠️ Origem não definida! Clique com Botão Direito (ou Shift+Clique) na imagem para definir a origem antes de clonar."));
+                    const QString msg = m_i18n ? m_i18n->t("editor", "canvas.status.cloneNoOrigin")
+                                               : QStringLiteral("⚠️ Origin not set! Right-Click (or Shift+Click) on the image to set origin before cloning.");
+                    emit statusMessageRequested(msg);
                     update();
                     event->accept();
                     return;
                 }
             } else {
-                emit statusMessageRequested(QStringLiteral("Clique sobre uma imagem para usar o Carimbo de Clonagem."));
+                const QString msg = m_i18n ? m_i18n->t("editor", "canvas.status.cloneClickImage")
+                                           : QStringLiteral("Click on an image to use the Clone Stamp.");
+                emit statusMessageRequested(msg);
             }
             event->accept();
             return;
@@ -633,7 +651,7 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
             // Se ainda não houver camada de imagem, cria automaticamente uma nova camada transparente
             if (!layer || layer->type() != LayerType::Image) {
                 auto newImgLayer = std::make_unique<ImageLayer>();
-                newImgLayer->name = QStringLiteral("Pintura");
+                newImgLayer->name = m_i18n ? m_i18n->t("editor", "canvas.layer.paint") : QStringLiteral("Painting");
                 newImgLayer->naturalWidth = m_document->width();
                 newImgLayer->naturalHeight = m_document->height();
                 newImgLayer->transform.position = QPointF(m_document->width() / 2.0, m_document->height() / 2.0);
@@ -706,14 +724,18 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
                 if (!orig.isNull() && orig.rect().contains(seedPt)) {
                     QImage filled = ImageProcessing::floodFill(orig, seedPt, m_paintColor, m_wandTolerance);
                     LayerId newAssetId = m_document->assets().addImage(filled);
+                    const QString cmdName = m_i18n ? m_i18n->t("editor", "canvas.command.paintBucket")
+                                                   : QStringLiteral("Paint Bucket");
                     emit imageLayerModified(img->id(),
                                             img->assetId, img->naturalWidth, img->naturalHeight, layer->transform,
                                             newAssetId, img->naturalWidth, img->naturalHeight, layer->transform,
-                                            QStringLiteral("Balde de Tinta"));
+                                            cmdName);
                     update();
                 }
             } else {
-                emit statusMessageRequested(QStringLiteral("Clique sobre uma imagem para preencher com o Balde de Tinta."));
+                const QString msg = m_i18n ? m_i18n->t("editor", "canvas.status.fillClickImage")
+                                           : QStringLiteral("Click on an image to fill with Paint Bucket.");
+                emit statusMessageRequested(msg);
             }
             event->accept();
             return;
@@ -1208,7 +1230,7 @@ void CanvasView::mouseReleaseEvent(QMouseEvent* event)
                 emit imageLayerModified(img->id(),
                                         img->assetId, img->naturalWidth, img->naturalHeight, layer->transform,
                                         newAssetId, img->naturalWidth, img->naturalHeight, layer->transform,
-                                        QStringLiteral("Clone Stamp"));
+                                        m_i18n ? m_i18n->t("editor", "canvas.command.cloneStamp") : QStringLiteral("Clone Stamp"));
                 m_cloneWorkingImage = QImage();
             }
         }
@@ -1227,7 +1249,7 @@ void CanvasView::mouseReleaseEvent(QMouseEvent* event)
                 emit imageLayerModified(img->id(),
                                         m_paintOrigAssetId, m_paintOrigWidth, m_paintOrigHeight, m_paintOrigTransform,
                                         newAssetId, img->naturalWidth, img->naturalHeight, layer->transform,
-                                        QStringLiteral("Pintura"));
+                                        m_i18n ? m_i18n->t("editor", "canvas.layer.paint") : QStringLiteral("Painting"));
                 m_paintWorkingImage = QImage();
             }
         }
@@ -1310,7 +1332,9 @@ void CanvasView::keyPressEvent(QKeyEvent* event)
     if (m_tool == CanvasTool::CloneStamp) {
         if (event->key() == Qt::Key_Escape) {
             m_hasCloneSrc = false;
-            emit statusMessageRequested(QStringLiteral("Origem do carimbo redefinida."));
+            const QString msg = m_i18n ? m_i18n->t("editor", "canvas.status.cloneOriginReset")
+                                       : QStringLiteral("Clone stamp origin reset.");
+            emit statusMessageRequested(msg);
             update();
             event->accept();
             return;
@@ -1415,8 +1439,12 @@ void CanvasView::contextMenuEvent(QContextMenuEvent* event)
     QAction* removeBgAiQuickAction = nullptr;
     if (layer->type() == LayerType::Image) {
         menu.addSeparator();
-        removeBgAiDialogAction = menu.addAction(QStringLiteral("✨ Remover Fundo com IA..."));
-        removeBgAiQuickAction = menu.addAction(QStringLiteral("⚡ Remover Fundo Rápido (1-Clique)"));
+        const QString aiDialogText = m_i18n ? m_i18n->t("editor", "canvas.context.aiDialog")
+                                            : QStringLiteral("✨ Remove Background with AI...");
+        const QString aiQuickText = m_i18n ? m_i18n->t("editor", "canvas.context.aiQuick")
+                                           : QStringLiteral("⚡ Quick Background Removal (1-Click)");
+        removeBgAiDialogAction = menu.addAction(aiDialogText);
+        removeBgAiQuickAction = menu.addAction(aiQuickText);
     }
 
     QAction* chosen = menu.exec(event->globalPos());
@@ -1546,7 +1574,9 @@ void CanvasView::setTool(CanvasTool tool)
     }
 
     if (m_tool == CanvasTool::CloneStamp) {
-        emit statusMessageRequested(QStringLiteral("Carimbo de Clonagem: Clique com o Botão Direito ou Shift+Clique para definir a origem, depois arraste para pintar."));
+        const QString msg = m_i18n ? m_i18n->t("editor", "canvas.status.cloneHelp")
+                                   : QStringLiteral("Clone Stamp: Right-Click or Shift+Click to set origin, then drag to paint.");
+        emit statusMessageRequested(msg);
     }
 
     update();
@@ -1621,7 +1651,7 @@ void CanvasView::applyCrop()
     emit imageLayerModified(img->id(),
                             img->assetId, img->naturalWidth, img->naturalHeight, layer->transform,
                             newAssetId, cropped.width(), cropped.height(), newTransform,
-                            QStringLiteral("Crop Image"));
+                            m_i18n ? m_i18n->t("editor", "canvas.command.cropImage") : QStringLiteral("Crop Image"));
 
     cancelCrop();
 }
@@ -1696,7 +1726,7 @@ void CanvasView::applyScissorsCut()
     emit imageLayerModified(img->id(),
                             img->assetId, img->naturalWidth, img->naturalHeight, layer->transform,
                             newAssetId, result.image.width(), result.image.height(), newTransform,
-                            QStringLiteral("Scissors Cut"));
+                            m_i18n ? m_i18n->t("editor", "canvas.command.scissorsCut") : QStringLiteral("Scissors Cut"));
 
     cancelScissorsCut();
 }
@@ -1776,7 +1806,7 @@ void CanvasView::applyMagicWand(const QPointF& docPos)
     emit imageLayerModified(img->id(),
                             img->assetId, img->naturalWidth, img->naturalHeight, layer->transform,
                             newAssetId, img->naturalWidth, img->naturalHeight, layer->transform,
-                            QStringLiteral("Magic Wand Background Removal"));
+                            m_i18n ? m_i18n->t("editor", "canvas.command.magicWandRemoval") : QStringLiteral("Magic Wand Background Removal"));
     update();
 }
 
@@ -2040,7 +2070,8 @@ void CanvasView::drawCloneOverlay(QPainter* painter)
         font.setBold(true);
         painter->setFont(font);
         painter->drawText(bannerRect, Qt::AlignCenter,
-            QStringLiteral("ℹ️ Clique com Botão Direito (ou Shift+Clique) para definir a origem"));
+            m_i18n ? m_i18n->t("editor", "canvas.status.clonePromptOrigin")
+                   : QStringLiteral("ℹ️ Right-Click (or Shift+Click) to set origin"));
     } else {
         painter->setBrush(QColor(20, 30, 25, 200));
         painter->drawRoundedRect(bannerRect, 6, 6);
@@ -2051,7 +2082,8 @@ void CanvasView::drawCloneOverlay(QPainter* painter)
         font.setBold(false);
         painter->setFont(font);
         painter->drawText(bannerRect, Qt::AlignCenter,
-            QStringLiteral("✓ Origem definida! Clique e arraste para clonar (Botão Direito redefine)"));
+            m_i18n ? m_i18n->t("editor", "canvas.status.cloneOriginActive")
+                   : QStringLiteral("✓ Origin set! Click and drag to clone (Right-Click resets)"));
     }
 
     painter->restore();
@@ -2075,10 +2107,12 @@ void CanvasView::openAiBackgroundRemoval(const LayerId& id)
         const QImage result = dlg.finalImage();
         if (!result.isNull()) {
             LayerId newAssetId = m_document->assets().addImage(result);
+            const QString cmdName = m_i18n ? m_i18n->t("editor", "canvas.command.aiBackground")
+                                           : QStringLiteral("AI Background Removal");
             emit imageLayerModified(imgLayer->id(),
                                     imgLayer->assetId, imgLayer->naturalWidth, imgLayer->naturalHeight, layer->transform,
                                     newAssetId, result.width(), result.height(), layer->transform,
-                                    QStringLiteral("AI Background Removal"));
+                                    cmdName);
             update();
         }
     }
@@ -2097,7 +2131,20 @@ void CanvasView::removeBackgroundAiQuick(const LayerId& id)
     if (srcImg.isNull())
         return;
 
-    emit statusMessageRequested(QStringLiteral("⏳ Removendo fundo com IA em segundo plano..."));
+    // Se já havia uma tarefa em execução, cancela e aguarda
+    if (m_quickAiCancelFlag) {
+        m_quickAiCancelFlag->store(true);
+    }
+    if (m_quickAiThread && m_quickAiThread->isRunning()) {
+        m_quickAiThread->wait(1000);
+    }
+
+    m_quickAiCancelFlag = std::make_shared<std::atomic<bool>>(false);
+    auto cancelFlag = m_quickAiCancelFlag;
+
+    const QString processingMsg = m_i18n ? m_i18n->t("editor", "canvas.status.aiQuickProcessing")
+                                         : QStringLiteral("⏳ Removing background with AI in background...");
+    emit statusMessageRequested(processingMsg);
 
     const LayerId layerId = id;
     const LayerId oldAssetId = imgLayer->assetId;
@@ -2105,25 +2152,40 @@ void CanvasView::removeBackgroundAiQuick(const LayerId& id)
     const int oldH = imgLayer->naturalHeight;
     const AffineTransform oldT = layer->transform;
 
-    auto* thread = QThread::create([this, layerId, oldAssetId, oldW, oldH, oldT, srcImg]() {
-        BackgroundRemover remover;
-        const QImage result = remover.removeBackground(srcImg);
+    QPointer<CanvasView> self(this);
 
-        QMetaObject::invokeMethod(this, [this, layerId, oldAssetId, oldW, oldH, oldT, result]() {
-            if (!m_document || result.isNull()) {
-                emit statusMessageRequested(QStringLiteral("Falha ao processar remoção de fundo com IA."));
+    auto* thread = QThread::create([self, cancelFlag, layerId, oldAssetId, oldW, oldH, oldT, srcImg]() {
+        BackgroundRemover remover;
+        const QImage result = remover.removeBackground(srcImg, cancelFlag.get());
+
+        if (cancelFlag->load())
+            return;
+
+        QMetaObject::invokeMethod(qApp, [self, cancelFlag, layerId, oldAssetId, oldW, oldH, oldT, result]() {
+            if (!self || cancelFlag->load())
+                return;
+
+            if (!self->m_document || result.isNull()) {
+                const QString failMsg = self->m_i18n ? self->m_i18n->t("editor", "canvas.status.aiQuickFailed")
+                                                     : QStringLiteral("Failed to remove background with AI.");
+                emit self->statusMessageRequested(failMsg);
                 return;
             }
-            LayerId newAssetId = m_document->assets().addImage(result);
-            emit imageLayerModified(layerId,
-                                    oldAssetId, oldW, oldH, oldT,
-                                    newAssetId, result.width(), result.height(), oldT,
-                                    QStringLiteral("AI Background Removal (Quick)"));
-            emit statusMessageRequested(QStringLiteral("✓ Fundo removido com sucesso pela IA!"));
-            update();
+            LayerId newAssetId = self->m_document->assets().addImage(result);
+            const QString cmdName = self->m_i18n ? self->m_i18n->t("editor", "canvas.command.aiBackgroundQuick")
+                                                 : QStringLiteral("AI Background Removal (Quick)");
+            emit self->imageLayerModified(layerId,
+                                          oldAssetId, oldW, oldH, oldT,
+                                          newAssetId, result.width(), result.height(), oldT,
+                                          cmdName);
+            const QString successMsg = self->m_i18n ? self->m_i18n->t("editor", "canvas.status.aiQuickSuccess")
+                                                   : QStringLiteral("✓ Background removed successfully with AI!");
+            emit self->statusMessageRequested(successMsg);
+            self->update();
         });
     });
 
+    m_quickAiThread = thread;
     connect(thread, &QThread::finished, thread, &QObject::deleteLater);
     thread->start();
 }
