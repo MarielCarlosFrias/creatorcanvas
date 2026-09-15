@@ -63,7 +63,8 @@ Version: $VERSION
 Section: graphics
 Priority: optional
 Architecture: $PKG_ARCH
-Depends: libc6 (>= 2.31), libqt6core6 (>= 6.5), libqt6gui6 (>= 6.5), libqt6widgets6 (>= 6.5), libstdc++6 (>= 11)
+Depends: libc6 (>= 2.31), libqt6core6 (>= 6.2), libqt6gui6 (>= 6.2), libqt6widgets6 (>= 6.2), libstdc++6 (>= 11)
+Recommends: qt6-image-formats-plugins
 Maintainer: CreatorCanvas Team <noreply@creatorcanvas.example.com>
 Description: Simple image editor for content creators
  CreatorCanvas is a lightweight, layer-based image editor focused on
