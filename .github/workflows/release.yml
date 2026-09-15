@@ -111,11 +111,21 @@ jobs:
           & $exe --version
           & $exe --smoke-test
 
-      - name: Upload Windows Artifact
+      - name: Build Windows Installer (NSIS)
+        shell: pwsh
+        run: |
+          pushd packaging\windows
+          makensis installer.nsi
+          popd
+          Move-Item packaging\windows\CreatorCanvas-0.2.0-Setup.exe .
+
+      - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: creatorcanvas-windows-portable
-          path: CreatorCanvas-portable.zip
+          name: creatorcanvas-windows
+          path: |
+            CreatorCanvas-portable.zip
+            CreatorCanvas-0.2.0-Setup.exe
 
   publish-release:
     name: Publish GitHub Release
@@ -132,7 +142,7 @@ jobs:
       - name: Organize Release Assets
         run: |
           mkdir -p release_assets
-          find artifacts -type f \( -name "*.deb" -o -name "*.zip" \) -exec cp {} release_assets/ \;
+          find artifacts -type f \( -name "*.deb" -o -name "*.zip" -o -name "*.exe" \) -exec cp {} release_assets/ \;
           ls -la release_assets/
 
       - name: Create GitHub Release
