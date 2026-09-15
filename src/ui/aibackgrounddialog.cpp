@@ -37,12 +37,32 @@ AiBackgroundDialog::AiBackgroundDialog(const QImage& sourceImage, I18nService* i
 
 AiBackgroundDialog::~AiBackgroundDialog()
 {
+    m_cancelRequested.store(true);
     if (m_workerThread) {
         if (m_workerThread->isRunning()) {
             m_workerThread->requestInterruption();
             m_workerThread->wait(2000);
         }
     }
+}
+
+void AiBackgroundDialog::reject()
+{
+    m_cancelRequested.store(true);
+    if (m_workerThread && m_workerThread->isRunning()) {
+        m_workerThread->requestInterruption();
+    }
+    QDialog::reject();
+}
+
+void AiBackgroundDialog::closeEvent(QCloseEvent* event)
+{
+    m_cancelRequested.store(true);
+    if (m_workerThread && m_workerThread->isRunning()) {
+        m_workerThread->requestInterruption();
+        m_workerThread->wait(1000);
+    }
+    QDialog::closeEvent(event);
 }
 
 void AiBackgroundDialog::setupUi()
@@ -279,7 +299,10 @@ void AiBackgroundDialog::runAiInference()
         return;
     }
 
+    m_cancelRequested.store(false);
     m_runAiButton->setEnabled(false);
+    m_modelCombo->setEnabled(false);
+    m_browseModelBtn->setEnabled(false);
     m_progressBar->setVisible(true);
     m_statusLabel->setText(m_i18n ? m_i18n->t("editor", "aiBackground.processing") : QStringLiteral("⏳ Processando imagem com a rede neural..."));
 
@@ -288,17 +311,26 @@ void AiBackgroundDialog::runAiInference()
 
     m_workerThread = QThread::create([self, input, modelPath]() {
         BackgroundRemover remover(modelPath);
-        QImage result = remover.removeBackground(input);
+        const std::atomic<bool>* cancelPtr = self ? &self->m_cancelRequested : nullptr;
+        QImage result = remover.removeBackground(input, cancelPtr);
 
         QMetaObject::invokeMethod(qApp, [self, result]() {
             if (!self)
                 return;
-            self->m_processedImage = result;
-            self->m_editCanvas->setImage(self->m_originalImage, self->m_processedImage);
             self->m_progressBar->setVisible(false);
             self->m_runAiButton->setEnabled(true);
-            self->m_statusLabel->setText(self->m_i18n ? self->m_i18n->t("editor", "aiBackground.done") : QStringLiteral("✓ Recorte concluído! Se desejar, faça ajustes com o pincel e clique em Aplicar."));
+            self->m_modelCombo->setEnabled(true);
+            self->m_browseModelBtn->setEnabled(true);
             self->m_workerThread = nullptr;
+
+            if (self->m_cancelRequested.load() || result.isNull()) {
+                self->m_statusLabel->setText(self->m_i18n ? self->m_i18n->t("editor", "aiBackground.tip") : QStringLiteral("Processamento cancelado ou interrompido."));
+                return;
+            }
+
+            self->m_processedImage = result;
+            self->m_editCanvas->setImage(self->m_originalImage, self->m_processedImage);
+            self->m_statusLabel->setText(self->m_i18n ? self->m_i18n->t("editor", "aiBackground.done") : QStringLiteral("✓ Recorte concluído! Se desejar, faça ajustes com o pincel e clique em Aplicar."));
         });
     });
 

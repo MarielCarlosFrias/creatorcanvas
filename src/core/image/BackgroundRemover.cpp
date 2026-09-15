@@ -43,9 +43,15 @@ public:
         m_outputName = std::string(outPtr.get());
     }
 
-    QImage process(const QImage& input)
+    QImage process(const QImage& input, const std::atomic<bool>* cancelFlag)
     {
+        if (cancelFlag && cancelFlag->load())
+            return QImage();
+
         std::vector<float> blob = buildInputBlob(input);
+        if (cancelFlag && cancelFlag->load())
+            return QImage();
+
         std::vector<int64_t> inputShape = {1, 3, INPUT_SIZE, INPUT_SIZE};
 
         Ort::MemoryInfo memInfo = Ort::MemoryInfo::CreateCpu(
@@ -57,13 +63,23 @@ public:
         const char* inName  = m_inputName.c_str();
         const char* outName = m_outputName.c_str();
 
+        if (cancelFlag && cancelFlag->load())
+            return QImage();
+
         auto outputs = m_session.Run(
             Ort::RunOptions{nullptr},
             &inName, &inputTensor, 1,
             &outName, 1);
 
+        if (cancelFlag && cancelFlag->load())
+            return QImage();
+
         float* maskPtr = outputs[0].GetTensorMutableData<float>();
         QImage alpha = buildAlphaMask(maskPtr, input.width(), input.height());
+
+        if (cancelFlag && cancelFlag->load())
+            return QImage();
+
         return composite(input, alpha);
     }
 
@@ -165,12 +181,17 @@ bool BackgroundRemover::isLoaded() const
     return m_impl != nullptr;
 }
 
-QImage BackgroundRemover::removeBackground(const QImage& input)
+QImage BackgroundRemover::removeBackground(const QImage& input, const std::atomic<bool>* cancelFlag)
 {
     if (!m_impl || input.isNull())
         return input;
+    if (cancelFlag && cancelFlag->load())
+        return QImage();
     try {
-        return m_impl->process(input);
+        QImage result = m_impl->process(input, cancelFlag);
+        if (result.isNull() && cancelFlag && cancelFlag->load())
+            return QImage();
+        return result.isNull() ? input : result;
     } catch (const std::exception& e) {
         qCWarning(lcBgRemover) << "Erro durante inferência ONNX:" << e.what();
         return input;

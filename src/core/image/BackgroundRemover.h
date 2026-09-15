@@ -2,6 +2,7 @@
 
 #include <QImage>
 #include <QString>
+#include <atomic>
 #include <memory>
 
 namespace cc {
@@ -23,7 +24,8 @@ public:
     bool isLoaded() const;
 
     /// Processa uma QImage de entrada e retorna a imagem recortada com canal alpha transparente.
-    QImage removeBackground(const QImage& input);
+    /// Suporta cancelamento cooperativo atraves de cancelFlag.
+    QImage removeBackground(const QImage& input, const std::atomic<bool>* cancelFlag = nullptr);
 
     /// Localiza o caminho absoluto para o arquivo de modelo .onnx nos caminhos padrao do sistema.
     static QString findModelPath(const QString& preferredName = QStringLiteral("u2netp.onnx"));

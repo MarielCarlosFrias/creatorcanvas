@@ -2,6 +2,7 @@
 
 #include <QDialog>
 #include <QImage>
+#include <atomic>
 #include "maskeditcanvas.h"
 
 class QComboBox;
@@ -10,6 +11,7 @@ class QLabel;
 class QPushButton;
 class QProgressBar;
 class QThread;
+class QCloseEvent;
 
 namespace cc {
 
@@ -24,6 +26,12 @@ public:
     ~AiBackgroundDialog() override;
 
     QImage finalImage() const;
+
+public slots:
+    void reject() override;
+
+protected:
+    void closeEvent(QCloseEvent* event) override;
 
 private slots:
     void runAiInference();
@@ -54,6 +62,7 @@ private:
     QLabel* m_statusLabel = nullptr;
     I18nService* m_i18n = nullptr;
     QThread* m_workerThread = nullptr;
+    std::atomic<bool> m_cancelRequested{false};
 };
 
 } // namespace cc
