@@ -4,6 +4,7 @@
 #include "services/presetstore.h"
 #include "services/recentfiles.h"
 #include "core/serialization/ProjectFile.h"
+#include "core/templates/TemplateFactory.h"
 
 #include <QFileInfo>
 #include <QFont>
@@ -17,6 +18,7 @@
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QVBoxLayout>
+#include <QEvent>
 #include <QFrame>
 
 namespace cc {
@@ -206,6 +208,85 @@ void StartScreen::buildUi()
                                           bannerSpec), 0, 3);
 
     mainLayout->addWidget(m_cardsHost);
+
+    mainLayout->addSpacing(8);
+
+    // --- 3b. Ready-Made Templates ---
+    m_templatesLabel = new QLabel(this);
+    m_templatesLabel->setFont(sectionFont);
+    m_templatesLabel->setStyleSheet(QStringLiteral("color: #d8dee9;"));
+    mainLayout->addWidget(m_templatesLabel);
+
+    m_templatesHost = new QWidget(this);
+    auto* templatesGrid = new QGridLayout(m_templatesHost);
+    templatesGrid->setContentsMargins(0, 0, 0, 0);
+    templatesGrid->setSpacing(12);
+
+    const auto templates = TemplateFactory::availableTemplates();
+    for (int i = 0; i < templates.size(); ++i) {
+        const auto& tmpl = templates[i];
+        auto* card = new QWidget(m_templatesHost);
+        card->setMinimumHeight(84);
+        card->setCursor(Qt::PointingHandCursor);
+
+        QString borderColor = QStringLiteral("#4c566a");
+        QString accentColor = QStringLiteral("#88c0d0");
+        if (tmpl.platform == QStringLiteral("YouTube")) {
+            borderColor = QStringLiteral("#cc0000");
+            accentColor = QStringLiteral("#ff4444");
+        } else if (tmpl.platform == QStringLiteral("Instagram")) {
+            borderColor = QStringLiteral("#c13584");
+            accentColor = QStringLiteral("#e1306c");
+        } else if (tmpl.platform == QStringLiteral("TikTok")) {
+            borderColor = QStringLiteral("#00f2ea");
+            accentColor = QStringLiteral("#69c9d0");
+        }
+
+        card->setStyleSheet(QStringLiteral(
+            "QWidget {"
+            "  background-color: #22262e;"
+            "  border: 1px solid %1;"
+            "  border-radius: 8px;"
+            "}"
+            "QWidget:hover {"
+            "  background-color: #2e3440;"
+            "  border-color: %2;"
+            "}"
+        ).arg(borderColor, accentColor));
+
+        auto* cardLayout = new QVBoxLayout(card);
+        cardLayout->setContentsMargins(12, 10, 12, 10);
+        cardLayout->setSpacing(4);
+
+        auto* platformLabel = new QLabel(tmpl.platform, card);
+        platformLabel->setStyleSheet(QStringLiteral(
+            "color: %1; font-size: 10px; font-weight: bold; border: none; background: transparent;"
+        ).arg(accentColor));
+
+        auto* titleLabel = new QLabel(tmpl.defaultTitle, card);
+        titleLabel->setWordWrap(true);
+        titleLabel->setStyleSheet(QStringLiteral(
+            "color: #e5e9f0; font-size: 12px; font-weight: 600; border: none; background: transparent;"
+        ));
+
+        auto* dimLabel = new QLabel(QStringLiteral("%1 × %2 px").arg(tmpl.width).arg(tmpl.height), card);
+        dimLabel->setStyleSheet(QStringLiteral(
+            "color: #7b8494; font-size: 10px; border: none; background: transparent;"
+        ));
+
+        cardLayout->addWidget(platformLabel);
+        cardLayout->addWidget(titleLabel);
+        cardLayout->addStretch();
+        cardLayout->addWidget(dimLabel);
+
+        const int kindInt = static_cast<int>(tmpl.kind);
+        card->installEventFilter(this);
+        card->setProperty("_templateKind", kindInt);
+
+        templatesGrid->addWidget(card, i / 4, i % 4);
+    }
+
+    mainLayout->addWidget(m_templatesHost);
 
     mainLayout->addSpacing(8);
 
@@ -401,10 +482,28 @@ void StartScreen::retranslateUi()
     m_customSizeBtn->setText(m_i18n->t("common", "start.custom"));
 
     m_popularLabel->setText(m_i18n->t("common", "start.popular"));
+    if (m_templatesLabel)
+        m_templatesLabel->setText(m_i18n->t("common", "start.templates"));
     m_recentLabel->setText(m_i18n->t("common", "start.recent"));
 
     m_emptyStateTitle->setText(m_i18n->t("common", "start.emptyRecents"));
     m_emptyStateSubtitle->setText(m_i18n->t("common", "start.emptyRecentsHint"));
+}
+
+bool StartScreen::eventFilter(QObject* watched, QEvent* event)
+{
+    if (event->type() == QEvent::MouseButtonPress) {
+        QWidget* card = qobject_cast<QWidget*>(watched);
+        if (card) {
+            bool ok = false;
+            int kind = card->property("_templateKind").toInt(&ok);
+            if (ok) {
+                emit templateRequested(kind);
+                return true;
+            }
+        }
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 } // namespace cc

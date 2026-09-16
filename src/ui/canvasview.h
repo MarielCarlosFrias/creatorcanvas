@@ -38,6 +38,8 @@ public:
     void setI18n(I18nService* i18n);
     void clearSelection();
     void setSelectedLayer(const LayerId& id);
+    QList<LayerId> selectedLayers() const;
+    void setMultiSelection(const QList<LayerId>& ids);
     void beginTextEdit(const LayerId& id);
 
     void setTool(CanvasTool tool);
@@ -78,6 +80,15 @@ public:
     QPointF panOffset() const { return m_panOffset; }
     void centerOn(const QPointF& documentPos);
 
+    void setShowGrid(bool show);
+    bool showGrid() const { return m_showGrid; }
+    void setSnapToGrid(bool snap);
+    bool snapToGrid() const { return m_snapToGrid; }
+    void setGridSpacing(int spacing);
+    int gridSpacing() const { return m_gridSpacing; }
+    void setSafeZoneMode(int mode);
+    int safeZoneMode() const { return m_safeZoneMode; }
+
 public slots:
     void zoomIn();
     void zoomOut();
@@ -90,6 +101,7 @@ signals:
     void cursorMoved(const QPointF& documentPos);
     void fileDropped(const QString& filePath);
     void selectionChanged(const cc::LayerId& id);
+    void multiSelectionChanged(const QList<cc::LayerId>& ids);
     void transformCommitted(const cc::LayerId& id,
                             const cc::AffineTransform& oldValue,
                             const cc::AffineTransform& newValue);
@@ -151,6 +163,15 @@ private:
     void commitTextEdit();
     void hideTextEdit();
 
+    void addToSelection(const LayerId& id);
+    void removeFromSelection(const LayerId& id);
+    void drawMultiSelectionOverlay(QPainter* painter);
+    void drawRubberBand(QPainter* painter);
+    void drawGridOverlay(QPainter* painter);
+    void drawSafeZoneOverlay(QPainter* painter);
+    void drawBrushCursor(QPainter* painter);
+    QList<Layer*> hitTestRubberBand(const QRectF& docRect) const;
+
     QPointer<Document> m_document;
     double m_zoom = 1.0;
     QPointF m_panOffset{0, 0};
@@ -178,6 +199,19 @@ private:
     QLineEdit* m_textEditor = nullptr;
     LayerId m_editingTextId;
     I18nService* m_i18n = nullptr;
+
+    // Multi-selection
+    QList<LayerId> m_multiSelection;
+    bool m_rubberBanding = false;
+    QPointF m_rubberBandStart;
+    QPointF m_rubberBandCurrent;
+    QList<AffineTransform> m_multiGestureStarts;
+
+    // Grid & Safe Zones
+    bool m_showGrid = false;
+    bool m_snapToGrid = false;
+    int m_gridSpacing = 50;
+    int m_safeZoneMode = 0; // 0=None, 1=YouTube, 2=Instagram, 3=TikTok
 
     // Ferramentas Raster (Crop, Scissors, Magic Wand, Clone Stamp)
     void drawCropOverlay(QPainter* painter);

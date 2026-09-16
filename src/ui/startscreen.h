@@ -35,6 +35,10 @@ signals:
     void customCreateRequested();
     void openRequested();
     void recentActivated(const QString& filePath);
+    void templateRequested(int templateKind);
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
     void buildUi();
@@ -58,6 +62,10 @@ private:
     // Visual Cards Section
     QLabel* m_popularLabel = nullptr;
     QWidget* m_cardsHost = nullptr;
+
+    // Templates Section
+    QLabel* m_templatesLabel = nullptr;
+    QWidget* m_templatesHost = nullptr;
 
     // Recents Section
     QLabel* m_recentLabel = nullptr;

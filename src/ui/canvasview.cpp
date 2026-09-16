@@ -230,6 +230,74 @@ void CanvasView::selectLayer(const LayerId& id)
     update();
 }
 
+QList<LayerId> CanvasView::selectedLayers() const
+{
+    if (m_multiSelection.isEmpty() && !m_selectedId.isNull())
+        return {m_selectedId};
+    return m_multiSelection;
+}
+
+void CanvasView::addToSelection(const LayerId& id)
+{
+    if (id.isNull()) return;
+    if (m_multiSelection.isEmpty() && !m_selectedId.isNull())
+        m_multiSelection.append(m_selectedId);
+    if (!m_multiSelection.contains(id))
+        m_multiSelection.append(id);
+    m_selectedId = id;
+    emit selectionChanged(m_selectedId);
+    emit multiSelectionChanged(m_multiSelection);
+    update();
+}
+
+void CanvasView::removeFromSelection(const LayerId& id)
+{
+    m_multiSelection.removeAll(id);
+    if (m_selectedId == id) {
+        m_selectedId = m_multiSelection.isEmpty() ? LayerId() : m_multiSelection.last();
+        emit selectionChanged(m_selectedId);
+    }
+    if (m_multiSelection.size() <= 1)
+        m_multiSelection.clear();
+    emit multiSelectionChanged(m_multiSelection);
+    update();
+}
+
+void CanvasView::setMultiSelection(const QList<LayerId>& ids)
+{
+    m_multiSelection = ids;
+    if (!ids.isEmpty())
+        m_selectedId = ids.last();
+    else
+        m_selectedId = LayerId();
+    emit selectionChanged(m_selectedId);
+    emit multiSelectionChanged(m_multiSelection);
+    update();
+}
+
+QList<Layer*> CanvasView::hitTestRubberBand(const QRectF& docRect) const
+{
+    QList<Layer*> result;
+    if (!m_document) return result;
+    const auto& children = m_document->rootGroup()->children;
+    for (const auto& child : children) {
+        Layer* layer = child.get();
+        if (!layer->visible || layer->locked) continue;
+        if (layer->type() == LayerType::Background) continue;
+        const QRectF bounds = layer->contentBounds();
+        if (bounds.isEmpty()) continue;
+        const QRectF layerDocRect = layer->transform.matrix(bounds).mapRect(bounds);
+        if (docRect.intersects(layerDocRect))
+            result.append(layer);
+    }
+    return result;
+}
+
+void CanvasView::setShowGrid(bool show) { m_showGrid = show; update(); }
+void CanvasView::setSnapToGrid(bool snap) { m_snapToGrid = snap; }
+void CanvasView::setGridSpacing(int spacing) { m_gridSpacing = std::clamp(spacing, 10, 200); update(); }
+void CanvasView::setSafeZoneMode(int mode) { m_safeZoneMode = std::clamp(mode, 0, 3); update(); }
+
 void CanvasView::zoomIn()
 {
     zoomAt(QPointF(width() / 2.0, height() / 2.0), kZoomStep);
@@ -454,7 +522,23 @@ void CanvasView::paintEvent(QPaintEvent*)
             drawSelectionOverlay(&painter);
     }
 
+    if (m_multiSelection.size() > 1)
+        drawMultiSelectionOverlay(&painter);
+
+    if (m_rubberBanding)
+        drawRubberBand(&painter);
+
+    if (m_showGrid)
+        drawGridOverlay(&painter);
+
+    if (m_safeZoneMode > 0)
+        drawSafeZoneOverlay(&painter);
+
     drawSnapGuides(&painter);
+
+    if ((m_tool == CanvasTool::Paint || m_tool == CanvasTool::CloneStamp)
+        && !m_isPainting && !m_isCloning)
+        drawBrushCursor(&painter);
 }
 
 void CanvasView::wheelEvent(QWheelEvent* event)
@@ -783,14 +867,44 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
         }
 
         if (Layer* layer = hitTestLayer(docPos)) {
-            selectLayer(layer->id());
+            if (event->modifiers() & Qt::ShiftModifier) {
+                if (m_multiSelection.contains(layer->id()))
+                    removeFromSelection(layer->id());
+                else
+                    addToSelection(layer->id());
+            } else {
+                if (!m_multiSelection.contains(layer->id())) {
+                    m_multiSelection.clear();
+                    selectLayer(layer->id());
+                }
+            }
             m_gestureStart = layer->transform;
             m_gestureStartDoc = docPos;
+            if (m_multiSelection.size() > 1) {
+                m_multiGestureStarts.clear();
+                for (const auto& lid : m_multiSelection) {
+                    if (Layer* l = m_document->findLayer(lid))
+                        m_multiGestureStarts.append(l->transform);
+                    else
+                        m_multiGestureStarts.append(AffineTransform());
+                }
+            }
             m_gesture = Gesture::Move;
             event->accept();
             return;
         }
 
+        if (m_tool == CanvasTool::Select) {
+            m_rubberBanding = true;
+            m_rubberBandStart = docPos;
+            m_rubberBandCurrent = docPos;
+            if (!(event->modifiers() & Qt::ShiftModifier)) {
+                m_multiSelection.clear();
+                selectLayer(LayerId());
+            }
+            event->accept();
+            return;
+        }
         selectLayer(LayerId());
     }
     event->ignore();
@@ -1045,7 +1159,18 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event)
             AffineTransform t = m_gestureStart;
 
             if (m_gesture == Gesture::Move) {
-                t.position += docNow - m_gestureStartDoc;
+                const QPointF delta = docNow - m_gestureStartDoc;
+                t.position += delta;
+                if (m_multiSelection.size() > 1) {
+                    for (int i = 0; i < m_multiSelection.size(); ++i) {
+                        if (m_multiSelection[i] == m_selectedId) continue;
+                        if (i < m_multiGestureStarts.size()) {
+                            AffineTransform mt = m_multiGestureStarts[i];
+                            mt.position += delta;
+                            m_document->setLayerTransform(m_multiSelection[i], mt);
+                        }
+                    }
+                }
             } else if (m_gesture == Gesture::Rotate) {
                 const double angle = std::atan2(docNow.y() - m_rotateCenter.y(),
                                                 docNow.x() - m_rotateCenter.x());
@@ -1170,6 +1295,13 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event)
         }
     }
 
+    if (m_rubberBanding && m_document) {
+        m_rubberBandCurrent = deviceToDoc().map(QPointF(event->pos()));
+        update();
+        event->accept();
+        return;
+    }
+
     if (m_gesture == Gesture::None)
         updateCursor(QPointF(event->pos()));
 
@@ -1189,6 +1321,23 @@ void CanvasView::mouseReleaseEvent(QMouseEvent* event)
         return;
     }
 
+    if (m_rubberBanding && event->button() == Qt::LeftButton) {
+        m_rubberBanding = false;
+        if (m_document) {
+            const QRectF selRect = QRectF(m_rubberBandStart, m_rubberBandCurrent).normalized();
+            if (selRect.width() > 4 || selRect.height() > 4) {
+                QList<Layer*> hits = hitTestRubberBand(selRect);
+                QList<LayerId> ids;
+                for (Layer* l : hits)
+                    ids.append(l->id());
+                setMultiSelection(ids);
+            }
+        }
+        update();
+        event->accept();
+        return;
+    }
+
     if (event->button() == Qt::LeftButton && m_gesture != Gesture::None) {
         if (m_document && !m_selectedId.isNull()) {
             if (Layer* layer = m_document->findLayer(m_selectedId)) {
@@ -1199,6 +1348,16 @@ void CanvasView::mouseReleaseEvent(QMouseEvent* event)
                     if (newBox != m_gestureStartBox)
                         emit textBoxCommitted(m_selectedId, m_gestureStartBox,
                                               newBox);
+                }
+            }
+            if (m_multiSelection.size() > 1) {
+                for (int i = 0; i < m_multiSelection.size(); ++i) {
+                    if (m_multiSelection[i] == m_selectedId) continue;
+                    if (Layer* ml = m_document->findLayer(m_multiSelection[i])) {
+                        if (i < m_multiGestureStarts.size())
+                            emit transformCommitted(m_multiSelection[i],
+                                                   m_multiGestureStarts[i], ml->transform);
+                    }
                 }
             }
         }
@@ -2208,6 +2367,169 @@ void CanvasView::removeBackgroundAiQuick(const LayerId& id)
         }
     });
     thread->start();
+}
+
+void CanvasView::drawMultiSelectionOverlay(QPainter* painter)
+{
+    if (!m_document) return;
+    painter->save();
+    painter->resetTransform();
+    const QColor accent(0x2f, 0x6f, 0xed);
+    QPen dashed(accent, 1.0, Qt::DashLine);
+    painter->setPen(dashed);
+    painter->setBrush(Qt::NoBrush);
+
+    for (const auto& lid : m_multiSelection) {
+        if (lid == m_selectedId) continue;
+        Layer* layer = m_document->findLayer(lid);
+        if (!layer) continue;
+        const HandleSet set = handlePositions(*layer);
+        if (!set.valid) continue;
+        QPolygonF box;
+        box << set.points[0] << set.points[1] << set.points[2] << set.points[3];
+        painter->drawPolygon(box);
+    }
+    painter->restore();
+}
+
+void CanvasView::drawRubberBand(QPainter* painter)
+{
+    painter->save();
+    const QTransform toScreen = docToDevice();
+    const QPointF p1 = toScreen.map(m_rubberBandStart);
+    const QPointF p2 = toScreen.map(m_rubberBandCurrent);
+    const QRectF rect = QRectF(p1, p2).normalized();
+
+    painter->resetTransform();
+    painter->setPen(QPen(QColor(0x2f, 0x6f, 0xed), 1.0, Qt::DashLine));
+    painter->setBrush(QColor(0x2f, 0x6f, 0xed, 35));
+    painter->drawRect(rect);
+    painter->restore();
+}
+
+void CanvasView::drawGridOverlay(QPainter* painter)
+{
+    if (!m_document || m_gridSpacing <= 0) return;
+    painter->save();
+    const QTransform toScreen = docToDevice();
+    const int docW = m_document->width();
+    const int docH = m_document->height();
+
+    QPen gridPen(QColor(0xff, 0xff, 0xff, 22), 0);
+    painter->setPen(gridPen);
+    painter->setBrush(Qt::NoBrush);
+
+    for (int x = 0; x <= docW; x += m_gridSpacing) {
+        const QPointF p1 = toScreen.map(QPointF(x, 0));
+        const QPointF p2 = toScreen.map(QPointF(x, docH));
+        painter->drawLine(p1, p2);
+    }
+    for (int y = 0; y <= docH; y += m_gridSpacing) {
+        const QPointF p1 = toScreen.map(QPointF(0, y));
+        const QPointF p2 = toScreen.map(QPointF(docW, y));
+        painter->drawLine(p1, p2);
+    }
+    painter->restore();
+}
+
+void CanvasView::drawSafeZoneOverlay(QPainter* painter)
+{
+    if (!m_document || m_safeZoneMode == 0) return;
+    painter->save();
+    const QTransform toScreen = docToDevice();
+    const double docW = m_document->width();
+    const double docH = m_document->height();
+
+    QPen zonePen(QColor(0xff, 0x44, 0x44, 160), 1.5, Qt::DashDotLine);
+    painter->setPen(zonePen);
+    painter->setBrush(Qt::NoBrush);
+    QFont labelFont = painter->font();
+    labelFont.setPointSize(9);
+    labelFont.setBold(true);
+    painter->setFont(labelFont);
+
+    auto drawZoneRect = [&](double x, double y, double w, double h, const QString& label, const QColor& fillColor = QColor(255, 68, 68, 20)) {
+        const QRectF docRect(x, y, w, h);
+        const QPolygonF screenPoly = toScreen.map(QPolygonF(docRect));
+        painter->setPen(zonePen);
+        painter->setBrush(fillColor);
+        painter->drawPolygon(screenPoly);
+        if (!label.isEmpty()) {
+            const QPointF labelPos = toScreen.map(QPointF(x + 6, y + 16));
+            painter->setPen(QColor(0xff, 0x77, 0x77));
+            painter->drawText(labelPos, label);
+        }
+    };
+
+    switch (m_safeZoneMode) {
+    case 1: {
+        const double margin = docW * 0.05;
+        drawZoneRect(margin, margin, docW - 2 * margin, docH - 2 * margin,
+                     QStringLiteral("YouTube Safe Title Margin"), Qt::NoBrush);
+        const double tsW = 140.0;
+        const double tsH = 44.0;
+        drawZoneRect(docW - tsW - 16, docH - tsH - 16, tsW, tsH,
+                     QStringLiteral("Timestamp [0:00]"), QColor(255, 68, 68, 45));
+        break;
+    }
+    case 2: {
+        if (docW != docH) {
+            const double side = std::min(docW, docH);
+            const double x = (docW - side) / 2.0;
+            const double y = (docH - side) / 2.0;
+            drawZoneRect(x, y, side, side, QStringLiteral("Feed Grid (1:1)"), QColor(50, 150, 255, 20));
+        }
+        const double m = std::min(docW, docH) * 0.08;
+        drawZoneRect(m, m, docW - 2 * m, docH - 2 * m, QStringLiteral("Instagram Safe"), Qt::NoBrush);
+        break;
+    }
+    case 3: {
+        const double topH = docH * 0.085;
+        drawZoneRect(0, 0, docW, topH, QStringLiteral("Header / Status"), QColor(255, 68, 68, 40));
+        const double botH = docH * 0.17;
+        drawZoneRect(0, docH - botH, docW, botH, QStringLiteral("Caption / Sound"), QColor(255, 68, 68, 40));
+        const double rightW = docW * 0.15;
+        drawZoneRect(docW - rightW, topH, rightW, docH - topH - botH,
+                     QStringLiteral("Buttons"), QColor(255, 68, 68, 40));
+        const double safeMargin = docW * 0.08;
+        drawZoneRect(safeMargin, topH + 20, docW - rightW - safeMargin * 1.5,
+                     docH - topH - botH - 40, QStringLiteral("Core Safe Zone"), Qt::NoBrush);
+        break;
+    }
+    }
+    painter->restore();
+}
+
+void CanvasView::drawBrushCursor(QPainter* painter)
+{
+    if (!m_document) return;
+    const QPoint widgetPos = mapFromGlobal(QCursor::pos());
+    if (!rect().contains(widgetPos)) return;
+
+    painter->save();
+    painter->resetTransform();
+
+    int radius = 0;
+    if (m_tool == CanvasTool::Paint)
+        radius = m_paintSize;
+    else if (m_tool == CanvasTool::CloneStamp)
+        radius = m_cloneRadius;
+
+    if (radius <= 0) { painter->restore(); return; }
+
+    const double screenRadius = std::max(2.0, radius * m_zoom);
+
+    QPen cursorPen(QColor(255, 255, 255, 200), 1.0);
+    painter->setPen(cursorPen);
+    painter->setBrush(Qt::NoBrush);
+    painter->drawEllipse(QPointF(widgetPos), screenRadius, screenRadius);
+
+    cursorPen.setColor(QColor(0, 0, 0, 120));
+    cursorPen.setStyle(Qt::DotLine);
+    painter->setPen(cursorPen);
+    painter->drawEllipse(QPointF(widgetPos), screenRadius + 1.0, screenRadius + 1.0);
+
+    painter->restore();
 }
 
 } // namespace cc

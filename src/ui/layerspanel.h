@@ -34,9 +34,11 @@ public:
     void setHistory(CommandStack* history);
     void refresh();
     void setSelectedLayer(const LayerId& id);
+    void setSelectedLayers(const QList<LayerId>& ids);
 
 signals:
     void selectionRequested(const cc::LayerId& id);
+    void multiSelectionRequested(const QList<cc::LayerId>& ids);
     void duplicateRequested(const cc::LayerId& id);
     void deleteRequested(const cc::LayerId& id);
     void focusRequested(const QPointF& documentPos);

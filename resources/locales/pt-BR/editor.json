@@ -184,6 +184,7 @@
         "command.magicWandRemoval": "Remoção de Fundo por Varinha Mágica",
         "command.paintBucket": "Balde de Tinta",
         "command.aiBackground": "Remoção de Fundo por IA",
-        "command.aiBackgroundQuick": "Remoção Rápida de Fundo por IA"
+        "command.aiBackgroundQuick": "Remoção Rápida de Fundo por IA",
+        "layer.group": "Grupo"
     }
 }

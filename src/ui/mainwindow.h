@@ -64,6 +64,7 @@ private:
     void showStartScreen();
     void enterEditor();
     void startFromPreset(const NewDocumentSpec& spec);
+    void startFromTemplate(int templateKind);
     void newDocument();
     void importImageViaDialog();
     void importImage(const QString& filePath);
@@ -77,6 +78,10 @@ private:
         CenterBoth
     };
     void alignSelectedLayer(AlignTarget target);
+    void alignMultipleLayers(AlignTarget target);
+    void distributeHorizontally();
+    void distributeVertically();
+    void groupSelectedLayers();
     void deleteSelectedLayer();
     bool saveDocument();
     bool saveDocumentAs();
@@ -136,6 +141,11 @@ private:
     QAction* m_alignCenterYAction = nullptr;
     QAction* m_alignBottomAction = nullptr;
     QAction* m_alignCenterBothAction = nullptr;
+    QAction* m_distributeHAction = nullptr;
+    QAction* m_distributeVAction = nullptr;
+    QAction* m_groupAction = nullptr;
+    QAction* m_toggleGridAction = nullptr;
+    QAction* m_toggleSnapAction = nullptr;
     QAction* m_flipHAction = nullptr;
     QAction* m_flipVAction = nullptr;
     QAction* m_deleteAction = nullptr;
@@ -149,6 +159,12 @@ private:
     QMenu* m_fileMenu = nullptr;
     QMenu* m_editMenu = nullptr;
     QMenu* m_layerMenu = nullptr;
+    QMenu* m_viewMenu = nullptr;
+    QMenu* m_safeZoneMenu = nullptr;
+    QAction* m_safeNoneAction = nullptr;
+    QAction* m_safeYouTubeAction = nullptr;
+    QAction* m_safeInstagramAction = nullptr;
+    QAction* m_safeTikTokAction = nullptr;
     QMenu* m_settingsMenu = nullptr;
     QMenu* m_helpMenu = nullptr;
 

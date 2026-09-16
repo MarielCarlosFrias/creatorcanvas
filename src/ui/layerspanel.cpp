@@ -134,7 +134,7 @@ void LayersPanel::buildUi()
     // --- 2. Lista interativa de camadas com miniaturas ---
     m_list = new LayerListWidget(this);
     m_list->setDragDropMode(QAbstractItemView::InternalMove);
-    m_list->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_list->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_list->setContextMenuPolicy(Qt::CustomContextMenu);
     m_list->setStyleSheet(QStringLiteral(
         "QListWidget {"
@@ -556,10 +556,46 @@ void LayersPanel::setSelectedLayer(const LayerId& id)
     }
 }
 
+void LayersPanel::setSelectedLayers(const QList<LayerId>& ids)
+{
+    if (ids.isEmpty()) {
+        setSelectedLayer(LayerId());
+        return;
+    }
+    m_selectedId = ids.last();
+    updateControlsForSelection();
+
+    if (m_updating || !m_document)
+        return;
+
+    m_updating = true;
+    m_list->clearSelection();
+    for (int row = 0; row < m_list->count(); ++row) {
+        const LayerId lid = m_list->item(row)->data(Qt::UserRole).value<LayerId>();
+        if (ids.contains(lid)) {
+            m_list->item(row)->setSelected(true);
+        }
+    }
+    m_updating = false;
+}
+
 void LayersPanel::onCurrentRowChanged(int row)
 {
     if (m_updating)
         return;
+
+    const auto selectedItems = m_list->selectedItems();
+    if (selectedItems.size() > 1) {
+        QList<LayerId> ids;
+        for (auto* item : selectedItems) {
+            ids.append(item->data(Qt::UserRole).value<LayerId>());
+        }
+        m_selectedId = layerIdFromRow(row);
+        updateControlsForSelection();
+        emit multiSelectionRequested(ids);
+        return;
+    }
+
     const LayerId id = layerIdFromRow(row);
     m_selectedId = id;
     updateControlsForSelection();

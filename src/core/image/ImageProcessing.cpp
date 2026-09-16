@@ -279,18 +279,30 @@ QImage ImageProcessing::paintStroke(const QImage& target, const QPointF& prevPoi
     case BrushType::Eraser: {
         painter.setCompositionMode(QPainter::CompositionMode_Clear);
         painter.setRenderHint(QPainter::Antialiasing, true);
-        QPen pen(Qt::transparent, clampedSize, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
-        painter.setPen(pen);
-        painter.drawLine(prevPoint, curPoint);
+        if (prevPoint == curPoint) {
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(Qt::transparent);
+            painter.drawEllipse(curPoint, clampedSize / 2.0, clampedSize / 2.0);
+        } else {
+            QPen pen(Qt::transparent, clampedSize, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+            painter.setPen(pen);
+            painter.drawLine(prevPoint, curPoint);
+        }
         break;
     }
     case BrushType::Pencil: {
         painter.setRenderHint(QPainter::Antialiasing, false);
         QColor c = color;
         c.setAlphaF(clampedOpacity);
-        QPen pen(c, clampedSize, Qt::SolidLine, Qt::SquareCap, Qt::MiterJoin);
-        painter.setPen(pen);
-        painter.drawLine(prevPoint, curPoint);
+        if (prevPoint == curPoint) {
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(c);
+            painter.drawRect(QRectF(curPoint.x() - clampedSize / 2.0, curPoint.y() - clampedSize / 2.0, clampedSize, clampedSize));
+        } else {
+            QPen pen(c, clampedSize, Qt::SolidLine, Qt::SquareCap, Qt::MiterJoin);
+            painter.setPen(pen);
+            painter.drawLine(prevPoint, curPoint);
+        }
         break;
     }
     case BrushType::Highlighter: {
@@ -329,9 +341,15 @@ QImage ImageProcessing::paintStroke(const QImage& target, const QPointF& prevPoi
         painter.setRenderHint(QPainter::Antialiasing, true);
         QColor c = color;
         c.setAlphaF(clampedOpacity);
-        QPen pen(c, clampedSize, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
-        painter.setPen(pen);
-        painter.drawLine(prevPoint, curPoint);
+        if (prevPoint == curPoint) {
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(c);
+            painter.drawEllipse(curPoint, clampedSize / 2.0, clampedSize / 2.0);
+        } else {
+            QPen pen(c, clampedSize, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+            painter.setPen(pen);
+            painter.drawLine(prevPoint, curPoint);
+        }
         break;
     }
     }

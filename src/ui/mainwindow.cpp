@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 
 #include "core/document/NewDocumentSpec.h"
+#include "core/templates/TemplateFactory.h"
 #include "core/history/DocumentCommands.h"
 #include "core/layers/Layer.h"
 #include "core/serialization/ProjectFile.h"
@@ -176,6 +177,8 @@ void MainWindow::buildCentralWidget()
             this, &MainWindow::openDocument);
     connect(m_startScreen, &StartScreen::recentActivated,
             this, &MainWindow::openFromPath);
+    connect(m_startScreen, &StartScreen::templateRequested,
+            this, &MainWindow::startFromTemplate);
 
     connect(m_canvas, &CanvasView::zoomChanged,
             this, &MainWindow::updateZoomLabel);
@@ -214,6 +217,11 @@ void MainWindow::buildCentralWidget()
                         m_imageDock->raise();
                     }
                 }
+            });
+    connect(m_canvas, &CanvasView::multiSelectionChanged, this,
+            [this](const QList<LayerId>& ids) {
+                if (m_layersPanel)
+                    m_layersPanel->setSelectedLayers(ids);
             });
     connect(m_canvas, &CanvasView::transformCommitted, this,
             [this](const LayerId& id, const AffineTransform& oldValue,
@@ -306,6 +314,12 @@ void MainWindow::buildLayersDock()
             [this](const LayerId& id) {
                 m_selectedId = id;
                 m_canvas->setSelectedLayer(id);
+            });
+    connect(m_layersPanel, &LayersPanel::multiSelectionRequested, this,
+            [this](const QList<LayerId>& ids) {
+                if (ids.isEmpty()) return;
+                m_selectedId = ids.last();
+                m_canvas->setMultiSelection(ids);
             });
     connect(m_layersPanel, &LayersPanel::deleteRequested,
             this, &MainWindow::deleteSelectedLayer);
@@ -461,6 +475,29 @@ void MainWindow::buildActions()
     m_alignCenterBothAction = new QAction(this);
     connect(m_alignCenterBothAction, &QAction::triggered, this, [this] {
         alignSelectedLayer(AlignTarget::CenterBoth);
+    });
+
+    m_distributeHAction = new QAction(this);
+    connect(m_distributeHAction, &QAction::triggered, this, &MainWindow::distributeHorizontally);
+
+    m_distributeVAction = new QAction(this);
+    connect(m_distributeVAction, &QAction::triggered, this, &MainWindow::distributeVertically);
+
+    m_groupAction = new QAction(this);
+    m_groupAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_G));
+    connect(m_groupAction, &QAction::triggered, this, &MainWindow::groupSelectedLayers);
+
+    m_toggleGridAction = new QAction(this);
+    m_toggleGridAction->setCheckable(true);
+    m_toggleGridAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Apostrophe));
+    connect(m_toggleGridAction, &QAction::triggered, this, [this](bool checked) {
+        if (m_canvas) m_canvas->setShowGrid(checked);
+    });
+
+    m_toggleSnapAction = new QAction(this);
+    m_toggleSnapAction->setCheckable(true);
+    connect(m_toggleSnapAction, &QAction::triggered, this, [this](bool checked) {
+        if (m_canvas) m_canvas->setSnapToGrid(checked);
     });
 
     m_flipHAction = new QAction(this);
@@ -666,6 +703,7 @@ void MainWindow::buildToolBars()
     m_cropAspectCombo->addItem(QStringLiteral("16:9 (Widescreen)"), 16.0 / 9.0);
     m_cropAspectCombo->addItem(QStringLiteral("4:3 (Standard)"), 4.0 / 3.0);
     m_cropAspectCombo->addItem(QStringLiteral("9:16 (Stories/Reels)"), 9.0 / 16.0);
+    m_cropAspectCombo->addItem(QStringLiteral("4:5 (Instagram Portrait)"), 4.0 / 5.0);
     connect(m_cropAspectCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
         if (m_canvas && index >= 0) {
             double ratio = m_cropAspectCombo->itemData(index).toDouble();
@@ -984,7 +1022,12 @@ void MainWindow::buildMenus()
     m_alignMenu->addAction(m_alignBottomAction);
     m_alignMenu->addSeparator();
     m_alignMenu->addAction(m_alignCenterBothAction);
+    m_alignMenu->addSeparator();
+    m_alignMenu->addAction(m_distributeHAction);
+    m_alignMenu->addAction(m_distributeVAction);
 
+    m_layerMenu->addAction(m_groupAction);
+    m_layerMenu->addSeparator();
     m_layerMenu->addAction(m_flipHAction);
     m_layerMenu->addAction(m_flipVAction);
     m_layerMenu->addSeparator();
@@ -992,6 +1035,32 @@ void MainWindow::buildMenus()
     m_layerMenu->addAction(m_removeBgAiQuickAction);
     m_layerMenu->addSeparator();
     m_layerMenu->addAction(m_deleteAction);
+
+    m_viewMenu = menuBar()->addMenu(QString());
+    m_viewMenu->addAction(m_toggleGridAction);
+    m_viewMenu->addAction(m_toggleSnapAction);
+    m_viewMenu->addSeparator();
+    m_safeZoneMenu = m_viewMenu->addMenu(QString());
+    m_safeNoneAction = m_safeZoneMenu->addAction(QString());
+    m_safeNoneAction->setCheckable(true);
+    m_safeNoneAction->setChecked(true);
+    m_safeYouTubeAction = m_safeZoneMenu->addAction(QString());
+    m_safeYouTubeAction->setCheckable(true);
+    m_safeInstagramAction = m_safeZoneMenu->addAction(QString());
+    m_safeInstagramAction->setCheckable(true);
+    m_safeTikTokAction = m_safeZoneMenu->addAction(QString());
+    m_safeTikTokAction->setCheckable(true);
+
+    auto* safeGroup = new QActionGroup(this);
+    safeGroup->addAction(m_safeNoneAction);
+    safeGroup->addAction(m_safeYouTubeAction);
+    safeGroup->addAction(m_safeInstagramAction);
+    safeGroup->addAction(m_safeTikTokAction);
+
+    connect(m_safeNoneAction, &QAction::triggered, this, [this]{ if(m_canvas) m_canvas->setSafeZoneMode(0); });
+    connect(m_safeYouTubeAction, &QAction::triggered, this, [this]{ if(m_canvas) m_canvas->setSafeZoneMode(1); });
+    connect(m_safeInstagramAction, &QAction::triggered, this, [this]{ if(m_canvas) m_canvas->setSafeZoneMode(2); });
+    connect(m_safeTikTokAction, &QAction::triggered, this, [this]{ if(m_canvas) m_canvas->setSafeZoneMode(3); });
 
     m_toolsMenu = menuBar()->addMenu(QString());
     m_toolsMenu->addAction(m_toolSelectAction);
@@ -1302,20 +1371,25 @@ void MainWindow::addShape(ShapeKind kind)
 
 void MainWindow::alignSelectedLayer(AlignTarget target)
 {
-    if (!m_document || m_selectedId.isNull())
+    if (!m_document)
+        return;
+
+    if (m_canvas && m_canvas->selectedLayers().size() > 1) {
+        alignMultipleLayers(target);
+        return;
+    }
+
+    if (m_selectedId.isNull())
         return;
 
     Layer* layer = m_document->findLayer(m_selectedId);
-    // Não alinha camadas inexistentes ou bloqueadas
     if (!layer || layer->locked)
         return;
 
-    // Obtém os limites locais da camada (dimensões intrínsecas)
     const QRectF local = layer->contentBounds();
     if (local.isEmpty())
         return;
 
-    // Calcula os limites reais da camada em coordenadas da tela (documento), levando em conta rotação e escala
     const QRectF docBounds = layer->transform.matrix(local).mapRect(local);
     const double docW = m_document->width();
     const double docH = m_document->height();
@@ -1323,7 +1397,6 @@ void MainWindow::alignSelectedLayer(AlignTarget target)
     double dx = 0.0;
     double dy = 0.0;
 
-    // Calcula o deslocamento necessário conforme o alvo de alinhamento
     switch (target) {
     case AlignTarget::Left:
         dx = -docBounds.left();
@@ -1349,7 +1422,6 @@ void MainWindow::alignSelectedLayer(AlignTarget target)
         break;
     }
 
-    // Se a camada já está perfeitamente alinhada, não faz nada
     if (qFuzzyIsNull(dx) && qFuzzyIsNull(dy))
         return;
 
@@ -1357,11 +1429,231 @@ void MainWindow::alignSelectedLayer(AlignTarget target)
     AffineTransform newT = oldT;
     newT.position += QPointF(dx, dy);
 
-    // Registra a alteração através do histórico (Ctrl+Z / Ctrl+Y)
     if (m_history) {
         m_history->execute(std::make_unique<SetLayerTransformCommand>(
             *m_document, m_selectedId, oldT, newT));
     }
+}
+
+void MainWindow::alignMultipleLayers(AlignTarget target)
+{
+    if (!m_document || !m_canvas)
+        return;
+    const QList<LayerId> ids = m_canvas->selectedLayers();
+    if (ids.size() < 2)
+        return;
+
+    struct LayerInfo {
+        LayerId id;
+        QRectF docBounds;
+        AffineTransform oldTransform;
+    };
+    QVector<LayerInfo> infos;
+    QRectF unionRect;
+
+    for (const auto& lid : ids) {
+        Layer* layer = m_document->findLayer(lid);
+        if (!layer || layer->locked)
+            continue;
+        const QRectF local = layer->contentBounds();
+        if (local.isEmpty())
+            continue;
+        const QRectF docBounds = layer->transform.matrix(local).mapRect(local);
+        infos.append({lid, docBounds, layer->transform});
+        unionRect = unionRect.isNull() ? docBounds : unionRect.united(docBounds);
+    }
+    if (infos.size() < 2 || unionRect.isEmpty())
+        return;
+
+    for (const auto& info : infos) {
+        double dx = 0.0;
+        double dy = 0.0;
+
+        switch (target) {
+        case AlignTarget::Left:
+            dx = unionRect.left() - info.docBounds.left();
+            break;
+        case AlignTarget::CenterX:
+            dx = unionRect.center().x() - info.docBounds.center().x();
+            break;
+        case AlignTarget::Right:
+            dx = unionRect.right() - info.docBounds.right();
+            break;
+        case AlignTarget::Top:
+            dy = unionRect.top() - info.docBounds.top();
+            break;
+        case AlignTarget::CenterY:
+            dy = unionRect.center().y() - info.docBounds.center().y();
+            break;
+        case AlignTarget::Bottom:
+            dy = unionRect.bottom() - info.docBounds.bottom();
+            break;
+        case AlignTarget::CenterBoth:
+            dx = unionRect.center().x() - info.docBounds.center().x();
+            dy = unionRect.center().y() - info.docBounds.center().y();
+            break;
+        }
+
+        if (!qFuzzyIsNull(dx) || !qFuzzyIsNull(dy)) {
+            AffineTransform newT = info.oldTransform;
+            newT.position += QPointF(dx, dy);
+            if (m_history) {
+                m_history->execute(std::make_unique<SetLayerTransformCommand>(
+                    *m_document, info.id, info.oldTransform, newT));
+            } else {
+                m_document->setLayerTransform(info.id, newT);
+            }
+        }
+    }
+    m_canvas->update();
+}
+
+void MainWindow::distributeHorizontally()
+{
+    if (!m_document || !m_canvas)
+        return;
+    const QList<LayerId> ids = m_canvas->selectedLayers();
+    if (ids.size() < 3)
+        return;
+
+    struct Info {
+        LayerId id;
+        QRectF docBounds;
+        AffineTransform oldTransform;
+        double centerX;
+    };
+    QVector<Info> infos;
+    for (const auto& lid : ids) {
+        Layer* layer = m_document->findLayer(lid);
+        if (!layer || layer->locked)
+            continue;
+        const QRectF local = layer->contentBounds();
+        if (local.isEmpty())
+            continue;
+        const QRectF db = layer->transform.matrix(local).mapRect(local);
+        infos.append({lid, db, layer->transform, db.center().x()});
+    }
+    if (infos.size() < 3)
+        return;
+
+    std::sort(infos.begin(), infos.end(), [](const Info& a, const Info& b) {
+        return a.centerX < b.centerX;
+    });
+
+    const double firstCenter = infos.first().centerX;
+    const double lastCenter = infos.last().centerX;
+    const double step = (lastCenter - firstCenter) / (infos.size() - 1);
+
+    for (int i = 1; i < infos.size() - 1; ++i) {
+        const double targetX = firstCenter + step * i;
+        const double dx = targetX - infos[i].centerX;
+        if (!qFuzzyIsNull(dx)) {
+            AffineTransform newT = infos[i].oldTransform;
+            newT.position += QPointF(dx, 0.0);
+            if (m_history) {
+                m_history->execute(std::make_unique<SetLayerTransformCommand>(
+                    *m_document, infos[i].id, infos[i].oldTransform, newT));
+            } else {
+                m_document->setLayerTransform(infos[i].id, newT);
+            }
+        }
+    }
+    m_canvas->update();
+}
+
+void MainWindow::distributeVertically()
+{
+    if (!m_document || !m_canvas)
+        return;
+    const QList<LayerId> ids = m_canvas->selectedLayers();
+    if (ids.size() < 3)
+        return;
+
+    struct Info {
+        LayerId id;
+        QRectF docBounds;
+        AffineTransform oldTransform;
+        double centerY;
+    };
+    QVector<Info> infos;
+    for (const auto& lid : ids) {
+        Layer* layer = m_document->findLayer(lid);
+        if (!layer || layer->locked)
+            continue;
+        const QRectF local = layer->contentBounds();
+        if (local.isEmpty())
+            continue;
+        const QRectF db = layer->transform.matrix(local).mapRect(local);
+        infos.append({lid, db, layer->transform, db.center().y()});
+    }
+    if (infos.size() < 3)
+        return;
+
+    std::sort(infos.begin(), infos.end(), [](const Info& a, const Info& b) {
+        return a.centerY < b.centerY;
+    });
+
+    const double firstCenter = infos.first().centerY;
+    const double lastCenter = infos.last().centerY;
+    const double step = (lastCenter - firstCenter) / (infos.size() - 1);
+
+    for (int i = 1; i < infos.size() - 1; ++i) {
+        const double targetY = firstCenter + step * i;
+        const double dy = targetY - infos[i].centerY;
+        if (!qFuzzyIsNull(dy)) {
+            AffineTransform newT = infos[i].oldTransform;
+            newT.position += QPointF(0.0, dy);
+            if (m_history) {
+                m_history->execute(std::make_unique<SetLayerTransformCommand>(
+                    *m_document, infos[i].id, infos[i].oldTransform, newT));
+            } else {
+                m_document->setLayerTransform(infos[i].id, newT);
+            }
+        }
+    }
+    m_canvas->update();
+}
+
+void MainWindow::groupSelectedLayers()
+{
+    if (!m_document || !m_canvas)
+        return;
+    const QList<LayerId> ids = m_canvas->selectedLayers();
+    if (ids.size() < 2)
+        return;
+
+    auto group = std::make_unique<GroupLayer>();
+    group->name = m_i18n ? m_i18n->t("editor", "layer.group") : QStringLiteral("Group");
+    const LayerId groupId = group->id();
+
+    for (const auto& lid : ids) {
+        if (auto taken = m_document->takeLayer(lid))
+            group->children.push_back(std::move(taken));
+    }
+
+    m_document->addLayer(std::move(group));
+    m_canvas->setSelectedLayer(groupId);
+    m_canvas->update();
+    if (m_layersPanel)
+        m_layersPanel->refresh();
+}
+
+void MainWindow::startFromTemplate(int templateKind)
+{
+    if (!confirmDiscardUnsavedChanges())
+        return;
+
+    auto kind = static_cast<TemplateKind>(templateKind);
+    auto doc = TemplateFactory::createTemplate(kind, m_i18n);
+    if (!doc)
+        return;
+
+    m_document = std::move(doc);
+    m_currentFilePath.clear();
+    m_modified = false;
+    if (m_history)
+        m_history->clear();
+    enterEditor();
 }
 
 void MainWindow::exportImage()
@@ -1646,6 +1938,30 @@ void MainWindow::retranslateUi()
         m_alignBottomAction->setText(m_i18n->t("common", "menu.layer.align.bottom"));
     if (m_alignCenterBothAction)
         m_alignCenterBothAction->setText(m_i18n->t("common", "menu.layer.align.centerBoth"));
+    if (m_distributeHAction)
+        m_distributeHAction->setText(m_i18n->t("common", "menu.layer.distribute.horizontal"));
+    if (m_distributeVAction)
+        m_distributeVAction->setText(m_i18n->t("common", "menu.layer.distribute.vertical"));
+    if (m_groupAction)
+        m_groupAction->setText(m_i18n->t("common", "menu.layer.group"));
+
+    if (m_viewMenu)
+        m_viewMenu->setTitle(m_i18n->t("common", "menu.view"));
+    if (m_toggleGridAction)
+        m_toggleGridAction->setText(m_i18n->t("common", "menu.view.showGrid"));
+    if (m_toggleSnapAction)
+        m_toggleSnapAction->setText(m_i18n->t("common", "menu.view.snapToGrid"));
+    if (m_safeZoneMenu)
+        m_safeZoneMenu->setTitle(m_i18n->t("common", "menu.view.safeZones"));
+    if (m_safeNoneAction)
+        m_safeNoneAction->setText(m_i18n->t("common", "menu.view.safe.none"));
+    if (m_safeYouTubeAction)
+        m_safeYouTubeAction->setText(m_i18n->t("common", "menu.view.safe.youtube"));
+    if (m_safeInstagramAction)
+        m_safeInstagramAction->setText(m_i18n->t("common", "menu.view.safe.instagram"));
+    if (m_safeTikTokAction)
+        m_safeTikTokAction->setText(m_i18n->t("common", "menu.view.safe.tiktok"));
+
     m_flipHAction->setText(m_i18n->t("common", "menu.layer.flipH"));
     m_flipVAction->setText(m_i18n->t("common", "menu.layer.flipV"));
     m_deleteAction->setText(m_i18n->t("common", "menu.layer.delete"));
@@ -1729,12 +2045,13 @@ void MainWindow::retranslateUi()
     if (m_cropCancelBtn)
         m_cropCancelBtn->setText(m_i18n->t("editor", "tools.crop.cancel") + QStringLiteral(" (Esc)"));
 
-    if (m_cropAspectCombo && m_cropAspectCombo->count() >= 5) {
+    if (m_cropAspectCombo && m_cropAspectCombo->count() >= 6) {
         m_cropAspectCombo->setItemText(0, m_i18n->t("editor", "tools.crop.free"));
         m_cropAspectCombo->setItemText(1, m_i18n->t("editor", "tools.crop.square"));
         m_cropAspectCombo->setItemText(2, m_i18n->t("editor", "tools.crop.widescreen"));
         m_cropAspectCombo->setItemText(3, m_i18n->t("editor", "tools.crop.standard"));
         m_cropAspectCombo->setItemText(4, m_i18n->t("editor", "tools.crop.portrait"));
+        m_cropAspectCombo->setItemText(5, QStringLiteral("4:5 (Instagram)"));
     }
 
     if (m_scissorsModeLabel)

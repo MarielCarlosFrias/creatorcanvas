@@ -34,6 +34,8 @@ add_library(cc_core STATIC
     core/Document.cpp
     core/document/NewDocumentSpec.h
     core/document/NewDocumentSpec.cpp
+    core/templates/TemplateFactory.h
+    core/templates/TemplateFactory.cpp
     core/history/Command.h
     core/history/Command.cpp
     core/history/CommandStack.h

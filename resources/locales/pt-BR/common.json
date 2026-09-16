@@ -107,7 +107,8 @@
         "emptyRecents": "Nenhum projeto recente ainda",
         "emptyRecentsHint": "Crie um novo design ou abra um arquivo de projeto para começar a criar!",
         "browseAll": "Mais Formatos...",
-        "screenAction": "Tela Inicial"
+        "screenAction": "Tela Inicial",
+        "templates": "Modelos Prontos"
     },
     "action": {
         "apply": "Aplicar",
@@ -115,5 +116,16 @@
         "cancel": "Cancelar",
         "undo": "Desfazer",
         "rename": "Renomear"
-    }
+    },
+    "menu.layer.distribute.horizontal": "Distribuir &Horizontalmente",
+    "menu.layer.distribute.vertical": "Distribuir &Verticalmente",
+    "menu.layer.group": "&Agrupar Camadas (Ctrl+G)",
+    "menu.view": "&Exibir",
+    "menu.view.showGrid": "Mostrar &Grade (Ctrl+')",
+    "menu.view.snapToGrid": "&Atrair pela Grade",
+    "menu.view.safeZones": "&Zonas Seguras",
+    "menu.view.safe.none": "&Nenhuma",
+    "menu.view.safe.youtube": "&YouTube (16:9)",
+    "menu.view.safe.instagram": "&Instagram",
+    "menu.view.safe.tiktok": "&TikTok / Reels (9:16)"
 }

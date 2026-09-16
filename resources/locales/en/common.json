@@ -107,7 +107,8 @@
         "emptyRecents": "No recent projects yet",
         "emptyRecentsHint": "Create a new design or open a project file to start creating!",
         "browseAll": "More Formats...",
-        "screenAction": "Start Screen"
+        "screenAction": "Start Screen",
+        "templates": "Ready-Made Templates"
     },
     "action": {
         "apply": "Apply",
@@ -115,5 +116,16 @@
         "cancel": "Cancel",
         "undo": "Undo",
         "rename": "Rename"
-    }
+    },
+    "menu.layer.distribute.horizontal": "Distribute &Horizontally",
+    "menu.layer.distribute.vertical": "Distribute &Vertically",
+    "menu.layer.group": "&Group Layers (Ctrl+G)",
+    "menu.view": "&View",
+    "menu.view.showGrid": "Show &Grid (Ctrl+')",
+    "menu.view.snapToGrid": "&Snap to Grid",
+    "menu.view.safeZones": "Safe &Zones",
+    "menu.view.safe.none": "&None",
+    "menu.view.safe.youtube": "&YouTube (16:9)",
+    "menu.view.safe.instagram": "&Instagram",
+    "menu.view.safe.tiktok": "&TikTok / Reels (9:16)"
 }

@@ -18,5 +18,15 @@
         "social": "Social Media",
         "video": "Video & Streaming",
         "custom": "Custom Size"
+    },
+    "builtIn": {
+        "yt_tech.title": "Tech Review (YouTube)",
+        "yt_tech.desc": "Professional 16:9 high-contrast thumbnail for reviews and analysis.",
+        "yt_gaming.title": "Gaming / Epic Gameplay (YouTube)",
+        "yt_gaming.desc": "High visual impact thumbnail with standout text and 4K badge.",
+        "insta_promo.title": "Promotional Post / Sale (Instagram)",
+        "insta_promo.desc": "Clean, modern 1:1 square format with call-to-action.",
+        "tiktok_viral.title": "Tip / Viral Curiosity (TikTok & Reels)",
+        "tiktok_viral.desc": "Vertical 9:16 format perfectly aligned within the safe zone."
     }
 }

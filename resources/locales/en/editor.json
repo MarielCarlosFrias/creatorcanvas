@@ -184,6 +184,7 @@
         "command.magicWandRemoval": "Magic Wand Background Removal",
         "command.paintBucket": "Paint Bucket",
         "command.aiBackground": "AI Background Removal",
-        "command.aiBackgroundQuick": "AI Background Removal (Quick)"
+        "command.aiBackgroundQuick": "AI Background Removal (Quick)",
+        "layer.group": "Group"
     }
 }
