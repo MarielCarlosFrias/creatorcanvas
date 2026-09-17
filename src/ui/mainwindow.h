@@ -168,7 +168,12 @@ private:
     QMenu* m_settingsMenu = nullptr;
     QMenu* m_helpMenu = nullptr;
 
+    QAction* m_zoomInAction = nullptr;
+    QAction* m_zoomOutAction = nullptr;
+    QAction* m_zoomFitAction = nullptr;
+
     // Ferramentas da barra de ferramentas e opções de ferramentas
+    QToolBar* m_quickToolBar = nullptr;
     QToolBar* m_toolsBar = nullptr;
     QToolBar* m_toolOptionsBar = nullptr;
     QActionGroup* m_toolGroup = nullptr;

@@ -8,6 +8,7 @@
 #include "services/settingsservice.h"
 #include "ui/darktheme.h"
 #include "ui/mainwindow.h"
+#include "ui/themeicons.h"
 
 #include <QApplication>
 #include <QCommandLineParser>
@@ -33,6 +34,7 @@ int main(int argc, char *argv[])
     QApplication::setApplicationVersion(QStringLiteral(APP_VERSION));
 
     cc::applyDarkTheme(app);
+    app.setWindowIcon(cc::ThemeIcons::appIcon());
 
     const QString dataDir =
         QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);

@@ -11,6 +11,7 @@
 #include "services/settingsservice.h"
 #include "core/Document.h"
 #include "core/layers/Layer.h"
+#include "core/templates/TemplateFactory.h"
 
 using namespace cc;
 
@@ -48,6 +49,33 @@ private slots:
         QVERIFY(!ThemeIcons::brandTiktok(32).isNull());
         QVERIFY(!ThemeIcons::brandBanner(32).isNull());
         QVERIFY(!ThemeIcons::emptyProjectsPlaceholder(64, 64).isNull());
+
+        // App and action icons
+        QVERIFY(!ThemeIcons::appIcon().isNull());
+        QVERIFY(!ThemeIcons::actionSave().isNull());
+        QVERIFY(!ThemeIcons::actionSaveAs().isNull());
+        QVERIFY(!ThemeIcons::actionImport().isNull());
+        QVERIFY(!ThemeIcons::actionExport().isNull());
+        QVERIFY(!ThemeIcons::actionQuit().isNull());
+        QVERIFY(!ThemeIcons::actionUndo().isNull());
+        QVERIFY(!ThemeIcons::actionRedo().isNull());
+        QVERIFY(!ThemeIcons::actionZoomIn().isNull());
+        QVERIFY(!ThemeIcons::actionZoomOut().isNull());
+        QVERIFY(!ThemeIcons::actionZoomFit().isNull());
+        QVERIFY(!ThemeIcons::actionGrid().isNull());
+        QVERIFY(!ThemeIcons::actionSnap().isNull());
+        QVERIFY(!ThemeIcons::actionAlignLeft().isNull());
+        QVERIFY(!ThemeIcons::actionAlignCenter().isNull());
+        QVERIFY(!ThemeIcons::actionAlignRight().isNull());
+        QVERIFY(!ThemeIcons::actionAlignTop().isNull());
+        QVERIFY(!ThemeIcons::actionAlignMiddle().isNull());
+        QVERIFY(!ThemeIcons::actionAlignBottom().isNull());
+        QVERIFY(!ThemeIcons::actionDistributeH().isNull());
+        QVERIFY(!ThemeIcons::actionDistributeV().isNull());
+        QVERIFY(!ThemeIcons::actionSettings().isNull());
+        QVERIFY(!ThemeIcons::actionAbout().isNull());
+        QVERIFY(!ThemeIcons::actionCheck().isNull());
+        QVERIFY(!ThemeIcons::actionCancel().isNull());
     }
 
     void testCollapsibleSection()
@@ -112,6 +140,29 @@ private slots:
         // Rebuild and refresh without crashing
         panel.refresh();
         QVERIFY(doc.rootGroup()->children.size() >= 2);
+    }
+
+    void testTemplatesCreationAndLayerLoading()
+    {
+        QTemporaryDir tmpDir;
+        SettingsService settings(tmpDir.path() + "/settings.json");
+        I18nService i18n(&settings, {":/locales"});
+        i18n.loadAvailableLanguages();
+
+        const auto templates = TemplateFactory::availableTemplates();
+        QCOMPARE(templates.size(), 4);
+
+        for (const auto& tmpl : templates) {
+            auto doc = TemplateFactory::createTemplate(tmpl.kind, &i18n);
+            QVERIFY(doc != nullptr);
+            QCOMPARE(doc->width(), tmpl.width);
+            QCOMPARE(doc->height(), tmpl.height);
+            QVERIFY(doc->rootGroup()->children.size() >= 3);
+
+            LayersPanel panel(&i18n, nullptr);
+            panel.setDocument(doc.get());
+            panel.refresh();
+        }
     }
 };
 

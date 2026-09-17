@@ -1,6 +1,8 @@
 # CreatorCanvas — Technical Documentation
 
-This document is the technical reference for CreatorCanvas: architecture, data model, rendering pipeline, persistence format, internationalization, testing, build/packaging, conventions, and known limitations. It reflects the state of the codebase for **v0.2.0** (Milestones M0 through M20 complete).
+Technical reference for CreatorCanvas: architecture, data model, rendering, persistence, i18n, testing, build/packaging, conventions, and known limitations.
+
+**Scope of this document:** current **`main`**. Last tagged release is **v0.2.0** (milestones M0–M20). `main` additionally includes multi-select, alignment/distribution/grouping, grid and safe-zone overlays, layout templates, and extra raster tools (crop, scissors, magic wand, clone stamp). CMake `project()` version is still `0.2.0` until the next tag.
 
 ## Table of contents
 
@@ -8,7 +10,7 @@ This document is the technical reference for CreatorCanvas: architecture, data m
 2. [Milestone history](#2-milestone-history)
 3. [Architecture](#3-architecture)
 4. [Data model & Layers](#4-data-model--layers)
-5. [Rendering pipeline & Paint Engine](#5-rendering-pipeline--paint-engine)
+5. [Rendering & raster processing](#5-rendering--raster-processing)
 6. [Canvas & interaction](#6-canvas--interaction)
 7. [AI Background Removal](#7-ai-background-removal)
 8. [Internationalization](#8-internationalization)
@@ -25,43 +27,38 @@ This document is the technical reference for CreatorCanvas: architecture, data m
 
 ## 1. Overview
 
-CreatorCanvas is a modern, layer-based image editor crafted specifically for digital content creators. The core workflow it optimizes for is: *pick a platform canvas preset (YouTube, Instagram, TikTok, Facebook, X) → compose images, shapes, and brush strokes → add rich typographic text with gradients and effects → apply non-destructive color adjustments and AI background removal → export high-fidelity images (PNG, JPEG, WebP)*.
+CreatorCanvas is a layer-based image editor aimed at digital content creators. Typical flow: *pick a platform preset or layout template → compose images, shapes, and brush strokes → style text (outline, shadow, gradient) → crop / cut out / adjust color / remove background → export PNG, JPEG, or WebP*.
 
-**Current state (v0.2.0):** Milestones M0 through M20 are fully implemented, stabilized, and verified:
-- **Phase 1 (M0–M14):** Core document model, undo/redo stack, serialization, software canvas renderer, transform gestures, layers panel, text tool with shadow/outline, settings, export, autosave, start screen with recent projects, and packaging base.
-- **Milestones M15–M20:**
-  - **M15:** Smart guides & snapping (canvas boundary and inter-layer edge/center alignment actively rendered on canvas during drag).
-  - **M16:** Raster brush paint engine (Round, Square, Marker, Airbrush, Eraser) with stroke smoothing.
-  - **M17:** Full blend modes (Normal, Multiply, Screen, Overlay, Darken, Lighten, Color Dodge, Color Burn, Hard Light, Soft Light, Difference, Exclusion) and layer opacity.
-  - **M18:** Non-destructive image adjustments (Brightness, Contrast, Saturation, Hue, Exposure, Temperature/Tint, Invert, Blur).
-  - **M19:** Advanced text effects: linear & radial multi-stop gradients, angle control, and 3D perspective tilt simulation.
-  - **M20:** AI Background Removal via ONNX Runtime (`u2netp.onnx` / custom models) with multi-stage cooperative cancellation (`std::atomic<bool>`), UI safety locks, and automated smoke testing.
+**Shipped in v0.2.0 (M0–M20):** document model, command stack, ZIP+JSON projects, software canvas renderer, transform gestures, layers panel, text + shape tools, settings, export, autosave, start screen, packaging, snapping, paint/fill, text gradients, shear, image inspector, ONNX background removal.
 
-**Stack:** C++20, Qt 6 (Widgets), ONNX Runtime (C API), CMake with presets, QTest, ZIP+JSON project archives with `miniz`.
+**On `main` after the tag (M21):** multi-layer selection, align/distribute/group, grid + snap-to-grid, YouTube/Instagram/TikTok safe-zone overlays, `TemplateFactory` start-screen templates, crop/scissors/wand/clone tools.
+
+**Stack:** C++20, Qt 6 Widgets, ONNX Runtime (C API), CMake presets, QTest, ZIP archives via vendored `miniz`.
 
 ## 2. Milestone history
 
 | Milestone | Delivered |
 |---|---|
-| `m0` / `m1` | Application skeleton — CMake project, logging (`LogService`), settings persistence (`SettingsService`), core document/layer model + serialization |
+| `m0` / `m1` | Application skeleton — CMake, `LogService`, `SettingsService`, document/layer model + serialization |
 | `m4-canvas` | Canvas MVP: pan/zoom, checkerboard, software renderer, status bar |
 | `m5-new-document` | New Document dialog — social presets, geometry, background fills |
-| `m6a-import` | Image import, asset store, media embedded in project archive, undo/redo |
-| `m6b-transform` | `AffineTransform`, `contentBounds`, interactive selection handles, gestures, Layer menu |
-| `m7-layers-panel` | Layers panel: drag reorder, visibility toggle, lock toggle, context menu, focus-on-double-click |
-| `m8-text` | Text tool: add text (Ctrl+T), inline WYSIWYG editing, property inspector, text wrap box |
-| `m9-text-effects` | Text effects: outline (with width) and drop shadow (with blur), cached, non-destructive, serialized |
-| `m10-save-open` | Save/Open/Save As UI, unsaved-changes prompt, settings dialog (language + autosave interval) |
-| `m11-export` | Export UI: PNG/JPEG/WebP with quality and scale, headless offscreen renderer |
-| `m12-autosave` | Autosave engine + emergency session recovery |
-| `m13-start-screen` | Start screen: preset cards, recent projects list with visual thumbnails, custom canvas creation flow |
-| `m14-packaging` | Linux DEB packaging, AppStream metadata, SVG icon, Windows portable ZIP packaging |
-| `m15-snap` | Smart guides & snapping engine (`SnapEngine`) + active on-canvas cyan visual guides during drag/resize |
-| `m16-paint` | Raster brush drawing engine: Round, Square, Marker, Airbrush, Eraser, color picker, stroke smoothing |
-| `m17-blend-modes` | Blend modes integration: 12 blending modes, opacity slider, compositing engine |
-| `m18-adjustments` | Non-destructive image adjustment pipeline (brightness, contrast, saturation, hue, warmth, blur) |
-| `m19-text-styling` | Text gradient fills (linear, radial, angle, colors) and 3D perspective tilt simulation |
-| `m20-ai-removal` | AI Background Removal via ONNX Runtime (`u2netp.onnx`), cooperative cancellation, UI control locking, full `--smoke-test` validation |
+| `m6a-import` | Image import, `AssetStore`, media embedded in the project archive, undo/redo |
+| `m6b-transform` | `AffineTransform`, `contentBounds`, selection handles, gestures, Layer menu |
+| `m7-layers-panel` | Layers panel: drag reorder, visibility, lock, context menu, focus-on-double-click |
+| `m8-text` | Text tool: add text, inline WYSIWYG, inspector, wrap box |
+| `m9-text-effects` | Outline and drop shadow, serialized on the layer |
+| `m10-save-open` | Save/Open/Save As, unsaved-changes prompt, settings (language + autosave) |
+| `m11-export` | PNG/JPEG/WebP with quality and scale, headless offscreen render |
+| `m12-autosave` | Autosave + emergency session recovery |
+| `m13-start-screen` | Preset cards, recent projects with thumbnails, custom canvas |
+| `m14-packaging` | Linux DEB, AppStream, SVG icon, Windows portable ZIP |
+| `m15-snap` | `SnapEngine` + on-canvas guides during drag/resize |
+| `m16-paint` | `ImageProcessing` brushes (Brush, Pencil, Highlighter, Airbrush, Eraser) + flood fill |
+| `m17-blend` | Layer opacity + **seven** `QPainter` blend modes (see §4) |
+| `m18-adjustments` | Image Inspector color/blur/sharpen/presets (baked assets) |
+| `m19-text-styling` | Two-stop linear/radial text gradients; shear X/Y on `AffineTransform` |
+| `m20-ai-removal` | ONNX `u2netp` (and custom models), cooperative cancellation, `--smoke-test` |
+| `m21-composer` | Multi-select, align/distribute/group, grid, safe zones, templates, crop/scissors/wand/clone |
 
 ## 3. Architecture
 
@@ -69,196 +66,291 @@ CreatorCanvas is a modern, layer-based image editor crafted specifically for dig
 
 ```
 ┌──────────────────────────────── ui/ ─────────────────────────────────────┐
-│  MainWindow · StartScreen · LayersPanel · TextInspector · BrushPanel     │
-│  AIBackgroundDialog · Dialogs (New/Export/Settings) · CanvasView         │
+│  MainWindow · StartScreen · LayersPanel · Text/Shape/Image inspectors    │
+│  AIBackgroundDialog · MaskEditCanvas · Dialogs · CanvasView              │
 └───────▲───────────────────────────────────────────▲──────────────────────┘
         │ user intents (commands)                   │ repaint requests
 ┌───────┴──────────── core/ ────────────────────────┴─────── rendering/ ──┐
-│  Document · Layer tree · CommandStack (history)                          │
+│  Document · Layer tree · CommandStack                                    │
 │  ProjectFile (ZIP+JSON+Thumbnail) · AssetStore                           │
-│  AffineTransform (geometry) · SnapEngine                                 │
-│  ImageAdjustments · BackgroundRemover (ONNX Runtime)                     │
-│                                                                          │
-│  CanvasRenderer — software renderer (QPainter, blend modes, effects)     │
-│  PaintEngine — brush stroke rasterizer (core/paint/)                     │
+│  AffineTransform · SnapEngine · TemplateFactory                          │
+│  ImageProcessing (raster ops) · BackgroundRemover (ONNX)                 │
+│  renderDocument() — QPainter compositor (no GPU path)                    │
 └──────────────────────────────────────────────────────────────────────────┘
-   services/     (SettingsService · AutosaveService · RecentFiles · LogService)
-   imageio/      (ImageImporter · DocumentExporter)
-   localization/ (I18nService + JSON catalogs)
+   services/     SettingsService · AutosaveService · RecentFiles · LogService · PresetStore
+   imageio/      ImageImporter · DocumentExporter   (compiled into cc_core)
+   localization/ I18nService + JSON catalogs
 ```
 
-### Architectural Principles
+CMake targets (`src/CMakeLists.txt`):
 
-- **Separation of Concerns:** `core/` contains no `QtWidgets` references, enabling 100% headless testing with `ctest` and automated CI runs without an X11/Wayland display server.
-- **Command Pattern:** All mutating operations against `Document` or `Layer` must pass through `core/history/Command` instances. Undo and redo record minimal property deltas rather than full state clones.
-- **Thread Safety & Cancellation:** Heavy asynchronous operations (such as AI background segmentation) run on worker threads using `std::atomic<bool>` cooperative cancellation flags, ensuring the UI remains responsive and aborts cleanly.
-- **Resource Attribution & Safety:** Archive extraction uses strict size and count guards to prevent zip-bomb attacks; media assets are verified by SHA-256 hashes.
+| Target | Sources |
+|---|---|
+| `cc_core` | `core/*` + `imageio/*`, links Qt Core/Gui, `miniz`, ONNX Runtime |
+| `cc_rendering` | `rendering/CanvasRenderer.*` |
+| `cc_services` | settings, autosave, recents, log, presets |
+| `cc_localization` | i18n + locale `.qrc` |
+| `creatorcanvas` | `main.cpp` + `ui/*` (output name `CreatorCanvas`) |
+
+There is **no** `src/platform/` tree and **no** `IRenderer` / `core/paint/` module. Raster drawing lives in `cc::ImageProcessing`.
+
+### Principles
+
+- **Separation of concerns:** `core/` must not include QtWidgets, so unit tests and CI can run with `QT_QPA_PLATFORM=offscreen`.
+- **Command pattern:** mutating `Document` / layer structure should go through `core/history/Command`. Undo stores property deltas, not full document clones. `Layer` still has public fields — treat those as a read path, not a second write path (see §16).
+- **Async cancellation:** ONNX inference inspects `std::atomic<bool>` cancellation flags so the UI can abort.
+- **Archive safety:** zip-bomb limits on entry count and uncompressed size; path traversal rejected; embedded media SHA-256 verified on load.
 
 ## 4. Data model & Layers
 
 ### Document
-`src/core/Document.h` manages the root layer group (`GroupLayer`), the asset dictionary (`AssetStore`), canvas dimensions (width, height, DPI), and document revision tracking.
 
-### Layer Hierarchy
-All layers derive from `cc::Layer`:
-- `GroupLayer`: Container holding child layers in paint order (index 0 is bottom).
-- `ImageLayer`: References an image asset from `AssetStore` with natural dimensions, optional non-destructive adjustments (`ImageAdjustments`), and raster modifications.
-- `TextLayer`: Typographic text layer with font family, size, weight, tracking, alignment, wrap box, drop shadow, outline, gradient fills, and 3D tilt angles.
-- `ShapeLayer`: Vector shapes (Rectangle, Rounded Rectangle, Ellipse, Line, Polygon) with fill and stroke.
-- `BackgroundLayer`: Canvas background color or pattern.
+`src/core/Document.h` owns the root `GroupLayer`, `AssetStore`, canvas width/height/DPI, and a monotonically increasing `revision()`.
 
-### Layer Properties
-- `name`: User-visible label in the layers panel.
-- `visible`: Toggles layer rendering.
-- `locked`: Prevents transform and selection on canvas.
-- `opacity`: Normalized alpha `[0.0, 1.0]`.
-- `blendMode`: 12 blend modes evaluated during scene compositing.
-- `transform`: `AffineTransform` (translation, rotation, scale X/Y, shear X/Y).
+### Layer types
 
-## 5. Rendering pipeline & Paint Engine
+All types derive from `cc::Layer` (`src/core/layers/Layer.h`):
 
-`src/rendering/CanvasRenderer.cpp` handles compositing:
-1. Walks the layer hierarchy from bottom to top.
-2. Applies layer transforms (`AffineTransform`) to the `QPainter` transform stack.
-3. Configures blend modes and opacity.
-4. Renders layer geometry, raster images with adjustments applied, vector paths, or styled text.
-5. In the interactive canvas (`CanvasView`), overlays are drawn on top:
-   - Selected layer bounding box and transform handles (corners, edges, rotation knob).
-   - Active smart guide alignment lines (cyan) when snapping is active.
-   - Brush cursor preview when in painting mode.
+- `GroupLayer` — children in paint order (index 0 = bottom).
+- `ImageLayer` — `assetId` into `AssetStore` plus `naturalWidth` / `naturalHeight`. No separate adjustment object; color filters replace the asset.
+- `TextLayer` — content, font, box, alignment, `TextEffects` (outline, shadow, gradient).
+- `ShapeLayer` — rectangle, rounded rect, ellipse, line, polygon; fill/stroke/corner radius/points.
+- `BackgroundLayer` — solid fill.
 
-### Paint Engine (`core/paint/`)
-Provides real-time brush rendering directly onto image layers:
-- **Brushes:** Round, Square, Marker (angled chisel), Airbrush (soft falloff), Eraser.
-- **Parameters:** Size, opacity, flow, hardness/softness, spacing.
-- **Stroke Smoothing:** Catmull-Rom spline interpolation between sampled pointer positions.
+### Shared properties
+
+- `name`, `visible`, `locked` (public fields)
+- `opacity` — `[0, 1]`, via getter/setter
+- `blendMode` — see below
+- `transform` — `AffineTransform`: translation, rotation (deg), scale X/Y, shear X/Y
+
+### Blend modes (implemented)
+
+`enum class BlendMode` maps to `QPainter::CompositionMode`:
+
+| Enum | QPainter mode |
+|---|---|
+| `Normal` | `SourceOver` |
+| `Multiply` | `Multiply` |
+| `Screen` | `Screen` |
+| `Overlay` | `Overlay` |
+| `Darken` | `Darken` |
+| `Lighten` | `Lighten` |
+| `Add` | `Plus` |
+
+There are **seven** modes, not twelve. Dodge, burn, hard/soft light, difference, and exclusion are not implemented.
+
+### Text effects
+
+`TextEffects` (`src/core/layers/TextEffects.h`):
+
+- Outline: enable, color, width
+- Shadow: enable, color, offset X/Y, blur (downscale-blur approximation in the renderer)
+- Gradient: enable, `type` 0 = linear / 1 = radial, two colors, angle (degrees). **No conical gradient.**
+
+### Templates
+
+`src/core/templates/TemplateFactory` builds starter documents:
+
+| Kind | Size |
+|---|---|
+| YouTube tech review | 1280×720 |
+| YouTube gaming | 1280×720 |
+| Instagram promo | 1080×1080 |
+| TikTok / Reels | 1080×1920 |
+
+## 5. Rendering & raster processing
+
+### Software compositor
+
+`cc::renderDocument()` in `src/rendering/CanvasRenderer.cpp`:
+
+1. Walks the layer tree bottom-up.
+2. Multiplies group opacity down the tree.
+3. Sets `QPainter` transform from `AffineTransform::matrix(contentBounds)`.
+4. Sets composition mode from `BlendMode`.
+5. Draws background fill, shapes, text (with effects), or the image asset.
+
+The renderer header still documents **full recomposition every call** — there is no per-layer pixmap cache. Export and the viewport share this function; `CanvasView` then draws editor overlays (handles, guides, grid, safe zones, tool cursors) on top.
+
+### Raster engine
+
+`cc::ImageProcessing` (`src/core/image/ImageProcessing.{h,cpp}`), not a `core/paint/` package:
+
+| API | Role |
+|---|---|
+| `paintStroke` | Brush / Pencil / Highlighter / Airbrush / Eraser between two points |
+| `floodFill` | Contiguous fill with tolerance |
+| `cropImage` / `calculateAspectCropRect` | Crop |
+| `scissorsCut` | Keep or punch a polygon; optional crop to bounds |
+| `removeBackground` | Magic-wand style color tolerance (not ONNX) |
+| `cloneStamp` | Circular clone with hardness/opacity |
+| `adjustColors` | Brightness, contrast, saturation, temperature |
+| `applyBlur` / `applySharpen` | Spatial filters |
+| `applyPresetFilter` | Grayscale, Sepia, Vintage, High Contrast |
+
+Paint strokes are sampled from pointer movement (line segments between previous and current point). There is no Catmull-Rom stroke spline.
+
+Image Inspector live preview writes a temporary asset via `Document::setImageLayerAsset`; committing (or cancelling) swaps back to the original or a final baked asset through history.
 
 ## 6. Canvas & interaction
 
-`src/ui/canvasview.cpp` provides the viewport and interaction:
-- **Pan & Zoom:** Smooth panning via Space+Drag or middle-click; zoom from 10% to 3200% with mouse wheel or hotkeys (`+`, `-`, `1`, `F` to fit).
-- **Selection & Transform:** Direct manipulation of layer handles (scale, rotate, move).
-- **Smart Guides & Snapping:** Calculates proximity thresholds against canvas edges, centerlines, and neighboring layer bounding boxes. Snaps the transform position and renders guide lines.
-- **Inline Text Editing:** Double-click a text layer to activate in-place editing.
-- **Drag and Drop:** External image files dropped onto the canvas are automatically imported and placed as new layers.
+`src/ui/canvasview.cpp` is the viewport (`CanvasView`). It currently also hosts most tool state (large file; see §16).
+
+- **Pan & zoom:** Space+drag or middle-click; wheel / `+` `-` `1` / `F` fit. Zoom range is implemented in the view (about 10%–3200%).
+- **Select:** click, Shift-add, rubber-band; transform handles (scale, rotate, move) for the primary or multi-selection.
+- **Snap:** `SnapEngine` against canvas edges/centers and sibling bounds; optional snap-to-grid.
+- **Overlays:** selection, multi-selection bounds, snap guides, grid, safe zones (`0` none, `1` YouTube, `2` Instagram, `3` TikTok), crop/scissors/clone previews, brush cursor.
+- **Inline text:** double-click a text layer.
+- **DnD:** dropped image files import as layers.
+- **`CanvasTool`:** `Select`, `Crop`, `Scissors`, `MagicWand`, `CloneStamp`, `Paint`, `FloodFill`.
+
+`MainWindow` wires menus, docks, tool option bars, align/distribute/group, and start-screen templates.
 
 ## 7. AI Background Removal
 
-Located in `src/core/image/BackgroundRemover.{h,cpp}` and `src/ui/aibackgrounddialog.{h,cpp}`:
-- **Engine:** Evaluated via ONNX Runtime C API.
-- **Default Model:** `u2netp.onnx` (lightweight, high-speed salient object segmentation). Custom ONNX models can be selected in the dialog.
-- **Pipeline:**
-  1. Preprocessing: Resizes input to 320×320, normalizes RGB channels (ImageNet mean & std dev), packs NCHW tensor.
-  2. Inference: Runs ONNX session asynchronously on a background worker thread.
-  3. Postprocessing: Normalizes sigmoid output, resizes mask to original image dimensions, applies edge feathering.
-  4. Compositing: Applies alpha channel to the original image pixels.
-- **Cooperative Cancellation:** The `cancelFlag` parameter (`const std::atomic<bool>*`) is inspected before inference, between tensor operations, and during mask scaling. If the user cancels or closes the dialog, the worker halts immediately.
-- **UI Safety:** Dialog controls (`m_modelCombo`, `m_browseModelBtn`, `m_runAiButton`) are locked during inference to prevent race conditions.
+`src/core/image/BackgroundRemover.{h,cpp}` and `src/ui/aibackgrounddialog.{h,cpp}` (+ `maskeditcanvas` for mask touch-up). Quick removal can also run from `CanvasView`.
+
+- **Engine:** ONNX Runtime C API.
+- **Default model:** `u2netp.onnx`. User may pick another `.onnx` on disk.
+- **Resolution order:** install/bundle `models/` → user data `CreatorCanvas/models/` → file picker.
+- **Pipeline:** resize to 320×320, ImageNet normalize, NCHW inference, resize/feather mask, apply alpha.
+- **Cancellation:** `cancelFlag` checked around inference and mask scaling.
+- **UI:** dialog controls locked while a run is in flight; quick-AI uses a worker `QThread` and a shared atomic flag.
+
+Setup scripts: `scripts/fetch_onnx.sh` (Linux), `scripts/fetch_onnx.bat` (Windows).
 
 ## 8. Internationalization
 
-Located in `src/localization/i18nservice.{h,cpp}`:
-- **Catalogs:** JSON catalogs categorized by namespace (`common`, `editor`, `settings`, `templates`) in `resources/locales/<lang>/`.
-- **Supported Languages:** English (`en`) and Portuguese (`pt-BR`).
-- **Dynamic Switching:** Language can be changed in Preferences at runtime without restarting the application; all UI views re-translate reactively.
-- **Fallback Guarantee:** If a translation key is missing in the active language, it falls back to English, and finally to a clean humanized fallback.
+`src/localization/i18nservice.{h,cpp}`:
+
+- Namespaces: `common`, `editor`, `settings`, `templates` under `resources/locales/<lang>/`.
+- Languages: `en`, `pt-BR`.
+- Runtime switch in Preferences; UI calls `retranslateUi`.
+- Missing key → English catalog → humanized fallback + log warning.
 
 ## 9. Persistence — the `.creatorcanvas` format
 
-A `.creatorcanvas` project file is a standard ZIP archive containing:
+ZIP archive:
+
 ```
-manifest.json        ← Complete document state, layers, metadata
-thumbnail.png        ← 320x180 thumbnail preview for recent projects
-media/<uuid>.png     ← Raw embedded image assets
+manifest.json        document state, layers, metadata
+thumbnail.png        ~320×180 preview for Recent Projects
+media/<uuid>.png     embedded image assets
 ```
 
-### High-Performance Thumbnail Extraction
-`cc::loadProjectThumbnail(const QString& filePath)` directly inspects the ZIP central directory using `miniz` and extracts only `thumbnail.png` into memory without decompressing the document manifest or media assets.
+`cc::loadProjectThumbnail()` reads only `thumbnail.png` from the ZIP central directory (no full project inflate).
 
-### Security & Zip Bomb Defenses
-- Maximum entry count: 1,024 entries.
-- Maximum single asset size: 100 MB.
-- Maximum total uncompressed archive size: 500 MB.
-- Path traversal protection: rejects entries with `..` or absolute paths.
+Saves write a temporary file and rename into place (atomic replace on the same volume).
+
+### Zip-bomb / integrity
+
+- Max entries: 1,024
+- Max single entry: 100 MB
+- Max total uncompressed: 500 MB
+- Reject `..` and absolute entry paths
+- Each media asset must match the SHA-256 stored in the manifest
 
 ## 10. Export
 
-Located in `src/imageio/DocumentExporter.{h,cpp}`:
-- **Formats:** PNG (lossless), JPEG (flattened onto background), WebP.
-- **Options:** Custom output dimensions, scale multiplier (e.g. 0.5×, 1×, 2×, 4×), quality compression level (1–100).
-- **Offscreen Rendering:** Export uses the exact same `CanvasRenderer` pipeline as the interactive viewport, ensuring complete visual fidelity while excluding editor UI overlays.
+`src/imageio/DocumentExporter.{h,cpp}`:
+
+- PNG (lossless), JPEG (flattened onto background), WebP
+- Scale multiplier and JPEG/WebP quality
+- Calls `renderDocument()` off-screen without editor overlays
 
 ## 11. Commands and undo/redo
 
-Located in `src/core/history/`:
-- Every user action (layer add/remove/reorder, property edit, transform commit, brush stroke, adjustment change) is encapsulated as a `Command`.
-- `CommandStack` maintains the undo/redo history.
-- Actions can be merged if they represent continuous operations (e.g., continuous slider scrubbing).
+`src/core/history/`:
+
+- `Command` / `CommandStack`
+- Typed helpers in `DocumentCommands.h` (layer properties, blend mode, image asset swap, …)
+- Continuous edits (inspector sliders, live preview) can merge while dragging
+- Raster tools commit a new asset + optional transform when the gesture ends
 
 ## 12. Testing & Verification
 
-17 unit test suites located in `tests/unit/`, run via `ctest`:
-1. `test_settings`: Preferences persistence and schema validation.
-2. `test_i18n`: Catalog completeness, key symmetry, fallback chains.
-3. `test_logging`: Log formatting and file rotation.
-4. `test_layers`: Layer hierarchy, z-ordering, cloning.
-5. `test_document`: Document lifecycle, layer queries, bounds calculation.
-6. `test_history`: Undo/redo stack operations.
-7. `test_serialization`: Save/load roundtrips, corrupted file handling.
-8. `test_renderer`: Offscreen rendering verification.
-9. `test_newdocument`: Canvas preset generator.
-10. `test_import`: Image format sniffing and decoding.
-11. `test_transform`: Matrix math, rotation, scale, bounds mapping.
-12. `test_textbox`: Text wrap calculations.
-13. `test_effects`: Drop shadows and outline rasterization.
-14. `test_export`: PNG, JPEG export accuracy.
-15. `test_autosave`: Crash recovery file lifecycle.
-16. `test_snap`: Smart guide alignment math.
-17. `test_image_processing`: Color adjustments and image filter math.
+**19** QTest executables in `tests/CMakeLists.txt` (all run with `QT_QPA_PLATFORM=offscreen`):
 
-### End-to-End Release Smoke Test
-The binary includes `--smoke-test` for post-install validation:
+1. `test_settings` — preferences persistence
+2. `test_i18n` — catalogs, key symmetry, fallback
+3. `test_logging` — log formatting
+4. `test_layers` — hierarchy, z-order, clone
+5. `test_document` — lifecycle, queries, bounds
+6. `test_history` — undo/redo
+7. `test_serialization` — round-trip and corrupt archives
+8. `test_renderer` — off-screen `renderDocument`
+9. `test_newdocument` — presets
+10. `test_import` — sniff/decode + SHA-256 on assets
+11. `test_transform` — affine math
+12. `test_textbox` — wrap box
+13. `test_effects` — outline/shadow raster
+14. `test_export` — PNG/JPEG (and related) export
+15. `test_autosave` — recovery files
+16. `test_snap` — guide math
+17. `test_image_processing` — filters and raster helpers
+18. `test_ai_quick` — quick AI / canvas-adjacent paths (`canvasview`, AI dialog, mask canvas compiled in)
+19. `test_ui_phase1` — start screen, layers panel, theme icons, collapsible sections
+
+### Smoke test
+
 ```bash
 QT_QPA_PLATFORM=offscreen CreatorCanvas --smoke-test
 ```
-Verifies:
-- Localization catalog loading (`en`, `pt-BR`).
-- AI background remover inference (if model present).
-- In-memory document generation with text and layers.
-- Project serialization (`.creatorcanvas`) to disk.
-- Instant `thumbnail.png` extraction and dimensions check.
-- Deserialization and layer hierarchy verification.
-- Document image export (PNG, JPEG, WebP).
-- Headless `MainWindow` instantiation and project load.
+
+Checks catalog load, optional ONNX inference, in-memory document, `.creatorcanvas` save/load, thumbnail extract, PNG/JPEG/WebP export, and a headless `MainWindow` load.
 
 ## 13. Build & distribution
 
-### CMake Presets (`CMakePresets.json`)
-- `linux-debug`: Debug symbols, warnings enabled.
-- `linux-release`: Release optimizations (`-O3`), stripped symbols.
-- `linux-asan`: AddressSanitizer & UndefinedBehaviorSanitizer instrumentation.
-- `windows-debug` / `windows-release`: MSVC configurations.
+### CMake presets (`CMakePresets.json`)
+
+- `linux-debug` — Debug, Ninja, warnings as errors
+- `linux-release` — Release
+- `linux-asan` — ASan + UBSan
+- `windows-debug` / `windows-release`
 
 ### Packaging
-- **Linux DEB:** `packaging/linux/build_deb.sh` produces `creatorcanvas_0.2.0_amd64.deb`. Requires Qt >= 6.2 (compatible with Ubuntu 22.04 LTS, 24.04 LTS, Debian 12) and bundles `libonnxruntime.so` in `/usr/lib/creatorcanvas/`.
-- **Windows Portable:** `packaging/windows/build_portable.ps1` produces `CreatorCanvas-portable.zip` with bundled Qt DLLs and ONNX Runtime.
-- **Windows Installer:** `packaging/windows/installer.nsi` builds `CreatorCanvas-0.2.0-Setup.exe` with NSIS, creating desktop shortcuts, start menu entries, uninstaller, and `.creatorcanvas` file associations.
-- **CI/CD:** `.github/workflows/release.yml` automatically compiles, tests, packages, and attaches both Linux and Windows release assets on tagged releases.
+
+- **Linux DEB:** `packaging/linux/build_deb.sh` (Qt ≥ 6.2). Bundles `libonnxruntime` under `lib/creatorcanvas/`.
+- **AppImage:** `packaging/linux/build_appimage.sh`
+- **Windows portable:** `packaging/windows/build_portable.ps1`
+- **Windows NSIS:** `packaging/windows/installer.nsi`
+- **CI:** `.github/workflows/release.yml` on version tags
+
+Install rules also stage locales, presets, desktop/AppStream files, and the SVG icon.
 
 ## 14. Roadmap
 
-1. **GPU-Accelerated Viewport:** Optional Vulkan/Direct3D rendering backend for high-frequency canvas operations.
-2. **Multi-layer Selection:** Simultaneous transform and group operations across multiple selected layers.
-3. **macOS Support:** Native packaging (.dmg / notarization) using the existing platform-agnostic abstractions.
+Already on `main` (do not treat as future work): multi-select, group/align/distribute, grid, safe zones, templates, extra raster tools.
+
+Still ahead:
+
+1. **Split `CanvasView` / `MainWindow`** — isolate tools and overlays so the viewport is not a 2k+ line catch-all.
+2. **Layer raster cache + `IRenderer`** — skip full recomposition; give a GPU backend a real seam (none exists today).
+3. **GPU viewport** — optional Vulkan/Direct3D (or Qt RHI) behind that interface.
+4. **Richer blend modes** — only if compositing moves beyond the current seven `QPainter` modes.
+5. **Non-destructive adjustments** — store filter parameters on `ImageLayer` instead of baking pixels.
+6. **macOS** — real bundle, notarization, and CI; `MACOSX_BUNDLE` on the target is not a shipping product.
 
 ## 15. Conventions
 
-- **Clean Commits:** Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`).
-- **Zero Hardcoded Strings:** All visible text must use `I18nService`.
-- **Strict Headers:** Include what you use; full type definitions for types held in `std::unique_ptr` members.
-- **Safe Resource Paths:** Cross-platform path handling via `QStandardPaths` and `QDir`.
+- Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`) and/or milestone-tagged messages.
+- No hardcoded user-visible strings; both `en` and `pt-BR` catalogs in the same change.
+- Include-what-you-use; complete types for `std::unique_ptr` members of `Q_OBJECT` classes.
+- Cross-platform paths via `QStandardPaths` / `QDir`. Keep new `#ifdef _WIN32` rare until a `platform/` module exists.
+- Qualify `cc::` free functions when a class method of the same name would shadow them.
+
+Logs live under the OS application data directory used by `LogService` / `SettingsService`.
 
 ## 16. Known limitations
 
-- **Color Spaces:** Canvas operations currently execute in standard sRGB color space.
-- **Animation:** Focus is strictly on static graphics and thumbnails (no multi-frame timeline or video export).
+- **sRGB only** — no wide-gamut or CMYK pipeline.
+- **Still images only** — no timeline or video export.
+- **Software compositor, no cache** — every paint walks the full tree; large documents will hitch.
+- **Image adjustments are destructive** — inspector preview is live, but the stored document holds a new raster asset, not an adjustment stack (`ImageAdjustments` does not exist as a type).
+- **Public `Layer` fields** — UI or tests can mutate `visible` / `transform` / etc. without a `Command`. That bypasses undo.
+- **UI concentration** — most interaction lives in `canvasview.cpp` and `mainwindow.cpp`.
+- **Blend/gradient surface smaller than older README copy** — 7 blends, linear+radial two-stop gradients, no conical.
+- **No `platform/` isolation** — Windows vs Unix still appears in CMake and isolated `#ifdef`s (e.g. ONNX).
+- **`Q_OBJECT` + `unique_ptr`** — incomplete type in the header still breaks the generated destructor; include the full type.
+- **macOS** — not a supported distribution target yet.

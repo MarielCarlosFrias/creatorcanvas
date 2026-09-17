@@ -594,4 +594,527 @@ QPixmap ThemeIcons::emptyProjectsPlaceholder(int width, int height)
     return pixmap;
 }
 
+QIcon ThemeIcons::appIcon()
+{
+    auto drawAppLogo = [](QPainter& p, int s) {
+        const qreal scale = s / 64.0;
+        // Background rounded rectangle with linear gradient
+        QLinearGradient g(0, 0, 0, 64 * scale);
+        g.setColorAt(0.0, QColor(0x2f, 0x6f, 0xed));
+        g.setColorAt(1.0, QColor(0x0d, 0x3a, 0x99));
+        p.setPen(Qt::NoPen);
+        p.setBrush(g);
+        p.drawRoundedRect(QRectF(4 * scale, 4 * scale, 56 * scale, 56 * scale), 12 * scale, 12 * scale);
+
+        // Canvas / document sheet
+        p.setBrush(QColor(255, 255, 255, 245));
+        p.drawRoundedRect(QRectF(12 * scale, 14 * scale, 40 * scale, 36 * scale), 4 * scale, 4 * scale);
+
+        // Header bar
+        p.setBrush(QColor(0x1a, 0x1b, 0x1f));
+        QPainterPath headerPath;
+        headerPath.addRoundedRect(QRectF(12 * scale, 14 * scale, 40 * scale, 9 * scale), 4 * scale, 4 * scale);
+        p.drawPath(headerPath);
+        p.drawRect(QRectF(12 * scale, 19 * scale, 40 * scale, 4 * scale));
+
+        // Window controls dots
+        p.setBrush(QColor(0xff, 0x60, 0x58));
+        p.drawEllipse(QPointF(17 * scale, 18.5 * scale), 1.8 * scale, 1.8 * scale);
+        p.setBrush(QColor(0xff, 0xbd, 0x2e));
+        p.drawEllipse(QPointF(22 * scale, 18.5 * scale), 1.8 * scale, 1.8 * scale);
+        p.setBrush(QColor(0x28, 0xc9, 0x40));
+        p.drawEllipse(QPointF(27 * scale, 18.5 * scale), 1.8 * scale, 1.8 * scale);
+
+        // Content / layout lines
+        p.setPen(QPen(QColor(0x1a, 0x1b, 0x1f), 2.5 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(20 * scale, 31 * scale), QPointF(44 * scale, 31 * scale));
+        p.drawLine(QPointF(20 * scale, 37 * scale), QPointF(44 * scale, 37 * scale));
+        p.drawLine(QPointF(20 * scale, 43 * scale), QPointF(34 * scale, 43 * scale));
+    };
+
+    QIcon icon;
+    icon.addPixmap(renderPixmap(16, drawAppLogo));
+    icon.addPixmap(renderPixmap(24, drawAppLogo));
+    icon.addPixmap(renderPixmap(32, drawAppLogo));
+    icon.addPixmap(renderPixmap(48, drawAppLogo));
+    icon.addPixmap(renderPixmap(64, drawAppLogo));
+    icon.addPixmap(renderPixmap(128, drawAppLogo));
+    icon.addPixmap(renderPixmap(256, drawAppLogo));
+    return icon;
+}
+
+QIcon ThemeIcons::actionSave(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.setBrush(Qt::NoBrush);
+
+        // Floppy outline with cut corner
+        QPainterPath path;
+        path.moveTo(4 * scale, 4 * scale);
+        path.lineTo(17 * scale, 4 * scale);
+        path.lineTo(20 * scale, 7 * scale);
+        path.lineTo(20 * scale, 20 * scale);
+        path.lineTo(4 * scale, 20 * scale);
+        path.closeSubpath();
+        p.drawPath(path);
+
+        // Top shutter
+        p.fillRect(QRectF(8 * scale, 5 * scale, 8 * scale, 5 * scale), color);
+        // Slider hole
+        p.fillRect(QRectF(10 * scale, 6 * scale, 2 * scale, 3 * scale), QColor(30, 34, 42));
+
+        // Bottom label
+        p.drawRoundedRect(QRectF(7 * scale, 13 * scale, 10 * scale, 7 * scale), 1 * scale, 1 * scale);
+    });
+}
+
+QIcon ThemeIcons::actionSaveAs(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.setBrush(Qt::NoBrush);
+
+        // Floppy outline
+        QPainterPath path;
+        path.moveTo(3 * scale, 3 * scale);
+        path.lineTo(15 * scale, 3 * scale);
+        path.lineTo(18 * scale, 6 * scale);
+        path.lineTo(18 * scale, 15 * scale);
+        path.lineTo(3 * scale, 15 * scale);
+        path.closeSubpath();
+        p.drawPath(path);
+
+        // Pen/Pencil in bottom right
+        p.setPen(QPen(QColor(43, 120, 228), 2.0 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(14 * scale, 21 * scale), QPointF(21 * scale, 14 * scale));
+        p.setPen(QPen(color, 1.5 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(12 * scale, 22 * scale), QPointF(14 * scale, 21 * scale));
+    });
+}
+
+QIcon ThemeIcons::actionImport(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.setBrush(Qt::NoBrush);
+
+        // Picture frame
+        p.drawRoundedRect(QRectF(4 * scale, 4 * scale, 16 * scale, 16 * scale), 2 * scale, 2 * scale);
+
+        // Downward arrow
+        p.setPen(QPen(QColor(43, 120, 228), 2.2 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(12 * scale, 8 * scale), QPointF(12 * scale, 15 * scale));
+        p.drawLine(QPointF(9 * scale, 12 * scale), QPointF(12 * scale, 15 * scale));
+        p.drawLine(QPointF(15 * scale, 12 * scale), QPointF(12 * scale, 15 * scale));
+    });
+}
+
+QIcon ThemeIcons::actionExport(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.setBrush(Qt::NoBrush);
+
+        // Open tray
+        QPainterPath tray;
+        tray.moveTo(4 * scale, 12 * scale);
+        tray.lineTo(4 * scale, 20 * scale);
+        tray.lineTo(20 * scale, 20 * scale);
+        tray.lineTo(20 * scale, 12 * scale);
+        p.drawPath(tray);
+
+        // Upward arrow
+        p.setPen(QPen(QColor(43, 120, 228), 2.2 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(12 * scale, 15 * scale), QPointF(12 * scale, 4 * scale));
+        p.drawLine(QPointF(8 * scale, 8 * scale), QPointF(12 * scale, 4 * scale));
+        p.drawLine(QPointF(16 * scale, 8 * scale), QPointF(12 * scale, 4 * scale));
+    });
+}
+
+QIcon ThemeIcons::actionQuit(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(color, 2.0 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.setBrush(Qt::NoBrush);
+
+        // Power arc
+        p.drawArc(QRectF(4 * scale, 4 * scale, 16 * scale, 16 * scale), 45 * 16, 270 * 16);
+        // Vertical power line
+        p.setPen(QPen(QColor(240, 80, 80), 2.0 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(12 * scale, 3 * scale), QPointF(12 * scale, 11 * scale));
+    });
+}
+
+QIcon ThemeIcons::actionUndo(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(color, 2.0 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.setBrush(Qt::NoBrush);
+
+        // Arc curving left
+        QPainterPath path;
+        path.moveTo(18 * scale, 19 * scale);
+        path.cubicTo(18 * scale, 10 * scale, 8 * scale, 10 * scale, 7 * scale, 13 * scale);
+        p.drawPath(path);
+
+        // Arrow head pointing left
+        p.drawLine(QPointF(11 * scale, 9 * scale), QPointF(6 * scale, 13 * scale));
+        p.drawLine(QPointF(11 * scale, 17 * scale), QPointF(6 * scale, 13 * scale));
+    });
+}
+
+QIcon ThemeIcons::actionRedo(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(color, 2.0 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.setBrush(Qt::NoBrush);
+
+        // Arc curving right
+        QPainterPath path;
+        path.moveTo(6 * scale, 19 * scale);
+        path.cubicTo(6 * scale, 10 * scale, 16 * scale, 10 * scale, 17 * scale, 13 * scale);
+        p.drawPath(path);
+
+        // Arrow head pointing right
+        p.drawLine(QPointF(13 * scale, 9 * scale), QPointF(18 * scale, 13 * scale));
+        p.drawLine(QPointF(13 * scale, 17 * scale), QPointF(18 * scale, 13 * scale));
+    });
+}
+
+QIcon ThemeIcons::actionZoomIn(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(color, 2.0 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.setBrush(Qt::NoBrush);
+
+        // Glass circle
+        p.drawEllipse(QRectF(4 * scale, 4 * scale, 12 * scale, 12 * scale));
+        // Handle
+        p.drawLine(QPointF(14.5 * scale, 14.5 * scale), QPointF(20 * scale, 20 * scale));
+
+        // Plus
+        p.drawLine(QPointF(7 * scale, 10 * scale), QPointF(13 * scale, 10 * scale));
+        p.drawLine(QPointF(10 * scale, 7 * scale), QPointF(10 * scale, 13 * scale));
+    });
+}
+
+QIcon ThemeIcons::actionZoomOut(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(color, 2.0 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.setBrush(Qt::NoBrush);
+
+        // Glass circle
+        p.drawEllipse(QRectF(4 * scale, 4 * scale, 12 * scale, 12 * scale));
+        // Handle
+        p.drawLine(QPointF(14.5 * scale, 14.5 * scale), QPointF(20 * scale, 20 * scale));
+
+        // Minus
+        p.drawLine(QPointF(7 * scale, 10 * scale), QPointF(13 * scale, 10 * scale));
+    });
+}
+
+QIcon ThemeIcons::actionZoomFit(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(color, 2.0 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.setBrush(Qt::NoBrush);
+
+        // 4 corner brackets
+        // Top-left
+        p.drawLine(QPointF(4 * scale, 9 * scale), QPointF(4 * scale, 4 * scale));
+        p.drawLine(QPointF(4 * scale, 4 * scale), QPointF(9 * scale, 4 * scale));
+
+        // Top-right
+        p.drawLine(QPointF(15 * scale, 4 * scale), QPointF(20 * scale, 4 * scale));
+        p.drawLine(QPointF(20 * scale, 4 * scale), QPointF(20 * scale, 9 * scale));
+
+        // Bottom-left
+        p.drawLine(QPointF(4 * scale, 15 * scale), QPointF(4 * scale, 20 * scale));
+        p.drawLine(QPointF(4 * scale, 20 * scale), QPointF(9 * scale, 20 * scale));
+
+        // Bottom-right
+        p.drawLine(QPointF(15 * scale, 20 * scale), QPointF(20 * scale, 20 * scale));
+        p.drawLine(QPointF(20 * scale, 20 * scale), QPointF(20 * scale, 15 * scale));
+
+        // Center dot
+        p.setBrush(color);
+        p.drawEllipse(QRectF(10.5 * scale, 10.5 * scale, 3 * scale, 3 * scale));
+    });
+}
+
+QIcon ThemeIcons::actionGrid(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(color, 1.6 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.setBrush(Qt::NoBrush);
+
+        p.drawRoundedRect(QRectF(4 * scale, 4 * scale, 16 * scale, 16 * scale), 2 * scale, 2 * scale);
+        // Vertical grid lines
+        p.drawLine(QPointF(9.3 * scale, 4 * scale), QPointF(9.3 * scale, 20 * scale));
+        p.drawLine(QPointF(14.7 * scale, 4 * scale), QPointF(14.7 * scale, 20 * scale));
+        // Horizontal grid lines
+        p.drawLine(QPointF(4 * scale, 9.3 * scale), QPointF(20 * scale, 9.3 * scale));
+        p.drawLine(QPointF(4 * scale, 14.7 * scale), QPointF(20 * scale, 14.7 * scale));
+    });
+}
+
+QIcon ThemeIcons::actionSnap(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(color, 2.2 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.setBrush(Qt::NoBrush);
+
+        // Horseshoe magnet
+        QPainterPath magnet;
+        magnet.moveTo(6 * scale, 7 * scale);
+        magnet.lineTo(6 * scale, 14 * scale);
+        magnet.arcTo(QRectF(6 * scale, 8 * scale, 12 * scale, 12 * scale), 180, -180);
+        magnet.lineTo(18 * scale, 7 * scale);
+        p.drawPath(magnet);
+
+        // North pole cap
+        p.fillRect(QRectF(4.5 * scale, 4 * scale, 3.5 * scale, 3.5 * scale), QColor(240, 70, 70));
+        // South pole cap
+        p.fillRect(QRectF(16 * scale, 4 * scale, 3.5 * scale, 3.5 * scale), QColor(50, 130, 240));
+    });
+}
+
+QIcon ThemeIcons::actionFlipH(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(QColor(120, 130, 150), 1.5 * scale, Qt::DashLine));
+        p.drawLine(QPointF(12 * scale, 3 * scale), QPointF(12 * scale, 21 * scale));
+
+        p.setPen(QPen(color, 1.8 * scale));
+        // Left triangle
+        QPolygonF t1;
+        t1 << QPointF(10 * scale, 6 * scale) << QPointF(3 * scale, 12 * scale) << QPointF(10 * scale, 18 * scale);
+        p.setBrush(QColor(color.red(), color.green(), color.blue(), 100));
+        p.drawPolygon(t1);
+
+        // Right triangle
+        QPolygonF t2;
+        t2 << QPointF(14 * scale, 6 * scale) << QPointF(21 * scale, 12 * scale) << QPointF(14 * scale, 18 * scale);
+        p.setBrush(Qt::NoBrush);
+        p.drawPolygon(t2);
+    });
+}
+
+QIcon ThemeIcons::actionFlipV(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(QColor(120, 130, 150), 1.5 * scale, Qt::DashLine));
+        p.drawLine(QPointF(3 * scale, 12 * scale), QPointF(21 * scale, 12 * scale));
+
+        p.setPen(QPen(color, 1.8 * scale));
+        // Top triangle
+        QPolygonF t1;
+        t1 << QPointF(6 * scale, 10 * scale) << QPointF(12 * scale, 3 * scale) << QPointF(18 * scale, 10 * scale);
+        p.setBrush(QColor(color.red(), color.green(), color.blue(), 100));
+        p.drawPolygon(t1);
+
+        // Bottom triangle
+        QPolygonF t2;
+        t2 << QPointF(6 * scale, 14 * scale) << QPointF(12 * scale, 21 * scale) << QPointF(18 * scale, 14 * scale);
+        p.setBrush(Qt::NoBrush);
+        p.drawPolygon(t2);
+    });
+}
+
+QIcon ThemeIcons::actionAlignLeft(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(QColor(43, 120, 228), 2.2 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(4 * scale, 3 * scale), QPointF(4 * scale, 21 * scale));
+
+        p.setPen(Qt::NoPen);
+        p.setBrush(color);
+        p.drawRoundedRect(QRectF(7 * scale, 6 * scale, 13 * scale, 4 * scale), 1 * scale, 1 * scale);
+        p.drawRoundedRect(QRectF(7 * scale, 14 * scale, 8 * scale, 4 * scale), 1 * scale, 1 * scale);
+    });
+}
+
+QIcon ThemeIcons::actionAlignCenter(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(QColor(43, 120, 228), 2.2 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(12 * scale, 3 * scale), QPointF(12 * scale, 21 * scale));
+
+        p.setPen(Qt::NoPen);
+        p.setBrush(color);
+        p.drawRoundedRect(QRectF(5 * scale, 6 * scale, 14 * scale, 4 * scale), 1 * scale, 1 * scale);
+        p.drawRoundedRect(QRectF(8 * scale, 14 * scale, 8 * scale, 4 * scale), 1 * scale, 1 * scale);
+    });
+}
+
+QIcon ThemeIcons::actionAlignRight(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(QColor(43, 120, 228), 2.2 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(20 * scale, 3 * scale), QPointF(20 * scale, 21 * scale));
+
+        p.setPen(Qt::NoPen);
+        p.setBrush(color);
+        p.drawRoundedRect(QRectF(4 * scale, 6 * scale, 13 * scale, 4 * scale), 1 * scale, 1 * scale);
+        p.drawRoundedRect(QRectF(9 * scale, 14 * scale, 8 * scale, 4 * scale), 1 * scale, 1 * scale);
+    });
+}
+
+QIcon ThemeIcons::actionAlignTop(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(QColor(43, 120, 228), 2.2 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(3 * scale, 4 * scale), QPointF(21 * scale, 4 * scale));
+
+        p.setPen(Qt::NoPen);
+        p.setBrush(color);
+        p.drawRoundedRect(QRectF(6 * scale, 7 * scale, 4 * scale, 13 * scale), 1 * scale, 1 * scale);
+        p.drawRoundedRect(QRectF(14 * scale, 7 * scale, 4 * scale, 8 * scale), 1 * scale, 1 * scale);
+    });
+}
+
+QIcon ThemeIcons::actionAlignMiddle(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(QColor(43, 120, 228), 2.2 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(3 * scale, 12 * scale), QPointF(21 * scale, 12 * scale));
+
+        p.setPen(Qt::NoPen);
+        p.setBrush(color);
+        p.drawRoundedRect(QRectF(6 * scale, 5 * scale, 4 * scale, 14 * scale), 1 * scale, 1 * scale);
+        p.drawRoundedRect(QRectF(14 * scale, 8 * scale, 4 * scale, 8 * scale), 1 * scale, 1 * scale);
+    });
+}
+
+QIcon ThemeIcons::actionAlignBottom(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(QColor(43, 120, 228), 2.2 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(3 * scale, 20 * scale), QPointF(21 * scale, 20 * scale));
+
+        p.setPen(Qt::NoPen);
+        p.setBrush(color);
+        p.drawRoundedRect(QRectF(6 * scale, 4 * scale, 4 * scale, 13 * scale), 1 * scale, 1 * scale);
+        p.drawRoundedRect(QRectF(14 * scale, 9 * scale, 4 * scale, 8 * scale), 1 * scale, 1 * scale);
+    });
+}
+
+QIcon ThemeIcons::actionDistributeH(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(QColor(43, 120, 228), 1.8 * scale, Qt::SolidLine));
+        p.drawLine(QPointF(3 * scale, 4 * scale), QPointF(3 * scale, 20 * scale));
+        p.drawLine(QPointF(21 * scale, 4 * scale), QPointF(21 * scale, 20 * scale));
+
+        p.setPen(Qt::NoPen);
+        p.setBrush(color);
+        p.drawRoundedRect(QRectF(8 * scale, 6 * scale, 3 * scale, 12 * scale), 1 * scale, 1 * scale);
+        p.drawRoundedRect(QRectF(14 * scale, 6 * scale, 3 * scale, 12 * scale), 1 * scale, 1 * scale);
+    });
+}
+
+QIcon ThemeIcons::actionDistributeV(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(QColor(43, 120, 228), 1.8 * scale, Qt::SolidLine));
+        p.drawLine(QPointF(4 * scale, 3 * scale), QPointF(20 * scale, 3 * scale));
+        p.drawLine(QPointF(4 * scale, 21 * scale), QPointF(20 * scale, 21 * scale));
+
+        p.setPen(Qt::NoPen);
+        p.setBrush(color);
+        p.drawRoundedRect(QRectF(6 * scale, 8 * scale, 12 * scale, 3 * scale), 1 * scale, 1 * scale);
+        p.drawRoundedRect(QRectF(6 * scale, 14 * scale, 12 * scale, 3 * scale), 1 * scale, 1 * scale);
+    });
+}
+
+QIcon ThemeIcons::actionSettings(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(color, 2.0 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.setBrush(Qt::NoBrush);
+
+        p.drawEllipse(QPointF(12 * scale, 12 * scale), 4.5 * scale, 4.5 * scale);
+
+        // 6 gear cogs
+        for (int i = 0; i < 6; ++i) {
+            const double angle = i * (M_PI / 3.0);
+            const qreal x1 = 12 * scale + std::cos(angle) * (6.5 * scale);
+            const qreal y1 = 12 * scale + std::sin(angle) * (6.5 * scale);
+            const qreal x2 = 12 * scale + std::cos(angle) * (9.5 * scale);
+            const qreal y2 = 12 * scale + std::sin(angle) * (9.5 * scale);
+            p.drawLine(QPointF(x1, y1), QPointF(x2, y2));
+        }
+    });
+}
+
+QIcon ThemeIcons::actionAbout(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.setBrush(Qt::NoBrush);
+
+        p.drawEllipse(QRectF(4 * scale, 4 * scale, 16 * scale, 16 * scale));
+
+        // 'i' dot
+        p.setBrush(color);
+        p.drawEllipse(QRectF(11 * scale, 7.5 * scale, 2 * scale, 2 * scale));
+
+        // 'i' stem
+        p.drawLine(QPointF(12 * scale, 11 * scale), QPointF(12 * scale, 16 * scale));
+    });
+}
+
+QIcon ThemeIcons::actionCheck(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(color, 2.4 * scale, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.setBrush(Qt::NoBrush);
+
+        QPainterPath check;
+        check.moveTo(5 * scale, 12 * scale);
+        check.lineTo(10 * scale, 17 * scale);
+        check.lineTo(19 * scale, 7 * scale);
+        p.drawPath(check);
+    });
+}
+
+QIcon ThemeIcons::actionCancel(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(color, 2.2 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.setBrush(Qt::NoBrush);
+
+        p.drawLine(QPointF(6 * scale, 6 * scale), QPointF(18 * scale, 18 * scale));
+        p.drawLine(QPointF(18 * scale, 6 * scale), QPointF(6 * scale, 18 * scale));
+    });
+}
+
 } // namespace cc

@@ -86,6 +86,7 @@ MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
 {
     setMinimumSize(1000, 640);
     resize(1280, 800);
+    setWindowIcon(ThemeIcons::appIcon());
 
     const QString configDir =
         QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
@@ -368,41 +369,50 @@ void MainWindow::buildLayersDock()
 void MainWindow::buildActions()
 {
     m_newAction = new QAction(this);
+    m_newAction->setIcon(ThemeIcons::actionNewDocument());
     m_newAction->setShortcut(QKeySequence::New);
     connect(m_newAction, &QAction::triggered, this, &MainWindow::newDocument);
 
     m_openAction = new QAction(this);
+    m_openAction->setIcon(ThemeIcons::actionOpenFolder());
     m_openAction->setShortcut(QKeySequence::Open);
     connect(m_openAction, &QAction::triggered, this, &MainWindow::openDocument);
 
     m_saveAction = new QAction(this);
+    m_saveAction->setIcon(ThemeIcons::actionSave());
     m_saveAction->setShortcut(QKeySequence::Save);
     connect(m_saveAction, &QAction::triggered, this, &MainWindow::saveDocument);
 
     m_saveAsAction = new QAction(this);
+    m_saveAsAction->setIcon(ThemeIcons::actionSaveAs());
     m_saveAsAction->setShortcut(QKeySequence::SaveAs);
     connect(m_saveAsAction, &QAction::triggered, this, &MainWindow::saveDocumentAs);
 
     m_importAction = new QAction(this);
+    m_importAction->setIcon(ThemeIcons::actionImport());
     m_importAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+I")));
     connect(m_importAction, &QAction::triggered,
             this, &MainWindow::importImageViaDialog);
 
     m_exportAction = new QAction(this);
+    m_exportAction->setIcon(ThemeIcons::actionExport());
     m_exportAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+E")));
     connect(m_exportAction, &QAction::triggered,
             this, &MainWindow::exportImage);
 
     m_quitAction = new QAction(this);
+    m_quitAction->setIcon(ThemeIcons::actionQuit());
     connect(m_quitAction, &QAction::triggered, this, &MainWindow::close);
 
     m_undoAction = new QAction(this);
+    m_undoAction->setIcon(ThemeIcons::actionUndo());
     m_undoAction->setShortcut(QKeySequence::Undo);
     m_undoAction->setEnabled(false);
     connect(m_undoAction, &QAction::triggered,
             this, [this] { m_history->undo(); });
 
     m_redoAction = new QAction(this);
+    m_redoAction->setIcon(ThemeIcons::actionRedo());
     m_redoAction->setShortcut(QKeySequence::Redo);
     m_redoAction->setEnabled(false);
     connect(m_redoAction, &QAction::triggered,
@@ -413,29 +423,55 @@ void MainWindow::buildActions()
     connect(m_history.get(), &CommandStack::canRedoChanged,
             m_redoAction, &QAction::setEnabled);
 
+    m_zoomInAction = new QAction(this);
+    m_zoomInAction->setIcon(ThemeIcons::actionZoomIn());
+    m_zoomInAction->setShortcut(QKeySequence::ZoomIn);
+    connect(m_zoomInAction, &QAction::triggered, this, [this] {
+        if (m_canvas) m_canvas->zoomIn();
+    });
+
+    m_zoomOutAction = new QAction(this);
+    m_zoomOutAction->setIcon(ThemeIcons::actionZoomOut());
+    m_zoomOutAction->setShortcut(QKeySequence::ZoomOut);
+    connect(m_zoomOutAction, &QAction::triggered, this, [this] {
+        if (m_canvas) m_canvas->zoomOut();
+    });
+
+    m_zoomFitAction = new QAction(this);
+    m_zoomFitAction->setIcon(ThemeIcons::actionZoomFit());
+    m_zoomFitAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+0")));
+    connect(m_zoomFitAction, &QAction::triggered, this, [this] {
+        if (m_canvas) m_canvas->fitToViewport();
+    });
+
     m_addTextAction = new QAction(this);
+    m_addTextAction->setIcon(ThemeIcons::toolText());
     m_addTextAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+T")));
     connect(m_addTextAction, &QAction::triggered, this, &MainWindow::addText);
 
     // Ações para adicionar formas geométricas com atalhos padrão
     m_addRectAction = new QAction(this);
+    m_addRectAction->setIcon(ThemeIcons::toolShape());
     m_addRectAction->setShortcut(QKeySequence(QStringLiteral("R")));
     connect(m_addRectAction, &QAction::triggered, this, [this] {
         addShape(ShapeKind::Rectangle);
     });
 
     m_addRoundedRectAction = new QAction(this);
+    m_addRoundedRectAction->setIcon(ThemeIcons::toolShape());
     connect(m_addRoundedRectAction, &QAction::triggered, this, [this] {
         addShape(ShapeKind::RoundedRect);
     });
 
     m_addEllipseAction = new QAction(this);
+    m_addEllipseAction->setIcon(ThemeIcons::toolShape());
     m_addEllipseAction->setShortcut(QKeySequence(QStringLiteral("O")));
     connect(m_addEllipseAction, &QAction::triggered, this, [this] {
         addShape(ShapeKind::Ellipse);
     });
 
     m_addLineAction = new QAction(this);
+    m_addLineAction->setIcon(ThemeIcons::toolShape());
     m_addLineAction->setShortcut(QKeySequence(QStringLiteral("L")));
     connect(m_addLineAction, &QAction::triggered, this, [this] {
         addShape(ShapeKind::Line);
@@ -443,51 +479,62 @@ void MainWindow::buildActions()
 
     // Ações para alinhamento rápido da camada selecionada na tela
     m_alignLeftAction = new QAction(this);
+    m_alignLeftAction->setIcon(ThemeIcons::actionAlignLeft());
     connect(m_alignLeftAction, &QAction::triggered, this, [this] {
         alignSelectedLayer(AlignTarget::Left);
     });
 
     m_alignCenterXAction = new QAction(this);
+    m_alignCenterXAction->setIcon(ThemeIcons::actionAlignCenter());
     connect(m_alignCenterXAction, &QAction::triggered, this, [this] {
         alignSelectedLayer(AlignTarget::CenterX);
     });
 
     m_alignRightAction = new QAction(this);
+    m_alignRightAction->setIcon(ThemeIcons::actionAlignRight());
     connect(m_alignRightAction, &QAction::triggered, this, [this] {
         alignSelectedLayer(AlignTarget::Right);
     });
 
     m_alignTopAction = new QAction(this);
+    m_alignTopAction->setIcon(ThemeIcons::actionAlignTop());
     connect(m_alignTopAction, &QAction::triggered, this, [this] {
         alignSelectedLayer(AlignTarget::Top);
     });
 
     m_alignCenterYAction = new QAction(this);
+    m_alignCenterYAction->setIcon(ThemeIcons::actionAlignMiddle());
     connect(m_alignCenterYAction, &QAction::triggered, this, [this] {
         alignSelectedLayer(AlignTarget::CenterY);
     });
 
     m_alignBottomAction = new QAction(this);
+    m_alignBottomAction->setIcon(ThemeIcons::actionAlignBottom());
     connect(m_alignBottomAction, &QAction::triggered, this, [this] {
         alignSelectedLayer(AlignTarget::Bottom);
     });
 
     m_alignCenterBothAction = new QAction(this);
+    m_alignCenterBothAction->setIcon(ThemeIcons::actionAlignCenter());
     connect(m_alignCenterBothAction, &QAction::triggered, this, [this] {
         alignSelectedLayer(AlignTarget::CenterBoth);
     });
 
     m_distributeHAction = new QAction(this);
+    m_distributeHAction->setIcon(ThemeIcons::actionDistributeH());
     connect(m_distributeHAction, &QAction::triggered, this, &MainWindow::distributeHorizontally);
 
     m_distributeVAction = new QAction(this);
+    m_distributeVAction->setIcon(ThemeIcons::actionDistributeV());
     connect(m_distributeVAction, &QAction::triggered, this, &MainWindow::distributeVertically);
 
     m_groupAction = new QAction(this);
+    m_groupAction->setIcon(ThemeIcons::layerTypeGroup());
     m_groupAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_G));
     connect(m_groupAction, &QAction::triggered, this, &MainWindow::groupSelectedLayers);
 
     m_toggleGridAction = new QAction(this);
+    m_toggleGridAction->setIcon(ThemeIcons::actionGrid());
     m_toggleGridAction->setCheckable(true);
     m_toggleGridAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Apostrophe));
     connect(m_toggleGridAction, &QAction::triggered, this, [this](bool checked) {
@@ -495,35 +542,42 @@ void MainWindow::buildActions()
     });
 
     m_toggleSnapAction = new QAction(this);
+    m_toggleSnapAction->setIcon(ThemeIcons::actionSnap());
     m_toggleSnapAction->setCheckable(true);
     connect(m_toggleSnapAction, &QAction::triggered, this, [this](bool checked) {
         if (m_canvas) m_canvas->setSnapToGrid(checked);
     });
 
     m_flipHAction = new QAction(this);
+    m_flipHAction->setIcon(ThemeIcons::actionFlipH());
     connect(m_flipHAction, &QAction::triggered,
             this, [this] { flipLayer(true); });
 
     m_flipVAction = new QAction(this);
+    m_flipVAction->setIcon(ThemeIcons::actionFlipV());
     connect(m_flipVAction, &QAction::triggered,
             this, [this] { flipLayer(false); });
 
     m_deleteAction = new QAction(this);
+    m_deleteAction->setIcon(ThemeIcons::actionDelete());
     m_deleteAction->setShortcut(QKeySequence::Delete);
     connect(m_deleteAction, &QAction::triggered,
             this, &MainWindow::deleteSelectedLayer);
 
     m_settingsAction = new QAction(this);
+    m_settingsAction->setIcon(ThemeIcons::actionSettings());
     m_settingsAction->setShortcut(QKeySequence::Preferences);
     connect(m_settingsAction, &QAction::triggered, this, &MainWindow::openSettings);
 
     m_startScreenAction = new QAction(this);
+    m_startScreenAction->setIcon(ThemeIcons::actionNewDocument());
     connect(m_startScreenAction, &QAction::triggered, this, [this] {
         if (confirmDiscardUnsavedChanges())
             showStartScreen();
     });
 
     m_aboutAction = new QAction(this);
+    m_aboutAction->setIcon(ThemeIcons::actionAbout());
     connect(m_aboutAction, &QAction::triggered, this, [this] {
         if (!m_i18n)
             return;
@@ -671,6 +725,54 @@ void MainWindow::buildToolBars()
     m_toolsBar->addAction(m_addTextAction);
     m_toolsBar->addAction(m_addRectAction);
 
+    // Barra Superior de Ações Rápidas (Novo, Abrir, Salvar, Exportar, Desfazer, Zoom, Grade)
+    m_quickToolBar = new QToolBar(QStringLiteral("QuickAccess"), this);
+    m_quickToolBar->setObjectName(QStringLiteral("QuickAccessToolBar"));
+    m_quickToolBar->setMovable(false);
+    m_quickToolBar->setFloatable(false);
+    m_quickToolBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    m_quickToolBar->setIconSize(QSize(20, 20));
+    m_quickToolBar->setStyleSheet(QStringLiteral(
+        "QToolBar {"
+        "  background-color: #1e222a;"
+        "  border-bottom: 1px solid #2b303c;"
+        "  padding: 3px 6px;"
+        "  spacing: 3px;"
+        "}"
+        "QToolButton {"
+        "  background-color: transparent;"
+        "  border: 1px solid transparent;"
+        "  border-radius: 4px;"
+        "  padding: 4px;"
+        "}"
+        "QToolButton:hover {"
+        "  background-color: #2b303c;"
+        "  border-color: #3b4252;"
+        "}"
+        "QToolButton:pressed {"
+        "  background-color: #1a1d24;"
+        "}"
+        "QToolButton:disabled {"
+        "  opacity: 0.35;"
+        "}"
+    ));
+    addToolBar(Qt::TopToolBarArea, m_quickToolBar);
+
+    m_quickToolBar->addAction(m_newAction);
+    m_quickToolBar->addAction(m_openAction);
+    m_quickToolBar->addAction(m_saveAction);
+    m_quickToolBar->addAction(m_exportAction);
+    m_quickToolBar->addSeparator();
+    m_quickToolBar->addAction(m_undoAction);
+    m_quickToolBar->addAction(m_redoAction);
+    m_quickToolBar->addSeparator();
+    m_quickToolBar->addAction(m_zoomOutAction);
+    m_quickToolBar->addAction(m_zoomInAction);
+    m_quickToolBar->addAction(m_zoomFitAction);
+    m_quickToolBar->addSeparator();
+    m_quickToolBar->addAction(m_toggleGridAction);
+    m_quickToolBar->addAction(m_toggleSnapAction);
+
     // Barra Superior de Opções de Ferramentas (Tool Options Bar)
     m_toolOptionsBar = new QToolBar(QStringLiteral("ToolOptions"), this);
     m_toolOptionsBar->setObjectName(QStringLiteral("ToolOptionsBar"));
@@ -712,12 +814,16 @@ void MainWindow::buildToolBars()
     });
 
     m_cropApplyBtn = new QPushButton(this);
+    m_cropApplyBtn->setIcon(ThemeIcons::actionCheck());
+    m_cropApplyBtn->setIconSize(QSize(16, 16));
     m_cropApplyBtn->setStyleSheet(QStringLiteral("background-color: #2b78e4; color: white; font-weight: bold; padding: 4px 12px; border-radius: 4px;"));
     connect(m_cropApplyBtn, &QPushButton::clicked, this, [this] {
         if (m_canvas) m_canvas->applyCrop();
     });
 
     m_cropCancelBtn = new QPushButton(this);
+    m_cropCancelBtn->setIcon(ThemeIcons::actionCancel());
+    m_cropCancelBtn->setIconSize(QSize(16, 16));
     connect(m_cropCancelBtn, &QPushButton::clicked, this, [this] {
         if (m_canvas) m_canvas->cancelCrop();
     });
@@ -753,12 +859,16 @@ void MainWindow::buildToolBars()
     });
 
     m_scissorsApplyBtn = new QPushButton(this);
+    m_scissorsApplyBtn->setIcon(ThemeIcons::actionCheck(QColor(0, 0, 0)));
+    m_scissorsApplyBtn->setIconSize(QSize(16, 16));
     m_scissorsApplyBtn->setStyleSheet(QStringLiteral("background-color: #00bcd4; color: black; font-weight: bold; padding: 4px 12px; border-radius: 4px;"));
     connect(m_scissorsApplyBtn, &QPushButton::clicked, this, [this] {
         if (m_canvas) m_canvas->applyScissorsCut();
     });
 
     m_scissorsCancelBtn = new QPushButton(this);
+    m_scissorsCancelBtn->setIcon(ThemeIcons::actionCancel());
+    m_scissorsCancelBtn->setIconSize(QSize(16, 16));
     connect(m_scissorsCancelBtn, &QPushButton::clicked, this, [this] {
         if (m_canvas) m_canvas->cancelScissorsCut();
     });
@@ -980,6 +1090,7 @@ void MainWindow::buildToolBars()
 
     m_toolOptionsBar->addWidget(m_toolOptionsStack);
 
+    m_quickToolBar->hide();
     m_toolsBar->hide();
     m_toolOptionsBar->hide();
 }
@@ -1019,6 +1130,7 @@ void MainWindow::buildMenus()
     m_alignMenu->addSeparator();
     m_alignMenu->addAction(m_alignTopAction);
     m_alignMenu->addAction(m_alignCenterYAction);
+    m_alignBottomAction->setIcon(ThemeIcons::actionAlignBottom());
     m_alignMenu->addAction(m_alignBottomAction);
     m_alignMenu->addSeparator();
     m_alignMenu->addAction(m_alignCenterBothAction);
@@ -1037,6 +1149,10 @@ void MainWindow::buildMenus()
     m_layerMenu->addAction(m_deleteAction);
 
     m_viewMenu = menuBar()->addMenu(QString());
+    m_viewMenu->addAction(m_zoomInAction);
+    m_viewMenu->addAction(m_zoomOutAction);
+    m_viewMenu->addAction(m_zoomFitAction);
+    m_viewMenu->addSeparator();
     m_viewMenu->addAction(m_toggleGridAction);
     m_viewMenu->addAction(m_toggleSnapAction);
     m_viewMenu->addSeparator();
@@ -1100,6 +1216,7 @@ void MainWindow::showStartScreen()
     if (m_textDock) m_textDock->hide();
     if (m_shapeDock) m_shapeDock->hide();
     if (m_imageDock) m_imageDock->hide();
+    if (m_quickToolBar) m_quickToolBar->hide();
     if (m_toolsBar) m_toolsBar->hide();
     if (m_toolOptionsBar) m_toolOptionsBar->hide();
     if (m_startScreen) m_startScreen->refreshRecents();
@@ -1112,6 +1229,7 @@ void MainWindow::enterEditor()
     if (m_textDock) m_textDock->show();
     if (m_shapeDock) m_shapeDock->show();
     if (m_imageDock) m_imageDock->show();
+    if (m_quickToolBar) m_quickToolBar->show();
     if (m_toolsBar) m_toolsBar->show();
     if (m_toolOptionsBar) m_toolOptionsBar->show();
     updateWindowTitle();
@@ -1651,9 +1769,24 @@ void MainWindow::startFromTemplate(int templateKind)
     m_document = std::move(doc);
     m_currentFilePath.clear();
     m_modified = false;
+    m_selectedId = LayerId();
     if (m_history)
         m_history->clear();
+    if (m_autosave)
+        m_autosave->setDocument(m_document.get());
+    m_canvas->setDocument(m_document.get());
+    if (m_layersPanel)
+        m_layersPanel->setDocument(m_document.get());
+    if (m_textInspector)
+        m_textInspector->setDocument(m_document.get());
+    if (m_shapeInspector)
+        m_shapeInspector->setDocument(m_document.get());
+    if (m_imageInspector)
+        m_imageInspector->setDocument(m_document.get());
+    connectDocumentSignals();
+    m_canvas->fitToViewport();
     enterEditor();
+    updateWindowTitle();
 }
 
 void MainWindow::exportImage()
@@ -1947,10 +2080,38 @@ void MainWindow::retranslateUi()
 
     if (m_viewMenu)
         m_viewMenu->setTitle(m_i18n->t("common", "menu.view"));
-    if (m_toggleGridAction)
+    if (m_zoomInAction) {
+        const QString text = m_i18n->currentLanguage() == QStringLiteral("pt-BR")
+            ? QStringLiteral("Aumentar Zoom") : QStringLiteral("Zoom In");
+        m_zoomInAction->setText(text);
+        m_zoomInAction->setToolTip(text + QStringLiteral(" (Ctrl++)"));
+    }
+    if (m_zoomOutAction) {
+        const QString text = m_i18n->currentLanguage() == QStringLiteral("pt-BR")
+            ? QStringLiteral("Diminuir Zoom") : QStringLiteral("Zoom Out");
+        m_zoomOutAction->setText(text);
+        m_zoomOutAction->setToolTip(text + QStringLiteral(" (Ctrl+-)"));
+    }
+    if (m_zoomFitAction) {
+        const QString text = m_i18n->currentLanguage() == QStringLiteral("pt-BR")
+            ? QStringLiteral("Ajustar à Janela") : QStringLiteral("Fit to Viewport");
+        m_zoomFitAction->setText(text);
+        m_zoomFitAction->setToolTip(text + QStringLiteral(" (Ctrl+0)"));
+    }
+    m_newAction->setToolTip(m_newAction->text() + QStringLiteral(" (Ctrl+N)"));
+    m_openAction->setToolTip(m_openAction->text() + QStringLiteral(" (Ctrl+O)"));
+    m_saveAction->setToolTip(m_saveAction->text() + QStringLiteral(" (Ctrl+S)"));
+    m_exportAction->setToolTip(m_exportAction->text() + QStringLiteral(" (Ctrl+E)"));
+    m_undoAction->setToolTip(m_undoAction->text() + QStringLiteral(" (Ctrl+Z)"));
+    m_redoAction->setToolTip(m_redoAction->text() + QStringLiteral(" (Ctrl+Y)"));
+    if (m_toggleGridAction) {
         m_toggleGridAction->setText(m_i18n->t("common", "menu.view.showGrid"));
-    if (m_toggleSnapAction)
+        m_toggleGridAction->setToolTip(m_toggleGridAction->text() + QStringLiteral(" (Ctrl+')"));
+    }
+    if (m_toggleSnapAction) {
         m_toggleSnapAction->setText(m_i18n->t("common", "menu.view.snapToGrid"));
+        m_toggleSnapAction->setToolTip(m_toggleSnapAction->text());
+    }
     if (m_safeZoneMenu)
         m_safeZoneMenu->setTitle(m_i18n->t("common", "menu.view.safeZones"));
     if (m_safeNoneAction)

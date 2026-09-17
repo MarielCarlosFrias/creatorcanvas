@@ -225,63 +225,94 @@ void StartScreen::buildUi()
     const auto templates = TemplateFactory::availableTemplates();
     for (int i = 0; i < templates.size(); ++i) {
         const auto& tmpl = templates[i];
-        auto* card = new QWidget(m_templatesHost);
-        card->setMinimumHeight(84);
+        auto* card = new QPushButton(m_templatesHost);
+        card->setMinimumHeight(88);
+        card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         card->setCursor(Qt::PointingHandCursor);
 
         QString borderColor = QStringLiteral("#4c566a");
         QString accentColor = QStringLiteral("#88c0d0");
+        QPixmap brandIcon;
         if (tmpl.platform == QStringLiteral("YouTube")) {
             borderColor = QStringLiteral("#cc0000");
             accentColor = QStringLiteral("#ff4444");
+            brandIcon = ThemeIcons::brandYoutube(26);
         } else if (tmpl.platform == QStringLiteral("Instagram")) {
             borderColor = QStringLiteral("#c13584");
             accentColor = QStringLiteral("#e1306c");
+            brandIcon = ThemeIcons::brandInstagram(26);
         } else if (tmpl.platform == QStringLiteral("TikTok")) {
             borderColor = QStringLiteral("#00f2ea");
             accentColor = QStringLiteral("#69c9d0");
+            brandIcon = ThemeIcons::brandTiktok(26);
+        } else {
+            brandIcon = ThemeIcons::brandBanner(26);
         }
 
         card->setStyleSheet(QStringLiteral(
-            "QWidget {"
+            "QPushButton {"
             "  background-color: #22262e;"
             "  border: 1px solid %1;"
             "  border-radius: 8px;"
+            "  padding: 8px;"
+            "  text-align: left;"
             "}"
-            "QWidget:hover {"
+            "QPushButton:hover {"
             "  background-color: #2e3440;"
             "  border-color: %2;"
             "}"
+            "QPushButton:pressed {"
+            "  background-color: #1a1d24;"
+            "}"
         ).arg(borderColor, accentColor));
 
-        auto* cardLayout = new QVBoxLayout(card);
-        cardLayout->setContentsMargins(12, 10, 12, 10);
-        cardLayout->setSpacing(4);
+        auto* cardLayout = new QHBoxLayout(card);
+        cardLayout->setContentsMargins(8, 8, 8, 8);
+        cardLayout->setSpacing(10);
+
+        if (!brandIcon.isNull()) {
+            auto* iconLabel = new QLabel(card);
+            iconLabel->setPixmap(brandIcon);
+            iconLabel->setFixedSize(brandIcon.size());
+            iconLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
+            iconLabel->setStyleSheet(QStringLiteral("background: transparent; border: none;"));
+            cardLayout->addWidget(iconLabel, 0, Qt::AlignTop);
+        }
+
+        auto* textContainer = new QVBoxLayout;
+        textContainer->setContentsMargins(0, 0, 0, 0);
+        textContainer->setSpacing(2);
 
         auto* platformLabel = new QLabel(tmpl.platform, card);
+        platformLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
         platformLabel->setStyleSheet(QStringLiteral(
             "color: %1; font-size: 10px; font-weight: bold; border: none; background: transparent;"
         ).arg(accentColor));
 
         auto* titleLabel = new QLabel(tmpl.defaultTitle, card);
         titleLabel->setWordWrap(true);
+        titleLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
         titleLabel->setStyleSheet(QStringLiteral(
-            "color: #e5e9f0; font-size: 12px; font-weight: 600; border: none; background: transparent;"
+            "color: #e5e9f0; font-size: 11px; font-weight: 600; border: none; background: transparent;"
         ));
 
         auto* dimLabel = new QLabel(QStringLiteral("%1 × %2 px").arg(tmpl.width).arg(tmpl.height), card);
+        dimLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
         dimLabel->setStyleSheet(QStringLiteral(
-            "color: #7b8494; font-size: 10px; border: none; background: transparent;"
+            "color: #7b8494; font-size: 9px; border: none; background: transparent;"
         ));
 
-        cardLayout->addWidget(platformLabel);
-        cardLayout->addWidget(titleLabel);
-        cardLayout->addStretch();
-        cardLayout->addWidget(dimLabel);
+        textContainer->addWidget(platformLabel);
+        textContainer->addWidget(titleLabel);
+        textContainer->addStretch();
+        textContainer->addWidget(dimLabel);
+
+        cardLayout->addLayout(textContainer, 1);
 
         const int kindInt = static_cast<int>(tmpl.kind);
-        card->installEventFilter(this);
-        card->setProperty("_templateKind", kindInt);
+        connect(card, &QPushButton::clicked, this, [this, kindInt] {
+            emit templateRequested(kindInt);
+        });
 
         templatesGrid->addWidget(card, i / 4, i % 4);
     }
