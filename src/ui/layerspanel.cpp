@@ -618,12 +618,29 @@ void LayersPanel::onMoved()
 {
     if (m_updating || !m_document)
         return;
-    const int row = m_list->currentRow();
-    const LayerId id = layerIdFromRow(row);
-    if (id.isNull())
+
+    const auto& children = m_document->rootGroup()->children;
+    const int total = static_cast<int>(children.size());
+    if (total <= 1 || m_list->count() != total) {
+        rebuild();
         return;
-    m_document->reorderLayer(id, m_document->rootGroup(), docIndexFromRow(row));
-    m_selectedId = id;
+    }
+
+    // A lista UI exibe as camadas do topo para a base (inverso da ordem do Document).
+    // O item na linha 0 da lista corresponde ao topo da pilha (índice total - 1 no Document).
+    // Vamos sincronizar a nova ordem da lista diretamente com o Document.
+    m_updating = true;
+    for (int row = 0; row < m_list->count(); ++row) {
+        QListWidgetItem* item = m_list->item(row);
+        if (!item) continue;
+        const LayerId id = item->data(Qt::UserRole).value<LayerId>();
+        if (id.isNull()) continue;
+
+        const int targetDocIndex = total - 1 - row;
+        m_document->reorderLayer(id, m_document->rootGroup(), targetDocIndex);
+    }
+    m_updating = false;
+
     rebuild();
 }
 
