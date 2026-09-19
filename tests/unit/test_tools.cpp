@@ -3,6 +3,8 @@
 #include "tools/SelectTool.h"
 #include "tools/PaintTool.h"
 #include "tools/CropTool.h"
+#include "tools/ScissorsTool.h"
+#include "tools/RasterTools.h"
 #include "core/Document.h"
 
 class TestTools : public QObject
@@ -40,8 +42,56 @@ private slots:
         tool.setColor(Qt::red);
         tool.setOpacity(0.8);
 
-        // Verification of state setting
-        QVERIFY(true);
+        QCOMPARE(tool.size(), 24);
+        QCOMPARE(tool.color(), QColor(Qt::red));
+        QCOMPARE(tool.opacity(), 0.8);
+    }
+
+    void testCropTool()
+    {
+        cc::CropTool tool;
+        QCOMPARE(tool.type(), cc::CanvasToolType::Crop);
+
+        cc::ToolContext ctx;
+        tool.setAspectRatio(1.5, ctx);
+        QCOMPARE(tool.aspectRatio(), 1.5);
+    }
+
+    void testScissorsTool()
+    {
+        cc::ScissorsTool tool;
+        QCOMPARE(tool.type(), cc::CanvasToolType::Scissors);
+
+        tool.setKeepInside(false);
+        QCOMPARE(tool.keepInside(), false);
+        tool.setAutoCrop(false);
+        QCOMPARE(tool.autoCrop(), false);
+    }
+
+    void testRasterTools()
+    {
+        cc::MagicWandTool wand;
+        QCOMPARE(wand.type(), cc::CanvasToolType::MagicWand);
+        wand.setTolerance(40);
+        QCOMPARE(wand.tolerance(), 40);
+        wand.setContiguous(false);
+        QCOMPARE(wand.contiguous(), false);
+
+        cc::CloneStampTool clone;
+        QCOMPARE(clone.type(), cc::CanvasToolType::CloneStamp);
+        clone.setRadius(32);
+        QCOMPARE(clone.radius(), 32);
+        clone.setHardness(0.5);
+        QCOMPARE(clone.hardness(), 0.5);
+        clone.setOpacity(0.9);
+        QCOMPARE(clone.opacity(), 0.9);
+
+        cc::FloodFillTool fill;
+        QCOMPARE(fill.type(), cc::CanvasToolType::FloodFill);
+        fill.setColor(Qt::green);
+        QCOMPARE(fill.color(), QColor(Qt::green));
+        fill.setTolerance(30);
+        QCOMPARE(fill.tolerance(), 30);
     }
 };
 

@@ -115,7 +115,7 @@ add_library(cc_tools STATIC
     tools/RasterTools.h
     tools/RasterTools.cpp
 )
-target_link_libraries(cc_tools PUBLIC Qt6::Core Qt6::Gui cc_core)
+target_link_libraries(cc_tools PUBLIC Qt6::Core Qt6::Gui cc_core cc_localization)
 target_include_directories(cc_tools PUBLIC ${PROJECT_SOURCE_DIR}/src)
 cc_enable_warnings(cc_tools)
 

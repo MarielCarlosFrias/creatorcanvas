@@ -2,6 +2,7 @@
 
 #include <QPointF>
 #include <QList>
+#include <functional>
 #include "core/Document.h"
 
 class QMouseEvent;
@@ -45,6 +46,14 @@ struct ToolContext {
     bool snapToGrid = false;
     int gridSpacing = 20;
     int safeZoneMode = 0;
+
+    LayerId selectedLayerId;
+    QList<LayerId> selectedLayerIds;
+
+    std::function<void()> requestUpdate;
+    std::function<void(const QString&)> requestStatusMessage;
+    std::function<void(const LayerId&)> selectLayer;
+    std::function<void(CanvasTool)> switchTool;
 };
 
 /// Abstract base class for all canvas interaction tools

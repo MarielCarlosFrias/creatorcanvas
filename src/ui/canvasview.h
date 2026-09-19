@@ -45,6 +45,14 @@ public:
     void setTool(CanvasTool tool);
     CanvasTool currentTool() const { return m_tool; }
 
+    SelectTool* selectTool() const { return m_selectTool.get(); }
+    CropTool* cropTool() const { return m_cropTool.get(); }
+    ScissorsTool* scissorsTool() const { return m_scissorsTool.get(); }
+    PaintTool* paintTool() const { return m_paintTool.get(); }
+    MagicWandTool* wandTool() const { return m_wandTool.get(); }
+    CloneStampTool* cloneTool() const { return m_cloneTool.get(); }
+    FloodFillTool* floodTool() const { return m_floodTool.get(); }
+
     // Configurações do Corte (Crop)
     void setCropAspectRatio(double ratio);
     void applyCrop();
@@ -169,7 +177,6 @@ private:
     void drawRubberBand(QPainter* painter);
     void drawGridOverlay(QPainter* painter);
     void drawSafeZoneOverlay(QPainter* painter);
-    void drawBrushCursor(QPainter* painter);
     QList<Layer*> hitTestRubberBand(const QRectF& docRect) const;
 
     QPointer<Document> m_document;
@@ -214,12 +221,6 @@ private:
     int m_gridSpacing = 50;
     int m_safeZoneMode = 0; // 0=None, 1=YouTube, 2=Instagram, 3=TikTok
 
-    // Ferramentas Raster (Crop, Scissors, Magic Wand, Clone Stamp)
-    void drawCropOverlay(QPainter* painter);
-    void drawScissorsOverlay(QPainter* painter);
-    void drawCloneOverlay(QPainter* painter);
-    int cropHandleAt(const QPointF& widgetPos) const;
-    void applyMagicWand(const QPointF& docPos);
     ToolContext makeToolContext() const;
 
     CanvasTool m_tool = CanvasTool::Select;
@@ -231,51 +232,6 @@ private:
     std::unique_ptr<CloneStampTool> m_cloneTool;
     std::unique_ptr<FloodFillTool> m_floodTool;
     ICanvasTool* m_activeTool = nullptr;
-
-    // Corte (Crop)
-    QRectF m_cropRect;
-    double m_cropAspectRatio = 0.0;
-    int m_activeCropHandle = -1;
-    QPointF m_cropDragStartLocal;
-    QRectF m_cropStartRect;
-
-    // Corte com Tesoura (Scissors Cut)
-    QPolygonF m_scissorsPolygon;
-    QPointF m_scissorsCurrentHover;
-    bool m_scissorsKeepInside = true;
-    bool m_scissorsAutoCrop = true;
-    bool m_isScissorsDrawing = false;
-
-    // Varinha Mágica (Magic Wand)
-    int m_wandTolerance = 25;
-    bool m_wandContiguous = true;
-
-    // Carimbo de Clonagem (Clone Stamp)
-    int m_cloneRadius = 20;
-    qreal m_cloneHardness = 0.8;
-    qreal m_cloneOpacity = 1.0;
-    bool m_hasCloneSrc = false;
-    QPoint m_cloneSrcPoint;
-    LayerId m_cloneSrcLayerId;
-    QPoint m_cloneLastDstPoint;
-    QImage m_cloneWorkingImage;
-    bool m_isCloning = false;
-    QPointF m_cloneHoverDocPos;
-    bool m_cloneHoverValid = false;
-
-    // Pintura Estilo Paint & Balde de Tinta
-    int m_paintBrushType = 0; // 0: Brush, 1: Pencil, 2: Highlighter, 3: Airbrush, 4: Eraser
-    QColor m_paintColor = QColor(47, 111, 237);
-    int m_paintSize = 12;
-    qreal m_paintOpacity = 1.0;
-    bool m_isPainting = false;
-    QPointF m_paintPrevPoint;
-    QImage m_paintWorkingImage;
-    LayerId m_paintActiveLayerId;
-    LayerId m_paintOrigAssetId;
-    int m_paintOrigWidth = 0;
-    int m_paintOrigHeight = 0;
-    AffineTransform m_paintOrigTransform;
 
     // AI Quick Background Removal cancel flag and thread tracking
     std::shared_ptr<std::atomic<bool>> m_quickAiCancelFlag;
