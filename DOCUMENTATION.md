@@ -2,7 +2,7 @@
 
 Technical reference for CreatorCanvas: architecture, data model, rendering, persistence, i18n, testing, build/packaging, conventions, and known limitations.
 
-**Scope of this document:** current **`main`**. Last tagged release is **v0.2.0** (milestones M0–M20). `main` additionally includes multi-select, alignment/distribution/grouping, grid and safe-zone overlays, layout templates, and extra raster tools (crop, scissors, magic wand, clone stamp). CMake `project()` version is still `0.2.0` until the next tag.
+**Scope of this document:** current **`main`**. Last tagged release is **v0.2.0** (milestones M0–M20). `main` additionally includes multi-select, alignment/distribution/grouping, grid and safe-zone overlays, layout templates, extra raster tools (crop, scissors, magic wand, clone stamp), modular `cc_tools` architecture (`ICanvasTool`), and Photoshop-style layer drag-and-drop reordering with full undo/redo. CMake `project()` version is still `0.2.0` until the next tag.
 
 ## Table of contents
 
@@ -31,7 +31,7 @@ CreatorCanvas is a layer-based image editor aimed at digital content creators. T
 
 **Shipped in v0.2.0 (M0–M20):** document model, command stack, ZIP+JSON projects, software canvas renderer, transform gestures, layers panel, text + shape tools, settings, export, autosave, start screen, packaging, snapping, paint/fill, text gradients, shear, image inspector, ONNX background removal.
 
-**On `main` after the tag (M21):** multi-layer selection, align/distribute/group, grid + snap-to-grid, YouTube/Instagram/TikTok safe-zone overlays, `TemplateFactory` start-screen templates, crop/scissors/wand/clone tools.
+**On `main` after the tag (M21–M22):** multi-layer selection, align/distribute/group, grid + snap-to-grid, YouTube/Instagram/TikTok safe-zone overlays, `TemplateFactory` start-screen templates, modular `cc_tools` architecture (`ICanvasTool`), and Photoshop-style layer drag-and-drop reordering with full undo/redo.
 
 **Stack:** C++20, Qt 6 Widgets, ONNX Runtime (C API), CMake presets, QTest, ZIP archives via vendored `miniz`.
 
@@ -59,6 +59,7 @@ CreatorCanvas is a layer-based image editor aimed at digital content creators. T
 | `m19-text-styling` | Two-stop linear/radial text gradients; shear X/Y on `AffineTransform` |
 | `m20-ai-removal` | ONNX `u2netp` (and custom models), cooperative cancellation, `--smoke-test` |
 | `m21-composer` | Multi-select, align/distribute/group, grid, safe zones, templates, crop/scissors/wand/clone |
+| `m22-tools-dnd` | Modular tool system (`ICanvasTool`, `ToolContext`, `cc_tools` library) & Photoshop-style layer drag-and-drop with undo/redo |
 
 ## 3. Architecture
 
@@ -68,9 +69,19 @@ CreatorCanvas is a layer-based image editor aimed at digital content creators. T
 ┌──────────────────────────────── ui/ ─────────────────────────────────────┐
 │  MainWindow · StartScreen · LayersPanel · Text/Shape/Image inspectors    │
 │  AIBackgroundDialog · MaskEditCanvas · Dialogs · CanvasView              │
-└───────▲───────────────────────────────────────────▲──────────────────────┘
-        │ user intents (commands)                   │ repaint requests
-┌───────┴──────────── core/ ────────────────────────┴─────── rendering/ ──┐
+└───────▲───────────────────────────────▲───────────────────▲──────────────┘
+        │ user intents (commands)       │ active tool       │ repaint requests
+        │                               ▼                   │
+        │                       ┌─── tools/ ───┐            │
+        │                       │ ICanvasTool  │            │
+        │                       │ SelectTool   │            │
+        │                       │ CropTool     │            │
+        │                       │ PaintTool    │            │
+        │                       │ ScissorsTool │            │
+        │                       │ RasterTools  │            │
+        │                       └───────┬──────┘            │
+        │                               │ delegate ops      │
+┌───────┴──────────── core/ ────────────▼───────────────────┴─────── rendering/ ──┐
 │  Document · Layer tree · CommandStack                                    │
 │  ProjectFile (ZIP+JSON+Thumbnail) · AssetStore                           │
 │  AffineTransform · SnapEngine · TemplateFactory                          │
@@ -87,6 +98,7 @@ CMake targets (`src/CMakeLists.txt`):
 | Target | Sources |
 |---|---|
 | `cc_core` | `core/*` + `imageio/*`, links Qt Core/Gui, `miniz`, ONNX Runtime |
+| `cc_tools` | `tools/*` (`ICanvasTool`, tools suite), links `cc_core` |
 | `cc_rendering` | `rendering/CanvasRenderer.*` |
 | `cc_services` | settings, autosave, recents, log, presets |
 | `cc_localization` | i18n + locale `.qrc` |
@@ -195,7 +207,7 @@ Image Inspector live preview writes a temporary asset via `Document::setImageLay
 
 ## 6. Canvas & interaction
 
-`src/ui/canvasview.cpp` is the viewport (`CanvasView`). It currently also hosts most tool state (large file; see §16).
+`src/ui/canvasview.cpp` is the viewport (`CanvasView`).
 
 - **Pan & zoom:** Space+drag or middle-click; wheel / `+` `-` `1` / `F` fit. Zoom range is implemented in the view (about 10%–3200%).
 - **Select:** click, Shift-add, rubber-band; transform handles (scale, rotate, move) for the primary or multi-selection.
@@ -203,7 +215,17 @@ Image Inspector live preview writes a temporary asset via `Document::setImageLay
 - **Overlays:** selection, multi-selection bounds, snap guides, grid, safe zones (`0` none, `1` YouTube, `2` Instagram, `3` TikTok), crop/scissors/clone previews, brush cursor.
 - **Inline text:** double-click a text layer.
 - **DnD:** dropped image files import as layers.
-- **`CanvasTool`:** `Select`, `Crop`, `Scissors`, `MagicWand`, `CloneStamp`, `Paint`, `FloodFill`.
+- **`CanvasTool` & `ICanvasTool` architecture:**
+  - Located in `src/tools/` compiled as static library `cc_tools`.
+  - `ICanvasTool` lifecycle: `activate(ctx)`, `deactivate(ctx)`, `drawOverlay(painter, ctx)`, `cursor()`.
+  - Input event dispatch: `mousePress`, `mouseMove`, `mouseRelease`, `mouseDoubleClick`, `keyPress`.
+  - `ToolContext` encapsulates references to `Document`, `CommandStack`, viewport zoom/pan transforms, selection, and active tool settings.
+  - Tools implemented: `SelectTool`, `CropTool`, `PaintTool`, `ScissorsTool`, `MagicWandTool`, `CloneStampTool`, `FloodFillTool`.
+  - Viewport delegates mouse and paint events to `m_activeTool` before legacy fallback handlers.
+- **Photoshop-style Layer Drag & Drop:**
+  - `LayerRowWidget` captures mouse drag exceeding `QApplication::startDragDistance()`, generates a semi-transparent drag pixmap of the row, and sets MIME data `application/x-creatorcanvas-layer-id`.
+  - `LayerListWidget` provides dynamic drop indicator and computes target index based on cursor position relative to item vertical midpoint.
+  - Layer reordering executes through `ReorderLayerCommand` on the `CommandStack`, preserving non-destructive undo/redo history.
 
 `MainWindow` wires menus, docks, tool option bars, align/distribute/group, and start-screen templates.
 
@@ -270,7 +292,7 @@ Saves write a temporary file and rename into place (atomic replace on the same v
 
 ## 12. Testing & Verification
 
-**19** QTest executables in `tests/CMakeLists.txt` (all run with `QT_QPA_PLATFORM=offscreen`):
+**20** QTest executables in `tests/CMakeLists.txt` (all run with `QT_QPA_PLATFORM=offscreen`):
 
 1. `test_settings` — preferences persistence
 2. `test_i18n` — catalogs, key symmetry, fallback
@@ -289,8 +311,9 @@ Saves write a temporary file and rename into place (atomic replace on the same v
 15. `test_autosave` — recovery files
 16. `test_snap` — guide math
 17. `test_image_processing` — filters and raster helpers
-18. `test_ai_quick` — quick AI / canvas-adjacent paths (`canvasview`, AI dialog, mask canvas compiled in)
-19. `test_ui_phase1` — start screen, layers panel, theme icons, collapsible sections
+18. `test_tools` — modular tool activation, event delegation, and context handling
+19. `test_ai_quick` — quick AI / canvas-adjacent paths (`canvasview`, AI dialog, mask canvas compiled in)
+20. `test_ui_phase1` — start screen, layers panel, theme icons, collapsible sections
 
 ### Smoke test
 
@@ -321,11 +344,11 @@ Install rules also stage locales, presets, desktop/AppStream files, and the SVG 
 
 ## 14. Roadmap
 
-Already on `main` (do not treat as future work): multi-select, group/align/distribute, grid, safe zones, templates, extra raster tools.
+Already on `main` (do not treat as future work): multi-select, group/align/distribute, grid, safe zones, templates, extra raster tools, modular `cc_tools` architecture, Photoshop-style layer drag-and-drop.
 
 Still ahead:
 
-1. **Split `CanvasView` / `MainWindow`** — isolate tools and overlays so the viewport is not a 2k+ line catch-all.
+1. **Split `CanvasView` / `MainWindow`** — isolate tools and overlays so the viewport is not a 2k+ line catch-all (Phase 1 delivered: `cc_tools` static library and `ICanvasTool` architecture integrated).
 2. **Layer raster cache + `IRenderer`** — skip full recomposition; give a GPU backend a real seam (none exists today).
 3. **GPU viewport** — optional Vulkan/Direct3D (or Qt RHI) behind that interface.
 4. **Richer blend modes** — only if compositing moves beyond the current seven `QPainter` modes.

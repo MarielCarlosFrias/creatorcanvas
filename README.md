@@ -2,7 +2,7 @@
 
 A fast, layer-based image editor designed specifically for digital content creators — YouTube thumbnails, social posts, stories, banners, and marketing graphics. Combines template-driven simplicity with a real layer and non-destructive command stack, optimized for Linux and Windows.
 
-> **Status:** Current `main` is ahead of **v0.2.0** (includes multi-select, layout templates, grid/safe zones, icon suite, and enhanced layer drag-and-drop).
+> **Status:** Current `main` is ahead of **v0.2.0** (includes multi-select, layout templates, grid/safe zones, icon suite, modular `cc_tools` architecture, and Photoshop-style layer drag-and-drop).
 
 ---
 
@@ -22,14 +22,14 @@ A fast, layer-based image editor designed specifically for digital content creat
 
 ## Key Features
 
-- **Layer-Based Compositing** — Support for Image, Text, Shape, Group, and Background layers with drag-and-drop reordering, visibility, locking, opacity, and blend modes.
+- **Layer-Based Compositing** — Support for Image, Text, Shape, Group, and Background layers with Photoshop-style drag-and-drop reordering, visibility, locking, opacity, and blend modes.
 - **Ready-to-Use Templates** — Built-in editable layout templates (`TemplateFactory`) for YouTube, Instagram, TikTok, and presentations.
 - **Multi-Layer Selection & Tools** — Shift-click and rubber-band multi-select, alignment & distribution, grouping, and transform gestures.
 - **Smart Guides & Safe Zones** — Toggleable alignment grid, snap-to-grid, and safe zone overlays for YouTube, Instagram, and TikTok.
 - **Text & Graphic Styling** — Rich text inspector with outline, drop-shadow, linear/radial color gradients, and transform shear (X/Y).
-- **Raster & Painting Suite** — Brush, Pencil, Airbrush, Eraser, Flood Fill, Crop, Polygon Cut (Scissors), Magic Wand, and Clone Stamp.
+- **Raster & Painting Suite** — Modular `ICanvasTool` architecture (`cc_tools`): Brush, Pencil, Airbrush, Eraser, Flood Fill, Crop, Polygon Cut (Scissors), Magic Wand, and Clone Stamp.
 - **Offline AI Background Removal** — Integrated ONNX Runtime (`u2netp`) for single-click background removal.
-- **Undo / Redo System** — Fully non-destructive command stack (`core/history/`) for all operations.
+- **Undo / Redo System** — Fully non-destructive command stack (`core/history/`) for all operations including layer reordering.
 - **Native Localization** — Full English and Brazilian Portuguese (pt-BR) support with live language switching.
 
 ---
@@ -42,10 +42,11 @@ A fast, layer-based image editor designed specifically for digital content creat
 | Framework | Qt 6 (Widgets). Reference/deployment toolchain **Qt 6.8 LTS**; builds tolerate **6.2+** |
 | Build | CMake ≥ 3.24 with presets `linux-debug`, `linux-asan`, `linux-release`, `windows-debug`, `windows-release` |
 | Rendering | `cc::renderDocument()` in `src/rendering/` — software `QPainter` only. No `IRenderer` interface and no GPU backend yet |
+| Tool Architecture | Modular `ICanvasTool` / `ToolContext` in static library `cc_tools` (`src/tools/`) |
 | Raster ops | `cc::ImageProcessing` (`src/core/image/`) — paint, fill, crop, wand, scissors, clone, color filters |
 | Imaging | `QImage` + Qt image plugins (PNG/JPEG/WebP) |
 | Project container | ZIP (vendored `miniz`) holding `manifest.json` + `media/` + `thumbnail.png` |
-| Testing | QTest, **19** unit-test executables in `tests/CMakeLists.txt` |
+| Testing | QTest, **20** unit-test executables in `tests/CMakeLists.txt` |
 | AI / ML | ONNX Runtime (background removal, C API) |
 | Packaging | AppImage + DEB (Linux), portable ZIP / NSIS (Windows) |
 
@@ -55,16 +56,17 @@ Approximate counts on current `main` (`.cpp` / `.h` only, excluding `3rdparty/`)
 
 | Area | Lines |
 |---|---|
-| `src/ui` | ~10,000 |
+| `src/ui` | ~11,000 |
 | `src/core` (includes serialization, snap, image, templates) | ~4,200 |
-| `src/services` | ~700 |
+| `src/tools` (`ICanvasTool` suite) | ~1,050 |
+| `src/services` | ~715 |
 | `src/localization` | ~340 |
 | `src/rendering` | ~330 |
 | `src/imageio` (compiled into `cc_core`) | ~190 |
-| **Production `src/` total** | **~16,000** |
-| `tests/unit` | ~3,400 |
+| **Production `src/` total** | **~17,900** |
+| `tests/unit` | ~3,500 |
 
-Largest files: `src/ui/canvasview.cpp` (~2,500) and `src/ui/mainwindow.cpp` (~2,100).
+Largest files: `src/ui/canvasview.cpp` (~2,600) and `src/ui/mainwindow.cpp` (~2,300).
 
 ## Prerequisites
 
@@ -140,6 +142,7 @@ Phase 1 (M0–M15) and Phase 2 (M16–M20) shipped in **v0.2.0**. Items below M2
 | M19 | Image Inspector (adjustments + presets) | v0.2.0 |
 | M20 | AI background removal | v0.2.0 |
 | M21 | Multi-select, align/distribute/group, grid, safe zones, templates, extra raster tools | on `main` |
+| M22 | Modular tools architecture (`cc_tools`, `ICanvasTool`) & Photoshop-style layer drag-and-drop | on `main` |
 
 ## Project structure
 
@@ -151,6 +154,8 @@ creatorcanvas/
 │   ├── main.cpp
 │   ├── core/            # Document, layers, history, serialization, geometry, snap,
 │   │                    # ImageProcessing, BackgroundRemover, TemplateFactory
+│   ├── tools/           # Modular tool system: ICanvasTool, SelectTool, CropTool,
+│   │                    # PaintTool, ScissorsTool, RasterTools (cc_tools)
 │   ├── rendering/       # renderDocument() — software QPainter compositor
 │   ├── ui/              # MainWindow, CanvasView, panels, dialogs, StartScreen
 │   ├── services/        # Settings, Autosave, RecentFiles, PresetStore, Log
@@ -160,12 +165,12 @@ creatorcanvas/
 │   ├── locales/{en,pt-BR}/{common,editor,settings,templates}.json
 │   ├── presets/builtin.json
 │   └── icons/
-├── tests/unit/          # 19 QTest executables
+├── tests/unit/          # 20 QTest executables
 ├── packaging/{linux,windows}/
 └── DOCUMENTATION.md
 ```
 
-CMake libraries: `cc_core`, `cc_rendering`, `cc_services`, `cc_localization`, plus the `creatorcanvas` executable (output name `CreatorCanvas`).
+CMake libraries: `cc_core`, `cc_tools`, `cc_rendering`, `cc_services`, `cc_localization`, plus the `creatorcanvas` executable (output name `CreatorCanvas`).
 
 ## Conventions
 
@@ -181,7 +186,7 @@ See `DOCUMENTATION.md` for architecture, format, tests, and known limitations.
 ## Release checklist
 
 Before tagging a new release:
-1. **Unit tests**: `ctest --output-on-failure` passes across all **19** test executables.
+1. **Unit tests**: `ctest --output-on-failure` passes across all **20** test executables.
 2. **Clean packaging**: Build `.deb` (Linux) and portable ZIP (Windows); verify `libonnxruntime` is staged inside the package.
 3. **Smoke testing**: Run `CreatorCanvas --smoke-test` on the installed package in headless mode (`QT_QPA_PLATFORM=offscreen`).
 4. **Model resolution**: Verify `u2netp.onnx` is bundled in `share/creatorcanvas/models/` or the browse prompt works cleanly.
