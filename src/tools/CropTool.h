@@ -6,7 +6,7 @@
 namespace cc {
 
 /// Modular Tool for Crop manipulation with fixed aspect ratio support
-class CropTool final : public CanvasTool
+class CropTool final : public ICanvasTool
 {
 public:
     CropTool() = default;

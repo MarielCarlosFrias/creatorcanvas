@@ -16,7 +16,7 @@ class SnapEngine;
 class CommandStack;
 class I18nService;
 
-enum class CanvasToolType {
+enum class CanvasTool {
     Select,
     Crop,
     Scissors,
@@ -25,6 +25,8 @@ enum class CanvasToolType {
     Paint,
     FloodFill
 };
+
+using CanvasToolType = CanvasTool;
 
 /// Context provided to tools on each event or draw cycle
 struct ToolContext {
@@ -46,12 +48,12 @@ struct ToolContext {
 };
 
 /// Abstract base class for all canvas interaction tools
-class CanvasTool
+class ICanvasTool
 {
 public:
-    virtual ~CanvasTool() = default;
+    virtual ~ICanvasTool() = default;
 
-    virtual CanvasToolType type() const = 0;
+    virtual CanvasTool type() const = 0;
 
     virtual void activate(const ToolContext& ctx) { Q_UNUSED(ctx); }
     virtual void deactivate(const ToolContext& ctx) { Q_UNUSED(ctx); }

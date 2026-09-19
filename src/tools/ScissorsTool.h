@@ -6,7 +6,7 @@
 namespace cc {
 
 /// Modular Tool for Polygon Cut (Scissors)
-class ScissorsTool final : public CanvasTool
+class ScissorsTool final : public ICanvasTool
 {
 public:
     ScissorsTool() = default;

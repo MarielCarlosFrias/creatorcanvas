@@ -53,6 +53,7 @@ private:
     void onCurrentRowChanged(int row);
     void onItemDoubleClicked(QListWidgetItem* item);
     void onMoved();
+    void onLayerReordered(const LayerId& id, int targetDocIndex);
     void showContextMenu(const QPoint& pos);
     int docIndexFromRow(int row) const;
     LayerId layerIdFromRow(int row) const;

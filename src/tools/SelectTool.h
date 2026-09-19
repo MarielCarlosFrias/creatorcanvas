@@ -9,7 +9,7 @@ namespace cc {
 
 /// Tool handling single and multi-layer selection, transform handles (move, scale, rotate),
 /// rubber-band selection, and snap engine integration.
-class SelectTool final : public CanvasTool
+class SelectTool final : public ICanvasTool
 {
 public:
     SelectTool() = default;

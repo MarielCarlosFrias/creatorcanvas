@@ -4,6 +4,11 @@
 #include "core/image/BackgroundRemover.h"
 #include "core/image/ImageProcessing.h"
 #include "rendering/CanvasRenderer.h"
+#include "tools/SelectTool.h"
+#include "tools/CropTool.h"
+#include "tools/ScissorsTool.h"
+#include "tools/PaintTool.h"
+#include "tools/RasterTools.h"
 #include <QThread>
 
 #include <QContextMenuEvent>
@@ -57,6 +62,34 @@ CanvasView::CanvasView(QWidget* parent)
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
     setAcceptDrops(true);
+
+    m_selectTool = std::make_unique<SelectTool>();
+    m_cropTool = std::make_unique<CropTool>();
+    m_scissorsTool = std::make_unique<ScissorsTool>();
+    m_paintTool = std::make_unique<PaintTool>();
+    m_wandTool = std::make_unique<MagicWandTool>();
+    m_cloneTool = std::make_unique<CloneStampTool>();
+    m_floodTool = std::make_unique<FloodFillTool>();
+    m_activeTool = m_selectTool.get();
+}
+
+ToolContext CanvasView::makeToolContext() const
+{
+    ToolContext ctx;
+    ctx.document = m_document.data();
+    ctx.history = m_history;
+    ctx.snapEngine = const_cast<SnapEngine*>(&m_snapEngine);
+    ctx.i18n = m_i18n;
+    ctx.view = const_cast<CanvasView*>(this);
+    ctx.zoom = m_zoom;
+    ctx.panOffset = m_panOffset;
+    ctx.docToDevice = docToDevice();
+    ctx.deviceToDoc = deviceToDoc();
+    ctx.showGrid = m_showGrid;
+    ctx.snapToGrid = m_snapToGrid;
+    ctx.gridSpacing = m_gridSpacing;
+    ctx.safeZoneMode = m_safeZoneMode;
+    return ctx;
 }
 
 CanvasView::~CanvasView()
@@ -83,6 +116,11 @@ void CanvasView::setDocument(Document* document)
 void CanvasView::setI18n(I18nService* i18n)
 {
     m_i18n = i18n;
+}
+
+void CanvasView::setHistory(CommandStack* history)
+{
+    m_history = history;
 }
 
 void CanvasView::clearSelection()
@@ -522,6 +560,10 @@ void CanvasView::paintEvent(QPaintEvent*)
             drawSelectionOverlay(&painter);
     }
 
+    if (m_activeTool) {
+        m_activeTool->drawOverlay(&painter, makeToolContext());
+    }
+
     if (m_multiSelection.size() > 1)
         drawMultiSelectionOverlay(&painter);
 
@@ -595,6 +637,10 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
 
     if (event->button() == Qt::LeftButton && m_document) {
         const QPointF docPos = deviceToDoc().map(QPointF(event->pos()));
+
+        if (m_activeTool) {
+            m_activeTool->mousePress(event, docPos, makeToolContext());
+        }
 
         // Interação da ferramenta de Corte (Crop)
         if (m_tool == CanvasTool::Crop) {
@@ -1012,6 +1058,11 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event)
         return;
     }
 
+    if (m_activeTool) {
+        const QPointF docPos = deviceToDoc().map(QPointF(event->pos()));
+        m_activeTool->mouseMove(event, docPos, makeToolContext());
+    }
+
     // Movimentação/redimensionamento interativo da ferramenta de Corte (Crop)
     if (m_tool == CanvasTool::Crop && m_activeCropHandle >= 0 && m_document && !m_selectedId.isNull()) {
         Layer* layer = m_document->findLayer(m_selectedId);
@@ -1321,6 +1372,11 @@ void CanvasView::mouseReleaseEvent(QMouseEvent* event)
         return;
     }
 
+    if (m_activeTool) {
+        const QPointF docPos = deviceToDoc().map(QPointF(event->pos()));
+        m_activeTool->mouseRelease(event, docPos, makeToolContext());
+    }
+
     if (m_rubberBanding && event->button() == Qt::LeftButton) {
         m_rubberBanding = false;
         if (m_document) {
@@ -1422,6 +1478,11 @@ void CanvasView::mouseReleaseEvent(QMouseEvent* event)
 
 void CanvasView::mouseDoubleClickEvent(QMouseEvent* event)
 {
+    if (m_activeTool) {
+        const QPointF docPos = deviceToDoc().map(QPointF(event->pos()));
+        m_activeTool->mouseDoubleClick(event, docPos, makeToolContext());
+    }
+
     if (event->button() == Qt::LeftButton) {
         if (m_tool == CanvasTool::Scissors) {
             applyScissorsCut();
@@ -1702,7 +1763,40 @@ void CanvasView::setTool(CanvasTool tool)
         return;
 
     const CanvasTool prevTool = m_tool;
+    const ToolContext ctx = makeToolContext();
+    if (m_activeTool) {
+        m_activeTool->deactivate(ctx);
+    }
+
     m_tool = tool;
+
+    switch (m_tool) {
+    case CanvasTool::Select:
+        m_activeTool = m_selectTool.get();
+        break;
+    case CanvasTool::Crop:
+        m_activeTool = m_cropTool.get();
+        break;
+    case CanvasTool::Scissors:
+        m_activeTool = m_scissorsTool.get();
+        break;
+    case CanvasTool::MagicWand:
+        m_activeTool = m_wandTool.get();
+        break;
+    case CanvasTool::CloneStamp:
+        m_activeTool = m_cloneTool.get();
+        break;
+    case CanvasTool::Paint:
+        m_activeTool = m_paintTool.get();
+        break;
+    case CanvasTool::FloodFill:
+        m_activeTool = m_floodTool.get();
+        break;
+    }
+
+    if (m_activeTool) {
+        m_activeTool->activate(ctx);
+    }
 
     // Limpa estado da ferramenta anterior sem chamar setTool para evitar recursão
     if (prevTool == CanvasTool::Crop) {

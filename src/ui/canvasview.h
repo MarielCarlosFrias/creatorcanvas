@@ -8,22 +8,21 @@
 #include <memory>
 #include "core/Document.h"
 #include "core/snap/SnapEngine.h"
+#include "tools/CanvasTool.h"
 
 class QLineEdit;
 
 namespace cc {
 
 class I18nService;
-
-enum class CanvasTool {
-    Select,
-    Crop,
-    Scissors,
-    MagicWand,
-    CloneStamp,
-    Paint,
-    FloodFill
-};
+class CommandStack;
+class SelectTool;
+class CropTool;
+class ScissorsTool;
+class PaintTool;
+class MagicWandTool;
+class CloneStampTool;
+class FloodFillTool;
 
 /// Interactive document viewport: pan, zoom, selection with transform
 /// handles, gestures, inline text editing, software rendering, and raster tools.
@@ -36,6 +35,7 @@ public:
 
     void setDocument(Document* document);
     void setI18n(I18nService* i18n);
+    void setHistory(CommandStack* history);
     void clearSelection();
     void setSelectedLayer(const LayerId& id);
     QList<LayerId> selectedLayers() const;
@@ -173,6 +173,7 @@ private:
     QList<Layer*> hitTestRubberBand(const QRectF& docRect) const;
 
     QPointer<Document> m_document;
+    CommandStack* m_history = nullptr;
     double m_zoom = 1.0;
     QPointF m_panOffset{0, 0};
 
@@ -219,8 +220,17 @@ private:
     void drawCloneOverlay(QPainter* painter);
     int cropHandleAt(const QPointF& widgetPos) const;
     void applyMagicWand(const QPointF& docPos);
+    ToolContext makeToolContext() const;
 
     CanvasTool m_tool = CanvasTool::Select;
+    std::unique_ptr<SelectTool> m_selectTool;
+    std::unique_ptr<CropTool> m_cropTool;
+    std::unique_ptr<ScissorsTool> m_scissorsTool;
+    std::unique_ptr<PaintTool> m_paintTool;
+    std::unique_ptr<MagicWandTool> m_wandTool;
+    std::unique_ptr<CloneStampTool> m_cloneTool;
+    std::unique_ptr<FloodFillTool> m_floodTool;
+    ICanvasTool* m_activeTool = nullptr;
 
     // Corte (Crop)
     QRectF m_cropRect;

@@ -5,12 +5,20 @@
 #include "core/history/DocumentCommands.h"
 #include "core/layers/Layer.h"
 
+#include <QApplication>
 #include <QComboBox>
+#include <QContextMenuEvent>
+#include <QDrag>
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
 #include <QMenu>
+#include <QMimeData>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QSlider>
 #include <QSpinBox>
@@ -46,6 +54,90 @@ QString fallbackName(const Layer& layer, I18nService* i18n)
     return i18n->t("common", "layer.typeImage");
 }
 
+class LayerRowWidget final : public QWidget
+{
+    Q_OBJECT
+public:
+    LayerRowWidget(const LayerId& id, QListWidget* listWidget, QWidget* parent = nullptr)
+        : QWidget(parent)
+        , m_id(id)
+        , m_list(listWidget)
+    {
+    }
+
+protected:
+    void mousePressEvent(QMouseEvent* event) override
+    {
+        if (event->button() == Qt::LeftButton) {
+            m_dragStartPos = event->pos();
+            for (int i = 0; i < m_list->count(); ++i) {
+                if (m_list->itemWidget(m_list->item(i)) == this) {
+                    m_list->setCurrentRow(i);
+                    break;
+                }
+            }
+        }
+        QWidget::mousePressEvent(event);
+    }
+
+    void mouseMoveEvent(QMouseEvent* event) override
+    {
+        if ((event->buttons() & Qt::LeftButton) &&
+            (event->pos() - m_dragStartPos).manhattanLength() >= QApplication::startDragDistance()) {
+            startDrag();
+            return;
+        }
+        QWidget::mouseMoveEvent(event);
+    }
+
+    void mouseDoubleClickEvent(QMouseEvent* event) override
+    {
+        if (event->button() == Qt::LeftButton) {
+            for (int i = 0; i < m_list->count(); ++i) {
+                if (m_list->itemWidget(m_list->item(i)) == this) {
+                    emit m_list->itemDoubleClicked(m_list->item(i));
+                    break;
+                }
+            }
+        }
+        QWidget::mouseDoubleClickEvent(event);
+    }
+
+    void contextMenuEvent(QContextMenuEvent* event) override
+    {
+        for (int i = 0; i < m_list->count(); ++i) {
+            if (m_list->itemWidget(m_list->item(i)) == this) {
+                m_list->setCurrentRow(i);
+                break;
+            }
+        }
+        const QPoint listPos = m_list->mapFromGlobal(event->globalPos());
+        emit m_list->customContextMenuRequested(listPos);
+    }
+
+private:
+    void startDrag()
+    {
+        auto* drag = new QDrag(this);
+        auto* mimeData = new QMimeData;
+        mimeData->setData(QStringLiteral("application/x-creatorcanvas-layer-id"),
+                          m_id.toString(QUuid::WithoutBraces).toUtf8());
+        drag->setMimeData(mimeData);
+
+        QPixmap pixmap(size());
+        pixmap.fill(Qt::transparent);
+        render(&pixmap);
+        drag->setPixmap(pixmap);
+        drag->setHotSpot(m_dragStartPos);
+
+        drag->exec(Qt::MoveAction);
+    }
+
+    LayerId m_id;
+    QListWidget* m_list = nullptr;
+    QPoint m_dragStartPos;
+};
+
 class LayerListWidget final : public QListWidget
 {
     Q_OBJECT
@@ -54,10 +146,53 @@ public:
 
 signals:
     void moved();
+    void layerReordered(const LayerId& id, int targetDocIndex);
 
 protected:
+    void dragEnterEvent(QDragEnterEvent* event) override
+    {
+        if (event->mimeData()->hasFormat(QStringLiteral("application/x-creatorcanvas-layer-id"))) {
+            event->acceptProposedAction();
+        } else {
+            QListWidget::dragEnterEvent(event);
+        }
+    }
+
+    void dragMoveEvent(QDragMoveEvent* event) override
+    {
+        if (event->mimeData()->hasFormat(QStringLiteral("application/x-creatorcanvas-layer-id"))) {
+            event->acceptProposedAction();
+        } else {
+            QListWidget::dragMoveEvent(event);
+        }
+    }
+
     void dropEvent(QDropEvent* event) override
     {
+        if (event->mimeData()->hasFormat(QStringLiteral("application/x-creatorcanvas-layer-id"))) {
+            const QByteArray data = event->mimeData()->data(QStringLiteral("application/x-creatorcanvas-layer-id"));
+            const LayerId draggedId = QUuid::fromString(QString::fromUtf8(data));
+
+            const QPoint pos = event->position().toPoint();
+            QListWidgetItem* targetItem = itemAt(pos);
+            int targetRow = count() - 1;
+            if (targetItem) {
+                targetRow = row(targetItem);
+                const QRect itemR = visualItemRect(targetItem);
+                if (pos.y() > itemR.center().y()) {
+                    targetRow += 1;
+                }
+            }
+            targetRow = qBound(0, targetRow, count() - 1);
+
+            const int total = count();
+            if (total > 0 && !draggedId.isNull()) {
+                const int targetDocIndex = qBound(0, total - 1 - targetRow, total - 1);
+                emit layerReordered(draggedId, targetDocIndex);
+            }
+            event->acceptProposedAction();
+            return;
+        }
         QListWidget::dropEvent(event);
         emit moved();
     }
@@ -133,7 +268,9 @@ void LayersPanel::buildUi()
 
     // --- 2. Lista interativa de camadas com miniaturas ---
     m_list = new LayerListWidget(this);
-    m_list->setDragDropMode(QAbstractItemView::InternalMove);
+    m_list->setDragDropMode(QAbstractItemView::DropOnly);
+    m_list->setAcceptDrops(true);
+    m_list->setDropIndicatorShown(true);
     m_list->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_list->setContextMenuPolicy(Qt::CustomContextMenu);
     m_list->setStyleSheet(QStringLiteral(
@@ -164,6 +301,8 @@ void LayersPanel::buildUi()
             this, &LayersPanel::onItemDoubleClicked);
     connect(static_cast<LayerListWidget*>(m_list), &LayerListWidget::moved,
             this, &LayersPanel::onMoved);
+    connect(static_cast<LayerListWidget*>(m_list), &LayerListWidget::layerReordered,
+            this, &LayersPanel::onLayerReordered);
     connect(m_list, &QListWidget::customContextMenuRequested,
             this, &LayersPanel::showContextMenu);
 
@@ -441,7 +580,7 @@ void LayersPanel::rebuild()
             item->setSizeHint(QSize(200, 42));
 
             // Custom Widget for each layer row
-            auto* rowWidget = new QWidget(m_list);
+            auto* rowWidget = new LayerRowWidget(layerId, m_list, m_list);
             auto* rowLayout = new QHBoxLayout(rowWidget);
             rowLayout->setContentsMargins(4, 2, 6, 2);
             rowLayout->setSpacing(6);
@@ -462,12 +601,14 @@ void LayersPanel::rebuild()
 
             // Thumbnail Preview
             auto* thumbLabel = new QLabel(rowWidget);
+            thumbLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
             thumbLabel->setPixmap(renderLayerThumbnail(*layer, 32));
             thumbLabel->setFixedSize(32, 32);
             thumbLabel->setStyleSheet(QStringLiteral("border: 1px solid #333a46; border-radius: 4px;"));
 
             // Type Badge Icon
             auto* typeIcon = new QLabel(rowWidget);
+            typeIcon->setAttribute(Qt::WA_TransparentForMouseEvents);
             QIcon badgeIcon;
             switch (layer->type()) {
             case LayerType::Text:       badgeIcon = ThemeIcons::layerTypeText(); break;
@@ -481,6 +622,7 @@ void LayersPanel::rebuild()
 
             // Layer Name Label
             auto* nameLabel = new QLabel(fallbackName(*layer, m_i18n), rowWidget);
+            nameLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
             nameLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
             QFont nf = nameLabel->font();
             if (layer->locked) {
@@ -642,6 +784,27 @@ void LayersPanel::onMoved()
     m_updating = false;
 
     rebuild();
+}
+
+void LayersPanel::onLayerReordered(const LayerId& id, int targetDocIndex)
+{
+    if (!m_document)
+        return;
+
+    const int currentIndex = m_document->indexOf(id);
+    if (currentIndex == targetDocIndex || currentIndex < 0)
+        return;
+
+    if (m_history) {
+        m_history->execute(std::make_unique<ReorderLayerCommand>(
+            *m_document, id, m_document->rootGroup(), targetDocIndex));
+    } else {
+        m_document->reorderLayer(id, m_document->rootGroup(), targetDocIndex);
+    }
+
+    m_selectedId = id;
+    rebuild();
+    emit selectionRequested(id);
 }
 
 void LayersPanel::showContextMenu(const QPoint& pos)

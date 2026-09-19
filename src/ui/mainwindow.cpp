@@ -165,6 +165,7 @@ void MainWindow::buildCentralWidget()
     m_canvas = new CanvasView(this);
     m_canvas->setDocument(m_document.get());
     m_canvas->setI18n(m_i18n);
+    m_canvas->setHistory(m_history.get());
 
     m_centralStack = new QStackedWidget(this);
     m_centralStack->addWidget(m_startScreen); // page 0: start

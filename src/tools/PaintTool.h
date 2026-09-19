@@ -9,7 +9,7 @@
 namespace cc {
 
 /// Modular Tool for Brush, Pencil, Highlighter, Airbrush, and Eraser raster painting
-class PaintTool final : public CanvasTool
+class PaintTool final : public ICanvasTool
 {
 public:
     PaintTool() = default;

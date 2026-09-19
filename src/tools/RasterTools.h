@@ -5,7 +5,7 @@
 namespace cc {
 
 /// Modular Tool for Magic Wand selection
-class MagicWandTool final : public CanvasTool
+class MagicWandTool final : public ICanvasTool
 {
 public:
     MagicWandTool() = default;
@@ -23,7 +23,7 @@ private:
 };
 
 /// Modular Tool for Clone Stamp sampling
-class CloneStampTool final : public CanvasTool
+class CloneStampTool final : public ICanvasTool
 {
 public:
     CloneStampTool() = default;
@@ -52,7 +52,7 @@ private:
 };
 
 /// Modular Tool for Flood Fill bucket
-class FloodFillTool final : public CanvasTool
+class FloodFillTool final : public ICanvasTool
 {
 public:
     FloodFillTool() = default;
