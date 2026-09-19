@@ -100,6 +100,25 @@ target_link_libraries(cc_localization PUBLIC Qt6::Core cc_services)
 target_include_directories(cc_localization PUBLIC ${PROJECT_SOURCE_DIR}/src)
 cc_enable_warnings(cc_localization)
 
+# ------------------------------------------------------------------- tools --
+add_library(cc_tools STATIC
+    tools/CanvasTool.h
+    tools/CanvasTool.cpp
+    tools/SelectTool.h
+    tools/SelectTool.cpp
+    tools/PaintTool.h
+    tools/PaintTool.cpp
+    tools/CropTool.h
+    tools/CropTool.cpp
+    tools/ScissorsTool.h
+    tools/ScissorsTool.cpp
+    tools/RasterTools.h
+    tools/RasterTools.cpp
+)
+target_link_libraries(cc_tools PUBLIC Qt6::Core Qt6::Gui cc_core)
+target_include_directories(cc_tools PUBLIC ${PROJECT_SOURCE_DIR}/src)
+cc_enable_warnings(cc_tools)
+
 # ------------------------------------------------------------- application --
 add_executable(creatorcanvas
     main.cpp
@@ -136,7 +155,7 @@ add_executable(creatorcanvas
 )
 target_link_libraries(creatorcanvas
     PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets
-            cc_core cc_rendering cc_services cc_localization)
+            cc_core cc_tools cc_rendering cc_services cc_localization)
 target_include_directories(creatorcanvas PRIVATE ${PROJECT_SOURCE_DIR}/src)
 target_compile_definitions(creatorcanvas PRIVATE APP_VERSION="${PROJECT_VERSION}")
 if(NOT WIN32)

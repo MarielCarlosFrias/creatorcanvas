@@ -1,6 +1,6 @@
 function(cc_add_test name)
     add_executable(${name} ${ARGN})
-    target_link_libraries(${name} PRIVATE Qt6::Test Qt6::Widgets cc_services cc_localization cc_core cc_rendering cc_core cc_rendering miniz)
+    target_link_libraries(${name} PRIVATE Qt6::Test Qt6::Widgets cc_services cc_localization cc_tools cc_core cc_rendering miniz)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/src)
     if(NOT WIN32)
         set_target_properties(${name} PROPERTIES
@@ -31,6 +31,7 @@ cc_add_test(test_export unit/test_export.cpp)
 cc_add_test(test_autosave      unit/test_autosave.cpp)
 cc_add_test(test_snap unit/test_snap.cpp)
 cc_add_test(test_image_processing unit/test_image_processing.cpp)
+cc_add_test(test_tools unit/test_tools.cpp)
 cc_add_test(test_ai_quick unit/test_ai_quick.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasview.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/aibackgrounddialog.cpp
