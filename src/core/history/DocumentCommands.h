@@ -227,6 +227,30 @@ private:
     TextEffects m_new;
 };
 
+/// Applies image effects (outline/glow/sticker).
+class SetLayerImageEffectsCommand final : public Command
+{
+public:
+    SetLayerImageEffectsCommand(Document& doc, const LayerId& id,
+                                ImageEffects oldValue, ImageEffects newValue)
+        : Command(QStringLiteral("layer.imageEffects"))
+        , m_doc(&doc)
+        , m_id(id)
+        , m_old(std::move(oldValue))
+        , m_new(std::move(newValue))
+    {
+    }
+
+    void redo() override { m_doc->setLayerImageEffects(m_id, m_new); }
+    void undo() override { m_doc->setLayerImageEffects(m_id, m_old); }
+
+private:
+    Document* m_doc;
+    LayerId m_id;
+    ImageEffects m_old;
+    ImageEffects m_new;
+};
+
 /// Resizes a text layer's wrap box (handle gesture on text).
 class SetLayerTextBoxCommand final : public Command
 {

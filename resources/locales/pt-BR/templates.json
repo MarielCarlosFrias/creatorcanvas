@@ -27,6 +27,12 @@
         "insta_promo.title": "Post Promocional / Oferta (Instagram)",
         "insta_promo.desc": "Formato quadrado 1:1 limpo e moderno com chamada para ação.",
         "tiktok_viral.title": "Curiosidade / Dica Viral (TikTok & Reels)",
-        "tiktok_viral.desc": "Formato vertical 9:16 alinhado na zona segura dos botões."
+        "tiktok_viral.desc": "Formato vertical 9:16 alinhado na zona segura dos botões.",
+        "yt_podcast.title": "Podcast / Entrevista (YouTube)",
+        "yt_podcast.desc": "Thumbnail 16:9 sofisticada para podcasts e mesas redondas com moldura e selo de episódio.",
+        "yt_finance.title": "Finanças & Investimentos (YouTube)",
+        "yt_finance.desc": "Thumbnail 16:9 de alta conversão com setas e badges de ganhos/estatísticas.",
+        "social_banner.title": "Banner para Redes Sociais (LinkedIn / X)",
+        "social_banner.desc": "Banner panorâmico moderno para cabeçalho de perfil pessoal ou corporativo."
     }
 }

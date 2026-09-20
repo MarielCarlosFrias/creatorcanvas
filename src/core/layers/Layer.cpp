@@ -69,6 +69,7 @@ std::unique_ptr<Layer> ImageLayer::deepCopy() const
     copy->assetId = assetId;
     copy->naturalWidth = naturalWidth;
     copy->naturalHeight = naturalHeight;
+    copy->effects = effects;
     return copy;
 }
 

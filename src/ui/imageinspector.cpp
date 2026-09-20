@@ -5,6 +5,8 @@
 #include "core/image/ImageProcessing.h"
 #include "localization/i18nservice.h"
 
+#include <QCheckBox>
+#include <QColorDialog>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QGroupBox>
@@ -95,6 +97,20 @@ void ImageInspector::refresh()
     m_currentPreviewAssetId = LayerId();
     m_tiltX->setValue(layer->transform.shearX);
     m_tiltY->setValue(layer->transform.shearY);
+
+    if (m_outlineOn)
+        m_outlineOn->setChecked(layer->effects.outline.enabled);
+    if (m_outlineWidth)
+        m_outlineWidth->setValue(layer->effects.outline.width);
+    if (m_outlineBlur)
+        m_outlineBlur->setValue(layer->effects.outline.blur);
+    if (m_outlineColor) {
+        const QString hex = layer->effects.outline.color.name(QColor::HexRgb);
+        m_outlineColor->setText(hex);
+        m_outlineColor->setStyleSheet(QStringLiteral("background: %1; color: %2; font-weight: bold; border-radius: 4px; padding: 2px 6px;")
+            .arg(hex, layer->effects.outline.color.lightness() > 128 ? QStringLiteral("#000000") : QStringLiteral("#ffffff")));
+    }
+
     resetAdjustments();
     m_loading = false;
 }
@@ -160,7 +176,72 @@ void ImageInspector::buildUi()
     m_quickFiltersSection->setContentLayout(quickLayout);
     mainLayout->addWidget(m_quickFiltersSection);
 
-    // --- 2. Ajustes Manuais de Cor e Filtros (Recolhido por padrão) ---
+    // --- 2. Contorno & Glow / Sticker Effect (Aberto por padrão para thumbnails) ---
+    m_outlineSection = new CollapsibleSection(QStringLiteral("Contorno & Glow (Sticker)"), true, this);
+    auto* fxLayout = new QVBoxLayout;
+    fxLayout->setContentsMargins(4, 4, 4, 4);
+    fxLayout->setSpacing(6);
+
+    auto* enableRow = new QHBoxLayout;
+    m_outlineOn = new QCheckBox(QStringLiteral("Ativar Borda / Brilho"), this);
+    m_outlineColor = new QPushButton(this);
+    m_outlineColor->setFixedWidth(75);
+    enableRow->addWidget(m_outlineOn);
+    enableRow->addWidget(m_outlineColor);
+    enableRow->addStretch();
+    fxLayout->addLayout(enableRow);
+
+    // Paleta de cores rápidas para stickers de thumbnail (Branco, Amarelo Neon, Ciano Neon, Rosa/Vermelho)
+    auto* quickColorsRow = new QHBoxLayout;
+    const QVector<QPair<QString, QColor>> quickColors = {
+        {QStringLiteral("Branco"), QColor(255, 255, 255)},
+        {QStringLiteral("Amarelo"), QColor(255, 230, 0)},
+        {QStringLiteral("Ciano"), QColor(0, 240, 255)},
+        {QStringLiteral("Neon"), QColor(57, 255, 20)},
+        {QStringLiteral("Vermelho"), QColor(255, 40, 40)}
+    };
+    for (const auto& qc : quickColors) {
+        auto* qBtn = new QPushButton(qc.first, this);
+        qBtn->setStyleSheet(QStringLiteral("background: %1; color: %2; font-size: 10px; font-weight: bold; border-radius: 3px; padding: 2px 4px;")
+            .arg(qc.second.name(), qc.second.lightness() > 128 ? QStringLiteral("#000000") : QStringLiteral("#ffffff")));
+        connect(qBtn, &QPushButton::clicked, this, [this, color = qc.second] {
+            ImageLayer* layer = nullptr;
+            if (!editingLayer(&layer)) return;
+            layer->effects.outline.color = color;
+            if (m_outlineColor) {
+                const QString hex = color.name(QColor::HexRgb);
+                m_outlineColor->setText(hex);
+                m_outlineColor->setStyleSheet(QStringLiteral("background: %1; color: %2; font-weight: bold; border-radius: 4px;")
+                    .arg(hex, color.lightness() > 128 ? QStringLiteral("#000000") : QStringLiteral("#ffffff")));
+            }
+            if (m_document) m_document->touchLayer(m_id);
+        });
+        quickColorsRow->addWidget(qBtn);
+    }
+    fxLayout->addLayout(quickColorsRow);
+
+    auto* fxForm = new QFormLayout;
+    fxForm->setContentsMargins(0, 0, 0, 0);
+
+    m_outlineWidthLabel = new QLabel(QStringLiteral("Espessura:"), this);
+    m_outlineWidth = new QDoubleSpinBox(this);
+    m_outlineWidth->setRange(1.0, 50.0);
+    m_outlineWidth->setValue(8.0);
+    m_outlineWidth->setSuffix(QStringLiteral(" px"));
+    fxForm->addRow(m_outlineWidthLabel, m_outlineWidth);
+
+    m_outlineBlurLabel = new QLabel(QStringLiteral("Desfoque / Glow:"), this);
+    m_outlineBlur = new QDoubleSpinBox(this);
+    m_outlineBlur->setRange(0.0, 40.0);
+    m_outlineBlur->setValue(0.0);
+    m_outlineBlur->setSuffix(QStringLiteral(" px"));
+    fxForm->addRow(m_outlineBlurLabel, m_outlineBlur);
+
+    fxLayout->addLayout(fxForm);
+    m_outlineSection->setContentLayout(fxLayout);
+    mainLayout->addWidget(m_outlineSection);
+
+    // --- 3. Ajustes Manuais de Cor e Filtros (Recolhido por padrão) ---
     m_adjustmentsSection = new CollapsibleSection(QStringLiteral("Color Adjustments & Filters"), false, this);
     auto* adjLayout = new QFormLayout;
     adjLayout->setContentsMargins(4, 4, 4, 4);
@@ -274,6 +355,41 @@ void ImageInspector::buildUi()
     connect(m_presetSepiaBtn, &QPushButton::clicked, this, [this] { applyPreset(1); });
     connect(m_presetVintageBtn, &QPushButton::clicked, this, [this] { applyPreset(2); });
     connect(m_presetHighContrastBtn, &QPushButton::clicked, this, [this] { applyPreset(3); });
+
+    // Conexões de Contorno / Glow (Sticker)
+    connect(m_outlineOn, &QCheckBox::toggled, this, [this](bool on) {
+        ImageLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->effects.outline.enabled = on;
+        if (m_document) m_document->touchLayer(m_id);
+    });
+
+    connect(m_outlineColor, &QPushButton::clicked, this, [this] {
+        ImageLayer* layer = nullptr;
+        if (!editingLayer(&layer)) return;
+        const QColor chosen = QColorDialog::getColor(layer->effects.outline.color, this);
+        if (!chosen.isValid()) return;
+        layer->effects.outline.color = chosen;
+        const QString hex = chosen.name(QColor::HexRgb);
+        m_outlineColor->setText(hex);
+        m_outlineColor->setStyleSheet(QStringLiteral("background: %1; color: %2; font-weight: bold; border-radius: 4px;")
+            .arg(hex, chosen.lightness() > 128 ? QStringLiteral("#000000") : QStringLiteral("#ffffff")));
+        if (m_document) m_document->touchLayer(m_id);
+    });
+
+    connect(m_outlineWidth, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double val) {
+        ImageLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->effects.outline.width = val;
+        if (m_document) m_document->touchLayer(m_id);
+    });
+
+    connect(m_outlineBlur, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double val) {
+        ImageLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->effects.outline.blur = val;
+        if (m_document) m_document->touchLayer(m_id);
+    });
 }
 
 void ImageInspector::schedulePreview()

@@ -133,6 +133,10 @@ private:
     QAction* m_addRoundedRectAction = nullptr;
     QAction* m_addEllipseAction = nullptr;
     QAction* m_addLineAction = nullptr;
+    QAction* m_addArrowRightAction = nullptr;
+    QAction* m_addArrowCurvedAction = nullptr;
+    QAction* m_addStarAction = nullptr;
+    QAction* m_addBadgeAction = nullptr;
     QMenu* m_alignMenu = nullptr;
     QAction* m_alignLeftAction = nullptr;
     QAction* m_alignCenterXAction = nullptr;

@@ -478,6 +478,30 @@ void MainWindow::buildActions()
         addShape(ShapeKind::Line);
     });
 
+    m_addArrowRightAction = new QAction(this);
+    m_addArrowRightAction->setIcon(ThemeIcons::toolShape());
+    connect(m_addArrowRightAction, &QAction::triggered, this, [this] {
+        addShape(ShapeKind::ArrowRight);
+    });
+
+    m_addArrowCurvedAction = new QAction(this);
+    m_addArrowCurvedAction->setIcon(ThemeIcons::toolShape());
+    connect(m_addArrowCurvedAction, &QAction::triggered, this, [this] {
+        addShape(ShapeKind::ArrowCurved);
+    });
+
+    m_addStarAction = new QAction(this);
+    m_addStarAction->setIcon(ThemeIcons::toolShape());
+    connect(m_addStarAction, &QAction::triggered, this, [this] {
+        addShape(ShapeKind::Star);
+    });
+
+    m_addBadgeAction = new QAction(this);
+    m_addBadgeAction->setIcon(ThemeIcons::toolShape());
+    connect(m_addBadgeAction, &QAction::triggered, this, [this] {
+        addShape(ShapeKind::Badge);
+    });
+
     // Ações para alinhamento rápido da camada selecionada na tela
     m_alignLeftAction = new QAction(this);
     m_alignLeftAction->setIcon(ThemeIcons::actionAlignLeft());
@@ -1122,6 +1146,11 @@ void MainWindow::buildMenus()
     m_addShapeMenu->addAction(m_addRoundedRectAction);
     m_addShapeMenu->addAction(m_addEllipseAction);
     m_addShapeMenu->addAction(m_addLineAction);
+    m_addShapeMenu->addSeparator();
+    m_addShapeMenu->addAction(m_addArrowRightAction);
+    m_addShapeMenu->addAction(m_addArrowCurvedAction);
+    m_addShapeMenu->addAction(m_addStarAction);
+    m_addShapeMenu->addAction(m_addBadgeAction);
 
     // Submenu de alinhamento rápido da camada em relação à tela
     m_alignMenu = m_layerMenu->addMenu(QString());
@@ -1472,6 +1501,52 @@ void MainWindow::addShape(ShapeKind kind)
         layer->stroke = QColor(30, 30, 30);
         layer->strokeWidth = 4.0;
         layer->fill = Qt::transparent;
+        break;
+    }
+    case ShapeKind::ArrowRight: {
+        layer->name = m_i18n->t("common", "menu.layer.shape.arrowRight").remove('&');
+        const double w = std::clamp(docW * 0.25, 120.0, 360.0);
+        const double h = w * 0.5;
+        layer->points = QPolygonF{
+            QPointF(0, 0), QPointF(w, 0), QPointF(w, h), QPointF(0, h)
+        };
+        layer->fill = QColor(255, 68, 68); // Vermelho vibrante de thumbnail
+        layer->stroke = Qt::white;
+        layer->strokeWidth = 3.0;
+        break;
+    }
+    case ShapeKind::ArrowCurved: {
+        layer->name = m_i18n->t("common", "menu.layer.shape.arrowCurved").remove('&');
+        const double w = std::clamp(docW * 0.22, 120.0, 320.0);
+        const double h = w * 0.8;
+        layer->points = QPolygonF{
+            QPointF(0, 0), QPointF(w, 0), QPointF(w, h), QPointF(0, h)
+        };
+        layer->fill = QColor(255, 204, 0); // Amarelo vibrante
+        layer->stroke = QColor(30, 30, 30);
+        layer->strokeWidth = 3.0;
+        break;
+    }
+    case ShapeKind::Star: {
+        layer->name = m_i18n->t("common", "menu.layer.shape.star").remove('&');
+        const double size = std::clamp(std::min(docW, docH) * 0.22, 100.0, 260.0);
+        layer->points = QPolygonF{
+            QPointF(0, 0), QPointF(size, 0), QPointF(size, size), QPointF(0, size)
+        };
+        layer->fill = QColor(255, 215, 0); // Dourado
+        layer->stroke = QColor(180, 100, 0);
+        layer->strokeWidth = 2.0;
+        break;
+    }
+    case ShapeKind::Badge: {
+        layer->name = m_i18n->t("common", "menu.layer.shape.badge").remove('&');
+        const double size = std::clamp(std::min(docW, docH) * 0.22, 110.0, 260.0);
+        layer->points = QPolygonF{
+            QPointF(0, 0), QPointF(size, 0), QPointF(size, size), QPointF(0, size)
+        };
+        layer->fill = QColor(230, 30, 80); // Vermelho/rosa badge
+        layer->stroke = Qt::white;
+        layer->strokeWidth = 3.0;
         break;
     }
     default:
@@ -2056,6 +2131,14 @@ void MainWindow::retranslateUi()
         m_addEllipseAction->setText(m_i18n->t("common", "menu.layer.shape.ellipse"));
     if (m_addLineAction)
         m_addLineAction->setText(m_i18n->t("common", "menu.layer.shape.line"));
+    if (m_addArrowRightAction)
+        m_addArrowRightAction->setText(m_i18n->t("common", "menu.layer.shape.arrowRight"));
+    if (m_addArrowCurvedAction)
+        m_addArrowCurvedAction->setText(m_i18n->t("common", "menu.layer.shape.arrowCurved"));
+    if (m_addStarAction)
+        m_addStarAction->setText(m_i18n->t("common", "menu.layer.shape.star"));
+    if (m_addBadgeAction)
+        m_addBadgeAction->setText(m_i18n->t("common", "menu.layer.shape.badge"));
     if (m_alignMenu)
         m_alignMenu->setTitle(m_i18n->t("common", "menu.layer.align"));
     if (m_alignLeftAction)

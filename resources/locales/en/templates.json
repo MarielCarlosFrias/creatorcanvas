@@ -27,6 +27,12 @@
         "insta_promo.title": "Promotional Post / Sale (Instagram)",
         "insta_promo.desc": "Clean, modern 1:1 square format with call-to-action.",
         "tiktok_viral.title": "Tip / Viral Curiosity (TikTok & Reels)",
-        "tiktok_viral.desc": "Vertical 9:16 format perfectly aligned within the safe zone."
+        "tiktok_viral.desc": "Vertical 9:16 format perfectly aligned within the safe zone.",
+        "yt_podcast.title": "Podcast / Interview (YouTube)",
+        "yt_podcast.desc": "Sophisticated 16:9 thumbnail for podcasts and roundtables with frame and episode badge.",
+        "yt_finance.title": "Finance & Investing (YouTube)",
+        "yt_finance.desc": "High-conversion 16:9 thumbnail with trend arrows and return/statistics badges.",
+        "social_banner.title": "Social Media Banner (LinkedIn / X)",
+        "social_banner.desc": "Modern panoramic banner for personal or corporate profile headers."
     }
 }

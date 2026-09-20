@@ -58,6 +58,36 @@ QVector<TemplateMeta> TemplateFactory::availableTemplates()
             QStringLiteral("Formato vertical 9:16 perfeitamente alinhado na zona segura dos botões."),
             1080, 1920,
             QStringLiteral("TikTok")
+        },
+        {
+            TemplateKind::YouTubePodcast,
+            QStringLiteral("yt_podcast"),
+            QStringLiteral("templates.yt_podcast.title"),
+            QStringLiteral("Podcast / Entrevista (YouTube)"),
+            QStringLiteral("templates.yt_podcast.desc"),
+            QStringLiteral("Thumbnail 16:9 sofisticada para podcasts e mesas redondas com moldura e selo de episódio."),
+            1280, 720,
+            QStringLiteral("YouTube")
+        },
+        {
+            TemplateKind::YouTubeFinance,
+            QStringLiteral("yt_finance"),
+            QStringLiteral("templates.yt_finance.title"),
+            QStringLiteral("Finanças & Investimentos (YouTube)"),
+            QStringLiteral("templates.yt_finance.desc"),
+            QStringLiteral("Thumbnail 16:9 de alta conversão com setas e badges de ganhos/estatísticas."),
+            1280, 720,
+            QStringLiteral("YouTube")
+        },
+        {
+            TemplateKind::SocialBanner,
+            QStringLiteral("social_banner"),
+            QStringLiteral("templates.social_banner.title"),
+            QStringLiteral("Banner para Redes Sociais (LinkedIn / X)"),
+            QStringLiteral("templates.social_banner.desc"),
+            QStringLiteral("Banner panorâmico moderno para cabeçalho de perfil pessoal ou corporativo."),
+            1584, 396,
+            QStringLiteral("LinkedIn")
         }
     };
 }
@@ -412,6 +442,205 @@ std::unique_ptr<Document> TemplateFactory::createTemplate(TemplateKind kind, I18
         cta->align = TextAlignment::Center;
         cta->transform.position = QPointF(540, 1160);
         doc->addLayer(std::move(cta));
+
+        return doc;
+    }
+    case TemplateKind::YouTubePodcast: {
+        auto doc = std::make_unique<Document>(1280, 720, 96);
+
+        // Fundo escuro elegante de estúdio
+        auto bg = std::make_unique<BackgroundLayer>();
+        bg->name = QStringLiteral("Fundo Estúdio");
+        bg->fill = QColor(0x12, 0x12, 0x14);
+        doc->addLayer(std::move(bg));
+
+        // Moldura do entrevistado (placeholder de foto)
+        auto frame = std::make_unique<ShapeLayer>();
+        frame->name = QStringLiteral("Moldura Convidado");
+        frame->kind = ShapeKind::RoundedRect;
+        frame->cornerRadius = 24.0;
+        frame->points = makeRectPolygon(420, 560);
+        frame->fill = QColor(0x27, 0x27, 0x2a);
+        frame->stroke = QColor(0xa8, 0x55, 0xf7); // Roxo podcast
+        frame->strokeWidth = 4.0;
+        frame->transform.position = QPointF(1020, 360);
+        doc->addLayer(std::move(frame));
+
+        // Badge Episódio
+        auto epBadge = std::make_unique<ShapeLayer>();
+        epBadge->name = QStringLiteral("Badge Episódio");
+        epBadge->kind = ShapeKind::RoundedRect;
+        epBadge->cornerRadius = 8.0;
+        epBadge->points = makeRectPolygon(180, 44);
+        epBadge->fill = QColor(0xa8, 0x55, 0xf7);
+        epBadge->strokeWidth = 0.0;
+        epBadge->transform.position = QPointF(160, 140);
+        doc->addLayer(std::move(epBadge));
+
+        auto epText = std::make_unique<TextLayer>();
+        epText->name = QStringLiteral("Texto Episódio");
+        epText->content = QStringLiteral("EPISÓDIO #42");
+        epText->sizePt = 16;
+        epText->bold = true;
+        epText->color = Qt::white;
+        epText->align = TextAlignment::Center;
+        epText->transform.position = QPointF(160, 140);
+        doc->addLayer(std::move(epText));
+
+        // Título Impactante
+        auto title = std::make_unique<TextLayer>();
+        title->name = QStringLiteral("Título Revelador");
+        title->content = QStringLiteral("ELE CONTOU\nTUDO SOBRE\nO SEGREDO!");
+        title->sizePt = 54;
+        title->bold = true;
+        title->color = Qt::white;
+        title->align = TextAlignment::Left;
+        title->effects.shadow.enabled = true;
+        title->effects.shadow.blur = 12.0;
+        title->effects.shadow.offsetY = 4.0;
+        title->transform.position = QPointF(80, 240);
+        doc->addLayer(std::move(title));
+
+        // Nome do Convidado
+        auto guest = std::make_unique<TextLayer>();
+        guest->name = QStringLiteral("Nome Convidado");
+        guest->content = QStringLiteral("COM NOME DO CONVIDADO");
+        guest->sizePt = 22;
+        guest->bold = true;
+        guest->color = QColor(0xc0, 0x84, 0xfc);
+        guest->align = TextAlignment::Left;
+        guest->transform.position = QPointF(80, 590);
+        doc->addLayer(std::move(guest));
+
+        return doc;
+    }
+    case TemplateKind::YouTubeFinance: {
+        auto doc = std::make_unique<Document>(1280, 720, 96);
+
+        // Fundo escuro azul petróleo
+        auto bg = std::make_unique<BackgroundLayer>();
+        bg->name = QStringLiteral("Fundo Finanças");
+        bg->fill = QColor(0x0a, 0x0f, 0x1d);
+        doc->addLayer(std::move(bg));
+
+        // Badge Ganho / Alta
+        auto badge = std::make_unique<ShapeLayer>();
+        badge->name = QStringLiteral("Badge Retorno");
+        badge->kind = ShapeKind::Badge;
+        badge->points = makeRectPolygon(170, 170);
+        badge->fill = QColor(0x10, 0xb9, 0x81); // Verde esmeralda
+        badge->stroke = Qt::white;
+        badge->strokeWidth = 3.0;
+        badge->transform.position = QPointF(1100, 160);
+        doc->addLayer(std::move(badge));
+
+        auto badgeText = std::make_unique<TextLayer>();
+        badgeText->name = QStringLiteral("Texto Retorno");
+        badgeText->content = QStringLiteral("+340%");
+        badgeText->sizePt = 28;
+        badgeText->bold = true;
+        badgeText->color = Qt::white;
+        badgeText->align = TextAlignment::Center;
+        badgeText->transform.position = QPointF(1100, 160);
+        doc->addLayer(std::move(badgeText));
+
+        // Seta de Alta
+        auto arrow = std::make_unique<ShapeLayer>();
+        arrow->name = QStringLiteral("Seta Alta");
+        arrow->kind = ShapeKind::ArrowCurved;
+        arrow->points = makeRectPolygon(360, 260);
+        arrow->fill = QColor(0x34, 0xd3, 0x99);
+        arrow->stroke = QColor(0x06, 0x5f, 0x46);
+        arrow->strokeWidth = 3.0;
+        arrow->transform.position = QPointF(850, 480);
+        doc->addLayer(std::move(arrow));
+
+        // Textos principais
+        auto tag = std::make_unique<TextLayer>();
+        tag->name = QStringLiteral("Tag Alerta");
+        tag->content = QStringLiteral("URGENTE: NÃO COMPRE ANTES DE VER");
+        tag->sizePt = 20;
+        tag->bold = true;
+        tag->color = QColor(0xfb, 0xbf, 0x24); // Amarelo ouro
+        tag->align = TextAlignment::Left;
+        tag->transform.position = QPointF(80, 180);
+        doc->addLayer(std::move(tag));
+
+        auto headline = std::make_unique<TextLayer>();
+        headline->name = QStringLiteral("Manchete Finanças");
+        headline->content = QStringLiteral("COMO MULTIPLICAR\nSEU CAPITAL\nEM 2026");
+        headline->sizePt = 56;
+        headline->bold = true;
+        headline->color = Qt::white;
+        headline->align = TextAlignment::Left;
+        headline->effects.outline.enabled = true;
+        headline->effects.outline.color = Qt::black;
+        headline->effects.outline.width = 5.0;
+        headline->transform.position = QPointF(80, 260);
+        doc->addLayer(std::move(headline));
+
+        return doc;
+    }
+    case TemplateKind::SocialBanner: {
+        auto doc = std::make_unique<Document>(1584, 396, 96);
+
+        // Fundo gradiente moderno sutil
+        auto bg = std::make_unique<BackgroundLayer>();
+        bg->name = QStringLiteral("Fundo Banner");
+        bg->fill = QColor(0x0f, 0x17, 0x2a); // Slate escuro
+        doc->addLayer(std::move(bg));
+
+        // Faixa geométrica de destaque
+        auto accent = std::make_unique<ShapeLayer>();
+        accent->name = QStringLiteral("Faixa Acento");
+        accent->kind = ShapeKind::Rectangle;
+        accent->points = makeRectPolygon(40, 396);
+        accent->fill = QColor(0x38, 0xbd, 0xf8); // Azul celeste
+        accent->strokeWidth = 0.0;
+        accent->transform.position = QPointF(20, 198);
+        doc->addLayer(std::move(accent));
+
+        // Estrela decorativa
+        auto star = std::make_unique<ShapeLayer>();
+        star->name = QStringLiteral("Estrela Destaque");
+        star->kind = ShapeKind::Star;
+        star->points = makeRectPolygon(60, 60);
+        star->fill = QColor(0xf5, 0x9e, 0x0b);
+        star->strokeWidth = 0.0;
+        star->transform.position = QPointF(1480, 70);
+        doc->addLayer(std::move(star));
+
+        // Título / Nome Profissional
+        auto nameText = std::make_unique<TextLayer>();
+        nameText->name = QStringLiteral("Nome / Especialidade");
+        nameText->content = QStringLiteral("SEU NOME | ESPECIALISTA & CRIADOR");
+        nameText->sizePt = 36;
+        nameText->bold = true;
+        nameText->color = Qt::white;
+        nameText->align = TextAlignment::Left;
+        nameText->transform.position = QPointF(320, 130);
+        doc->addLayer(std::move(nameText));
+
+        // Subtítulo / Proposta de Valor
+        auto subText = std::make_unique<TextLayer>();
+        subText->name = QStringLiteral("Bio / Contato");
+        subText->content = QStringLiteral("Ajudando empresas e marcas a escalarem com conteúdo visual e tecnologia.");
+        subText->sizePt = 20;
+        subText->color = QColor(0x94, 0xa3, 0xb8);
+        subText->align = TextAlignment::Left;
+        subText->transform.position = QPointF(320, 210);
+        doc->addLayer(std::move(subText));
+
+        // Redes / Site
+        auto siteText = std::make_unique<TextLayer>();
+        siteText->name = QStringLiteral("Website / Contato");
+        siteText->content = QStringLiteral("🔗 seudominio.com  •  ✉ contato@seudominio.com");
+        siteText->sizePt = 16;
+        siteText->bold = true;
+        siteText->color = QColor(0x38, 0xbd, 0xf8);
+        siteText->align = TextAlignment::Left;
+        siteText->transform.position = QPointF(320, 280);
+        doc->addLayer(std::move(siteText));
 
         return doc;
     }

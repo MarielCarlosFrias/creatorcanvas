@@ -11,6 +11,7 @@ class QSlider;
 class QLabel;
 class QPushButton;
 class QGroupBox;
+class QCheckBox;
 
 namespace cc {
 
@@ -95,6 +96,15 @@ private:
 
     QPushButton* m_applyAdjustBtn = nullptr;
     QPushButton* m_resetAdjustBtn = nullptr;
+
+    // Efeito Contorno & Glow (Sticker Effect)
+    class CollapsibleSection* m_outlineSection = nullptr;
+    QCheckBox* m_outlineOn = nullptr;
+    QPushButton* m_outlineColor = nullptr;
+    QDoubleSpinBox* m_outlineWidth = nullptr;
+    QDoubleSpinBox* m_outlineBlur = nullptr;
+    QLabel* m_outlineWidthLabel = nullptr;
+    QLabel* m_outlineBlurLabel = nullptr;
 
     // Seções recolhíveis
     class CollapsibleSection* m_quickFiltersSection = nullptr;

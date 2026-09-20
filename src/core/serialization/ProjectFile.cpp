@@ -75,6 +75,10 @@ QString shapeKindToString(ShapeKind kind)
     case ShapeKind::Ellipse:     return QStringLiteral("ellipse");
     case ShapeKind::Line:        return QStringLiteral("line");
     case ShapeKind::Polygon:     return QStringLiteral("polygon");
+    case ShapeKind::ArrowRight:  return QStringLiteral("arrowRight");
+    case ShapeKind::ArrowCurved: return QStringLiteral("arrowCurved");
+    case ShapeKind::Star:        return QStringLiteral("star");
+    case ShapeKind::Badge:       return QStringLiteral("badge");
     }
     return QStringLiteral("rectangle");
 }
@@ -86,6 +90,10 @@ std::optional<ShapeKind> shapeKindFromString(const QString& value)
     if (value == QLatin1String("ellipse"))     return ShapeKind::Ellipse;
     if (value == QLatin1String("line"))        return ShapeKind::Line;
     if (value == QLatin1String("polygon"))     return ShapeKind::Polygon;
+    if (value == QLatin1String("arrowRight"))  return ShapeKind::ArrowRight;
+    if (value == QLatin1String("arrowCurved")) return ShapeKind::ArrowCurved;
+    if (value == QLatin1String("star"))        return ShapeKind::Star;
+    if (value == QLatin1String("badge"))       return ShapeKind::Badge;
     return std::nullopt;
 }
 
@@ -153,6 +161,16 @@ QJsonObject writeLayer(const Layer& layer)
                  image.assetId.toString(QUuid::WithoutBraces));
         o.insert(QStringLiteral("naturalWidth"), image.naturalWidth);
         o.insert(QStringLiteral("naturalHeight"), image.naturalHeight);
+
+        QJsonObject effects;
+        QJsonObject outline;
+        outline.insert(QStringLiteral("enabled"), image.effects.outline.enabled);
+        outline.insert(QStringLiteral("color"), colorToString(image.effects.outline.color));
+        outline.insert(QStringLiteral("width"), image.effects.outline.width);
+        outline.insert(QStringLiteral("blur"), image.effects.outline.blur);
+        outline.insert(QStringLiteral("opacity"), image.effects.outline.opacity);
+        effects.insert(QStringLiteral("outline"), outline);
+        o.insert(QStringLiteral("effects"), effects);
         break;
     }
     case LayerType::Text: {
@@ -524,6 +542,15 @@ private:
         image->assetId = LayerId(o.value(QStringLiteral("assetId")).toString());
         image->naturalWidth = o.value(QStringLiteral("naturalWidth")).toInt();
         image->naturalHeight = o.value(QStringLiteral("naturalHeight")).toInt();
+
+        const QJsonObject effects = o.value(QStringLiteral("effects")).toObject();
+        const QJsonObject outline = effects.value(QStringLiteral("outline")).toObject();
+        image->effects.outline.enabled = outline.value(QStringLiteral("enabled")).toBool(false);
+        image->effects.outline.color = colorFromString(outline.value(QStringLiteral("color")).toString(QStringLiteral("#ffffff")));
+        image->effects.outline.width = outline.value(QStringLiteral("width")).toDouble(8.0);
+        image->effects.outline.blur = outline.value(QStringLiteral("blur")).toDouble(0.0);
+        image->effects.outline.opacity = outline.value(QStringLiteral("opacity")).toDouble(1.0);
+
         finishLayer(*image, o, id);
         *out = std::move(image);
         return true;

@@ -268,6 +268,20 @@ bool Document::setLayerTextEffects(const LayerId& id, const TextEffects& effects
     return true;
 }
 
+bool Document::setLayerImageEffects(const LayerId& id, const ImageEffects& effects)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Image)
+        return false;
+    auto* img = static_cast<ImageLayer*>(layer);
+    if (img->effects == effects)
+        return true;
+    img->effects = effects;
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
 bool Document::setLayerTextContent(const LayerId& id, QString content)
 {
     Layer* layer = findLayer(id);

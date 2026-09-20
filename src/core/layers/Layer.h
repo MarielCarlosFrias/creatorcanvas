@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "../geometry/AffineTransform.h"
+#include "ImageEffects.h"
 #include "TextEffects.h"
 
 namespace cc {
@@ -24,7 +25,7 @@ inline LayerId newLayerId() { return QUuid::createUuid(); }
 enum class LayerType { Group, Image, Text, Shape, Background };
 enum class BlendMode { Normal, Multiply, Screen, Overlay, Darken, Lighten, Add };
 enum class TextAlignment { Left, Center, Right };
-enum class ShapeKind { Rectangle, RoundedRect, Ellipse, Line, Polygon };
+enum class ShapeKind { Rectangle, RoundedRect, Ellipse, Line, Polygon, ArrowRight, ArrowCurved, Star, Badge };
 
 /// Base class of every layer. UI/commands mutate layers ONLY through
 /// Document methods; direct field access is the read path (renderer,
@@ -88,6 +89,7 @@ public:
     LayerId assetId;
     int naturalWidth = 0;
     int naturalHeight = 0;
+    ImageEffects effects;
 };
 
 class TextLayer final : public Layer

@@ -10,6 +10,9 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPen>
+#include <algorithm>
+#include <cmath>
+#include "core/image/ImageProcessing.h"
 
 namespace cc {
 namespace {
@@ -89,6 +92,114 @@ void drawShape(QPainter* painter, const ShapeLayer& shape)
                                      shape.cornerRadius);
         else
             painter->drawRect(rect);
+        break;
+    }
+    case ShapeKind::ArrowRight: {
+        const QRectF rect = shape.points.boundingRect();
+        const double x = rect.left();
+        const double y = rect.top();
+        const double w = rect.width();
+        const double h = rect.height();
+        // Seta para a direita: haste retangular + ponta triangular
+        const double shaftTop = y + h * 0.28;
+        const double shaftBottom = y + h * 0.72;
+        const double headStart = x + w * 0.58;
+
+        QPainterPath path;
+        path.moveTo(x, shaftTop);
+        path.lineTo(headStart, shaftTop);
+        path.lineTo(headStart, y);
+        path.lineTo(x + w, y + h * 0.5);
+        path.lineTo(headStart, y + h);
+        path.lineTo(headStart, shaftBottom);
+        path.lineTo(x, shaftBottom);
+        path.closeSubpath();
+
+        painter->setBrush(shape.fill);
+        painter->drawPath(path);
+        break;
+    }
+    case ShapeKind::ArrowCurved: {
+        const QRectF rect = shape.points.boundingRect();
+        const double x = rect.left();
+        const double y = rect.top();
+        const double w = rect.width();
+        const double h = rect.height();
+
+        // Seta curva dinâmica (swoop arrow) muito usada em thumbnails
+        QPainterPath path;
+        path.moveTo(x, y + h * 0.9);
+        path.cubicTo(x + w * 0.1, y + h * 0.35,
+                    x + w * 0.45, y + h * 0.15,
+                    x + w * 0.75, y + h * 0.25);
+        path.lineTo(x + w * 0.70, y);
+        path.lineTo(x + w, y + h * 0.35);
+        path.lineTo(x + w * 0.65, y + h * 0.65);
+        path.lineTo(x + w * 0.70, y + h * 0.42);
+        path.cubicTo(x + w * 0.45, y + h * 0.35,
+                    x + w * 0.25, y + h * 0.55,
+                    x + w * 0.15, y + h);
+        path.closeSubpath();
+
+        painter->setBrush(shape.fill);
+        painter->drawPath(path);
+        break;
+    }
+    case ShapeKind::Star: {
+        const QRectF rect = shape.points.boundingRect();
+        const double cx = rect.center().x();
+        const double cy = rect.center().y();
+        const double rOuter = std::min(rect.width(), rect.height()) / 2.0;
+        const double rInner = rOuter * 0.42;
+
+        QPainterPath path;
+        constexpr int numPoints = 5;
+        constexpr double angleStep = 3.14159265358979323846 / numPoints;
+        double currentAngle = -3.14159265358979323846 / 2.0; // Começa no topo
+
+        for (int i = 0; i < numPoints * 2; ++i) {
+            const double r = (i % 2 == 0) ? rOuter : rInner;
+            const double px = cx + r * std::cos(currentAngle);
+            const double py = cy + r * std::sin(currentAngle);
+            if (i == 0)
+                path.moveTo(px, py);
+            else
+                path.lineTo(px, py);
+            currentAngle += angleStep;
+        }
+        path.closeSubpath();
+
+        painter->setBrush(shape.fill);
+        painter->drawPath(path);
+        break;
+    }
+    case ShapeKind::Badge: {
+        const QRectF rect = shape.points.boundingRect();
+        const double cx = rect.center().x();
+        const double cy = rect.center().y();
+        const double rx = rect.width() / 2.0;
+        const double ry = rect.height() / 2.0;
+
+        // Selo / Badge com 12 pontas arredondadas / recortadas estilo burst promocional
+        QPainterPath path;
+        constexpr int points = 12;
+        constexpr double angleStep = 3.14159265358979323846 / points;
+        double currentAngle = 0.0;
+
+        for (int i = 0; i < points * 2; ++i) {
+            const double rFactor = (i % 2 == 0) ? 1.0 : 0.82;
+            const double px = cx + (rx * rFactor) * std::cos(currentAngle);
+            const double py = cy + (ry * rFactor) * std::sin(currentAngle);
+            if (i == 0)
+                path.moveTo(px, py);
+            else
+                path.lineTo(px, py);
+            currentAngle += angleStep;
+        }
+        path.closeSubpath();
+
+        painter->setBrush(shape.fill);
+        painter->drawPath(path);
         break;
     }
     }
@@ -242,6 +353,59 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
         const auto& image = static_cast<const ImageLayer&>(layer);
         const QImage pixels = doc.assets().decodedImage(image.assetId);
         if (!pixels.isNull()) {
+            // Efeito Contorno / Glow ("Sticker Effect")
+            if (image.effects.outline.enabled && image.effects.outline.width > 0.0) {
+                const auto& outline = image.effects.outline;
+                const int w = pixels.width();
+                const int h = pixels.height();
+                const int pad = static_cast<int>(std::ceil(outline.width + outline.blur * 2.0));
+                const int effectW = w + pad * 2;
+                const int effectH = h + pad * 2;
+
+                // 1. Gera silhueta na cor do efeito baseada no canal alfa da imagem original
+                QImage silhouette(effectW, effectH, QImage::Format_ARGB32_Premultiplied);
+                silhouette.fill(Qt::transparent);
+
+                // Preenche onde há opacidade na imagem
+                QImage mask(effectW, effectH, QImage::Format_ARGB32_Premultiplied);
+                mask.fill(Qt::transparent);
+                {
+                    QPainter mp(&mask);
+                    mp.drawImage(QPoint(pad, pad), pixels);
+                }
+
+                // Dilatação por amostragem circular para criar borda sólida precisa
+                const int radius = static_cast<int>(std::round(outline.width));
+                QPainter sp(&silhouette);
+                const int steps = std::clamp(radius * 3, 12, 48);
+                const double angleDelta = (2.0 * 3.14159265358979323846) / steps;
+
+                // Desenha a máscara com deslocamentos circulares
+                for (int r = 1; r <= radius; ++r) {
+                    for (int i = 0; i < steps; ++i) {
+                        const double ang = i * angleDelta;
+                        const double dx = r * std::cos(ang);
+                        const double dy = r * std::sin(ang);
+                        sp.drawImage(QPointF(dx, dy), mask);
+                    }
+                }
+
+                // Tingir a silhueta com a cor desejada
+                sp.setCompositionMode(QPainter::CompositionMode_SourceIn);
+                QColor glowColor = outline.color;
+                glowColor.setAlphaF(std::clamp(outline.opacity, 0.0, 1.0) * glowColor.alphaF());
+                sp.fillRect(silhouette.rect(), glowColor);
+                sp.end();
+
+                // Se houver blur (efeito glow / neon), aplica o desfoque
+                if (outline.blur > 0.1) {
+                    silhouette = ImageProcessing::applyBlur(silhouette, outline.blur);
+                }
+
+                // Desenha o contorno/brilho atrás da imagem original
+                painter->drawImage(QPointF(-pad, -pad), silhouette);
+            }
+
             painter->drawImage(QPointF(0, 0), pixels);
         } else {
             // Placeholder while the asset has no decoded pixels.

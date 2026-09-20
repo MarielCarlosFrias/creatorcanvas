@@ -89,6 +89,86 @@ private slots:
         QVERIFY(loadedLayer != nullptr);
         QVERIFY(loadedLayer->effects == fx);
     }
+
+    void imageEffectsAppliesAndSerializes()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath("img_fx.creatorcanvas");
+
+        Document doc(500, 500);
+        auto img = std::make_unique<ImageLayer>();
+        img->naturalWidth = 200;
+        img->naturalHeight = 200;
+
+        ImageEffects fx;
+        fx.outline.enabled = true;
+        fx.outline.color = QColor(255, 230, 0);
+        fx.outline.width = 12.0;
+        fx.outline.blur = 4.0;
+        fx.outline.opacity = 0.9;
+        img->effects = fx;
+
+        const LayerId id = img->id();
+        QVERIFY(doc.addLayer(std::move(img)));
+
+        // Teste de mutação via Document API
+        ImageEffects newFx = fx;
+        newFx.outline.width = 16.0;
+        QVERIFY(doc.setLayerImageEffects(id, newFx));
+        auto* modified = static_cast<ImageLayer*>(doc.findLayer(id));
+        QVERIFY(modified != nullptr);
+        QVERIFY(modified->effects == newFx);
+
+        // Teste de Serialização Round-Trip
+        QString error;
+        QVERIFY(saveDocument(doc, path, &error));
+        auto loaded = loadDocument(path, &error);
+        QVERIFY(loaded != nullptr);
+
+        auto* loadedImg = static_cast<ImageLayer*>(loaded->findLayer(id));
+        QVERIFY(loadedImg != nullptr);
+        QVERIFY(loadedImg->effects == newFx);
+    }
+
+    void newShapeKindsCreationAndRoundTrip()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath("shapes.creatorcanvas");
+
+        Document doc(600, 600);
+
+        const QVector<ShapeKind> kinds = {
+            ShapeKind::ArrowRight,
+            ShapeKind::ArrowCurved,
+            ShapeKind::Star,
+            ShapeKind::Badge
+        };
+
+        QVector<LayerId> ids;
+        for (ShapeKind k : kinds) {
+            auto shape = std::make_unique<ShapeLayer>();
+            shape->kind = k;
+            shape->fill = QColor(255, 0, 100);
+            shape->stroke = Qt::white;
+            shape->strokeWidth = 2.0;
+            shape->points = QPolygonF{ QPointF(0, 0), QPointF(100, 0), QPointF(100, 100), QPointF(0, 100) };
+            ids.append(shape->id());
+            QVERIFY(doc.addLayer(std::move(shape)));
+        }
+
+        QString error;
+        QVERIFY(saveDocument(doc, path, &error));
+        auto loaded = loadDocument(path, &error);
+        QVERIFY(loaded != nullptr);
+
+        for (int i = 0; i < kinds.size(); ++i) {
+            auto* loadedShape = static_cast<ShapeLayer*>(loaded->findLayer(ids[i]));
+            QVERIFY(loadedShape != nullptr);
+            QCOMPARE(loadedShape->kind, kinds[i]);
+        }
+    }
 };
 
 QTEST_GUILESS_MAIN(TestEffects)
