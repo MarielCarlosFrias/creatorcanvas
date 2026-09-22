@@ -68,10 +68,35 @@ QImage AssetStore::decodedImage(const LayerId& id) const
     const Asset* asset = find(id);
     if (!asset)
         return {};
-    if (asset->decoded.isNull())
+    if (asset->decoded.isNull()) {
         asset->decoded.loadFromData(asset->encoded,
                                     asset->format.toLatin1().constData());
+        if (!asset->decoded.isNull() && asset->decoded.format() != QImage::Format_ARGB32_Premultiplied) {
+            asset->decoded = asset->decoded.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+        }
+    }
     return asset->decoded;
+}
+
+QImage AssetStore::previewImage(const LayerId& id, int maxDimension) const
+{
+    const Asset* asset = find(id);
+    if (!asset)
+        return {};
+    const QImage orig = decodedImage(id);
+    if (orig.isNull())
+        return {};
+    if (orig.width() <= maxDimension && orig.height() <= maxDimension)
+        return orig;
+    if (asset->displayPreview.isNull()) {
+        asset->displayPreview = orig.scaled(maxDimension, maxDimension,
+                                            Qt::KeepAspectRatio,
+                                            Qt::SmoothTransformation);
+        if (asset->displayPreview.format() != QImage::Format_ARGB32_Premultiplied) {
+            asset->displayPreview = asset->displayPreview.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+        }
+    }
+    return asset->displayPreview;
 }
 
 } // namespace cc

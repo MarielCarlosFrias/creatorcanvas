@@ -33,6 +33,7 @@ public:
     void setDocument(Document* document);
     void setHistory(CommandStack* history);
     void refresh();
+    void refreshProperties();
     void setSelectedLayer(const LayerId& id);
     void setSelectedLayers(const QList<LayerId>& ids);
 

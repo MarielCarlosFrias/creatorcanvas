@@ -6,6 +6,7 @@
 
 #include <QBrush>
 #include <QFont>
+#include <QHash>
 #include <QImage>
 #include <QPainter>
 #include <QPainterPath>
@@ -205,8 +206,136 @@ void drawShape(QPainter* painter, const ShapeLayer& shape)
     }
 }
 
+struct OutlineCacheKey {
+    LayerId assetId;
+    QRgb color = 0;
+    int width10 = 0;
+    int blur10 = 0;
+    int opacity100 = 0;
+    int naturalW = 0;
+    int naturalH = 0;
+
+    bool operator==(const OutlineCacheKey& o) const {
+        return assetId == o.assetId
+            && color == o.color
+            && width10 == o.width10
+            && blur10 == o.blur10
+            && opacity100 == o.opacity100
+            && naturalW == o.naturalW
+            && naturalH == o.naturalH;
+    }
+};
+
+inline size_t qHash(const OutlineCacheKey& k, size_t seed = 0) {
+    return ::qHash(k.assetId.toString(), seed)
+        ^ ::qHash(k.color)
+        ^ ::qHash(k.width10)
+        ^ ::qHash(k.blur10)
+        ^ ::qHash(k.opacity100)
+        ^ ::qHash(k.naturalW)
+        ^ ::qHash(k.naturalH);
+}
+
+struct CachedOutline {
+    QImage silhouette;
+    double pad = 0.0;
+};
+
+static QHash<OutlineCacheKey, CachedOutline> s_outlineCache;
+
+void renderImageOutline(QPainter* painter, const ImageLayer& image, const Document& doc)
+{
+    const auto& outline = image.effects.outline;
+    OutlineCacheKey key;
+    key.assetId = image.assetId;
+    key.color = outline.color.rgba();
+    key.width10 = static_cast<int>(std::round(outline.width * 10.0));
+    key.blur10 = static_cast<int>(std::round(outline.blur * 10.0));
+    key.opacity100 = static_cast<int>(std::round(outline.opacity * 100.0));
+    key.naturalW = image.naturalWidth;
+    key.naturalH = image.naturalHeight;
+
+    auto it = s_outlineCache.find(key);
+    if (it != s_outlineCache.end()) {
+        const CachedOutline& cached = it.value();
+        painter->drawImage(QRectF(-cached.pad, -cached.pad,
+                                  image.naturalWidth + cached.pad * 2.0,
+                                  image.naturalHeight + cached.pad * 2.0),
+                           cached.silhouette);
+        return;
+    }
+
+    const QImage fullImg = doc.assets().decodedImage(image.assetId);
+    if (fullImg.isNull()) return;
+
+    // Geração acelerada: downscale para no máximo 1280px se a textura for gigante
+    const int maxDim = 1280;
+    double scaleDown = 1.0;
+    QImage baseImg = fullImg;
+    if (fullImg.width() > maxDim || fullImg.height() > maxDim) {
+        baseImg = fullImg.scaled(maxDim, maxDim, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        scaleDown = static_cast<double>(baseImg.width()) / static_cast<double>(fullImg.width());
+    }
+
+    const double scaledWidth = std::max(1.0, outline.width * scaleDown);
+    const double scaledBlur = outline.blur * scaleDown;
+    const int pad = static_cast<int>(std::ceil(scaledWidth + scaledBlur * 2.0));
+    const int effectW = baseImg.width() + pad * 2;
+    const int effectH = baseImg.height() + pad * 2;
+
+    QImage silhouette(effectW, effectH, QImage::Format_ARGB32_Premultiplied);
+    silhouette.fill(Qt::transparent);
+
+    QImage mask(effectW, effectH, QImage::Format_ARGB32_Premultiplied);
+    mask.fill(Qt::transparent);
+    {
+        QPainter mp(&mask);
+        mp.drawImage(QPoint(pad, pad), baseImg);
+    }
+
+    const int radius = static_cast<int>(std::round(scaledWidth));
+    QPainter sp(&silhouette);
+    const int steps = std::clamp(radius * 3, 12, 36);
+    const double angleDelta = (2.0 * 3.14159265358979323846) / steps;
+
+    for (int r = 1; r <= radius; ++r) {
+        for (int i = 0; i < steps; ++i) {
+            const double ang = i * angleDelta;
+            const double dx = r * std::cos(ang);
+            const double dy = r * std::sin(ang);
+            sp.drawImage(QPointF(dx, dy), mask);
+        }
+    }
+
+    sp.setCompositionMode(QPainter::CompositionMode_SourceIn);
+    QColor glowColor = outline.color;
+    glowColor.setAlphaF(std::clamp(outline.opacity, 0.0, 1.0) * glowColor.alphaF());
+    sp.fillRect(silhouette.rect(), glowColor);
+    sp.end();
+
+    if (scaledBlur > 0.1) {
+        silhouette = ImageProcessing::applyBlur(silhouette, scaledBlur);
+    }
+
+    const double unscaledPad = pad / scaleDown;
+
+    if (s_outlineCache.size() > 32)
+        s_outlineCache.clear();
+
+    CachedOutline entry;
+    entry.silhouette = silhouette;
+    entry.pad = unscaledPad;
+    s_outlineCache.insert(key, entry);
+
+    painter->drawImage(QRectF(-unscaledPad, -unscaledPad,
+                              image.naturalWidth + unscaledPad * 2.0,
+                              image.naturalHeight + unscaledPad * 2.0),
+                       silhouette);
+}
+
 void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
-               const QRectF& canvasRect, float parentOpacity)
+               const QRectF& canvasRect, float parentOpacity,
+               const RenderOptions& options)
 {
     if (!layer.visible)
         return;
@@ -229,7 +358,7 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
     case LayerType::Group: {
         const auto& group = static_cast<const GroupLayer&>(layer);
         for (const auto& child : group.children)
-            drawLayer(painter, *child, doc, canvasRect, effectiveOpacity);
+            drawLayer(painter, *child, doc, canvasRect, effectiveOpacity, options);
         break;
     }
     case LayerType::Shape:
@@ -351,62 +480,18 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
     }
     case LayerType::Image: {
         const auto& image = static_cast<const ImageLayer&>(layer);
-        const QImage pixels = doc.assets().decodedImage(image.assetId);
+        const QImage pixels = options.interactive
+            ? doc.assets().previewImage(image.assetId)
+            : doc.assets().decodedImage(image.assetId);
         if (!pixels.isNull()) {
+            const QRectF targetRect(0, 0, image.naturalWidth, image.naturalHeight);
+
             // Efeito Contorno / Glow ("Sticker Effect")
             if (image.effects.outline.enabled && image.effects.outline.width > 0.0) {
-                const auto& outline = image.effects.outline;
-                const int w = pixels.width();
-                const int h = pixels.height();
-                const int pad = static_cast<int>(std::ceil(outline.width + outline.blur * 2.0));
-                const int effectW = w + pad * 2;
-                const int effectH = h + pad * 2;
-
-                // 1. Gera silhueta na cor do efeito baseada no canal alfa da imagem original
-                QImage silhouette(effectW, effectH, QImage::Format_ARGB32_Premultiplied);
-                silhouette.fill(Qt::transparent);
-
-                // Preenche onde há opacidade na imagem
-                QImage mask(effectW, effectH, QImage::Format_ARGB32_Premultiplied);
-                mask.fill(Qt::transparent);
-                {
-                    QPainter mp(&mask);
-                    mp.drawImage(QPoint(pad, pad), pixels);
-                }
-
-                // Dilatação por amostragem circular para criar borda sólida precisa
-                const int radius = static_cast<int>(std::round(outline.width));
-                QPainter sp(&silhouette);
-                const int steps = std::clamp(radius * 3, 12, 48);
-                const double angleDelta = (2.0 * 3.14159265358979323846) / steps;
-
-                // Desenha a máscara com deslocamentos circulares
-                for (int r = 1; r <= radius; ++r) {
-                    for (int i = 0; i < steps; ++i) {
-                        const double ang = i * angleDelta;
-                        const double dx = r * std::cos(ang);
-                        const double dy = r * std::sin(ang);
-                        sp.drawImage(QPointF(dx, dy), mask);
-                    }
-                }
-
-                // Tingir a silhueta com a cor desejada
-                sp.setCompositionMode(QPainter::CompositionMode_SourceIn);
-                QColor glowColor = outline.color;
-                glowColor.setAlphaF(std::clamp(outline.opacity, 0.0, 1.0) * glowColor.alphaF());
-                sp.fillRect(silhouette.rect(), glowColor);
-                sp.end();
-
-                // Se houver blur (efeito glow / neon), aplica o desfoque
-                if (outline.blur > 0.1) {
-                    silhouette = ImageProcessing::applyBlur(silhouette, outline.blur);
-                }
-
-                // Desenha o contorno/brilho atrás da imagem original
-                painter->drawImage(QPointF(-pad, -pad), silhouette);
+                renderImageOutline(painter, image, doc);
             }
 
-            painter->drawImage(QPointF(0, 0), pixels);
+            painter->drawImage(targetRect, pixels);
         } else {
             // Placeholder while the asset has no decoded pixels.
             painter->fillRect(
@@ -435,11 +520,14 @@ void renderDocument(const Document& doc, QPainter* painter,
     painter->setTransform(docToDevice);
     painter->setRenderHint(QPainter::Antialiasing, true);
     painter->setRenderHint(QPainter::TextAntialiasing, true);
+    if (!options.interactive) {
+        painter->setRenderHint(QPainter::SmoothPixmapTransform, true);
+    }
     painter->setClipRect(canvasRect); // layers never draw outside the canvas
 
     const GroupLayer* root = doc.rootGroup();
     for (const auto& child : root->children)
-        drawLayer(painter, *child, doc, canvasRect, 1.0f);
+        drawLayer(painter, *child, doc, canvasRect, 1.0f, options);
     painter->restore();
 
     painter->save();

@@ -154,7 +154,7 @@ void MainWindow::connectDocumentSignals()
         connect(m_document.get(), &Document::structureChanged,
                 m_layersPanel, &LayersPanel::refresh);
         connect(m_document.get(), &Document::layerPropertyChanged,
-                m_layersPanel, &LayersPanel::refresh);
+                m_layersPanel, &LayersPanel::refreshProperties);
     }
 }
 

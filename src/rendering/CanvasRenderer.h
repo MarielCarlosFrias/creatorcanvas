@@ -17,6 +17,8 @@ struct RenderOptions
     QColor checkerLight{0xcc, 0xcc, 0xcc};
     QColor checkerDark{0x99, 0x99, 0x99};
     QColor canvasBorder{0x50, 0x51, 0x57};
+    /// Favor performance during interactive gestures (e.g. moving/scaling layers, panning).
+    bool interactive = false;
 };
 
 /// Renders the document through |painter| (already active on the target

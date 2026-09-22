@@ -528,6 +528,7 @@ void CanvasView::paintEvent(QPaintEvent*)
         return;
 
     RenderOptions options;
+    options.interactive = (m_gesture != Gesture::None) || m_panning;
     renderDocument(*m_document, &painter, docToDevice(), options);
 
     if (m_activeTool) {

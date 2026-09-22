@@ -564,6 +564,13 @@ void LayersPanel::refresh()
     rebuild();
 }
 
+void LayersPanel::refreshProperties()
+{
+    // Atualiza somente os controles de opacidade/blend sem reconstruir a lista.
+    // Isso evita reconstrução cara do painel durante arraste de camadas no canvas.
+    updateControlsForSelection();
+}
+
 void LayersPanel::rebuild()
 {
     m_updating = true;
