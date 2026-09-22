@@ -842,12 +842,19 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event)
                 static_cast<TextLayer*>(layer)->box = QSizeF(newW, newH);
 
                 // anchor the fixed point under the new box
+                // m_fixedLocal is in the OLD box coords; remap to the new box.
+                const double origW = m_gestureBounds.width();
+                const double origH = m_gestureBounds.height();
+                const QPointF fixedNew(
+                    origW > 1e-6 ? (m_fixedLocal.x() / origW) * newW : 0,
+                    origH > 1e-6 ? (m_fixedLocal.y() / origH) * newH : 0);
+
                 const double rad = qDegreesToRadians(m_gestureStart.rotationDeg);
                 const double cosR = std::cos(rad);
                 const double sinR = std::sin(rad);
                 const QPointF c2(newW / 2.0, newH / 2.0);
-                const QPointF v(m_fixedLocal.x() - c2.x(),
-                                m_fixedLocal.y() - c2.y());
+                const QPointF v(fixedNew.x() - c2.x(),
+                                fixedNew.y() - c2.y());
                 const QPointF rotated(v.x() * cosR - v.y() * sinR,
                                       v.x() * sinR + v.y() * cosR);
                 t.position = m_fixedDoc - rotated;
