@@ -32,6 +32,11 @@ public:
     QString nextUndoName() const;
     QString nextRedoName() const;
 
+    int totalCount() const { return undoCount() + redoCount(); }
+    int currentIndex() const { return undoCount(); }
+    QString commandNameAt(int index) const;
+    void jumpToState(int targetIndex);
+
 signals:
     void canUndoChanged(bool canUndo);
     void canRedoChanged(bool canRedo);

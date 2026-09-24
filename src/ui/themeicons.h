@@ -63,6 +63,7 @@ public:
     // --- Edit & History Actions ---
     static QIcon actionUndo(const QColor& color = QColor(220, 220, 220));
     static QIcon actionRedo(const QColor& color = QColor(220, 220, 220));
+    static QIcon actionHistory(const QColor& color = QColor(220, 220, 220));
 
     // --- View & Zoom Actions ---
     static QIcon actionZoomIn(const QColor& color = QColor(220, 220, 220));

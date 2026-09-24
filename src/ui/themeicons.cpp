@@ -789,6 +789,27 @@ QIcon ThemeIcons::actionRedo(const QColor& color)
     });
 }
 
+QIcon ThemeIcons::actionHistory(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.setBrush(Qt::NoBrush);
+
+        // Circular clock outline with arrow at top-left
+        QRectF clockRect(4 * scale, 4 * scale, 16 * scale, 16 * scale);
+        p.drawArc(clockRect, 45 * 16, 270 * 16);
+
+        // Arrow head pointing counter-clockwise
+        p.drawLine(QPointF(9 * scale, 2 * scale), QPointF(12 * scale, 5 * scale));
+        p.drawLine(QPointF(9 * scale, 8 * scale), QPointF(12 * scale, 5 * scale));
+
+        // Clock hands (center 12, 12)
+        p.drawLine(QPointF(12 * scale, 12 * scale), QPointF(12 * scale, 8 * scale));
+        p.drawLine(QPointF(12 * scale, 12 * scale), QPointF(15 * scale, 12 * scale));
+    });
+}
+
 QIcon ThemeIcons::actionZoomIn(const QColor& color)
 {
     return makeMultiSizeIcon([color](QPainter& p, int s) {

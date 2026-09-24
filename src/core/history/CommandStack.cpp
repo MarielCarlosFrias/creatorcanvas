@@ -83,6 +83,58 @@ QString CommandStack::nextRedoName() const
     return m_redoStack.empty() ? QString() : m_redoStack.back()->name();
 }
 
+QString CommandStack::commandNameAt(int index) const
+{
+    if (index < 0 || index >= totalCount())
+        return QString();
+
+    if (index < static_cast<int>(m_undoStack.size())) {
+        return m_undoStack[index]->name();
+    } else {
+        // Redo stack is stored in LIFO order (m_redoStack.back() is the next redo, i.e., index == undoCount())
+        int redoOffset = index - static_cast<int>(m_undoStack.size());
+        int redoIdx = static_cast<int>(m_redoStack.size()) - 1 - redoOffset;
+        if (redoIdx >= 0 && redoIdx < static_cast<int>(m_redoStack.size()))
+            return m_redoStack[redoIdx]->name();
+    }
+    return QString();
+}
+
+void CommandStack::jumpToState(int targetIndex)
+{
+    if (targetIndex < 0)
+        targetIndex = 0;
+    if (targetIndex > totalCount())
+        targetIndex = totalCount();
+
+    int current = currentIndex();
+    if (targetIndex == current)
+        return;
+
+    const bool wasUndoable = canUndo();
+    const bool wasRedoable = canRedo();
+
+    if (targetIndex < current) {
+        int steps = current - targetIndex;
+        for (int i = 0; i < steps && !m_undoStack.empty(); ++i) {
+            auto command = std::move(m_undoStack.back());
+            m_undoStack.pop_back();
+            command->undo();
+            m_redoStack.push_back(std::move(command));
+        }
+    } else {
+        int steps = targetIndex - current;
+        for (int i = 0; i < steps && !m_redoStack.empty(); ++i) {
+            auto command = std::move(m_redoStack.back());
+            m_redoStack.pop_back();
+            command->redo();
+            m_undoStack.push_back(std::move(command));
+        }
+    }
+
+    emitStateChanged(wasUndoable, wasRedoable);
+}
+
 void CommandStack::emitStateChanged(bool beforeUndoable, bool beforeRedoable)
 {
     if (beforeUndoable != canUndo())

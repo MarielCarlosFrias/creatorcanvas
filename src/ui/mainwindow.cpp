@@ -20,6 +20,7 @@
 #include "ui/textinspector.h"
 #include "ui/shapeinspector.h"
 #include "ui/imageinspector.h"
+#include "ui/historypanel.h"
 #include "ui/themeicons.h"
 
 #include <QActionGroup>
@@ -365,6 +366,22 @@ void MainWindow::buildLayersDock()
     addDockWidget(Qt::RightDockWidgetArea, m_imageDock);
     tabifyDockWidget(m_shapeDock, m_imageDock);
     m_imageDock->hide();
+
+    // Cria o painel de Histórico (Undo/Redo visual estilo Photoshop)
+    m_historyPanel = new HistoryPanel(m_i18n, m_history.get(), this);
+    m_historyDock = new QDockWidget(QString(), this);
+    m_historyDock->setWidget(m_historyPanel);
+    m_historyDock->setFeatures(QDockWidget::DockWidgetMovable
+                              | QDockWidget::DockWidgetFloatable);
+    addDockWidget(Qt::RightDockWidgetArea, m_historyDock);
+    tabifyDockWidget(m_layersDock, m_historyDock);
+    m_historyDock->hide();
+
+    connect(m_historyDock, &QDockWidget::visibilityChanged, this, [this](bool visible) {
+        if (m_toggleHistoryAction && m_toggleHistoryAction->isChecked() != visible) {
+            m_toggleHistoryAction->setChecked(visible);
+        }
+    });
 }
 
 void MainWindow::buildActions()
@@ -571,6 +588,17 @@ void MainWindow::buildActions()
     m_toggleSnapAction->setCheckable(true);
     connect(m_toggleSnapAction, &QAction::triggered, this, [this](bool checked) {
         if (m_canvas) m_canvas->setSnapToGrid(checked);
+    });
+
+    m_toggleHistoryAction = new QAction(this);
+    m_toggleHistoryAction->setIcon(ThemeIcons::actionHistory());
+    m_toggleHistoryAction->setCheckable(true);
+    m_toggleHistoryAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_H));
+    connect(m_toggleHistoryAction, &QAction::triggered, this, [this](bool checked) {
+        if (m_historyDock) {
+            m_historyDock->setVisible(checked);
+            if (checked) m_historyDock->raise();
+        }
     });
 
     m_flipHAction = new QAction(this);
@@ -1185,6 +1213,7 @@ void MainWindow::buildMenus()
     m_viewMenu->addSeparator();
     m_viewMenu->addAction(m_toggleGridAction);
     m_viewMenu->addAction(m_toggleSnapAction);
+    m_viewMenu->addAction(m_toggleHistoryAction);
     m_viewMenu->addSeparator();
     m_safeZoneMenu = m_viewMenu->addMenu(QString());
     m_safeNoneAction = m_safeZoneMenu->addAction(QString());
@@ -1246,6 +1275,7 @@ void MainWindow::showStartScreen()
     if (m_textDock) m_textDock->hide();
     if (m_shapeDock) m_shapeDock->hide();
     if (m_imageDock) m_imageDock->hide();
+    if (m_historyDock) m_historyDock->hide();
     if (m_quickToolBar) m_quickToolBar->hide();
     if (m_toolsBar) m_toolsBar->hide();
     if (m_toolOptionsBar) m_toolOptionsBar->hide();
@@ -1259,6 +1289,8 @@ void MainWindow::enterEditor()
     if (m_textDock) m_textDock->show();
     if (m_shapeDock) m_shapeDock->show();
     if (m_imageDock) m_imageDock->show();
+    if (m_historyDock) m_historyDock->show();
+    if (m_toggleHistoryAction) m_toggleHistoryAction->setChecked(true);
     if (m_quickToolBar) m_quickToolBar->show();
     if (m_toolsBar) m_toolsBar->show();
     if (m_toolOptionsBar) m_toolOptionsBar->show();
@@ -1356,6 +1388,8 @@ void MainWindow::newDocument()
         m_textInspector->setDocument(m_document.get());
     if (m_shapeInspector)
         m_shapeInspector->setDocument(m_document.get());
+    if (m_imageInspector)
+        m_imageInspector->setDocument(m_document.get());
     connectDocumentSignals();
     updateWindowTitle();
     enterEditor();
@@ -2196,6 +2230,10 @@ void MainWindow::retranslateUi()
         m_toggleSnapAction->setText(m_i18n->t("common", "menu.view.snapToGrid"));
         m_toggleSnapAction->setToolTip(m_toggleSnapAction->text());
     }
+    if (m_toggleHistoryAction) {
+        m_toggleHistoryAction->setText(m_i18n->t("common", "menu.view.history"));
+        m_toggleHistoryAction->setToolTip(m_toggleHistoryAction->text() + QStringLiteral(" (Ctrl+H)"));
+    }
     if (m_safeZoneMenu)
         m_safeZoneMenu->setTitle(m_i18n->t("common", "menu.view.safeZones"));
     if (m_safeNoneAction)
@@ -2240,6 +2278,8 @@ void MainWindow::retranslateUi()
         m_shapeDock->setWindowTitle(m_i18n->t("editor", "shape.title"));
     if (m_imageDock)
         m_imageDock->setWindowTitle(m_i18n->t("common", "panel.imageProperties"));
+    if (m_historyDock)
+        m_historyDock->setWindowTitle(m_i18n->t("common", "panel.history"));
 
     // Retradução das ferramentas da barra e opções com tooltips contendo atalhos
     if (m_toolSelectAction) {

@@ -136,6 +136,8 @@ add_executable(creatorcanvas
     ui/exportdialog.cpp
     ui/layerspanel.h
     ui/layerspanel.cpp
+    ui/historypanel.h
+    ui/historypanel.cpp
     ui/settingsdialog.h
     ui/settingsdialog.cpp
     ui/startscreen.h

@@ -356,6 +356,59 @@ private slots:
         QVERIFY(!stack.canRedo());
         QCOMPARE(doc.rootGroup()->children.size(), std::size_t(2));
     }
+
+    void jumpToStateAndCommandNameAt()
+    {
+        Document doc(100, 100);
+        CommandStack stack;
+
+        auto a = makeText("A");
+        auto b = makeText("B");
+        auto c = makeText("C");
+        const LayerId idA = a->id();
+        const LayerId idB = b->id();
+        const LayerId idC = c->id();
+
+        stack.execute(std::make_unique<AddLayerCommand>(doc, std::move(a)));
+        stack.execute(std::make_unique<AddLayerCommand>(doc, std::move(b)));
+        stack.execute(std::make_unique<AddLayerCommand>(doc, std::move(c)));
+
+        QCOMPARE(stack.totalCount(), 3);
+        QCOMPARE(stack.currentIndex(), 3);
+        QCOMPARE(stack.commandNameAt(0), QStringLiteral("layer.add"));
+        QCOMPARE(stack.commandNameAt(1), QStringLiteral("layer.add"));
+        QCOMPARE(stack.commandNameAt(2), QStringLiteral("layer.add"));
+
+        // Jump to state 1 (only A should exist)
+        stack.jumpToState(1);
+        QCOMPARE(stack.currentIndex(), 1);
+        QCOMPARE(stack.undoCount(), 1);
+        QCOMPARE(stack.redoCount(), 2);
+        QVERIFY(doc.findLayer(idA) != nullptr);
+        QVERIFY(doc.findLayer(idB) == nullptr);
+        QVERIFY(doc.findLayer(idC) == nullptr);
+
+        // Names should remain intact across undo/redo boundaries
+        QCOMPARE(stack.commandNameAt(0), QStringLiteral("layer.add"));
+        QCOMPARE(stack.commandNameAt(1), QStringLiteral("layer.add"));
+        QCOMPARE(stack.commandNameAt(2), QStringLiteral("layer.add"));
+
+        // Jump to state 0 (initial document state, nothing exists)
+        stack.jumpToState(0);
+        QCOMPARE(stack.currentIndex(), 0);
+        QCOMPARE(stack.undoCount(), 0);
+        QCOMPARE(stack.redoCount(), 3);
+        QVERIFY(doc.findLayer(idA) == nullptr);
+
+        // Jump to state 3 (all exist)
+        stack.jumpToState(3);
+        QCOMPARE(stack.currentIndex(), 3);
+        QCOMPARE(stack.undoCount(), 3);
+        QCOMPARE(stack.redoCount(), 0);
+        QVERIFY(doc.findLayer(idA) != nullptr);
+        QVERIFY(doc.findLayer(idB) != nullptr);
+        QVERIFY(doc.findLayer(idC) != nullptr);
+    }
 };
 
 QTEST_GUILESS_MAIN(TestHistory)

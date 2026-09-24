@@ -37,6 +37,7 @@ class LayersPanel;
 class TextInspector;
 class ShapeInspector;
 class ImageInspector;
+class HistoryPanel;
 class StartScreen;
 
 class MainWindow final : public QMainWindow
@@ -110,10 +111,12 @@ private:
     TextInspector* m_textInspector = nullptr;
     ShapeInspector* m_shapeInspector = nullptr;
     ImageInspector* m_imageInspector = nullptr;
+    HistoryPanel* m_historyPanel = nullptr;
     QDockWidget* m_layersDock = nullptr;
     QDockWidget* m_textDock = nullptr;
     QDockWidget* m_shapeDock = nullptr;
     QDockWidget* m_imageDock = nullptr;
+    QDockWidget* m_historyDock = nullptr;
     LayerId m_selectedId;
     QString m_currentFilePath;
     bool m_modified = false;
@@ -150,6 +153,7 @@ private:
     QAction* m_groupAction = nullptr;
     QAction* m_toggleGridAction = nullptr;
     QAction* m_toggleSnapAction = nullptr;
+    QAction* m_toggleHistoryAction = nullptr;
     QAction* m_flipHAction = nullptr;
     QAction* m_flipVAction = nullptr;
     QAction* m_deleteAction = nullptr;

@@ -131,5 +131,8 @@
     "menu.view.safe.none": "&Nenhuma",
     "menu.view.safe.youtube": "&YouTube (16:9)",
     "menu.view.safe.instagram": "&Instagram",
-    "menu.view.safe.tiktok": "&TikTok / Reels (9:16)"
+    "menu.view.safe.tiktok": "&TikTok / Reels (9:16)",
+    "panel.history": "Histórico",
+    "panel.history.initial": "Novo Documento",
+    "menu.view.history": "Painel de &Histórico"
 }
