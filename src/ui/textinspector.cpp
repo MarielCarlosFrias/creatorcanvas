@@ -269,6 +269,18 @@ void TextInspector::buildUi()
 
     layout->addStretch();
 
+    connect(m_color, &QPushButton::clicked, this, [this] {
+        TextLayer* layer = nullptr;
+        if (!editingLayer(&layer)) return;
+        const QColor chosen = QColorDialog::getColor(layer->color, this);
+        if (!chosen.isValid()) return;
+        layer->color = chosen;
+        const QString hex = chosen.name(QColor::HexRgb);
+        m_color->setText(hex);
+        m_color->setStyleSheet(QStringLiteral("background: %1;").arg(hex));
+        touch();
+    });
+
     connect(m_outlineOn, &QCheckBox::toggled, this, [this](bool on) {
         TextLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;

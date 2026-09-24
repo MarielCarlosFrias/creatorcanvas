@@ -822,43 +822,8 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event)
                 t.rotationDeg = m_gestureStart.rotationDeg
                                 + qRadiansToDegrees(angle - m_rotateStartAngle);
                 t.position = m_gestureStart.position;
-            } else if (layer->type() == LayerType::Text) {
-                // Text: handles resize the WRAP BOX, never the glyph size.
-                const QTransform inv =
-                    m_gestureStart.matrix(m_gestureBounds).inverted();
-                const QPointF localNow = inv.map(docNow);
-                QSizeF box = m_gestureStartBox;
-                if (box.isEmpty())
-                    box = m_gestureBounds.size();
-                const bool corner = m_activeHandle <= 3;
-                const bool doW = corner || m_activeHandle == 5 || m_activeHandle == 7;
-                const bool doH = corner || m_activeHandle == 4 || m_activeHandle == 6;
-                double newW = box.width();
-                double newH = box.height();
-                if (doW)
-                    newW = qMax(24.0, qAbs(localNow.x() - m_fixedLocal.x()));
-                if (doH)
-                    newH = qMax(12.0, qAbs(localNow.y() - m_fixedLocal.y()));
-                static_cast<TextLayer*>(layer)->box = QSizeF(newW, newH);
-
-                // anchor the fixed point under the new box
-                // m_fixedLocal is in the OLD box coords; remap to the new box.
-                const double origW = m_gestureBounds.width();
-                const double origH = m_gestureBounds.height();
-                const QPointF fixedNew(
-                    origW > 1e-6 ? (m_fixedLocal.x() / origW) * newW : 0,
-                    origH > 1e-6 ? (m_fixedLocal.y() / origH) * newH : 0);
-
-                const double rad = qDegreesToRadians(m_gestureStart.rotationDeg);
-                const double cosR = std::cos(rad);
-                const double sinR = std::sin(rad);
-                const QPointF c2(newW / 2.0, newH / 2.0);
-                const QPointF v(fixedNew.x() - c2.x(),
-                                fixedNew.y() - c2.y());
-                const QPointF rotated(v.x() * cosR - v.y() * sinR,
-                                      v.x() * sinR + v.y() * cosR);
-                t.position = m_fixedDoc - rotated;
             } else {
+                // Scale-based resize for all layer types (images, text, shapes).
                 const QTransform inv =
                     m_gestureStart.matrix(m_gestureBounds).inverted();
                 const QPointF localNow = inv.map(docNow);
