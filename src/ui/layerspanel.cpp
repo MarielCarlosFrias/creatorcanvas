@@ -358,8 +358,7 @@ void LayersPanel::buildUi()
         int row = m_list->currentRow();
         if (row > 0) {
             int newDocIdx = docIndexFromRow(row - 1);
-            m_document->reorderLayer(m_selectedId, m_document->rootGroup(), newDocIdx);
-            rebuild();
+            onLayerReordered(m_selectedId, newDocIdx);
         }
     });
 
@@ -369,8 +368,7 @@ void LayersPanel::buildUi()
         int row = m_list->currentRow();
         if (row >= 0 && row < m_list->count() - 1) {
             int newDocIdx = docIndexFromRow(row + 1);
-            m_document->reorderLayer(m_selectedId, m_document->rootGroup(), newDocIdx);
-            rebuild();
+            onLayerReordered(m_selectedId, newDocIdx);
         }
     });
 
@@ -600,10 +598,16 @@ void LayersPanel::rebuild()
             visBtn->setStyleSheet(QStringLiteral("border: none; background: transparent;"));
             visBtn->setToolTip(m_i18n ? m_i18n->t("common", "panel.visibility") : QStringLiteral("Toggle Visibility"));
             connect(visBtn, &QToolButton::clicked, this, [this, layerId, layer] {
-                if (m_document) {
-                    m_document->setLayerVisible(layerId, !layer->visible);
-                    rebuild();
+                if (!m_document) return;
+                const bool newVis = !layer->visible;
+                if (m_history) {
+                    m_history->execute(std::make_unique<LayerVisibilityCommand>(
+                        *m_document, layerId, QStringLiteral("layer.visible"),
+                        &Document::setLayerVisible, layer->visible, newVis));
+                } else {
+                    m_document->setLayerVisible(layerId, newVis);
                 }
+                rebuild();
             });
 
             // Thumbnail Preview
@@ -648,10 +652,16 @@ void LayersPanel::rebuild()
             lockBtn->setStyleSheet(QStringLiteral("border: none; background: transparent;"));
             lockBtn->setToolTip(m_i18n ? m_i18n->t("common", "panel.lockToggle") : QStringLiteral("Toggle Lock"));
             connect(lockBtn, &QToolButton::clicked, this, [this, layerId, layer] {
-                if (m_document) {
-                    m_document->setLayerLocked(layerId, !layer->locked);
-                    rebuild();
+                if (!m_document) return;
+                const bool newLock = !layer->locked;
+                if (m_history) {
+                    m_history->execute(std::make_unique<LayerLockCommand>(
+                        *m_document, layerId, QStringLiteral("layer.lock"),
+                        &Document::setLayerLocked, layer->locked, newLock));
+                } else {
+                    m_document->setLayerLocked(layerId, newLock);
                 }
+                rebuild();
             });
 
             rowLayout->addWidget(visBtn);
@@ -837,14 +847,19 @@ void LayersPanel::showContextMenu(const QPoint& pos)
 
     QAction* chosen = menu.exec(m_list->mapToGlobal(pos));
     if (chosen == lockAction) {
-        m_document->setLayerLocked(id, !layer->locked);
+        const bool newLock = !layer->locked;
+        if (m_history) {
+            m_history->execute(std::make_unique<LayerLockCommand>(
+                *m_document, id, QStringLiteral("layer.lock"),
+                &Document::setLayerLocked, layer->locked, newLock));
+        } else {
+            m_document->setLayerLocked(id, newLock);
+        }
         rebuild();
     } else if (chosen == frontAction) {
-        m_document->reorderLayer(id, m_document->rootGroup(), -1);
-        rebuild();
+        onLayerReordered(id, -1);
     } else if (chosen == backAction) {
-        m_document->reorderLayer(id, m_document->rootGroup(), 0);
-        rebuild();
+        onLayerReordered(id, 0);
     } else if (chosen == duplicateAction) {
         emit duplicateRequested(id);
     } else if (chosen == deleteAction) {

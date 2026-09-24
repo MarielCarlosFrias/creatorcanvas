@@ -58,6 +58,13 @@ public:
     bool setLayerImageEffects(const LayerId& id, const ImageEffects& effects);
     void touchLayer(const LayerId& id);
     bool setLayerTextContent(const LayerId& id, QString content);
+    bool setLayerFontFamily(const LayerId& id, QString family);
+    bool setLayerTextSize(const LayerId& id, double sizePt);
+    bool setLayerTextBold(const LayerId& id, bool bold);
+    bool setLayerTextItalic(const LayerId& id, bool italic);
+    bool setLayerTextUnderline(const LayerId& id, bool underline);
+    bool setLayerTextColor(const LayerId& id, QColor color);
+    bool setLayerTextAlign(const LayerId& id, TextAlignment align);
 
     // Propriedades de ShapeLayer (retângulos, elipses, linhas)
     // Passadas por valor para garantir compatibilidade com LayerPropertyCommand (Undo/Redo)

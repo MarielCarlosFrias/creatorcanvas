@@ -296,6 +296,104 @@ bool Document::setLayerTextContent(const LayerId& id, QString content)
     return true;
 }
 
+bool Document::setLayerFontFamily(const LayerId& id, QString family)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Text)
+        return false;
+    auto* text = static_cast<TextLayer*>(layer);
+    if (text->fontFamily == family)
+        return true;
+    text->fontFamily = std::move(family);
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
+bool Document::setLayerTextSize(const LayerId& id, double sizePt)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Text)
+        return false;
+    auto* text = static_cast<TextLayer*>(layer);
+    if (qFuzzyCompare(text->sizePt, sizePt))
+        return true;
+    text->sizePt = sizePt;
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
+bool Document::setLayerTextBold(const LayerId& id, bool bold)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Text)
+        return false;
+    auto* text = static_cast<TextLayer*>(layer);
+    if (text->bold == bold)
+        return true;
+    text->bold = bold;
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
+bool Document::setLayerTextItalic(const LayerId& id, bool italic)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Text)
+        return false;
+    auto* text = static_cast<TextLayer*>(layer);
+    if (text->italic == italic)
+        return true;
+    text->italic = italic;
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
+bool Document::setLayerTextUnderline(const LayerId& id, bool underline)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Text)
+        return false;
+    auto* text = static_cast<TextLayer*>(layer);
+    if (text->underline == underline)
+        return true;
+    text->underline = underline;
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
+bool Document::setLayerTextColor(const LayerId& id, QColor color)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Text)
+        return false;
+    auto* text = static_cast<TextLayer*>(layer);
+    if (text->color == color)
+        return true;
+    text->color = std::move(color);
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
+bool Document::setLayerTextAlign(const LayerId& id, TextAlignment align)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Text)
+        return false;
+    auto* text = static_cast<TextLayer*>(layer);
+    if (text->align == align)
+        return true;
+    text->align = align;
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
 void Document::touchLayer(const LayerId& id)
 {
     if (findLayer(id)) {

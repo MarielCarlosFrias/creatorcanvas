@@ -17,7 +17,7 @@ namespace cc {
 HistoryPanel::HistoryPanel(I18nService* i18n, CommandStack* history, QWidget* parent)
     : QWidget(parent)
     , m_i18n(i18n)
-    , m_history(history)
+    , m_history(nullptr)
 {
     buildUi();
     if (m_i18n) {

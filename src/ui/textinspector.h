@@ -18,19 +18,21 @@ class QToolButton;
 namespace cc {
 
 class I18nService;
+class CommandStack;
 
-/// Property panel for TextLayers: content, font, size, style, color, align.
-/// Changes apply directly (canvas + layers panel update live). Undo for
-/// inspector edits arrives with the Phase 2 polish.
+/// Property panel for TextLayers: content, font, size, style, color, align, effects.
+/// Edits are executed via CommandStack for full Undo/Redo support.
 class TextInspector final : public QWidget
 {
     Q_OBJECT
 public:
     explicit TextInspector(I18nService* i18n, Document* document,
+                           CommandStack* history = nullptr,
                            QWidget* parent = nullptr);
 
     void setSelectedLayer(const LayerId& id);
     void setDocument(Document* document);
+    void setHistory(CommandStack* history) { m_history = history; }
     void refresh();
 
 private:
@@ -41,6 +43,7 @@ private:
 
     I18nService* m_i18n = nullptr;
     QPointer<Document> m_document;
+    CommandStack* m_history = nullptr;
     LayerId m_id;
     bool m_loading = false;
 

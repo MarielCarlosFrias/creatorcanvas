@@ -1,6 +1,8 @@
 #include "textinspector.h"
 #include "collapsiblesection.h"
 #include "localization/i18nservice.h"
+#include "core/history/CommandStack.h"
+#include "core/history/DocumentCommands.h"
 
 #include <QColorDialog>
 #include <QCheckBox>
@@ -20,10 +22,11 @@
 namespace cc {
 
 TextInspector::TextInspector(I18nService* i18n, Document* document,
-                             QWidget* parent)
+                             CommandStack* history, QWidget* parent)
     : QWidget(parent)
     , m_i18n(i18n)
     , m_document(document)
+    , m_history(history)
 {
     buildUi();
 
@@ -269,48 +272,117 @@ void TextInspector::buildUi()
 
     layout->addStretch();
 
+    // Helper lambda to apply text effects with undo/redo
+    auto applyEffects = [this](auto mutator) {
+        TextLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        TextEffects oldFx = layer->effects;
+        TextEffects newFx = oldFx;
+        mutator(newFx);
+        if (oldFx == newFx) return;
+
+        if (m_history && m_document) {
+            m_history->execute(std::make_unique<SetLayerTextEffectsCommand>(
+                *m_document, m_id, oldFx, newFx));
+        } else if (m_document) {
+            m_document->setLayerTextEffects(m_id, newFx);
+        }
+    };
+
     // --- Typography controls ---
     connect(m_content, &QPlainTextEdit::textChanged, this, [this] {
         TextLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
-        layer->content = m_content->toPlainText();
-        touch();
+        const QString newContent = m_content->toPlainText();
+        if (layer->content == newContent) return;
+
+        if (m_history && m_document) {
+            m_history->execute(std::make_unique<LayerPropertyCommand<QString>>(
+                *m_document, m_id, QStringLiteral("layer.text"),
+                &Document::setLayerTextContent, layer->content, newContent));
+        } else if (m_document) {
+            m_document->setLayerTextContent(m_id, newContent);
+        }
     });
     connect(m_fontFamily, &QFontComboBox::currentTextChanged, this, [this](const QString& family) {
         TextLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
-        layer->fontFamily = family;
-        touch();
+        if (layer->fontFamily == family) return;
+
+        if (m_history && m_document) {
+            m_history->execute(std::make_unique<SetTextFontFamilyCommand>(
+                *m_document, m_id, QStringLiteral("text.fontFamily"),
+                &Document::setLayerFontFamily, layer->fontFamily, family));
+        } else if (m_document) {
+            m_document->setLayerFontFamily(m_id, family);
+        }
     });
     connect(m_size, qOverload<int>(&QSpinBox::valueChanged), this, [this](int value) {
         TextLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
-        layer->sizePt = value;
-        touch();
+        const double newSize = static_cast<double>(value);
+        if (qFuzzyCompare(layer->sizePt, newSize)) return;
+
+        if (m_history && m_document) {
+            m_history->execute(std::make_unique<SetTextSizeCommand>(
+                *m_document, m_id, QStringLiteral("text.size"),
+                &Document::setLayerTextSize, layer->sizePt, newSize));
+        } else if (m_document) {
+            m_document->setLayerTextSize(m_id, newSize);
+        }
     });
     connect(m_bold, &QToolButton::toggled, this, [this](bool on) {
         TextLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
-        layer->bold = on;
-        touch();
+        if (layer->bold == on) return;
+
+        if (m_history && m_document) {
+            m_history->execute(std::make_unique<SetTextBoldCommand>(
+                *m_document, m_id, QStringLiteral("text.bold"),
+                &Document::setLayerTextBold, layer->bold, on));
+        } else if (m_document) {
+            m_document->setLayerTextBold(m_id, on);
+        }
     });
     connect(m_italic, &QToolButton::toggled, this, [this](bool on) {
         TextLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
-        layer->italic = on;
-        touch();
+        if (layer->italic == on) return;
+
+        if (m_history && m_document) {
+            m_history->execute(std::make_unique<SetTextItalicCommand>(
+                *m_document, m_id, QStringLiteral("text.italic"),
+                &Document::setLayerTextItalic, layer->italic, on));
+        } else if (m_document) {
+            m_document->setLayerTextItalic(m_id, on);
+        }
     });
     connect(m_underline, &QToolButton::toggled, this, [this](bool on) {
         TextLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
-        layer->underline = on;
-        touch();
+        if (layer->underline == on) return;
+
+        if (m_history && m_document) {
+            m_history->execute(std::make_unique<SetTextUnderlineCommand>(
+                *m_document, m_id, QStringLiteral("text.underline"),
+                &Document::setLayerTextUnderline, layer->underline, on));
+        } else if (m_document) {
+            m_document->setLayerTextUnderline(m_id, on);
+        }
     });
     connect(m_align, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int idx) {
         TextLayer* layer = nullptr;
-        if (m_loading || !editingLayer(&layer)) return;
-        layer->align = static_cast<TextAlignment>(idx);
-        touch();
+        if (m_loading || idx < 0 || !editingLayer(&layer)) return;
+        const auto newAlign = static_cast<TextAlignment>(idx);
+        if (layer->align == newAlign) return;
+
+        if (m_history && m_document) {
+            m_history->execute(std::make_unique<SetTextAlignCommand>(
+                *m_document, m_id, QStringLiteral("text.align"),
+                &Document::setLayerTextAlign, layer->align, newAlign));
+        } else if (m_document) {
+            m_document->setLayerTextAlign(m_id, newAlign);
+        }
     });
 
     connect(m_color, &QPushButton::clicked, this, [this] {
@@ -318,130 +390,121 @@ void TextInspector::buildUi()
         if (!editingLayer(&layer)) return;
         const QColor chosen = QColorDialog::getColor(layer->color, this);
         if (!chosen.isValid()) return;
-        layer->color = chosen;
+
         const QString hex = chosen.name(QColor::HexRgb);
         m_color->setText(hex);
         m_color->setStyleSheet(QStringLiteral("background: %1;").arg(hex));
-        touch();
+
+        if (m_history && m_document) {
+            m_history->execute(std::make_unique<SetTextColorCommand>(
+                *m_document, m_id, QStringLiteral("text.color"),
+                &Document::setLayerTextColor, layer->color, chosen));
+        } else if (m_document) {
+            m_document->setLayerTextColor(m_id, chosen);
+        }
     });
 
-    connect(m_outlineOn, &QCheckBox::toggled, this, [this](bool on) {
-        TextLayer* layer = nullptr;
-        if (m_loading || !editingLayer(&layer)) return;
-        layer->effects.outline.enabled = on;
-        touch();
+    connect(m_outlineOn, &QCheckBox::toggled, this, [applyEffects](bool on) {
+        applyEffects([on](TextEffects& fx) { fx.outline.enabled = on; });
     });
-    connect(m_outlineColor, &QPushButton::clicked, this, [this] {
+    connect(m_outlineColor, &QPushButton::clicked, this, [this, applyEffects] {
         TextLayer* layer = nullptr;
         if (!editingLayer(&layer)) return;
         const QColor chosen = QColorDialog::getColor(layer->effects.outline.color, this);
         if (!chosen.isValid()) return;
-        layer->effects.outline.color = chosen;
         const QString hex = chosen.name(QColor::HexRgb);
         m_outlineColor->setText(hex);
         m_outlineColor->setStyleSheet(QStringLiteral("background: %1;").arg(hex));
-        touch();
+        applyEffects([chosen](TextEffects& fx) { fx.outline.color = chosen; });
     });
     connect(m_outlineWidth, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
-            [this](double value) {
-        TextLayer* layer = nullptr;
-        if (m_loading || !editingLayer(&layer)) return;
-        layer->effects.outline.width = value;
-        touch();
+            [applyEffects](double value) {
+        applyEffects([value](TextEffects& fx) { fx.outline.width = value; });
     });
-    connect(m_shadowOn, &QCheckBox::toggled, this, [this](bool on) {
-        TextLayer* layer = nullptr;
-        if (m_loading || !editingLayer(&layer)) return;
-        layer->effects.shadow.enabled = on;
-        touch();
+    connect(m_shadowOn, &QCheckBox::toggled, this, [applyEffects](bool on) {
+        applyEffects([on](TextEffects& fx) { fx.shadow.enabled = on; });
     });
-    connect(m_shadowColor, &QPushButton::clicked, this, [this] {
+    connect(m_shadowColor, &QPushButton::clicked, this, [this, applyEffects] {
         TextLayer* layer = nullptr;
         if (!editingLayer(&layer)) return;
         const QColor chosen = QColorDialog::getColor(layer->effects.shadow.color, this);
         if (!chosen.isValid()) return;
-        layer->effects.shadow.color = chosen;
         const QString hex = chosen.name(QColor::HexRgb);
         m_shadowColor->setText(hex);
         m_shadowColor->setStyleSheet(QStringLiteral("background: %1;").arg(hex));
-        touch();
+        applyEffects([chosen](TextEffects& fx) { fx.shadow.color = chosen; });
     });
     connect(m_shadowX, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
-            [this](double value) {
-        TextLayer* layer = nullptr;
-        if (m_loading || !editingLayer(&layer)) return;
-        layer->effects.shadow.offsetX = value;
-        touch();
+            [applyEffects](double value) {
+        applyEffects([value](TextEffects& fx) { fx.shadow.offsetX = value; });
     });
     connect(m_shadowY, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
-            [this](double value) {
-        TextLayer* layer = nullptr;
-        if (m_loading || !editingLayer(&layer)) return;
-        layer->effects.shadow.offsetY = value;
-        touch();
+            [applyEffects](double value) {
+        applyEffects([value](TextEffects& fx) { fx.shadow.offsetY = value; });
     });
     connect(m_shadowBlur, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
-            [this](double value) {
-        TextLayer* layer = nullptr;
-        if (m_loading || !editingLayer(&layer)) return;
-        layer->effects.shadow.blur = value;
-        touch();
+            [applyEffects](double value) {
+        applyEffects([value](TextEffects& fx) { fx.shadow.blur = value; });
     });
-    connect(m_gradientOn, &QCheckBox::toggled, this, [this](bool on) {
-        TextLayer* layer = nullptr;
-        if (m_loading || !editingLayer(&layer)) return;
-        layer->effects.gradient.enabled = on;
-        touch();
+    connect(m_gradientOn, &QCheckBox::toggled, this, [applyEffects](bool on) {
+        applyEffects([on](TextEffects& fx) { fx.gradient.enabled = on; });
     });
     connect(m_gradientType, qOverload<int>(&QComboBox::currentIndexChanged), this,
-            [this](int index) {
-        TextLayer* layer = nullptr;
-        if (m_loading || index < 0 || !editingLayer(&layer)) return;
-        layer->effects.gradient.type = index;
-        touch();
+            [applyEffects](int index) {
+        if (index < 0) return;
+        applyEffects([index](TextEffects& fx) { fx.gradient.type = index; });
     });
-    connect(m_gradientStartColor, &QPushButton::clicked, this, [this] {
+    connect(m_gradientStartColor, &QPushButton::clicked, this, [this, applyEffects] {
         TextLayer* layer = nullptr;
         if (!editingLayer(&layer)) return;
         const QColor chosen = QColorDialog::getColor(layer->effects.gradient.startColor, this);
         if (!chosen.isValid()) return;
-        layer->effects.gradient.startColor = chosen;
         const QString hex = chosen.name(QColor::HexRgb);
         m_gradientStartColor->setText(hex);
         m_gradientStartColor->setStyleSheet(QStringLiteral("background: %1;").arg(hex));
-        touch();
+        applyEffects([chosen](TextEffects& fx) { fx.gradient.startColor = chosen; });
     });
-    connect(m_gradientEndColor, &QPushButton::clicked, this, [this] {
+    connect(m_gradientEndColor, &QPushButton::clicked, this, [this, applyEffects] {
         TextLayer* layer = nullptr;
         if (!editingLayer(&layer)) return;
         const QColor chosen = QColorDialog::getColor(layer->effects.gradient.endColor, this);
         if (!chosen.isValid()) return;
-        layer->effects.gradient.endColor = chosen;
         const QString hex = chosen.name(QColor::HexRgb);
         m_gradientEndColor->setText(hex);
         m_gradientEndColor->setStyleSheet(QStringLiteral("background: %1;").arg(hex));
-        touch();
+        applyEffects([chosen](TextEffects& fx) { fx.gradient.endColor = chosen; });
     });
     connect(m_gradientAngle, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
-            [this](double value) {
-        TextLayer* layer = nullptr;
-        if (m_loading || !editingLayer(&layer)) return;
-        layer->effects.gradient.angleDeg = value;
-        touch();
+            [applyEffects](double value) {
+        applyEffects([value](TextEffects& fx) { fx.gradient.angleDeg = value; });
     });
     connect(m_tiltX, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
             [this](double value) {
         TextLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
-        layer->transform.shearX = value;
-        touch();
+        AffineTransform oldT = layer->transform;
+        AffineTransform newT = oldT;
+        newT.shearX = value;
+        if (m_history && m_document) {
+            m_history->execute(std::make_unique<SetLayerTransformCommand>(
+                *m_document, m_id, oldT, newT));
+        } else if (m_document) {
+            m_document->setLayerTransform(m_id, newT);
+        }
     });
     connect(m_tiltY, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
             [this](double value) {
         TextLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
-        layer->transform.shearY = value;
-        touch();
+        AffineTransform oldT = layer->transform;
+        AffineTransform newT = oldT;
+        newT.shearY = value;
+        if (m_history && m_document) {
+            m_history->execute(std::make_unique<SetLayerTransformCommand>(
+                *m_document, m_id, oldT, newT));
+        } else if (m_document) {
+            m_document->setLayerTransform(m_id, newT);
+        }
     });
 }
 

@@ -339,7 +339,7 @@ void MainWindow::buildLayersDock()
         if (m_addRectAction) m_addRectAction->trigger();
     });
 
-    m_textInspector = new TextInspector(m_i18n, m_document.get(), this);
+    m_textInspector = new TextInspector(m_i18n, m_document.get(), m_history.get(), this);
     m_textDock = new QDockWidget(QString(), this);
     m_textDock->setWidget(m_textInspector);
     m_textDock->setFeatures(QDockWidget::DockWidgetMovable
@@ -1693,6 +1693,8 @@ void MainWindow::alignMultipleLayers(AlignTarget target)
     if (infos.size() < 2 || unionRect.isEmpty())
         return;
 
+    auto compound = std::make_unique<CompoundCommand>(QStringLiteral("layer.align"));
+
     for (const auto& info : infos) {
         double dx = 0.0;
         double dy = 0.0;
@@ -1726,12 +1728,16 @@ void MainWindow::alignMultipleLayers(AlignTarget target)
             AffineTransform newT = info.oldTransform;
             newT.position += QPointF(dx, dy);
             if (m_history) {
-                m_history->execute(std::make_unique<SetLayerTransformCommand>(
+                compound->addCommand(std::make_unique<SetLayerTransformCommand>(
                     *m_document, info.id, info.oldTransform, newT));
             } else {
                 m_document->setLayerTransform(info.id, newT);
             }
         }
+    }
+
+    if (m_history && !compound->isEmpty()) {
+        m_history->execute(std::move(compound));
     }
     m_canvas->update();
 }
@@ -1772,6 +1778,8 @@ void MainWindow::distributeHorizontally()
     const double lastCenter = infos.last().centerX;
     const double step = (lastCenter - firstCenter) / (infos.size() - 1);
 
+    auto compound = std::make_unique<CompoundCommand>(QStringLiteral("layer.distributeH"));
+
     for (int i = 1; i < infos.size() - 1; ++i) {
         const double targetX = firstCenter + step * i;
         const double dx = targetX - infos[i].centerX;
@@ -1779,12 +1787,16 @@ void MainWindow::distributeHorizontally()
             AffineTransform newT = infos[i].oldTransform;
             newT.position += QPointF(dx, 0.0);
             if (m_history) {
-                m_history->execute(std::make_unique<SetLayerTransformCommand>(
+                compound->addCommand(std::make_unique<SetLayerTransformCommand>(
                     *m_document, infos[i].id, infos[i].oldTransform, newT));
             } else {
                 m_document->setLayerTransform(infos[i].id, newT);
             }
         }
+    }
+
+    if (m_history && !compound->isEmpty()) {
+        m_history->execute(std::move(compound));
     }
     m_canvas->update();
 }
@@ -1825,6 +1837,8 @@ void MainWindow::distributeVertically()
     const double lastCenter = infos.last().centerY;
     const double step = (lastCenter - firstCenter) / (infos.size() - 1);
 
+    auto compound = std::make_unique<CompoundCommand>(QStringLiteral("layer.distributeV"));
+
     for (int i = 1; i < infos.size() - 1; ++i) {
         const double targetY = firstCenter + step * i;
         const double dy = targetY - infos[i].centerY;
@@ -1832,12 +1846,16 @@ void MainWindow::distributeVertically()
             AffineTransform newT = infos[i].oldTransform;
             newT.position += QPointF(0.0, dy);
             if (m_history) {
-                m_history->execute(std::make_unique<SetLayerTransformCommand>(
+                compound->addCommand(std::make_unique<SetLayerTransformCommand>(
                     *m_document, infos[i].id, infos[i].oldTransform, newT));
             } else {
                 m_document->setLayerTransform(infos[i].id, newT);
             }
         }
+    }
+
+    if (m_history && !compound->isEmpty()) {
+        m_history->execute(std::move(compound));
     }
     m_canvas->update();
 }
@@ -1850,21 +1868,32 @@ void MainWindow::groupSelectedLayers()
     if (ids.size() < 2)
         return;
 
-    auto group = std::make_unique<GroupLayer>();
-    group->name = m_i18n ? m_i18n->t("editor", "layer.group") : QStringLiteral("Group");
-    const LayerId groupId = group->id();
+    const QString groupName = m_i18n ? m_i18n->t("editor", "layer.group") : QStringLiteral("Group");
 
-    for (const auto& lid : ids) {
-        if (auto taken = m_document->takeLayer(lid))
-            group->children.push_back(std::move(taken));
+    if (m_history) {
+        auto cmd = std::make_unique<GroupLayersCommand>(*m_document, ids, groupName);
+        const LayerId groupId = cmd->groupId();
+        m_history->execute(std::move(cmd));
+        m_canvas->setSelectedLayer(groupId);
+    } else {
+        auto group = std::make_unique<GroupLayer>();
+        group->name = groupName;
+        const LayerId groupId = group->id();
+
+        for (const auto& lid : ids) {
+            if (auto taken = m_document->takeLayer(lid))
+                group->children.push_back(std::move(taken));
+        }
+
+        m_document->addLayer(std::move(group));
+        m_canvas->setSelectedLayer(groupId);
     }
 
-    m_document->addLayer(std::move(group));
-    m_canvas->setSelectedLayer(groupId);
     m_canvas->update();
     if (m_layersPanel)
         m_layersPanel->refresh();
 }
+
 
 void MainWindow::startFromTemplate(int templateKind)
 {

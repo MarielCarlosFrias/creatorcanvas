@@ -323,6 +323,15 @@ using SetShapeStrokeCommand       = LayerPropertyCommand<QColor>;
 using SetShapeStrokeWidthCommand  = LayerPropertyCommand<double>;
 using SetShapeCornerRadiusCommand = LayerPropertyCommand<double>;
 
+// Comandos de histórico para operações de texto (TextLayer)
+using SetTextFontFamilyCommand = LayerPropertyCommand<QString>;
+using SetTextSizeCommand       = LayerPropertyCommand<double>;
+using SetTextBoldCommand       = LayerPropertyCommand<bool>;
+using SetTextItalicCommand     = LayerPropertyCommand<bool>;
+using SetTextUnderlineCommand  = LayerPropertyCommand<bool>;
+using SetTextColorCommand      = LayerPropertyCommand<QColor>;
+using SetTextAlignCommand      = LayerPropertyCommand<TextAlignment>;
+
 /// Comando reversível para modificações de conteúdo em camadas de imagem (corte, varinha mágica, tesoura, clone stamp).
 /// Preserva o asset anterior e novo, dimensões naturais e transformações (posição/escala) para suporte completo a Desfazer/Refazer.
 class ModifyImageLayerCommand final : public Command
@@ -369,6 +378,130 @@ private:
     int m_newWidth;
     int m_newHeight;
     AffineTransform m_newTransform;
+};
+
+/// Macro command that executes multiple commands sequentially as a single undo/redo step.
+class CompoundCommand final : public Command
+{
+public:
+    explicit CompoundCommand(QString name = QStringLiteral("compound"))
+        : Command(std::move(name))
+    {
+    }
+
+    void addCommand(std::unique_ptr<Command> cmd)
+    {
+        if (cmd)
+            m_commands.push_back(std::move(cmd));
+    }
+
+    bool isEmpty() const { return m_commands.empty(); }
+    std::size_t size() const { return m_commands.size(); }
+
+    void redo() override
+    {
+        for (auto& cmd : m_commands)
+            cmd->redo();
+    }
+
+    void undo() override
+    {
+        for (auto it = m_commands.rbegin(); it != m_commands.rend(); ++it)
+            (*it)->undo();
+    }
+
+private:
+    std::vector<std::unique_ptr<Command>> m_commands;
+};
+
+/// Groups multiple layers into a single GroupLayer with full undo/redo support.
+class GroupLayersCommand final : public Command
+{
+public:
+    GroupLayersCommand(Document& doc, QList<LayerId> layerIds, QString groupName = QStringLiteral("Group"))
+        : Command(QStringLiteral("layer.group"))
+        , m_doc(&doc)
+        , m_layerIds(std::move(layerIds))
+        , m_groupName(std::move(groupName))
+    {
+        auto group = std::make_unique<GroupLayer>();
+        group->name = m_groupName;
+        m_groupId = group->id();
+        m_groupHolder = std::move(group);
+
+        // Store the original parent and index of each layer
+        for (const auto& id : m_layerIds) {
+            LayerInfo info;
+            info.id = id;
+            if (GroupLayer* parent = m_doc->parentOf(id)) {
+                info.parentId = parent->id();
+                info.index = m_doc->indexOf(id);
+            } else {
+                info.parentId = m_doc->rootGroup()->id();
+                info.index = -1;
+            }
+            m_layerInfos.push_back(info);
+        }
+    }
+
+    const LayerId& groupId() const { return m_groupId; }
+
+    void redo() override
+    {
+        if (!m_created) {
+            auto* group = static_cast<GroupLayer*>(m_groupHolder.get());
+            // Take layers from document and add to group children
+            for (const auto& id : m_layerIds) {
+                if (auto taken = m_doc->takeLayer(id))
+                    group->children.push_back(std::move(taken));
+            }
+
+            m_doc->addLayer(std::move(m_groupHolder));
+            m_created = true;
+        } else {
+            Q_ASSERT(m_groupHolder);
+            m_doc->addLayer(std::move(m_groupHolder));
+        }
+    }
+
+    void undo() override
+    {
+        // Take the group from the document
+        m_groupHolder = m_doc->takeLayer(m_groupId);
+        Q_ASSERT(m_groupHolder);
+
+        auto* group = static_cast<GroupLayer*>(m_groupHolder.get());
+
+        // Restore child layers back to original positions in the document
+        // Group children are moved back to their original parent
+        for (const auto& info : m_layerInfos) {
+            // Find and extract child from group
+            auto& children = group->children;
+            auto it = std::find_if(children.begin(), children.end(),
+                                   [&](const auto& c) { return c->id() == info.id; });
+            if (it != children.end()) {
+                auto child = std::move(*it);
+                children.erase(it);
+                GroupLayer* targetParent = detail::resolveGroup(m_doc, info.parentId);
+                m_doc->addLayer(std::move(child), targetParent, info.index);
+            }
+        }
+    }
+
+private:
+    struct LayerInfo {
+        LayerId id;
+        LayerId parentId;
+        int index = -1;
+    };
+
+    Document* m_doc;
+    QList<LayerId> m_layerIds;
+    QString m_groupName;
+    LayerId m_groupId;
+    std::vector<LayerInfo> m_layerInfos;
+    std::unique_ptr<Layer> m_groupHolder;
+    bool m_created = false;
 };
 
 } // namespace cc

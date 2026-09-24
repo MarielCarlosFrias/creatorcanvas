@@ -409,6 +409,81 @@ private slots:
         QVERIFY(doc.findLayer(idB) != nullptr);
         QVERIFY(doc.findLayer(idC) != nullptr);
     }
+
+    void testCompoundCommand()
+    {
+        Document doc(100, 100);
+        CommandStack stack;
+        auto l1 = makeText("L1");
+        auto l2 = makeText("L2");
+        const LayerId id1 = l1->id();
+        const LayerId id2 = l2->id();
+
+        doc.addLayer(std::move(l1));
+        doc.addLayer(std::move(l2));
+
+        auto compound = std::make_unique<CompoundCommand>(QStringLiteral("test.compound"));
+        AffineTransform t1;
+        t1.position = QPointF(10, 10);
+        compound->addCommand(std::make_unique<SetLayerTransformCommand>(doc, id1, AffineTransform{}, t1));
+
+        AffineTransform t2;
+        t2.position = QPointF(20, 20);
+        compound->addCommand(std::make_unique<SetLayerTransformCommand>(doc, id2, AffineTransform{}, t2));
+
+        stack.execute(std::move(compound));
+        QCOMPARE(stack.undoCount(), 1);
+        QCOMPARE(doc.findLayer(id1)->transform.position, QPointF(10, 10));
+        QCOMPARE(doc.findLayer(id2)->transform.position, QPointF(20, 20));
+
+        stack.undo();
+        QCOMPARE(stack.undoCount(), 0);
+        QCOMPARE(doc.findLayer(id1)->transform.position, QPointF(0, 0));
+        QCOMPARE(doc.findLayer(id2)->transform.position, QPointF(0, 0));
+
+        stack.redo();
+        QCOMPARE(doc.findLayer(id1)->transform.position, QPointF(10, 10));
+        QCOMPARE(doc.findLayer(id2)->transform.position, QPointF(20, 20));
+    }
+
+    void testGroupLayersCommand()
+    {
+        Document doc(100, 100);
+        CommandStack stack;
+        auto l1 = makeText("L1");
+        auto l2 = makeText("L2");
+        const LayerId id1 = l1->id();
+        const LayerId id2 = l2->id();
+
+        doc.addLayer(std::move(l1));
+        doc.addLayer(std::move(l2));
+
+        auto groupCmd = std::make_unique<GroupLayersCommand>(doc, QList<LayerId>{id1, id2}, QStringLiteral("MyGroup"));
+        const LayerId gid = groupCmd->groupId();
+        stack.execute(std::move(groupCmd));
+
+        QCOMPARE(stack.undoCount(), 1);
+        Layer* grp = doc.findLayer(gid);
+        QVERIFY(grp != nullptr);
+        QCOMPARE(grp->type(), LayerType::Group);
+        auto* g = static_cast<GroupLayer*>(grp);
+        QCOMPARE(static_cast<int>(g->children.size()), 2);
+        QCOMPARE(g->children[0]->id(), id1);
+        QCOMPARE(g->children[1]->id(), id2);
+
+        // Undo grouping: layers must return to root
+        stack.undo();
+        QCOMPARE(stack.undoCount(), 0);
+        QVERIFY(doc.findLayer(gid) == nullptr);
+        QVERIFY(doc.findLayer(id1) != nullptr);
+        QVERIFY(doc.findLayer(id2) != nullptr);
+        QCOMPARE(doc.rootGroup()->children.size(), static_cast<std::size_t>(2));
+
+        // Redo grouping: group restored
+        stack.redo();
+        QCOMPARE(stack.undoCount(), 1);
+        QVERIFY(doc.findLayer(gid) != nullptr);
+    }
 };
 
 QTEST_GUILESS_MAIN(TestHistory)
