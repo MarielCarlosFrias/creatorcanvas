@@ -269,6 +269,50 @@ void TextInspector::buildUi()
 
     layout->addStretch();
 
+    // --- Typography controls ---
+    connect(m_content, &QPlainTextEdit::textChanged, this, [this] {
+        TextLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->content = m_content->toPlainText();
+        touch();
+    });
+    connect(m_fontFamily, &QFontComboBox::currentTextChanged, this, [this](const QString& family) {
+        TextLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->fontFamily = family;
+        touch();
+    });
+    connect(m_size, qOverload<int>(&QSpinBox::valueChanged), this, [this](int value) {
+        TextLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->sizePt = value;
+        touch();
+    });
+    connect(m_bold, &QToolButton::toggled, this, [this](bool on) {
+        TextLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->bold = on;
+        touch();
+    });
+    connect(m_italic, &QToolButton::toggled, this, [this](bool on) {
+        TextLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->italic = on;
+        touch();
+    });
+    connect(m_underline, &QToolButton::toggled, this, [this](bool on) {
+        TextLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->underline = on;
+        touch();
+    });
+    connect(m_align, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int idx) {
+        TextLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->align = static_cast<TextAlignment>(idx);
+        touch();
+    });
+
     connect(m_color, &QPushButton::clicked, this, [this] {
         TextLayer* layer = nullptr;
         if (!editingLayer(&layer)) return;
