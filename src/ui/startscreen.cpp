@@ -21,6 +21,7 @@
 #include <QEvent>
 #include <QFrame>
 #include <QResizeEvent>
+#include <QScrollArea>
 
 namespace cc {
 
@@ -43,7 +44,20 @@ StartScreen::StartScreen(I18nService* i18n, PresetStore* presets,
 
 void StartScreen::buildUi()
 {
-    auto* mainLayout = new QVBoxLayout(this);
+    auto* outerLayout = new QVBoxLayout(this);
+    outerLayout->setContentsMargins(0, 0, 0, 0);
+    outerLayout->setSpacing(0);
+
+    auto* scrollArea = new QScrollArea(this);
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setFrameShape(QFrame::NoFrame);
+    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scrollArea->setStyleSheet(QStringLiteral("QScrollArea { background: transparent; border: none; }"));
+
+    auto* content = new QWidget;
+    content->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
+    auto* mainLayout = new QVBoxLayout(content);
     mainLayout->setContentsMargins(60, 32, 60, 32);
     mainLayout->setSpacing(18);
 
@@ -423,6 +437,8 @@ void StartScreen::buildUi()
     mainLayout->addWidget(m_recentStack);
 
     mainLayout->addStretch();
+    scrollArea->setWidget(content);
+    outerLayout->addWidget(scrollArea);
 }
 
 QWidget* StartScreen::createVisualCard(const QString& brandName, const QPixmap& icon,
