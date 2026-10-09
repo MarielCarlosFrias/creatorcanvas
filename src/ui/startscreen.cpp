@@ -22,6 +22,8 @@
 #include <QFrame>
 #include <QResizeEvent>
 #include <QScrollArea>
+#include <QScrollBar>
+#include <QShowEvent>
 
 namespace cc {
 
@@ -49,6 +51,7 @@ void StartScreen::buildUi()
     outerLayout->setSpacing(0);
 
     auto* scrollArea = new QScrollArea(this);
+    m_scrollArea = scrollArea;
     scrollArea->setWidgetResizable(true);
     scrollArea->setFrameShape(QFrame::NoFrame);
     scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -556,6 +559,13 @@ void StartScreen::resizeEvent(QResizeEvent* event)
         mainLayout->setContentsMargins(horizontalMargin, 20,
                                        horizontalMargin, 20);
     relayoutCards();
+}
+
+void StartScreen::showEvent(QShowEvent* event)
+{
+    QWidget::showEvent(event);
+    if (m_scrollArea && m_scrollArea->verticalScrollBar())
+        m_scrollArea->verticalScrollBar()->setValue(0);
 }
 
 void StartScreen::relayoutCards()

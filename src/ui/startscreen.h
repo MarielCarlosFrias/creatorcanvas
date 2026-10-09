@@ -11,6 +11,8 @@ class QPushButton;
 class QStackedWidget;
 class QGridLayout;
 class QResizeEvent;
+class QShowEvent;
+class QScrollArea;
 
 namespace cc {
 
@@ -42,6 +44,7 @@ signals:
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+    void showEvent(QShowEvent* event) override;
 
 private:
     void buildUi();
@@ -81,6 +84,7 @@ private:
     QLabel* m_emptyStateTitle = nullptr;
     QLabel* m_emptyStateSubtitle = nullptr;
     QLabel* m_emptyStateIcon = nullptr;
+    QScrollArea* m_scrollArea = nullptr;
 };
 
 } // namespace cc
