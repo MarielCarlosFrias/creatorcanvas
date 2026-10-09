@@ -25,6 +25,14 @@ public:
 
     void redo() override { m_doc->setLayerTransform(m_id, m_newValue); }
     void undo() override { m_doc->setLayerTransform(m_id, m_oldValue); }
+    bool mergeWith(const Command& other) override
+    {
+        const auto* rhs = dynamic_cast<const SetLayerTransformCommand*>(&other);
+        if (!rhs || rhs->m_doc != m_doc || rhs->m_id != m_id)
+            return false;
+        m_newValue = rhs->m_newValue;
+        return true;
+    }
 
 private:
     Document* m_doc;
@@ -77,6 +85,85 @@ private:
     LayerId m_layerId;
     LayerId m_parentId;
     int m_index;
+};
+
+/// Builds the common "text behind subject" composition without flattening
+/// anything: the original text stays below the subject and a duplicate with
+/// transparent fill/outline enabled is placed above it.
+class TextBehindSubjectCommand final : public Command
+{
+public:
+    TextBehindSubjectCommand(Document& doc, const LayerId& textId,
+                             const LayerId& subjectId)
+        : Command(QStringLiteral("text.behindSubject"))
+        , m_doc(&doc)
+        , m_textId(textId)
+        , m_subjectId(subjectId)
+    {
+        Layer* text = doc.findLayer(textId);
+        Layer* subject = doc.findLayer(subjectId);
+        GroupLayer* parent = text ? doc.parentOf(textId) : nullptr;
+        Q_ASSERT(text && text->type() == LayerType::Text);
+        Q_ASSERT(subject && subject->type() == LayerType::Image);
+        Q_ASSERT(parent && parent == doc.parentOf(subjectId));
+        m_parentId = parent ? parent->id() : doc.rootGroup()->id();
+        m_oldTextIndex = doc.indexOf(textId);
+        m_oldSubjectEffects = static_cast<ImageLayer*>(subject)->effects;
+        m_duplicate = text->deepCopy();
+        m_duplicate->name = text->name + QStringLiteral(" outline");
+        const auto* sourceText = static_cast<const TextLayer*>(text);
+        auto* outlineText = static_cast<TextLayer*>(m_duplicate.get());
+        outlineText->color = Qt::transparent;
+        outlineText->effects.hollow = true;
+        outlineText->effects.knockout = false;
+        outlineText->effects.outline.enabled = true;
+        outlineText->effects.outline.color = sourceText->color;
+        outlineText->effects.outline.width = qMax(2.0, sourceText->effects.outline.width);
+        m_newSubjectEffects = m_oldSubjectEffects;
+        m_newSubjectEffects.outline.enabled = true;
+        m_newSubjectEffects.outline.color = sourceText->color;
+        m_newSubjectEffects.outline.width = qMax(4.0, sourceText->effects.outline.width);
+        m_newSubjectEffects.outline.blur = 0.0;
+        m_newSubjectEffects.outline.opacity = 1.0;
+        m_duplicateId = m_duplicate->id();
+    }
+
+    void redo() override
+    {
+        GroupLayer* parent = detail::resolveGroup(m_doc, m_parentId);
+        Layer* subject = m_doc->findLayer(m_subjectId);
+        Layer* text = m_doc->findLayer(m_textId);
+        if (!parent || !subject || !text || !m_duplicate)
+            return;
+
+        int subjectIndex = m_doc->indexOf(m_subjectId);
+        const int textIndex = m_doc->indexOf(m_textId);
+        if (textIndex > subjectIndex) {
+            m_doc->reorderLayer(m_textId, parent, subjectIndex);
+            subjectIndex = m_doc->indexOf(m_subjectId);
+        }
+        m_doc->addLayer(std::move(m_duplicate), parent, subjectIndex + 1);
+        m_doc->setLayerImageEffects(m_subjectId, m_newSubjectEffects);
+    }
+
+    void undo() override
+    {
+        m_duplicate = m_doc->takeLayer(m_duplicateId);
+        if (m_duplicate)
+            m_doc->reorderLayer(m_textId, detail::resolveGroup(m_doc, m_parentId), m_oldTextIndex);
+        m_doc->setLayerImageEffects(m_subjectId, m_oldSubjectEffects);
+    }
+
+private:
+    Document* m_doc;
+    LayerId m_textId;
+    LayerId m_subjectId;
+    LayerId m_parentId;
+    LayerId m_duplicateId;
+    int m_oldTextIndex = -1;
+    ImageEffects m_oldSubjectEffects;
+    ImageEffects m_newSubjectEffects;
+    std::unique_ptr<Layer> m_duplicate;
 };
 
 class RemoveLayerCommand final : public Command
@@ -219,6 +306,14 @@ public:
 
     void redo() override { m_doc->setLayerTextEffects(m_id, m_new); }
     void undo() override { m_doc->setLayerTextEffects(m_id, m_old); }
+    bool mergeWith(const Command& other) override
+    {
+        const auto* rhs = dynamic_cast<const SetLayerTextEffectsCommand*>(&other);
+        if (!rhs || rhs->m_doc != m_doc || rhs->m_id != m_id)
+            return false;
+        m_new = rhs->m_new;
+        return true;
+    }
 
 private:
     Document* m_doc;
@@ -301,6 +396,17 @@ public:
 
     void redo() override { (m_doc->*m_apply)(m_id, m_newValue); }
     void undo() override { (m_doc->*m_apply)(m_id, m_oldValue); }
+    bool mergeWith(const Command& other) override
+    {
+        const auto* rhs = dynamic_cast<const LayerPropertyCommand<T>*>(&other);
+        const bool mergeableTextEdit = name().startsWith(QStringLiteral("text.")) ||
+                                       name() == QStringLiteral("layer.text");
+        if (!mergeableTextEdit || !rhs || rhs->m_doc != m_doc || rhs->m_id != m_id ||
+            rhs->m_apply != m_apply || rhs->name() != name())
+            return false;
+        m_newValue = rhs->m_newValue;
+        return true;
+    }
 
 private:
     Document* m_doc;
@@ -322,6 +428,7 @@ using SetShapeFillCommand         = LayerPropertyCommand<QColor>;
 using SetShapeStrokeCommand       = LayerPropertyCommand<QColor>;
 using SetShapeStrokeWidthCommand  = LayerPropertyCommand<double>;
 using SetShapeCornerRadiusCommand = LayerPropertyCommand<double>;
+using SetShapeKindCommand         = LayerPropertyCommand<ShapeKind>;
 
 // Comandos de histórico para operações de texto (TextLayer)
 using SetTextFontFamilyCommand = LayerPropertyCommand<QString>;
@@ -502,6 +609,61 @@ private:
     std::vector<LayerInfo> m_layerInfos;
     std::unique_ptr<Layer> m_groupHolder;
     bool m_created = false;
+};
+
+/// Ungroups a group without rasterizing its contents. The children return to
+/// the group's parent at precisely the former group position, so undo/redo
+/// remains predictable.
+class UngroupLayersCommand final : public Command
+{
+public:
+    UngroupLayersCommand(Document& doc, const LayerId& groupId)
+        : Command(QStringLiteral("layer.ungroup"))
+        , m_doc(&doc)
+        , m_groupId(groupId)
+    {
+        Layer* layer = doc.findLayer(groupId);
+        Q_ASSERT(layer && layer->type() == LayerType::Group);
+        GroupLayer* parent = doc.parentOf(groupId);
+        m_parentId = parent ? parent->id() : doc.rootGroup()->id();
+        m_groupIndex = doc.indexOf(groupId);
+        const auto* group = static_cast<const GroupLayer*>(layer);
+        for (const auto& child : group->children)
+            m_childIds.append(child->id());
+    }
+
+    void redo() override
+    {
+        m_groupHolder = m_doc->takeLayer(m_groupId);
+        Q_ASSERT(m_groupHolder);
+        auto* group = static_cast<GroupLayer*>(m_groupHolder.get());
+        GroupLayer* parent = detail::resolveGroup(m_doc, m_parentId);
+        int insertion = m_groupIndex;
+        while (!group->children.empty()) {
+            auto child = std::move(group->children.front());
+            group->children.erase(group->children.begin());
+            m_doc->addLayer(std::move(child), parent, insertion++);
+        }
+    }
+
+    void undo() override
+    {
+        Q_ASSERT(m_groupHolder);
+        auto* group = static_cast<GroupLayer*>(m_groupHolder.get());
+        for (const LayerId& childId : m_childIds) {
+            if (auto child = m_doc->takeLayer(childId))
+                group->children.push_back(std::move(child));
+        }
+        m_doc->addLayer(std::move(m_groupHolder), detail::resolveGroup(m_doc, m_parentId), m_groupIndex);
+    }
+
+private:
+    Document* m_doc;
+    LayerId m_groupId;
+    LayerId m_parentId;
+    int m_groupIndex = -1;
+    QList<LayerId> m_childIds;
+    std::unique_ptr<Layer> m_groupHolder;
 };
 
 } // namespace cc

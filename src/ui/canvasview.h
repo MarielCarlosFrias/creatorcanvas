@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QPointF>
+#include <QPolygonF>
 #include <QWidget>
 
 #include <QPointer>
@@ -97,6 +98,12 @@ public:
     void setSafeZoneMode(int mode);
     int safeZoneMode() const { return m_safeZoneMode; }
 
+    /// Starts a four-corner selection used by the mockup/logo tool. Points
+    /// are collected directly on the document so the user never needs to
+    /// type canvas coordinates.
+    void beginMockupPlacement();
+    void cancelMockupPlacement();
+
 public slots:
     void zoomIn();
     void zoomOut();
@@ -128,6 +135,7 @@ signals:
                             const QString& actionName);
     void statusMessageRequested(const QString& message);
     void quickAiBusyChanged(bool busy);
+    void mockupAreaSelected(const QPolygonF& corners);
 
 protected:
     void paintEvent(QPaintEvent*) override;
@@ -141,6 +149,7 @@ protected:
     void keyReleaseEvent(QKeyEvent*) override;
     void resizeEvent(QResizeEvent*) override;
     void leaveEvent(QEvent*) override;
+    void changeEvent(QEvent* event) override;
     void dragEnterEvent(QDragEnterEvent*) override;
     void dragMoveEvent(QDragMoveEvent*) override;
     void dropEvent(QDropEvent*) override;
@@ -177,6 +186,8 @@ private:
     void drawRubberBand(QPainter* painter);
     void drawGridOverlay(QPainter* painter);
     void drawSafeZoneOverlay(QPainter* painter);
+    void drawMockupPlacementOverlay(QPainter* painter);
+    void finishMockupPlacement();
     QList<Layer*> hitTestRubberBand(const QRectF& docRect) const;
 
     QPointer<Document> m_document;
@@ -220,6 +231,9 @@ private:
     bool m_snapToGrid = false;
     int m_gridSpacing = 50;
     int m_safeZoneMode = 0; // 0=None, 1=YouTube, 2=Instagram, 3=TikTok
+
+    bool m_mockupPlacementActive = false;
+    QPolygonF m_mockupCorners;
 
     ToolContext makeToolContext() const;
 

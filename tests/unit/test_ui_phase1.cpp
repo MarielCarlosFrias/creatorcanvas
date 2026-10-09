@@ -1,10 +1,19 @@
 #include <QtTest>
 #include <QSignalSpy>
+#include <QListWidget>
+#include <QToolButton>
+#include <QLabel>
+#include <QPlainTextEdit>
 
 #include "ui/themeicons.h"
 #include "ui/collapsiblesection.h"
 #include "ui/startscreen.h"
 #include "ui/layerspanel.h"
+#include "ui/historypanel.h"
+#include "ui/textinspector.h"
+#include "ui/darktheme.h"
+#include "core/history/CommandStack.h"
+#include "core/history/DocumentCommands.h"
 #include "localization/i18nservice.h"
 #include "services/presetstore.h"
 #include "services/recentfiles.h"
@@ -150,7 +159,7 @@ private slots:
         i18n.loadAvailableLanguages();
 
         const auto templates = TemplateFactory::availableTemplates();
-        QCOMPARE(templates.size(), 7);
+        QCOMPARE(templates.size(), 11);
 
         for (const auto& tmpl : templates) {
             auto doc = TemplateFactory::createTemplate(tmpl.kind, &i18n);
@@ -163,6 +172,197 @@ private slots:
             panel.setDocument(doc.get());
             panel.refresh();
         }
+    }
+
+    void testCreativeShapesAndKinds()
+    {
+        Document doc(1280, 720, 96);
+        auto shape = std::make_unique<ShapeLayer>();
+        shape->kind = ShapeKind::Rectangle;
+        const LayerId id = shape->id();
+        doc.addLayer(std::move(shape));
+
+        // Test mutating shape kind to SpeechBubble
+        QVERIFY(doc.setShapeKind(id, ShapeKind::SpeechBubble));
+        auto* layer = static_cast<ShapeLayer*>(doc.findLayer(id));
+        QVERIFY(layer != nullptr);
+        QCOMPARE(layer->kind, ShapeKind::SpeechBubble);
+
+        // Test mutating shape kind to Heart
+        QVERIFY(doc.setShapeKind(id, ShapeKind::Heart));
+        QCOMPARE(layer->kind, ShapeKind::Heart);
+
+        // Test undo/redo with SetShapeKindCommand
+        CommandStack history;
+        history.execute(std::make_unique<SetShapeKindCommand>(
+            doc, id, QStringLiteral("shape.kind"), &Document::setShapeKind,
+            ShapeKind::Heart, ShapeKind::Star));
+        QCOMPARE(layer->kind, ShapeKind::Star);
+
+        history.undo();
+        QCOMPARE(layer->kind, ShapeKind::Heart);
+
+        history.redo();
+        QCOMPARE(layer->kind, ShapeKind::Star);
+    }
+
+    void testThemeSwitching()
+    {
+        QTemporaryDir tmpDir;
+        SettingsService settings(tmpDir.path() + "/settings.json");
+        I18nService i18n(&settings, {":/locales"});
+        i18n.loadAvailableLanguages();
+
+        CommandStack history;
+        Document doc(800, 600, 96);
+
+        LayersPanel layersPanel(&i18n, &history);
+        layersPanel.setDocument(&doc);
+
+        HistoryPanel historyPanel(&i18n, &history);
+        CollapsibleSection section(QStringLiteral("Effects"), true);
+
+        // Switch to Light Mode
+        applyTheme(*qApp, false);
+        const QColor lightWindow = qApp->palette().color(QPalette::Window);
+        QVERIFY(lightWindow.value() >= 128);
+
+        layersPanel.refresh();
+        historyPanel.refresh();
+
+        // Switch to Dark Mode
+        applyTheme(*qApp, true);
+        const QColor darkWindow = qApp->palette().color(QPalette::Window);
+        QVERIFY(darkWindow.value() < 128);
+
+        layersPanel.refresh();
+        historyPanel.refresh();
+    }
+
+    void testHistoryPanelIntegration()
+    {
+        QTemporaryDir tmpDir;
+        SettingsService settings(tmpDir.path() + "/settings.json");
+        I18nService i18n(&settings, {":/locales"});
+        i18n.loadAvailableLanguages();
+
+        CommandStack history;
+        Document doc(800, 600, 96);
+
+        HistoryPanel panel(&i18n, &history);
+        auto* list = panel.findChild<QListWidget*>(QStringLiteral("HistoryListWidget"));
+        auto* undoBtn = panel.findChild<QToolButton*>(QStringLiteral("HistoryUndoButton"));
+        auto* redoBtn = panel.findChild<QToolButton*>(QStringLiteral("HistoryRedoButton"));
+        auto* statusLabel = panel.findChild<QLabel*>(QStringLiteral("HistoryStatusLabel"));
+
+        QVERIFY(list != nullptr);
+        QVERIFY(undoBtn != nullptr);
+        QVERIFY(redoBtn != nullptr);
+        QVERIFY(statusLabel != nullptr);
+
+        // Initial state: Item 0 is New Document
+        QCOMPARE(list->count(), 1);
+        QCOMPARE(history.currentIndex(), 0);
+        QCOMPARE(undoBtn->isEnabled(), false);
+        QCOMPARE(redoBtn->isEnabled(), false);
+        QCOMPARE(statusLabel->text(), QStringLiteral("0 / 0"));
+
+        // Execute command 1 (Add Shape Layer)
+        history.execute(std::make_unique<AddLayerCommand>(doc, std::make_unique<ShapeLayer>()));
+        QCOMPARE(list->count(), 2);
+        QCOMPARE(history.currentIndex(), 1);
+        QCOMPARE(undoBtn->isEnabled(), true);
+        QCOMPARE(redoBtn->isEnabled(), false);
+        QCOMPARE(statusLabel->text(), QStringLiteral("1 / 1"));
+
+        // Execute command 2 (Add Text Layer)
+        history.execute(std::make_unique<AddLayerCommand>(doc, std::make_unique<TextLayer>()));
+        QCOMPARE(list->count(), 3);
+        QCOMPARE(history.currentIndex(), 2);
+        QCOMPARE(undoBtn->isEnabled(), true);
+        QCOMPARE(redoBtn->isEnabled(), false);
+        QCOMPARE(statusLabel->text(), QStringLiteral("2 / 2"));
+
+        // Click past item (Item 1: Shape layer) -> should rewind 1 step
+        emit list->itemClicked(list->item(1));
+        QCOMPARE(history.currentIndex(), 1);
+        QCOMPARE(list->currentRow(), 1);
+        QCOMPARE(undoBtn->isEnabled(), true);
+        QCOMPARE(redoBtn->isEnabled(), true);
+        QCOMPARE(statusLabel->text(), QStringLiteral("1 / 2"));
+
+        // Click state 0 (Initial document) -> should rewind to 0
+        emit list->itemClicked(list->item(0));
+        QCOMPARE(history.currentIndex(), 0);
+        QCOMPARE(list->currentRow(), 0);
+        QCOMPARE(undoBtn->isEnabled(), false);
+        QCOMPARE(redoBtn->isEnabled(), true);
+        QCOMPARE(statusLabel->text(), QStringLiteral("0 / 2"));
+
+        // Click redo button
+        redoBtn->click();
+        QCOMPARE(history.currentIndex(), 1);
+        QCOMPARE(undoBtn->isEnabled(), true);
+        QCOMPARE(redoBtn->isEnabled(), true);
+
+        // Click redo button again to reach head
+        redoBtn->click();
+        QCOMPARE(history.currentIndex(), 2);
+        QCOMPARE(undoBtn->isEnabled(), true);
+        QCOMPARE(redoBtn->isEnabled(), false);
+
+        // Click undo button
+        undoBtn->click();
+        QCOMPARE(history.currentIndex(), 1);
+        QCOMPARE(undoBtn->isEnabled(), true);
+        QCOMPARE(redoBtn->isEnabled(), true);
+    }
+
+    void testTextInspectorDebounce()
+    {
+        QTemporaryDir tmpDir;
+        SettingsService settings(tmpDir.path() + "/settings.json");
+        I18nService i18n(&settings, {":/locales"});
+        i18n.loadAvailableLanguages();
+
+        CommandStack history;
+        Document doc(800, 600, 96);
+
+        auto textLayer = std::make_unique<TextLayer>();
+        textLayer->content = QStringLiteral("Primeiro Texto");
+        const LayerId textId = textLayer->id();
+        doc.addLayer(std::move(textLayer));
+
+        TextInspector inspector(&i18n, &doc, &history);
+        inspector.setSelectedLayer(textId);
+
+        auto* edit = inspector.findChild<QPlainTextEdit*>();
+        QVERIFY(edit != nullptr);
+        QCOMPARE(edit->toPlainText(), QStringLiteral("Primeiro Texto"));
+
+        // Simulate typing into the plain text editor
+        edit->setPlainText(QStringLiteral("Texto Atualizado"));
+
+        // Live visual feedback: Document was updated immediately
+        auto* layer = static_cast<TextLayer*>(doc.findLayer(textId));
+        QVERIFY(layer != nullptr);
+        QCOMPARE(layer->content, QStringLiteral("Texto Atualizado"));
+
+        // Debounce: History has NOT recorded a command per-keystroke yet
+        QCOMPARE(history.totalCount(), 0);
+
+        // Explicitly commit (as happens when debounce timer triggers or widget loses focus)
+        inspector.commitPendingTextChange();
+        QCOMPARE(history.totalCount(), 1);
+        QCOMPARE(history.commandNameAt(0), QStringLiteral("layer.text"));
+
+        // Undo properly restores original text before typing started
+        history.undo();
+        QCOMPARE(layer->content, QStringLiteral("Primeiro Texto"));
+
+        // Redo properly restores final typed text
+        history.redo();
+        QCOMPARE(layer->content, QStringLiteral("Texto Atualizado"));
     }
 };
 

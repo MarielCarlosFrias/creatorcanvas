@@ -15,6 +15,7 @@
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
+#include <QEvent>
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QLineF>
@@ -522,13 +523,17 @@ void CanvasView::paintEvent(QPaintEvent*)
         fitToViewport();
 
     QPainter painter(this);
-    painter.fillRect(rect(), QColor(0x17, 0x18, 0x1b));
+    const bool dark = palette().color(QPalette::Window).value() < 128;
+    painter.fillRect(rect(), dark ? QColor(0x17, 0x18, 0x1b) : QColor(0xd1, 0xd5, 0xdb));
 
     if (!m_document)
         return;
 
     RenderOptions options;
     options.interactive = (m_gesture != Gesture::None) || m_panning;
+    if (!dark) {
+        options.canvasBorder = QColor(0x94, 0xa3, 0xb8);
+    }
     renderDocument(*m_document, &painter, docToDevice(), options);
 
     if (m_activeTool) {
@@ -551,6 +556,9 @@ void CanvasView::paintEvent(QPaintEvent*)
 
     if (m_safeZoneMode > 0)
         drawSafeZoneOverlay(&painter);
+
+    if (m_mockupPlacementActive)
+        drawMockupPlacementOverlay(&painter);
 
     drawSnapGuides(&painter);
 }
@@ -583,6 +591,20 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
     }
 
     const QPointF docPos = deviceToDoc().map(QPointF(event->pos()));
+
+    if (m_mockupPlacementActive) {
+        if (event->button() == Qt::RightButton) {
+            cancelMockupPlacement();
+            event->accept();
+            return;
+        }
+        if (event->button() == Qt::LeftButton) {
+            m_mockupCorners << docPos;
+            update();
+            event->accept();
+            return;
+        }
+    }
 
     if (m_tool != CanvasTool::Select) {
         if (m_activeTool) {
@@ -1008,6 +1030,11 @@ void CanvasView::mouseReleaseEvent(QMouseEvent* event)
 
 void CanvasView::mouseDoubleClickEvent(QMouseEvent* event)
 {
+    if (m_mockupPlacementActive && event->button() == Qt::LeftButton) {
+        finishMockupPlacement();
+        event->accept();
+        return;
+    }
     if (m_activeTool) {
         const QPointF docPos = deviceToDoc().map(QPointF(event->pos()));
         m_activeTool->mouseDoubleClick(event, docPos, makeToolContext());
@@ -1042,6 +1069,11 @@ bool CanvasView::eventFilter(QObject* watched, QEvent* event)
 
 void CanvasView::keyPressEvent(QKeyEvent* event)
 {
+    if (m_mockupPlacementActive && event->key() == Qt::Key_Return && m_mockupCorners.size() >= 3) {
+        finishMockupPlacement();
+        event->accept();
+        return;
+    }
     if (m_activeTool) {
         m_activeTool->keyPress(event, makeToolContext());
         if (event->isAccepted())
@@ -1218,6 +1250,14 @@ void CanvasView::leaveEvent(QEvent* event)
     QWidget::leaveEvent(event);
 }
 
+void CanvasView::changeEvent(QEvent* event)
+{
+    QWidget::changeEvent(event);
+    if (event->type() == QEvent::PaletteChange || event->type() == QEvent::StyleChange) {
+        update();
+    }
+}
+
 void CanvasView::dragEnterEvent(QDragEnterEvent* event)
 {
     if (event->mimeData()->hasUrls())
@@ -1285,6 +1325,40 @@ void CanvasView::setTool(CanvasTool tool)
 
     update();
     emit toolChanged(m_tool);
+}
+
+void CanvasView::beginMockupPlacement()
+{
+    if (!m_document)
+        return;
+    m_mockupCorners.clear();
+    m_mockupPlacementActive = true;
+    setCursor(Qt::CrossCursor);
+    emit statusMessageRequested(QStringLiteral("Mockup: clique nos quatro cantos da área (canto superior esquerdo, superior direito, inferior direito, inferior esquerdo). Clique direito para cancelar."));
+    update();
+}
+
+void CanvasView::cancelMockupPlacement()
+{
+    if (!m_mockupPlacementActive)
+        return;
+    m_mockupPlacementActive = false;
+    m_mockupCorners.clear();
+    setCursor(Qt::ArrowCursor);
+    emit statusMessageRequested(QStringLiteral("Posicionamento do mockup cancelado."));
+    update();
+}
+
+void CanvasView::finishMockupPlacement()
+{
+    if (!m_mockupPlacementActive || m_mockupCorners.size() < 3)
+        return;
+    const QPolygonF completed = m_mockupCorners;
+    m_mockupPlacementActive = false;
+    m_mockupCorners.clear();
+    setCursor(Qt::ArrowCursor);
+    update();
+    emit mockupAreaSelected(completed);
 }
 
 void CanvasView::setCropAspectRatio(double ratio)
@@ -1599,15 +1673,26 @@ void CanvasView::drawSafeZoneOverlay(QPainter* painter)
     labelFont.setBold(true);
     painter->setFont(labelFont);
 
-    auto drawZoneRect = [&](double x, double y, double w, double h, const QString& label, const QColor& fillColor = QColor(255, 68, 68, 20)) {
+    auto drawZoneRect = [&](double x, double y, double w, double h, const QString& label, const QColor& fillColor = QColor(0, 0, 0, 0)) {
         const QRectF docRect(x, y, w, h);
         const QPolygonF screenPoly = toScreen.map(QPolygonF(docRect));
         painter->setPen(zonePen);
-        painter->setBrush(fillColor);
+        // A transparent fill keeps the artwork visible; only special zones
+        // such as headers/timestamps receive a subtle tint.
+        painter->setBrush(fillColor.alpha() == 0 ? Qt::NoBrush : QBrush(fillColor));
         painter->drawPolygon(screenPoly);
         if (!label.isEmpty()) {
             const QPointF labelPos = toScreen.map(QPointF(x + 6, y + 16));
-            painter->setPen(QColor(0xff, 0x77, 0x77));
+            // Give guide labels a subtle backing so they remain readable
+            // without obscuring the artwork beneath them.
+            const QFontMetrics metrics(labelFont);
+            const QRectF textRect = metrics.boundingRect(label);
+            const QRectF background(labelPos.x() - 3.0, labelPos.y() - metrics.ascent(),
+                                    textRect.width() + 6.0, metrics.height());
+            painter->setPen(Qt::NoPen);
+            painter->setBrush(QColor(20, 20, 30, 150));
+            painter->drawRoundedRect(background, 3.0, 3.0);
+            painter->setPen(QColor(0xff, 0x99, 0x99));
             painter->drawText(labelPos, label);
         }
     };
@@ -1616,7 +1701,7 @@ void CanvasView::drawSafeZoneOverlay(QPainter* painter)
     case 1: {
         const double margin = docW * 0.05;
         drawZoneRect(margin, margin, docW - 2 * margin, docH - 2 * margin,
-                     QStringLiteral("YouTube Safe Title Margin"), Qt::NoBrush);
+                     QStringLiteral("YouTube Safe Title Margin"));
         const double tsW = 140.0;
         const double tsH = 44.0;
         drawZoneRect(docW - tsW - 16, docH - tsH - 16, tsW, tsH,
@@ -1631,7 +1716,7 @@ void CanvasView::drawSafeZoneOverlay(QPainter* painter)
             drawZoneRect(x, y, side, side, QStringLiteral("Feed Grid (1:1)"), QColor(50, 150, 255, 20));
         }
         const double m = std::min(docW, docH) * 0.08;
-        drawZoneRect(m, m, docW - 2 * m, docH - 2 * m, QStringLiteral("Instagram Safe"), Qt::NoBrush);
+        drawZoneRect(m, m, docW - 2 * m, docH - 2 * m, QStringLiteral("Instagram Safe"));
         break;
     }
     case 3: {
@@ -1644,10 +1729,41 @@ void CanvasView::drawSafeZoneOverlay(QPainter* painter)
                      QStringLiteral("Buttons"), QColor(255, 68, 68, 40));
         const double safeMargin = docW * 0.08;
         drawZoneRect(safeMargin, topH + 20, docW - rightW - safeMargin * 1.5,
-                     docH - topH - botH - 40, QStringLiteral("Core Safe Zone"), Qt::NoBrush);
+                     docH - topH - botH - 40, QStringLiteral("Core Safe Zone"));
         break;
     }
     }
+    painter->restore();
+}
+
+void CanvasView::drawMockupPlacementOverlay(QPainter* painter)
+{
+    painter->save();
+    painter->resetTransform();
+    const QTransform toScreen = docToDevice();
+    QPolygonF screen;
+    for (const QPointF& point : m_mockupCorners)
+        screen << toScreen.map(point);
+
+    painter->setPen(QPen(QColor(0x22, 0xa6, 0xf2), 2.0, Qt::DashLine));
+    painter->setBrush(QColor(0x22, 0xa6, 0xf2, 32));
+    if (screen.size() >= 3)
+        painter->drawPolygon(screen);
+    else if (screen.size() == 2)
+        painter->drawLine(screen[0], screen[1]);
+    for (int i = 0; i < screen.size(); ++i) {
+        painter->setBrush(Qt::white);
+        painter->drawEllipse(screen[i], 5, 5);
+        painter->setBrush(QColor(0x22, 0xa6, 0xf2));
+        painter->drawText(screen[i] + QPointF(8, -8), QString::number(i + 1));
+    }
+    const QString help = QStringLiteral("MOCKUP: %1 pontos — duplo clique/Enter confirma — botão direito cancela")
+        .arg(m_mockupCorners.size());
+    QFont font = painter->font(); font.setBold(true); font.setPointSize(10); painter->setFont(font);
+    const QRectF message(14, 14, 430, 30);
+    painter->setPen(Qt::NoPen); painter->setBrush(QColor(15, 23, 42, 220));
+    painter->drawRoundedRect(message, 6, 6);
+    painter->setPen(Qt::white); painter->drawText(message, Qt::AlignCenter, help);
     painter->restore();
 }
 

@@ -33,6 +33,14 @@
         "yt_finance.title": "Finanças & Investimentos (YouTube)",
         "yt_finance.desc": "Thumbnail 16:9 de alta conversão com setas e badges de ganhos/estatísticas.",
         "social_banner.title": "Banner para Redes Sociais (LinkedIn / X)",
-        "social_banner.desc": "Banner panorâmico moderno para cabeçalho de perfil pessoal ou corporativo."
+        "social_banner.desc": "Banner panorâmico moderno para cabeçalho de perfil pessoal ou corporativo.",
+        "yt_shorts.title": "YouTube Shorts Viral / Trending",
+        "yt_shorts.desc": "Layout vertical 9:16 com gancho explosivo, balão de fala e badge em destaque.",
+        "insta_carousel.title": "Slide de Carrossel (Instagram)",
+        "insta_carousel.desc": "Formato retrato 4:5 moderno para carrosséis educativos com indicador de páginas e coração.",
+        "twitch_offline.title": "Tela Offline / Intervalo (Twitch Stream)",
+        "twitch_offline.desc": "Tela 16:9 estilizada com gradiente escuro, redes sociais e aviso de transmissão encerrada.",
+        "yt_true_crime.title": "Documentário & Mistério / True Crime (YouTube)",
+        "yt_true_crime.desc": "Thumbnail 16:9 de alto impacto dramático com tipografia gigante, contraste sombrio e badge de tempo."
     }
 }

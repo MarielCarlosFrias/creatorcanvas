@@ -425,7 +425,7 @@ QImage ImageProcessing::floodFill(const QImage& source, const QPoint& seedPoint,
 }
 
 QImage ImageProcessing::adjustColors(const QImage& source, double brightness, double contrast,
-                                    double saturation, double temperature)
+                                    double saturation, double temperature, double hue)
 {
     if (source.isNull())
         return source;
@@ -441,6 +441,7 @@ QImage ImageProcessing::adjustColors(const QImage& source, double brightness, do
         : (1.0 + contrast / 100.0); // [0.0, 3.0]
     const double sFactor = 1.0 + saturation / 100.0; // [0.0, 2.0]
     const double tFactor = (temperature / 100.0) * 30.0; // [-30, 30]
+    const bool hasHue = !qFuzzyIsNull(hue);
 
     for (int y = 0; y < h; ++y) {
         QRgb* line = reinterpret_cast<QRgb*>(result.scanLine(y));
@@ -473,10 +474,29 @@ QImage ImageProcessing::adjustColors(const QImage& source, double brightness, do
             g = gray + (g - gray) * sFactor;
             b = gray + (b - gray) * sFactor;
 
-            line[x] = qRgba(std::clamp(static_cast<int>(std::round(r)), 0, 255),
-                            std::clamp(static_cast<int>(std::round(g)), 0, 255),
-                            std::clamp(static_cast<int>(std::round(b)), 0, 255),
-                            a);
+            int clampedR = std::clamp(static_cast<int>(std::round(r)), 0, 255);
+            int clampedG = std::clamp(static_cast<int>(std::round(g)), 0, 255);
+            int clampedB = std::clamp(static_cast<int>(std::round(b)), 0, 255);
+
+            // 5. Matiz / Tint (Hue Shift)
+            if (hasHue) {
+                QColor c = QColor::fromRgb(clampedR, clampedG, clampedB);
+                float hVal = 0.0f;
+                float sVal = 0.0f;
+                float vVal = 0.0f;
+                c.getHsvF(&hVal, &sVal, &vVal);
+                if (hVal >= 0.0f) {
+                    hVal += static_cast<float>(hue / 360.0);
+                    while (hVal < 0.0f) hVal += 1.0f;
+                    while (hVal >= 1.0f) hVal -= 1.0f;
+                    c.setHsvF(hVal, sVal, vVal);
+                    clampedR = c.red();
+                    clampedG = c.green();
+                    clampedB = c.blue();
+                }
+            }
+
+            line[x] = qRgba(clampedR, clampedG, clampedB, a);
         }
     }
 

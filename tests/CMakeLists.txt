@@ -42,4 +42,7 @@ cc_add_test(test_ui_phase1 unit/test_ui_phase1.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/collapsiblesection.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/startscreen.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/layerspanel.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/historypanel.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/textinspector.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/darktheme.cpp
 )

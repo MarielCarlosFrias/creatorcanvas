@@ -23,6 +23,7 @@ class QAction;
 class QActionGroup;
 class QStackedWidget;
 class QToolBar;
+class QScrollArea;
 class QComboBox;
 class QCheckBox;
 class QPushButton;
@@ -83,6 +84,8 @@ private:
     void distributeHorizontally();
     void distributeVertically();
     void groupSelectedLayers();
+    void ungroupSelectedLayer();
+    void textBehindSubject();
     void deleteSelectedLayer();
     bool saveDocument();
     bool saveDocumentAs();
@@ -140,6 +143,8 @@ private:
     QAction* m_addArrowCurvedAction = nullptr;
     QAction* m_addStarAction = nullptr;
     QAction* m_addBadgeAction = nullptr;
+    QAction* m_addSpeechBubbleAction = nullptr;
+    QAction* m_addHeartAction = nullptr;
     QMenu* m_alignMenu = nullptr;
     QAction* m_alignLeftAction = nullptr;
     QAction* m_alignCenterXAction = nullptr;
@@ -151,9 +156,13 @@ private:
     QAction* m_distributeHAction = nullptr;
     QAction* m_distributeVAction = nullptr;
     QAction* m_groupAction = nullptr;
+    QAction* m_ungroupAction = nullptr;
+    QAction* m_textBehindSubjectAction = nullptr;
     QAction* m_toggleGridAction = nullptr;
     QAction* m_toggleSnapAction = nullptr;
     QAction* m_toggleHistoryAction = nullptr;
+    QAction* m_toggleToolsBarAction = nullptr;
+    QAction* m_toggleRightPanelAction = nullptr;
     QAction* m_flipHAction = nullptr;
     QAction* m_flipVAction = nullptr;
     QAction* m_deleteAction = nullptr;
@@ -168,6 +177,7 @@ private:
     QMenu* m_editMenu = nullptr;
     QMenu* m_layerMenu = nullptr;
     QMenu* m_viewMenu = nullptr;
+    QMenu* m_panelsMenu = nullptr;
     QMenu* m_safeZoneMenu = nullptr;
     QAction* m_safeNoneAction = nullptr;
     QAction* m_safeYouTubeAction = nullptr;
@@ -193,8 +203,12 @@ private:
     QAction* m_toolPaintAction = nullptr;
     QAction* m_toolFloodAction = nullptr;
     QMenu* m_toolsMenu = nullptr;
+    QMenu* m_selectionToolsMenu = nullptr;
+    QMenu* m_retouchToolsMenu = nullptr;
+    QMenu* m_createToolsMenu = nullptr;
 
     QStackedWidget* m_toolOptionsStack = nullptr;
+    QScrollArea* m_toolOptionsScroll = nullptr;
     QLabel* m_selectHintLabel = nullptr;
 
     QLabel* m_cropAspectLabel = nullptr;

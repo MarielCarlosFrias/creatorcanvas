@@ -16,7 +16,11 @@ enum class TemplateKind {
     TikTokReelsViral,
     YouTubePodcast,
     YouTubeFinance,
-    SocialBanner
+    SocialBanner,
+    YouTubeShortsTrending,
+    InstagramCarouselSlide,
+    TwitchStreamOffline,
+    YouTubeTrueCrimeMystery
 };
 
 struct TemplateMeta {

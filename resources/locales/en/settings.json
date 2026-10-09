@@ -2,6 +2,14 @@
     "dialog": {
         "title": "Settings",
         "language": "Language",
-        "autosave": "Autosave (minutes)"
+        "autosave": "Autosave (minutes)",
+        "gpuAcceleration": "GPU acceleration",
+        "gpuAccelerationHint": "Changes to GPU acceleration apply after restarting the program.",
+        "appearance": "Appearance",
+        "darkMode": "Use dark mode",
+        "confirmExit": "Confirm before closing with unsaved changes",
+        "canvas": "Canvas",
+        "showGrid": "Show grid when opening a document",
+        "snapToGrid": "Snap objects to grid"
     }
 }

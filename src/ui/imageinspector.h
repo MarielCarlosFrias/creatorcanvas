@@ -2,6 +2,8 @@
 
 #include <QWidget>
 #include <QPointer>
+#include <QPolygonF>
+#include <QImage>
 #include "core/Document.h"
 
 #include <QTimer>
@@ -34,6 +36,10 @@ public:
     void setSelectedLayer(const LayerId& id);
     void setDocument(Document* document);
     void refresh();
+    void setMockupArea(const QPolygonF& corners);
+
+signals:
+    void mockupPlacementRequested();
 
 private:
     void buildUi();
@@ -44,6 +50,7 @@ private:
     void resetAdjustments();
     void schedulePreview();
     void onPreviewTimeout();
+    void openMockupDialog();
 
     I18nService* m_i18n = nullptr;
     QPointer<Document> m_document;
@@ -80,6 +87,10 @@ private:
     QSlider* m_temperatureSlider = nullptr;
     QLabel* m_temperatureValue = nullptr;
 
+    QLabel* m_hueLabel = nullptr;
+    QSlider* m_hueSlider = nullptr;
+    QLabel* m_hueValue = nullptr;
+
     QLabel* m_blurLabel = nullptr;
     QSlider* m_blurSlider = nullptr;
     QLabel* m_blurValue = nullptr;
@@ -93,6 +104,10 @@ private:
     QPushButton* m_presetSepiaBtn = nullptr;
     QPushButton* m_presetVintageBtn = nullptr;
     QPushButton* m_presetHighContrastBtn = nullptr;
+    QPushButton* m_presetVividPopBtn = nullptr;
+    QPushButton* m_presetCyberpunkBtn = nullptr;
+    QPushButton* m_presetGoldenHourBtn = nullptr;
+    QPushButton* m_presetNoirBtn = nullptr;
 
     QPushButton* m_applyAdjustBtn = nullptr;
     QPushButton* m_resetAdjustBtn = nullptr;
@@ -110,6 +125,10 @@ private:
     class CollapsibleSection* m_quickFiltersSection = nullptr;
     class CollapsibleSection* m_adjustmentsSection = nullptr;
     class CollapsibleSection* m_perspectiveSection = nullptr;
+    class CollapsibleSection* m_mockupSection = nullptr;
+    QPushButton* m_mockupButton = nullptr;
+    QLabel* m_mockupHint = nullptr;
+    QImage m_pendingMockupLogo;
 };
 
 } // namespace cc

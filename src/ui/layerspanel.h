@@ -50,6 +50,7 @@ private:
     void buildUi();
     void retranslateUi();
     void rebuild();
+    void changeEvent(QEvent* event) override;
     void updateControlsForSelection();
     void onCurrentRowChanged(int row);
     void onItemDoubleClicked(QListWidgetItem* item);

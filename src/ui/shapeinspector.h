@@ -10,6 +10,7 @@ class QPushButton;
 class QLabel;
 class QGroupBox;
 class QFormLayout;
+class QComboBox;
 
 namespace cc {
 
@@ -58,11 +59,13 @@ private:
     // Widgets para preenchimento, contorno e cantos
     QGroupBox* m_groupBox = nullptr;
     QFormLayout* m_formLayout = nullptr;
+    QComboBox* m_kindCombo = nullptr;
     QPushButton* m_fillColorBtn = nullptr;
     QPushButton* m_strokeColorBtn = nullptr;
     QDoubleSpinBox* m_strokeWidthSpin = nullptr;
     QDoubleSpinBox* m_cornerRadiusSpin = nullptr;
 
+    QLabel* m_kindLabel = nullptr;
     QLabel* m_fillLabel = nullptr;
     QLabel* m_strokeLabel = nullptr;
     QLabel* m_strokeWidthLabel = nullptr;

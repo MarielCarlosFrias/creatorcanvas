@@ -45,6 +45,9 @@
 #include <QStatusBar>
 #include <QStackedWidget>
 #include <QToolBar>
+#include <QToolButton>
+#include <QScrollArea>
+#include <QTabWidget>
 
 namespace cc {
 namespace {
@@ -85,7 +88,9 @@ MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
     , m_settings(settings)
     , m_i18n(i18n)
 {
-    setMinimumSize(1000, 640);
+    // Allow compact laptop windows while keeping enough room for the canvas
+    // and the docked properties panels.
+    setMinimumSize(800, 520);
     resize(1280, 800);
     setWindowIcon(ThemeIcons::appIcon());
 
@@ -208,23 +213,36 @@ void MainWindow::buildCentralWidget()
                     m_shapeInspector->setSelectedLayer(id);
                 if (m_imageInspector)
                     m_imageInspector->setSelectedLayer(id);
+                if (m_textBehindSubjectAction)
+                    m_textBehindSubjectAction->setEnabled(false);
 
-                // Alterna automaticamente a aba ativa do dock de propriedades para o tipo da camada
-                if (m_document) {
-                    const Layer* layer = m_document->findLayer(id);
-                    if (layer && layer->type() == LayerType::Shape && m_shapeDock) {
-                        m_shapeDock->raise();
-                    } else if (layer && layer->type() == LayerType::Text && m_textDock) {
-                        m_textDock->raise();
-                    } else if (layer && layer->type() == LayerType::Image && m_imageDock) {
-                        m_imageDock->raise();
-                    }
-                }
+                // Selecting a layer updates all inspectors, but deliberately
+                // does not change the active tab.  The user may be editing an
+                // image while selecting another layer for comparison.
             });
     connect(m_canvas, &CanvasView::multiSelectionChanged, this,
             [this](const QList<LayerId>& ids) {
                 if (m_layersPanel)
                     m_layersPanel->setSelectedLayers(ids);
+                if (m_textBehindSubjectAction) {
+                    int textCount = 0;
+                    int imageCount = 0;
+                    bool sameParent = ids.size() == 2;
+                    GroupLayer* parent = nullptr;
+                    if (m_document && sameParent) {
+                        parent = m_document->parentOf(ids.first());
+                        sameParent = parent && parent == m_document->parentOf(ids.last());
+                    }
+                    if (m_document && sameParent) {
+                        for (const LayerId& id : ids) {
+                            const Layer* layer = m_document->findLayer(id);
+                            if (!layer) continue;
+                            textCount += layer->type() == LayerType::Text;
+                            imageCount += layer->type() == LayerType::Image;
+                        }
+                    }
+                    m_textBehindSubjectAction->setEnabled(textCount == 1 && imageCount == 1);
+                }
             });
     connect(m_canvas, &CanvasView::transformCommitted, this,
             [this](const LayerId& id, const AffineTransform& oldValue,
@@ -271,6 +289,8 @@ void MainWindow::buildCentralWidget()
             [this](CanvasTool tool) {
                 if (m_toolOptionsStack)
                     m_toolOptionsStack->setCurrentIndex(static_cast<int>(tool));
+                if (m_toolOptionsBar)
+                    m_toolOptionsBar->setVisible(tool != CanvasTool::Select);
                 if (m_toolGroup) {
                     switch (tool) {
                     case CanvasTool::Select:
@@ -307,6 +327,7 @@ void MainWindow::buildLayersDock()
     m_layersPanel->setDocument(m_document.get());
 
     m_layersDock = new QDockWidget(QString(), this);
+    m_layersDock->setMinimumWidth(240);
     m_layersDock->setWidget(m_layersPanel);
     m_layersDock->setFeatures(QDockWidget::DockWidgetMovable
                               | QDockWidget::DockWidgetFloatable);
@@ -341,6 +362,7 @@ void MainWindow::buildLayersDock()
 
     m_textInspector = new TextInspector(m_i18n, m_document.get(), m_history.get(), this);
     m_textDock = new QDockWidget(QString(), this);
+    m_textDock->setMinimumWidth(240);
     m_textDock->setWidget(m_textInspector);
     m_textDock->setFeatures(QDockWidget::DockWidgetMovable
                             | QDockWidget::DockWidgetFloatable);
@@ -350,32 +372,67 @@ void MainWindow::buildLayersDock()
     // Cria o inspetor de formas e tabifica junto ao inspetor de texto na barra lateral direita
     m_shapeInspector = new ShapeInspector(m_i18n, m_document.get(), m_history.get(), this);
     m_shapeDock = new QDockWidget(QString(), this);
+    m_shapeDock->setMinimumWidth(240);
     m_shapeDock->setWidget(m_shapeInspector);
     m_shapeDock->setFeatures(QDockWidget::DockWidgetMovable
                              | QDockWidget::DockWidgetFloatable);
     addDockWidget(Qt::RightDockWidgetArea, m_shapeDock);
-    tabifyDockWidget(m_textDock, m_shapeDock);
     m_shapeDock->hide();
 
     // Cria o inspetor de imagens e tabifica junto aos outros inspetores na barra lateral direita
     m_imageInspector = new ImageInspector(m_i18n, m_document.get(), m_history.get(), this);
     m_imageDock = new QDockWidget(QString(), this);
+    m_imageDock->setMinimumWidth(240);
     m_imageDock->setWidget(m_imageInspector);
     m_imageDock->setFeatures(QDockWidget::DockWidgetMovable
                              | QDockWidget::DockWidgetFloatable);
     addDockWidget(Qt::RightDockWidgetArea, m_imageDock);
-    tabifyDockWidget(m_shapeDock, m_imageDock);
     m_imageDock->hide();
+
+    // Mockup: the inspector owns the logo/settings; CanvasView owns the
+    // direct four-corner interaction on top of the artwork.
+    connect(m_imageInspector, &ImageInspector::mockupPlacementRequested,
+            m_canvas, &CanvasView::beginMockupPlacement);
+    connect(m_canvas, &CanvasView::mockupAreaSelected,
+            m_imageInspector, &ImageInspector::setMockupArea);
 
     // Cria o painel de Histórico (Undo/Redo visual estilo Photoshop)
     m_historyPanel = new HistoryPanel(m_i18n, m_history.get(), this);
     m_historyDock = new QDockWidget(QString(), this);
+    m_historyDock->setMinimumWidth(240);
     m_historyDock->setWidget(m_historyPanel);
     m_historyDock->setFeatures(QDockWidget::DockWidgetMovable
                               | QDockWidget::DockWidgetFloatable);
     addDockWidget(Qt::RightDockWidgetArea, m_historyDock);
-    tabifyDockWidget(m_layersDock, m_historyDock);
     m_historyDock->hide();
+
+    // Build one explicit tab group for all right-side panels.  Tabifying each
+    // dock against the same anchor avoids Qt creating a second tab row when
+    // some panels start hidden.
+    tabifyDockWidget(m_layersDock, m_textDock);
+    tabifyDockWidget(m_layersDock, m_shapeDock);
+    tabifyDockWidget(m_layersDock, m_imageDock);
+    tabifyDockWidget(m_layersDock, m_historyDock);
+    setTabPosition(Qt::RightDockWidgetArea, QTabWidget::North);
+
+    // Recalculate the canvas zoom after a dock changes visibility.  Without
+    // this, opening an inspector can leave the document partly underneath
+    // the right panel until the user presses Fit or resizes the window.
+    const auto refitCanvas = [this](bool) {
+        if (!m_canvas)
+            return;
+        // Allow Qt to finish laying out/animating the dock before measuring
+        // the available viewport; an immediate fit can use stale dimensions.
+        QTimer::singleShot(150, m_canvas, [this] {
+            if (m_canvas)
+                m_canvas->fitToViewport();
+        });
+    };
+    connect(m_layersDock, &QDockWidget::visibilityChanged, this, refitCanvas);
+    connect(m_textDock, &QDockWidget::visibilityChanged, this, refitCanvas);
+    connect(m_shapeDock, &QDockWidget::visibilityChanged, this, refitCanvas);
+    connect(m_imageDock, &QDockWidget::visibilityChanged, this, refitCanvas);
+    connect(m_historyDock, &QDockWidget::visibilityChanged, this, refitCanvas);
 
     connect(m_historyDock, &QDockWidget::visibilityChanged, this, [this](bool visible) {
         if (m_toggleHistoryAction && m_toggleHistoryAction->isChecked() != visible) {
@@ -519,6 +576,18 @@ void MainWindow::buildActions()
         addShape(ShapeKind::Badge);
     });
 
+    m_addSpeechBubbleAction = new QAction(this);
+    m_addSpeechBubbleAction->setIcon(ThemeIcons::toolShape());
+    connect(m_addSpeechBubbleAction, &QAction::triggered, this, [this] {
+        addShape(ShapeKind::SpeechBubble);
+    });
+
+    m_addHeartAction = new QAction(this);
+    m_addHeartAction->setIcon(ThemeIcons::toolShape());
+    connect(m_addHeartAction, &QAction::triggered, this, [this] {
+        addShape(ShapeKind::Heart);
+    });
+
     // Ações para alinhamento rápido da camada selecionada na tela
     m_alignLeftAction = new QAction(this);
     m_alignLeftAction->setIcon(ThemeIcons::actionAlignLeft());
@@ -575,6 +644,15 @@ void MainWindow::buildActions()
     m_groupAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_G));
     connect(m_groupAction, &QAction::triggered, this, &MainWindow::groupSelectedLayers);
 
+    m_ungroupAction = new QAction(this);
+    m_ungroupAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_G));
+    connect(m_ungroupAction, &QAction::triggered, this, &MainWindow::ungroupSelectedLayer);
+
+    m_textBehindSubjectAction = new QAction(this);
+    m_textBehindSubjectAction->setEnabled(false);
+    connect(m_textBehindSubjectAction, &QAction::triggered,
+            this, &MainWindow::textBehindSubject);
+
     m_toggleGridAction = new QAction(this);
     m_toggleGridAction->setIcon(ThemeIcons::actionGrid());
     m_toggleGridAction->setCheckable(true);
@@ -599,6 +677,30 @@ void MainWindow::buildActions()
             m_historyDock->setVisible(checked);
             if (checked) m_historyDock->raise();
         }
+    });
+
+    m_toggleToolsBarAction = new QAction(this);
+    m_toggleToolsBarAction->setCheckable(true);
+    m_toggleToolsBarAction->setChecked(true);
+    m_toggleToolsBarAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_B));
+    connect(m_toggleToolsBarAction, &QAction::triggered, this, [this](bool checked) {
+        if (m_toolsBar) m_toolsBar->setVisible(checked);
+        if (m_toolOptionsBar)
+            m_toolOptionsBar->setVisible(checked && m_toolOptionsStack
+                                         && m_toolOptionsStack->currentIndex() != 0);
+        QTimer::singleShot(150, this, [this] { if (m_canvas) m_canvas->fitToViewport(); });
+    });
+
+    m_toggleRightPanelAction = new QAction(this);
+    m_toggleRightPanelAction->setCheckable(true);
+    m_toggleRightPanelAction->setChecked(true);
+    m_toggleRightPanelAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_J));
+    connect(m_toggleRightPanelAction, &QAction::triggered, this, [this](bool checked) {
+        const QList<QDockWidget*> panels = {m_layersDock, m_textDock, m_shapeDock,
+                                            m_imageDock, m_historyDock};
+        for (auto* panel : panels)
+            if (panel) panel->setVisible(checked);
+        QTimer::singleShot(150, this, [this] { if (m_canvas) m_canvas->fitToViewport(); });
     });
 
     m_flipHAction = new QAction(this);
@@ -733,28 +835,6 @@ void MainWindow::buildToolBars()
     m_toolsBar->setOrientation(Qt::Vertical);
     m_toolsBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
     m_toolsBar->setIconSize(QSize(24, 24));
-    m_toolsBar->setStyleSheet(QStringLiteral(
-        "QToolBar {"
-        "  background-color: #1e222a;"
-        "  border-right: 1px solid #2b303c;"
-        "  padding: 4px 2px;"
-        "  spacing: 4px;"
-        "}"
-        "QToolButton {"
-        "  background-color: transparent;"
-        "  border: 1px solid transparent;"
-        "  border-radius: 6px;"
-        "  padding: 5px;"
-        "}"
-        "QToolButton:hover {"
-        "  background-color: #2b303c;"
-        "  border-color: #3b4252;"
-        "}"
-        "QToolButton:checked {"
-        "  background-color: #2b78e4;"
-        "  border-color: #4b8df2;"
-        "}"
-    ));
     addToolBar(Qt::LeftToolBarArea, m_toolsBar);
 
     m_toolSelectAction->setIcon(ThemeIcons::toolSelect());
@@ -785,30 +865,6 @@ void MainWindow::buildToolBars()
     m_quickToolBar->setFloatable(false);
     m_quickToolBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
     m_quickToolBar->setIconSize(QSize(20, 20));
-    m_quickToolBar->setStyleSheet(QStringLiteral(
-        "QToolBar {"
-        "  background-color: #1e222a;"
-        "  border-bottom: 1px solid #2b303c;"
-        "  padding: 3px 6px;"
-        "  spacing: 3px;"
-        "}"
-        "QToolButton {"
-        "  background-color: transparent;"
-        "  border: 1px solid transparent;"
-        "  border-radius: 4px;"
-        "  padding: 4px;"
-        "}"
-        "QToolButton:hover {"
-        "  background-color: #2b303c;"
-        "  border-color: #3b4252;"
-        "}"
-        "QToolButton:pressed {"
-        "  background-color: #1a1d24;"
-        "}"
-        "QToolButton:disabled {"
-        "  opacity: 0.35;"
-        "}"
-    ));
     addToolBar(Qt::TopToolBarArea, m_quickToolBar);
 
     m_quickToolBar->addAction(m_newAction);
@@ -984,7 +1040,7 @@ void MainWindow::buildToolBars()
     m_cloneRadiusSlider = new QSlider(Qt::Horizontal, this);
     m_cloneRadiusSlider->setRange(1, 100);
     m_cloneRadiusSlider->setValue(20);
-    m_cloneRadiusSlider->setFixedWidth(100);
+    m_cloneRadiusSlider->setFixedWidth(78);
     m_cloneRadiusValueLabel = new QLabel(QStringLiteral("20px"), this);
     m_cloneRadiusValueLabel->setFixedWidth(36);
 
@@ -997,7 +1053,7 @@ void MainWindow::buildToolBars()
     m_cloneHardnessSlider = new QSlider(Qt::Horizontal, this);
     m_cloneHardnessSlider->setRange(0, 100);
     m_cloneHardnessSlider->setValue(80);
-    m_cloneHardnessSlider->setFixedWidth(100);
+    m_cloneHardnessSlider->setFixedWidth(78);
     m_cloneHardnessValueLabel = new QLabel(QStringLiteral("80%"), this);
     m_cloneHardnessValueLabel->setFixedWidth(36);
 
@@ -1010,7 +1066,7 @@ void MainWindow::buildToolBars()
     m_cloneOpacitySlider = new QSlider(Qt::Horizontal, this);
     m_cloneOpacitySlider->setRange(10, 100);
     m_cloneOpacitySlider->setValue(100);
-    m_cloneOpacitySlider->setFixedWidth(100);
+    m_cloneOpacitySlider->setFixedWidth(78);
     m_cloneOpacityValueLabel = new QLabel(QStringLiteral("100%"), this);
     m_cloneOpacityValueLabel->setFixedWidth(40);
 
@@ -1021,6 +1077,9 @@ void MainWindow::buildToolBars()
 
     m_cloneHintLabel = new QLabel(this);
     m_cloneHintLabel->setStyleSheet(QStringLiteral("color: #888888; font-size: 11px;"));
+    m_cloneRadiusLabel->setFixedWidth(48);
+    m_cloneHardnessLabel->setFixedWidth(58);
+    m_cloneOpacityLabel->setFixedWidth(52);
 
     cloneLayout->addWidget(m_cloneRadiusLabel);
     cloneLayout->addWidget(m_cloneRadiusSlider);
@@ -1070,7 +1129,7 @@ void MainWindow::buildToolBars()
     m_paintSizeSlider = new QSlider(Qt::Horizontal, this);
     m_paintSizeSlider->setRange(1, 200);
     m_paintSizeSlider->setValue(20);
-    m_paintSizeSlider->setFixedWidth(100);
+    m_paintSizeSlider->setFixedWidth(78);
     m_paintSizeValueLabel = new QLabel(QStringLiteral("20px"), this);
     m_paintSizeValueLabel->setFixedWidth(36);
     connect(m_paintSizeSlider, &QSlider::valueChanged, this, [this](int val) {
@@ -1082,7 +1141,7 @@ void MainWindow::buildToolBars()
     m_paintOpacitySlider = new QSlider(Qt::Horizontal, this);
     m_paintOpacitySlider->setRange(10, 100);
     m_paintOpacitySlider->setValue(100);
-    m_paintOpacitySlider->setFixedWidth(100);
+    m_paintOpacitySlider->setFixedWidth(78);
     m_paintOpacityValueLabel = new QLabel(QStringLiteral("100%"), this);
     m_paintOpacityValueLabel->setFixedWidth(40);
     connect(m_paintOpacitySlider, &QSlider::valueChanged, this, [this](int val) {
@@ -1141,7 +1200,24 @@ void MainWindow::buildToolBars()
     floodLayout->addStretch();
     m_toolOptionsStack->addWidget(floodPage);
 
-    m_toolOptionsBar->addWidget(m_toolOptionsStack);
+    // Tool option pages contain several controls and can be wider than the
+    // available window.  Keep their natural width and let the toolbar scroll
+    // horizontally instead of shrinking sliders and labels into unusable
+    // controls on compact screens.
+    m_toolOptionsStack->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
+    m_toolOptionsScroll = new QScrollArea(this);
+    m_toolOptionsScroll->setObjectName(QStringLiteral("ToolOptionsScrollArea"));
+    m_toolOptionsScroll->setWidget(m_toolOptionsStack);
+    m_toolOptionsScroll->setWidgetResizable(false);
+    m_toolOptionsScroll->setFrameShape(QFrame::NoFrame);
+    m_toolOptionsScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_toolOptionsScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_toolOptionsScroll->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    m_toolOptionsScroll->setStyleSheet(QStringLiteral(
+        "QScrollArea { background: transparent; border: none; }"
+        "QScrollBar:horizontal { height: 8px; margin: 0 8px; }"
+    ));
+    m_toolOptionsBar->addWidget(m_toolOptionsScroll);
 
     m_quickToolBar->hide();
     m_toolsBar->hide();
@@ -1179,6 +1255,9 @@ void MainWindow::buildMenus()
     m_addShapeMenu->addAction(m_addArrowCurvedAction);
     m_addShapeMenu->addAction(m_addStarAction);
     m_addShapeMenu->addAction(m_addBadgeAction);
+    m_addShapeMenu->addSeparator();
+    m_addShapeMenu->addAction(m_addSpeechBubbleAction);
+    m_addShapeMenu->addAction(m_addHeartAction);
 
     // Submenu de alinhamento rápido da camada em relação à tela
     m_alignMenu = m_layerMenu->addMenu(QString());
@@ -1197,6 +1276,8 @@ void MainWindow::buildMenus()
     m_alignMenu->addAction(m_distributeVAction);
 
     m_layerMenu->addAction(m_groupAction);
+    m_layerMenu->addAction(m_ungroupAction);
+    m_layerMenu->addAction(m_textBehindSubjectAction);
     m_layerMenu->addSeparator();
     m_layerMenu->addAction(m_flipHAction);
     m_layerMenu->addAction(m_flipVAction);
@@ -1214,6 +1295,9 @@ void MainWindow::buildMenus()
     m_viewMenu->addAction(m_toggleGridAction);
     m_viewMenu->addAction(m_toggleSnapAction);
     m_viewMenu->addAction(m_toggleHistoryAction);
+    m_panelsMenu = m_viewMenu->addMenu(m_i18n ? m_i18n->t("common", "menu.view.panels") : QStringLiteral("Panels"));
+    m_panelsMenu->addAction(m_toggleToolsBarAction);
+    m_panelsMenu->addAction(m_toggleRightPanelAction);
     m_viewMenu->addSeparator();
     m_safeZoneMenu = m_viewMenu->addMenu(QString());
     m_safeNoneAction = m_safeZoneMenu->addAction(QString());
@@ -1238,13 +1322,22 @@ void MainWindow::buildMenus()
     connect(m_safeTikTokAction, &QAction::triggered, this, [this]{ if(m_canvas) m_canvas->setSafeZoneMode(3); });
 
     m_toolsMenu = menuBar()->addMenu(QString());
-    m_toolsMenu->addAction(m_toolSelectAction);
-    m_toolsMenu->addAction(m_toolCropAction);
-    m_toolsMenu->addAction(m_toolScissorsAction);
-    m_toolsMenu->addAction(m_toolWandAction);
-    m_toolsMenu->addAction(m_toolCloneAction);
-    m_toolsMenu->addAction(m_toolPaintAction);
-    m_toolsMenu->addAction(m_toolFloodAction);
+    m_selectionToolsMenu = m_toolsMenu->addMenu(m_i18n ? m_i18n->t("common", "menu.tools.selection") : QStringLiteral("Select & Cut"));
+    m_selectionToolsMenu->addAction(m_toolSelectAction);
+    m_selectionToolsMenu->addAction(m_toolCropAction);
+    m_selectionToolsMenu->addAction(m_toolScissorsAction);
+    m_selectionToolsMenu->addAction(m_toolWandAction);
+    m_retouchToolsMenu = m_toolsMenu->addMenu(m_i18n ? m_i18n->t("common", "menu.tools.retouch") : QStringLiteral("Retouch & Paint"));
+    m_retouchToolsMenu->addAction(m_toolCloneAction);
+    m_retouchToolsMenu->addAction(m_toolPaintAction);
+    m_retouchToolsMenu->addAction(m_toolFloodAction);
+    m_createToolsMenu = m_toolsMenu->addMenu(m_i18n ? m_i18n->t("common", "menu.tools.create") : QStringLiteral("Create"));
+    m_createToolsMenu->addAction(m_addTextAction);
+    m_createToolsMenu->addSeparator();
+    m_createToolsMenu->addAction(m_addRectAction);
+    m_createToolsMenu->addAction(m_addRoundedRectAction);
+    m_createToolsMenu->addAction(m_addEllipseAction);
+    m_createToolsMenu->addAction(m_addLineAction);
 
     m_settingsMenu = menuBar()->addMenu(QString());
     m_settingsMenu->addAction(m_settingsAction);
@@ -1293,7 +1386,9 @@ void MainWindow::enterEditor()
     if (m_toggleHistoryAction) m_toggleHistoryAction->setChecked(true);
     if (m_quickToolBar) m_quickToolBar->show();
     if (m_toolsBar) m_toolsBar->show();
-    if (m_toolOptionsBar) m_toolOptionsBar->show();
+    // Selection has no contextual controls, so keep this row hidden until a
+    // tool that needs options is selected.
+    if (m_toolOptionsBar) m_toolOptionsBar->hide();
     updateWindowTitle();
 }
 
@@ -1583,6 +1678,30 @@ void MainWindow::addShape(ShapeKind kind)
         layer->strokeWidth = 3.0;
         break;
     }
+    case ShapeKind::SpeechBubble: {
+        layer->name = m_i18n->t("common", "menu.layer.shape.speechBubble").remove('&');
+        const double w = std::clamp(docW * 0.32, 140.0, 420.0);
+        const double h = std::clamp(docH * 0.22, 100.0, 280.0);
+        layer->points = QPolygonF{
+            QPointF(0, 0), QPointF(w, 0), QPointF(w, h), QPointF(0, h)
+        };
+        layer->cornerRadius = 20.0;
+        layer->fill = Qt::white;
+        layer->stroke = QColor(30, 30, 30);
+        layer->strokeWidth = 3.0;
+        break;
+    }
+    case ShapeKind::Heart: {
+        layer->name = m_i18n->t("common", "menu.layer.shape.heart").remove('&');
+        const double size = std::clamp(std::min(docW, docH) * 0.24, 100.0, 280.0);
+        layer->points = QPolygonF{
+            QPointF(0, 0), QPointF(size, 0), QPointF(size, size), QPointF(0, size)
+        };
+        layer->fill = QColor(244, 63, 94); // Vermelho/rosa romântico
+        layer->stroke = Qt::white;
+        layer->strokeWidth = 2.0;
+        break;
+    }
     default:
         break;
     }
@@ -1864,7 +1983,31 @@ void MainWindow::groupSelectedLayers()
 {
     if (!m_document || !m_canvas)
         return;
-    const QList<LayerId> ids = m_canvas->selectedLayers();
+    const QList<LayerId> rawIds = m_canvas->selectedLayers();
+    if (rawIds.size() < 2)
+        return;
+
+    // Filter out background layer and layers whose ancestors are already selected
+    QList<LayerId> ids;
+    for (const auto& id : rawIds) {
+        Layer* layer = m_document->findLayer(id);
+        if (!layer || layer->type() == LayerType::Background)
+            continue;
+
+        bool hasSelectedAncestor = false;
+        GroupLayer* p = m_document->parentOf(id);
+        while (p && p != m_document->rootGroup()) {
+            if (rawIds.contains(p->id())) {
+                hasSelectedAncestor = true;
+                break;
+            }
+            p = m_document->parentOf(p->id());
+        }
+        if (!hasSelectedAncestor && !ids.contains(id)) {
+            ids.append(id);
+        }
+    }
+
     if (ids.size() < 2)
         return;
 
@@ -1892,6 +2035,63 @@ void MainWindow::groupSelectedLayers()
     m_canvas->update();
     if (m_layersPanel)
         m_layersPanel->refresh();
+}
+
+void MainWindow::ungroupSelectedLayer()
+{
+    if (!m_document || !m_canvas)
+        return;
+    const LayerId id = m_selectedId;
+    Layer* layer = m_document->findLayer(id);
+    if (!layer || layer->type() != LayerType::Group)
+        return;
+
+    auto* group = static_cast<GroupLayer*>(layer);
+    if (group->children.empty())
+        return;
+    const LayerId nextSelection = group->children.back()->id();
+    if (m_history)
+        m_history->execute(std::make_unique<UngroupLayersCommand>(*m_document, id));
+    else {
+        GroupLayer* parent = m_document->parentOf(id);
+        const int insertion = m_document->indexOf(id);
+        auto holder = m_document->takeLayer(id);
+        auto* heldGroup = static_cast<GroupLayer*>(holder.get());
+        int index = insertion;
+        while (!heldGroup->children.empty()) {
+            auto child = std::move(heldGroup->children.front());
+            heldGroup->children.erase(heldGroup->children.begin());
+            m_document->addLayer(std::move(child), parent, index++);
+        }
+    }
+    m_canvas->setSelectedLayer(nextSelection);
+    m_canvas->update();
+    if (m_layersPanel)
+        m_layersPanel->refresh();
+}
+
+void MainWindow::textBehindSubject()
+{
+    if (!m_document || !m_canvas || !m_history)
+        return;
+    const QList<LayerId> ids = m_canvas->selectedLayers();
+    if (ids.size() != 2)
+        return;
+
+    LayerId textId;
+    LayerId subjectId;
+    for (const LayerId& id : ids) {
+        const Layer* layer = m_document->findLayer(id);
+        if (!layer) continue;
+        if (layer->type() == LayerType::Text) textId = id;
+        if (layer->type() == LayerType::Image) subjectId = id;
+    }
+    if (textId.isNull() || subjectId.isNull()
+        || m_document->parentOf(textId) != m_document->parentOf(subjectId))
+        return;
+
+    m_history->execute(std::make_unique<TextBehindSubjectCommand>(
+        *m_document, textId, subjectId));
 }
 
 
@@ -2202,6 +2402,10 @@ void MainWindow::retranslateUi()
         m_addStarAction->setText(m_i18n->t("common", "menu.layer.shape.star"));
     if (m_addBadgeAction)
         m_addBadgeAction->setText(m_i18n->t("common", "menu.layer.shape.badge"));
+    if (m_addSpeechBubbleAction)
+        m_addSpeechBubbleAction->setText(m_i18n->t("common", "menu.layer.shape.speechBubble"));
+    if (m_addHeartAction)
+        m_addHeartAction->setText(m_i18n->t("common", "menu.layer.shape.heart"));
     if (m_alignMenu)
         m_alignMenu->setTitle(m_i18n->t("common", "menu.layer.align"));
     if (m_alignLeftAction)
@@ -2224,6 +2428,8 @@ void MainWindow::retranslateUi()
         m_distributeVAction->setText(m_i18n->t("common", "menu.layer.distribute.vertical"));
     if (m_groupAction)
         m_groupAction->setText(m_i18n->t("common", "menu.layer.group"));
+    if (m_ungroupAction)
+        m_ungroupAction->setText(m_i18n->t("common", "menu.layer.ungroup"));
 
     if (m_viewMenu)
         m_viewMenu->setTitle(m_i18n->t("common", "menu.view"));
@@ -2263,6 +2469,16 @@ void MainWindow::retranslateUi()
         m_toggleHistoryAction->setText(m_i18n->t("common", "menu.view.history"));
         m_toggleHistoryAction->setToolTip(m_toggleHistoryAction->text() + QStringLiteral(" (Ctrl+H)"));
     }
+    if (m_panelsMenu)
+        m_panelsMenu->setTitle(m_i18n->t("common", "menu.view.panels"));
+    if (m_toggleToolsBarAction) {
+        m_toggleToolsBarAction->setText(m_i18n->t("common", "menu.view.toggleToolsBar"));
+        m_toggleToolsBarAction->setToolTip(m_toggleToolsBarAction->text() + QStringLiteral(" (Ctrl+B)"));
+    }
+    if (m_toggleRightPanelAction) {
+        m_toggleRightPanelAction->setText(m_i18n->t("common", "menu.view.toggleRightPanel"));
+        m_toggleRightPanelAction->setToolTip(m_toggleRightPanelAction->text() + QStringLiteral(" (Ctrl+J)"));
+    }
     if (m_safeZoneMenu)
         m_safeZoneMenu->setTitle(m_i18n->t("common", "menu.view.safeZones"));
     if (m_safeNoneAction)
@@ -2277,6 +2493,10 @@ void MainWindow::retranslateUi()
     m_flipHAction->setText(m_i18n->t("common", "menu.layer.flipH"));
     m_flipVAction->setText(m_i18n->t("common", "menu.layer.flipV"));
     m_deleteAction->setText(m_i18n->t("common", "menu.layer.delete"));
+    if (m_textBehindSubjectAction)
+        m_textBehindSubjectAction->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
+            ? QStringLiteral("Texto atrás do personagem")
+            : QStringLiteral("Text behind subject"));
     m_settingsAction->setText(m_i18n->t("common", "menu.settings.open"));
     m_startScreenAction->setText(m_i18n->t("common", "start.screenAction"));
     m_aboutAction->setText(m_i18n->t("common", "menu.help.about"));
@@ -2306,7 +2526,7 @@ void MainWindow::retranslateUi()
     if (m_shapeDock)
         m_shapeDock->setWindowTitle(m_i18n->t("editor", "shape.title"));
     if (m_imageDock)
-        m_imageDock->setWindowTitle(m_i18n->t("common", "panel.imageProperties"));
+        m_imageDock->setWindowTitle(m_i18n->t("common", "panel.image"));
     if (m_historyDock)
         m_historyDock->setWindowTitle(m_i18n->t("common", "panel.history"));
 
@@ -2339,6 +2559,8 @@ void MainWindow::retranslateUi()
         m_toolFloodAction->setText(m_i18n->t("editor", "tools.floodName"));
         m_toolFloodAction->setToolTip(QStringLiteral("%1 (G)").arg(m_i18n->t("editor", "tools.floodName")));
     }
+
+
     if (m_addTextAction) {
         m_addTextAction->setToolTip(QStringLiteral("%1 (T)").arg(m_i18n->t("common", "menu.layer.addText")));
     }
@@ -2348,6 +2570,12 @@ void MainWindow::retranslateUi()
 
     if (m_toolsMenu)
         m_toolsMenu->setTitle(m_i18n->t("editor", "tools.title"));
+    if (m_selectionToolsMenu)
+        m_selectionToolsMenu->setTitle(m_i18n->t("common", "menu.tools.selection"));
+    if (m_retouchToolsMenu)
+        m_retouchToolsMenu->setTitle(m_i18n->t("common", "menu.tools.retouch"));
+    if (m_createToolsMenu)
+        m_createToolsMenu->setTitle(m_i18n->t("common", "menu.tools.create"));
 
     if (m_selectHintLabel)
         m_selectHintLabel->setText(m_i18n->t("editor", "tools.selectHint"));
@@ -2402,8 +2630,8 @@ void MainWindow::retranslateUi()
         m_cloneOpacityLabel->setText(m_i18n->t("editor", "tools.clone.opacity") + QStringLiteral(":"));
     if (m_cloneHintLabel)
         m_cloneHintLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
-            ? QStringLiteral("Botão Direito ou Shift+Clique define a origem. Arraste para clonar.")
-            : QStringLiteral("Right-Click or Shift+Click sets source. Drag to clone."));
+            ? QStringLiteral("Clique direito/Shift: definir origem; arraste para clonar.")
+            : QStringLiteral("Right-click/Shift-click: set source; drag to clone."));
 
     if (m_paintBrushLabel)
         m_paintBrushLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Pincel:") : QStringLiteral("Brush:"));

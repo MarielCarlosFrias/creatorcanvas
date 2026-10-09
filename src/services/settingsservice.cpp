@@ -7,6 +7,10 @@ namespace {
 constexpr auto kLanguage         = "general/language";
 constexpr auto kAutosaveInterval = "general/autosaveIntervalMinutes";
 constexpr auto kGpuAcceleration  = "performance/gpuAcceleration";
+constexpr auto kDarkMode         = "appearance/darkMode";
+constexpr auto kConfirmExit      = "general/confirmBeforeExit";
+constexpr auto kShowGrid         = "canvas/showGridByDefault";
+constexpr auto kSnapToGrid       = "canvas/snapToGridByDefault";
 
 constexpr int kDefaultAutosaveInterval = 5;
 } // namespace
@@ -50,6 +54,15 @@ void SettingsService::setGpuAccelerationEnabled(bool enabled)
 {
     setValue(kGpuAcceleration, enabled);
 }
+
+bool SettingsService::darkModeEnabled() const { return value(kDarkMode, true).toBool(); }
+void SettingsService::setDarkModeEnabled(bool enabled) { setValue(kDarkMode, enabled); }
+bool SettingsService::confirmBeforeExit() const { return value(kConfirmExit, true).toBool(); }
+void SettingsService::setConfirmBeforeExit(bool enabled) { setValue(kConfirmExit, enabled); }
+bool SettingsService::showGridByDefault() const { return value(kShowGrid, false).toBool(); }
+void SettingsService::setShowGridByDefault(bool enabled) { setValue(kShowGrid, enabled); }
+bool SettingsService::snapToGridByDefault() const { return value(kSnapToGrid, false).toBool(); }
+void SettingsService::setSnapToGridByDefault(bool enabled) { setValue(kSnapToGrid, enabled); }
 
 QVariant SettingsService::value(const QString &key, const QVariant &fallback) const
 {

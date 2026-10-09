@@ -33,6 +33,14 @@
         "yt_finance.title": "Finance & Investing (YouTube)",
         "yt_finance.desc": "High-conversion 16:9 thumbnail with trend arrows and return/statistics badges.",
         "social_banner.title": "Social Media Banner (LinkedIn / X)",
-        "social_banner.desc": "Modern panoramic banner for personal or corporate profile headers."
+        "social_banner.desc": "Modern panoramic banner for personal or corporate profile headers.",
+        "yt_shorts.title": "YouTube Shorts Viral / Trending",
+        "yt_shorts.desc": "Vertical 9:16 layout with explosive hook, speech bubble, and standout badge.",
+        "insta_carousel.title": "Carousel Slide (Instagram)",
+        "insta_carousel.desc": "Modern 4:5 portrait slide for educational carousels with page indicator and heart.",
+        "twitch_offline.title": "Stream Offline / Intermission (Twitch)",
+        "twitch_offline.desc": "Stylized 16:9 dark gradient screen with social handles and offline notification.",
+        "yt_true_crime.title": "Documentary & Mystery / True Crime (YouTube)",
+        "yt_true_crime.desc": "High-impact dramatic 16:9 thumbnail with massive typography, dark contrast and duration badge."
     }
 }

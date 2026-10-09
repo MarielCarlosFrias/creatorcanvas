@@ -16,29 +16,11 @@ CollapsibleSection::CollapsibleSection(const QString& title, bool expanded, QWid
     m_mainLayout->setSpacing(2);
 
     m_headerButton = new QToolButton(this);
+    m_headerButton->setObjectName(QStringLiteral("CollapsibleHeaderButton"));
     m_headerButton->setCheckable(true);
     m_headerButton->setChecked(expanded);
     m_headerButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     m_headerButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    m_headerButton->setStyleSheet(QStringLiteral(
-        "QToolButton {"
-        "  border: none;"
-        "  background-color: #2b303c;"
-        "  color: #e0e0e0;"
-        "  font-weight: 600;"
-        "  font-size: 11px;"
-        "  text-align: left;"
-        "  padding: 6px 8px;"
-        "  border-radius: 4px;"
-        "}"
-        "QToolButton:hover {"
-        "  background-color: #353b49;"
-        "  color: #ffffff;"
-        "}"
-        "QToolButton:pressed {"
-        "  background-color: #242832;"
-        "}"
-    ));
 
     connect(m_headerButton, &QToolButton::toggled, this, &CollapsibleSection::setExpanded);
 

@@ -203,6 +203,68 @@ void drawShape(QPainter* painter, const ShapeLayer& shape)
         painter->drawPath(path);
         break;
     }
+    case ShapeKind::SpeechBubble: {
+        const QRectF rect = shape.points.boundingRect();
+        const double x = rect.left();
+        const double y = rect.top();
+        const double w = rect.width();
+        const double h = rect.height();
+
+        const double bodyH = h * 0.8;
+        const double cr = (shape.cornerRadius > 0)
+            ? std::min({shape.cornerRadius, w / 2.0, bodyH / 2.0})
+            : std::min(w, bodyH) * 0.18;
+
+        QPainterPath path;
+        path.moveTo(x + cr, y);
+        path.lineTo(x + w - cr, y);
+        path.arcTo(x + w - 2 * cr, y, 2 * cr, 2 * cr, 90, -90);
+        path.lineTo(x + w, y + bodyH - cr);
+        path.arcTo(x + w - 2 * cr, y + bodyH - 2 * cr, 2 * cr, 2 * cr, 0, -90);
+        path.lineTo(x + w * 0.45, y + bodyH);
+        path.lineTo(x + w * 0.20, y + h);
+        path.lineTo(x + w * 0.25, y + bodyH);
+        path.lineTo(x + cr, y + bodyH);
+        path.arcTo(x, y + bodyH - 2 * cr, 2 * cr, 2 * cr, 270, -90);
+        path.lineTo(x, y + cr);
+        path.arcTo(x, y, 2 * cr, 2 * cr, 180, -90);
+        path.closeSubpath();
+
+        painter->setBrush(shape.fill);
+        painter->drawPath(path);
+        break;
+    }
+    case ShapeKind::Heart: {
+        const QRectF rect = shape.points.boundingRect();
+        const double x = rect.left();
+        const double y = rect.top();
+        const double w = rect.width();
+        const double h = rect.height();
+
+        const double midX = x + w * 0.5;
+        const double topY = y + h * 0.25;
+        const double botY = y + h;
+
+        QPainterPath path;
+        path.moveTo(midX, topY);
+        path.cubicTo(midX - w * 0.05, y,
+                     x, y,
+                     x, y + h * 0.35);
+        path.cubicTo(x, y + h * 0.65,
+                     midX - w * 0.2, y + h * 0.85,
+                     midX, botY);
+        path.cubicTo(midX + w * 0.2, y + h * 0.85,
+                     x + w, y + h * 0.65,
+                     x + w, y + h * 0.35);
+        path.cubicTo(x + w, y,
+                     midX + w * 0.05, y,
+                     midX, topY);
+        path.closeSubpath();
+
+        painter->setBrush(shape.fill);
+        painter->drawPath(path);
+        break;
+    }
     }
 }
 
@@ -380,6 +442,9 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
         const bool hasShadow = text.effects.shadow.enabled;
         const bool hasGradient = text.effects.gradient.enabled;
 
+        const bool hasTexture = text.effects.texture.enabled
+                                && !text.effects.texture.assetId.isNull();
+
         Qt::Alignment alignFlag = Qt::AlignLeft;
         if (text.align == TextAlignment::Center)
             alignFlag = Qt::AlignHCenter;
@@ -390,7 +455,10 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
             ? text.contentBounds()
             : QRectF(QPointF(0, 0), text.box);
 
-        if (!hasOutline && !hasShadow && !hasGradient) {
+        const bool isHollow = text.effects.hollow;
+        const bool isKnockout = text.effects.knockout;
+
+        if (!hasOutline && !hasShadow && !hasGradient && !hasTexture && !isHollow && !isKnockout) {
             painter->setFont(font);
             painter->setPen(text.color);
             painter->drawText(drawRect,
@@ -447,14 +515,14 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
                 silhouette);
         }
 
-        if (hasOutline) {
-            const QPen outlinePen(text.effects.outline.color,
-                                  text.effects.outline.width,
-                                  Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
-            painter->strokePath(path, outlinePen);
+        // Knockout / Chroma Cut mode: remove as camadas de trás no formato do texto
+        if (isKnockout) {
+            painter->setCompositionMode(QPainter::CompositionMode_Clear);
+            painter->fillPath(path, Qt::transparent);
+            painter->setCompositionMode(compositionMode(layer.blendMode));
         }
 
-        if (hasGradient) {
+        if (hasGradient && !isHollow) {
             const auto& grad = text.effects.gradient;
             const QRectF b = path.boundingRect();
             if (grad.type == 1) { // Radial
@@ -473,8 +541,35 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
                 lg.setColorAt(1.0, grad.endColor);
                 painter->fillPath(path, lg);
             }
-        } else {
-            painter->fillPath(path, text.color);
+        } else if (hasTexture && !isHollow) {
+            const QImage texImg = options.interactive
+                ? doc.assets().previewImage(text.effects.texture.assetId)
+                : doc.assets().decodedImage(text.effects.texture.assetId);
+            if (!texImg.isNull()) {
+                const QRectF b = path.boundingRect();
+                painter->save();
+                painter->setClipPath(path, Qt::ReplaceClip);
+                const double texOpacity = std::clamp(text.effects.texture.opacity, 0.0, 1.0);
+                if (texOpacity < 1.0) {
+                    painter->setOpacity(painter->opacity() * texOpacity);
+                }
+                painter->drawImage(b, texImg);
+                painter->restore();
+            } else {
+                painter->fillPath(path, text.color);
+            }
+        } else if (!isHollow) {
+            if (text.color.alpha() > 0) {
+                painter->fillPath(path, text.color);
+            }
+        }
+
+        // Desenha o contorno por cima da cor/transparência para acabamento perfeito
+        if (hasOutline) {
+            const QPen outlinePen(text.effects.outline.color,
+                                  text.effects.outline.width,
+                                  Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+            painter->strokePath(path, outlinePen);
         }
         break;
     }

@@ -71,15 +71,19 @@ void AiBackgroundDialog::setupUi()
     mainLayout->setContentsMargins(12, 12, 12, 12);
     mainLayout->setSpacing(10);
 
+    const bool darkUi = palette().color(QPalette::Window).value() < 128;
+
     // --- Barra Superior de Controle de IA ---
     auto* topCard = new QWidget(this);
-    topCard->setStyleSheet(QStringLiteral("background-color: #202227; border-radius: 8px;"));
+    topCard->setStyleSheet(QStringLiteral(
+        "background-color: %1; border: 1px solid %2; border-radius: 8px;"
+    ).arg(darkUi ? "#202227" : "#ffffff", darkUi ? "#2b303c" : "#d9dee7"));
     auto* topLayout = new QHBoxLayout(topCard);
     topLayout->setContentsMargins(12, 8, 12, 8);
     topLayout->setSpacing(12);
 
     auto* modelLabel = new QLabel(m_i18n ? m_i18n->t("editor", "aiBackground.model") : QStringLiteral("Modelo de IA:"), this);
-    modelLabel->setStyleSheet(QStringLiteral("font-weight: bold; color: #E0E0E0;"));
+    modelLabel->setStyleSheet(QStringLiteral("font-weight: bold; color: %1;").arg(darkUi ? "#E0E0E0" : "#1f2937"));
     topLayout->addWidget(modelLabel);
 
     m_modelCombo = new QComboBox(this);
@@ -94,9 +98,12 @@ void AiBackgroundDialog::setupUi()
 
     m_browseModelBtn = new QPushButton(m_i18n ? m_i18n->t("editor", "aiBackground.browseModel") : QStringLiteral("Procurar..."), this);
     m_browseModelBtn->setStyleSheet(QStringLiteral(
-        "QPushButton { background-color: #2A2D34; color: #EEE; padding: 5px 10px; border-radius: 4px; }"
-        "QPushButton:hover { background-color: #3C3F46; }"
-    ));
+        "QPushButton { background-color: %1; color: %2; padding: 5px 10px; border-radius: 4px; border: 1px solid %3; }"
+        "QPushButton:hover { background-color: %4; }"
+    ).arg(darkUi ? "#2A2D34" : "#eef2f7",
+          darkUi ? "#EEE" : "#1f2937",
+          darkUi ? "#3b4252" : "#cbd5e1",
+          darkUi ? "#3C3F46" : "#dbeafe"));
     connect(m_browseModelBtn, &QPushButton::clicked, this, &AiBackgroundDialog::onBrowseModel);
     topLayout->addWidget(m_browseModelBtn);
 
@@ -104,8 +111,8 @@ void AiBackgroundDialog::setupUi()
     m_runAiButton->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #0078D4; color: white; font-weight: bold; padding: 6px 16px; border-radius: 4px; }"
         "QPushButton:hover { background-color: #1084E3; }"
-        "QPushButton:disabled { background-color: #3C3F46; color: #888888; }"
-    ));
+        "QPushButton:disabled { background-color: %1; color: %2; }"
+    ).arg(darkUi ? "#3C3F46" : "#e5e7eb", darkUi ? "#888888" : "#6b7280"));
     connect(m_runAiButton, &QPushButton::clicked, this, &AiBackgroundDialog::runAiInference);
     topLayout->addWidget(m_runAiButton);
 
@@ -133,7 +140,9 @@ void AiBackgroundDialog::setupUi()
 
     // --- Barra de Retoque de Máscara (Pincel) ---
     auto* toolsCard = new QWidget(this);
-    toolsCard->setStyleSheet(QStringLiteral("background-color: #1A1C20; border-radius: 6px;"));
+    toolsCard->setStyleSheet(QStringLiteral(
+        "background-color: %1; border: 1px solid %2; border-radius: 6px;"
+    ).arg(darkUi ? "#1A1C20" : "#f8fafc", darkUi ? "#2b303c" : "#d9dee7"));
     auto* toolsLayout = new QHBoxLayout(toolsCard);
     toolsLayout->setContentsMargins(10, 6, 10, 6);
     toolsLayout->setSpacing(10);
@@ -146,18 +155,26 @@ void AiBackgroundDialog::setupUi()
     m_restoreBtn->setCheckable(true);
     m_restoreBtn->setChecked(true);
     m_restoreBtn->setStyleSheet(QStringLiteral(
-        "QPushButton { background: #2A2D34; color: #EEE; padding: 4px 10px; border-radius: 4px; }"
+        "QPushButton { background: %1; color: %2; padding: 4px 10px; border-radius: 4px; border: 1px solid %3; }"
+        "QPushButton:hover { background: %4; }"
         "QPushButton:checked { background: #2E7D32; color: white; font-weight: bold; }"
-    ));
+    ).arg(darkUi ? "#2A2D34" : "#eef2f7",
+          darkUi ? "#EEE" : "#1f2937",
+          darkUi ? "#3b4252" : "#cbd5e1",
+          darkUi ? "#3C3F46" : "#dbeafe"));
     connect(m_restoreBtn, &QPushButton::clicked, this, &AiBackgroundDialog::onModeRestore);
     toolsLayout->addWidget(m_restoreBtn);
 
     m_eraseBtn = new QPushButton(m_i18n ? m_i18n->t("editor", "aiBackground.erase") : QStringLiteral("🧹 Apagar"), this);
     m_eraseBtn->setCheckable(true);
     m_eraseBtn->setStyleSheet(QStringLiteral(
-        "QPushButton { background: #2A2D34; color: #EEE; padding: 4px 10px; border-radius: 4px; }"
+        "QPushButton { background: %1; color: %2; padding: 4px 10px; border-radius: 4px; border: 1px solid %3; }"
+        "QPushButton:hover { background: %4; }"
         "QPushButton:checked { background: #C62828; color: white; font-weight: bold; }"
-    ));
+    ).arg(darkUi ? "#2A2D34" : "#eef2f7",
+          darkUi ? "#EEE" : "#1f2937",
+          darkUi ? "#3b4252" : "#cbd5e1",
+          darkUi ? "#3C3F46" : "#dbeafe"));
     connect(m_eraseBtn, &QPushButton::clicked, this, &AiBackgroundDialog::onModeErase);
     toolsLayout->addWidget(m_eraseBtn);
 

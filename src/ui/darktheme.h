@@ -7,5 +7,7 @@ namespace cc {
 /// Applies the application's identity theme: Fusion style + dark palette.
 /// Called once from main() before any widget exists.
 void applyDarkTheme(QApplication &app);
+void applyLightTheme(QApplication &app);
+void applyTheme(QApplication &app, bool darkMode);
 
 } // namespace cc

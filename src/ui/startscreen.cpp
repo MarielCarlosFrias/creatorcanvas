@@ -20,6 +20,7 @@
 #include <QVBoxLayout>
 #include <QEvent>
 #include <QFrame>
+#include <QResizeEvent>
 
 namespace cc {
 
@@ -37,6 +38,7 @@ StartScreen::StartScreen(I18nService* i18n, PresetStore* presets,
                 this, &StartScreen::retranslateUi);
     retranslateUi();
     populateRecents();
+    relayoutCards();
 }
 
 void StartScreen::buildUi()
@@ -57,14 +59,14 @@ void StartScreen::buildUi()
     titleFont.setPointSize(24);
     titleFont.setBold(true);
     m_title->setFont(titleFont);
-    m_title->setStyleSheet(QStringLiteral("color: #ffffff;"));
+    m_title->setStyleSheet(QStringLiteral("color: #1f2937;"));
 
     m_tagline = new QLabel(this);
     m_tagline->setAlignment(Qt::AlignCenter);
     QFont tagFont = m_tagline->font();
     tagFont.setPointSize(12);
     m_tagline->setFont(tagFont);
-    m_tagline->setStyleSheet(QStringLiteral("color: #9aa4b2;"));
+    m_tagline->setStyleSheet(QStringLiteral("color: #6b7280;"));
 
     headerLayout->addWidget(m_title);
     headerLayout->addWidget(m_tagline);
@@ -99,6 +101,8 @@ void StartScreen::buildUi()
     connect(m_createDesignBtn, &QPushButton::clicked,
             this, &StartScreen::customCreateRequested);
 
+    const bool darkUi = palette().color(QPalette::Window).value() < 128;
+
     m_openProjectBtn = new QPushButton(this);
     m_openProjectBtn->setIcon(ThemeIcons::actionOpenFolder());
     m_openProjectBtn->setIconSize(QSize(20, 20));
@@ -106,22 +110,26 @@ void StartScreen::buildUi()
     m_openProjectBtn->setMinimumWidth(160);
     m_openProjectBtn->setStyleSheet(QStringLiteral(
         "QPushButton {"
-        "  background-color: #2e3440;"
-        "  color: #e5e9f0;"
+        "  background-color: %1;"
+        "  color: %2;"
         "  font-weight: 600;"
         "  font-size: 13px;"
-        "  border: 1px solid #434c5e;"
+        "  border: 1px solid %3;"
         "  border-radius: 6px;"
         "  padding: 8px 18px;"
         "}"
         "QPushButton:hover {"
-        "  background-color: #3b4252;"
-        "  border-color: #5e81ac;"
+        "  background-color: %4;"
+        "  border-color: #2b78e4;"
         "}"
         "QPushButton:pressed {"
-        "  background-color: #242933;"
+        "  background-color: %5;"
         "}"
-    ));
+    ).arg(darkUi ? "#262b35" : "#ffffff",
+          darkUi ? "#e5e9f0" : "#1f2937",
+          darkUi ? "#3b4252" : "#cbd5e1",
+          darkUi ? "#313744" : "#eef2f7",
+          darkUi ? "#1e222a" : "#e2e8f0"));
     connect(m_openProjectBtn, &QPushButton::clicked,
             this, &StartScreen::openRequested);
 
@@ -130,7 +138,7 @@ void StartScreen::buildUi()
     m_customSizeBtn->setStyleSheet(QStringLiteral(
         "QPushButton {"
         "  background-color: transparent;"
-        "  color: #88c0d0;"
+        "  color: %1;"
         "  font-weight: 600;"
         "  font-size: 12px;"
         "  border: 1px dashed #4c566a;"
@@ -138,10 +146,12 @@ void StartScreen::buildUi()
         "  padding: 8px 16px;"
         "}"
         "QPushButton:hover {"
-        "  background-color: #2e3440;"
-        "  border-color: #88c0d0;"
+        "  background-color: %2;"
+        "  border-color: %3;"
         "}"
-    ));
+    ).arg(darkUi ? "#5c9bff" : "#2563a8",
+          darkUi ? "#262b35" : "#eef2f7",
+          darkUi ? "#5c9bff" : "#94a3b8"));
     connect(m_customSizeBtn, &QPushButton::clicked,
             this, &StartScreen::customCreateRequested);
 
@@ -158,13 +168,13 @@ void StartScreen::buildUi()
     sectionFont.setPointSize(13);
     sectionFont.setBold(true);
     m_popularLabel->setFont(sectionFont);
-    m_popularLabel->setStyleSheet(QStringLiteral("color: #d8dee9;"));
+    m_popularLabel->setStyleSheet(QStringLiteral("color: #e5e9f0;"));
     mainLayout->addWidget(m_popularLabel);
 
     m_cardsHost = new QWidget(this);
-    auto* cardsGrid = new QGridLayout(m_cardsHost);
-    cardsGrid->setContentsMargins(0, 0, 0, 0);
-    cardsGrid->setSpacing(12);
+    m_cardsGrid = new QGridLayout(m_cardsHost);
+    m_cardsGrid->setContentsMargins(0, 0, 0, 0);
+    m_cardsGrid->setSpacing(12);
 
     // Platform Presets definition
     NewDocumentSpec ytSpec;
@@ -183,25 +193,25 @@ void StartScreen::buildUi()
     bannerSpec.width = 2560; bannerSpec.height = 1440; bannerSpec.dpi = 96;
     bannerSpec.backgroundColor = QColor(Qt::white);
 
-    cardsGrid->addWidget(createVisualCard(QStringLiteral("YouTube Thumbnail"),
+    m_cardsGrid->addWidget(createVisualCard(QStringLiteral("YouTube Thumbnail"),
                                           ThemeIcons::brandYoutube(30),
                                           QStringLiteral("1280 × 720 px"),
                                           QStringLiteral("16:9"),
                                           ytSpec), 0, 0);
 
-    cardsGrid->addWidget(createVisualCard(QStringLiteral("Instagram Post"),
+    m_cardsGrid->addWidget(createVisualCard(QStringLiteral("Instagram Post"),
                                           ThemeIcons::brandInstagram(30),
                                           QStringLiteral("1080 × 1080 px"),
                                           QStringLiteral("1:1"),
                                           instaSpec), 0, 1);
 
-    cardsGrid->addWidget(createVisualCard(QStringLiteral("TikTok / Reels / Story"),
+    m_cardsGrid->addWidget(createVisualCard(QStringLiteral("TikTok / Reels / Story"),
                                           ThemeIcons::brandTiktok(30),
                                           QStringLiteral("1080 × 1920 px"),
                                           QStringLiteral("9:16"),
                                           tiktokSpec), 0, 2);
 
-    cardsGrid->addWidget(createVisualCard(QStringLiteral("YouTube Banner"),
+    m_cardsGrid->addWidget(createVisualCard(QStringLiteral("YouTube Banner"),
                                           ThemeIcons::brandBanner(30),
                                           QStringLiteral("2560 × 1440 px"),
                                           QStringLiteral("16:9"),
@@ -214,19 +224,19 @@ void StartScreen::buildUi()
     // --- 3b. Ready-Made Templates ---
     m_templatesLabel = new QLabel(this);
     m_templatesLabel->setFont(sectionFont);
-    m_templatesLabel->setStyleSheet(QStringLiteral("color: #d8dee9;"));
+    m_templatesLabel->setStyleSheet(QStringLiteral("color: #e5e9f0;"));
     mainLayout->addWidget(m_templatesLabel);
 
     m_templatesHost = new QWidget(this);
-    auto* templatesGrid = new QGridLayout(m_templatesHost);
-    templatesGrid->setContentsMargins(0, 0, 0, 0);
-    templatesGrid->setSpacing(12);
+    m_templatesGrid = new QGridLayout(m_templatesHost);
+    m_templatesGrid->setContentsMargins(0, 0, 0, 0);
+    m_templatesGrid->setSpacing(12);
 
     const auto templates = TemplateFactory::availableTemplates();
     for (int i = 0; i < templates.size(); ++i) {
         const auto& tmpl = templates[i];
         auto* card = new QPushButton(m_templatesHost);
-        card->setMinimumHeight(88);
+        card->setMinimumHeight(72);
         card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         card->setCursor(Qt::PointingHandCursor);
 
@@ -251,20 +261,24 @@ void StartScreen::buildUi()
 
         card->setStyleSheet(QStringLiteral(
             "QPushButton {"
-            "  background-color: #22262e;"
-            "  border: 1px solid %1;"
+            "  background-color: %1;"
+            "  border: 1px solid %2;"
             "  border-radius: 8px;"
             "  padding: 8px;"
             "  text-align: left;"
             "}"
             "QPushButton:hover {"
-            "  background-color: #2e3440;"
-            "  border-color: %2;"
+            "  background-color: %3;"
+            "  border-color: %4;"
             "}"
             "QPushButton:pressed {"
-            "  background-color: #1a1d24;"
+            "  background-color: %5;"
             "}"
-        ).arg(borderColor, accentColor));
+        ).arg(darkUi ? "#232730" : "#ffffff",
+              borderColor,
+              darkUi ? "#2b303c" : "#eef2f7",
+              accentColor,
+              darkUi ? "#1e222a" : "#e2e8f0"));
 
         auto* cardLayout = new QHBoxLayout(card);
         cardLayout->setContentsMargins(8, 8, 8, 8);
@@ -293,14 +307,14 @@ void StartScreen::buildUi()
         titleLabel->setWordWrap(true);
         titleLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
         titleLabel->setStyleSheet(QStringLiteral(
-            "color: #e5e9f0; font-size: 11px; font-weight: 600; border: none; background: transparent;"
-        ));
+            "color: %1; font-size: 11px; font-weight: 600; border: none; background: transparent;"
+        ).arg(darkUi ? "#e5e9f0" : "#1f2937"));
 
         auto* dimLabel = new QLabel(QStringLiteral("%1 × %2 px").arg(tmpl.width).arg(tmpl.height), card);
         dimLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
         dimLabel->setStyleSheet(QStringLiteral(
-            "color: #7b8494; font-size: 9px; border: none; background: transparent;"
-        ));
+            "color: %1; font-size: 9px; border: none; background: transparent;"
+        ).arg(darkUi ? "#8c97a8" : "#6b7280"));
 
         textContainer->addWidget(platformLabel);
         textContainer->addWidget(titleLabel);
@@ -314,7 +328,7 @@ void StartScreen::buildUi()
             emit templateRequested(kindInt);
         });
 
-        templatesGrid->addWidget(card, i / 4, i % 4);
+        m_templatesGrid->addWidget(card, i / 4, i % 4);
     }
 
     mainLayout->addWidget(m_templatesHost);
@@ -324,37 +338,42 @@ void StartScreen::buildUi()
     // --- 4. Recent Projects Section ---
     m_recentLabel = new QLabel(this);
     m_recentLabel->setFont(sectionFont);
-    m_recentLabel->setStyleSheet(QStringLiteral("color: #d8dee9;"));
+    m_recentLabel->setStyleSheet(QStringLiteral("color: #e5e9f0;"));
     mainLayout->addWidget(m_recentLabel);
 
     m_recentStack = new QStackedWidget(this);
-    m_recentStack->setMinimumHeight(140);
-    m_recentStack->setMaximumHeight(220);
+    m_recentStack->setMinimumHeight(110);
+    m_recentStack->setMaximumHeight(180);
 
     // Page 0: List of recent files
     m_recentList = new QListWidget(this);
     m_recentList->setIconSize(QSize(54, 40));
     m_recentList->setStyleSheet(QStringLiteral(
         "QListWidget {"
-        "  background-color: #22262e;"
-        "  border: 1px solid #333a46;"
+        "  background-color: %1;"
+        "  border: 1px solid %2;"
         "  border-radius: 8px;"
         "  padding: 6px;"
         "}"
         "QListWidget::item {"
         "  padding: 8px 12px;"
         "  border-radius: 6px;"
-        "  color: #e5e9f0;"
+        "  color: %3;"
         "  margin-bottom: 2px;"
         "}"
         "QListWidget::item:hover {"
-        "  background-color: #2e3440;"
+        "  background-color: %4;"
         "}"
         "QListWidget::item:selected {"
-        "  background-color: #3b4252;"
-        "  color: #ffffff;"
+        "  background-color: %5;"
+        "  color: %6;"
         "}"
-    ));
+    ).arg(darkUi ? "#22262e" : "#ffffff",
+          darkUi ? "#333a46" : "#cbd5e1",
+          darkUi ? "#e5e9f0" : "#1f2937",
+          darkUi ? "#2e3440" : "#eef2f7",
+          darkUi ? "#3b4252" : "#dbeafe",
+          darkUi ? "#ffffff" : "#1f2937"));
     connect(m_recentList, &QListWidget::itemActivated, this,
             [this](QListWidgetItem* item) {
                 if (item)
@@ -366,11 +385,12 @@ void StartScreen::buildUi()
     m_emptyStateWidget = new QWidget(this);
     m_emptyStateWidget->setStyleSheet(QStringLiteral(
         "QWidget {"
-        "  background-color: #22262e;"
-        "  border: 1px dashed #353c48;"
+        "  background-color: %1;"
+        "  border: 1px dashed %2;"
         "  border-radius: 8px;"
         "}"
-    ));
+    ).arg(darkUi ? "#22262e" : "#ffffff",
+          darkUi ? "#353c48" : "#cbd5e1"));
     auto* emptyLayout = new QVBoxLayout(m_emptyStateWidget);
     emptyLayout->setContentsMargins(20, 24, 20, 24);
     emptyLayout->setAlignment(Qt::AlignCenter);
@@ -387,11 +407,13 @@ void StartScreen::buildUi()
     emptyTitleFont.setPointSize(12);
     emptyTitleFont.setBold(true);
     m_emptyStateTitle->setFont(emptyTitleFont);
-    m_emptyStateTitle->setStyleSheet(QStringLiteral("color: #abb2bf; border: none; background: transparent;"));
+    m_emptyStateTitle->setStyleSheet(QStringLiteral("color: %1; border: none; background: transparent;")
+        .arg(darkUi ? "#abb2bf" : "#374151"));
 
     m_emptyStateSubtitle = new QLabel(m_emptyStateWidget);
     m_emptyStateSubtitle->setAlignment(Qt::AlignCenter);
-    m_emptyStateSubtitle->setStyleSheet(QStringLiteral("color: #636d83; font-size: 11px; border: none; background: transparent;"));
+    m_emptyStateSubtitle->setStyleSheet(QStringLiteral("color: %1; font-size: 11px; border: none; background: transparent;")
+        .arg(darkUi ? "#636d83" : "#6b7280"));
 
     emptyLayout->addWidget(m_emptyStateIcon);
     emptyLayout->addWidget(m_emptyStateTitle);
@@ -407,26 +429,30 @@ QWidget* StartScreen::createVisualCard(const QString& brandName, const QPixmap& 
                                       const QString& dimensions, const QString& ratio,
                                       const NewDocumentSpec& spec)
 {
+    const bool darkUi = palette().color(QPalette::Window).value() < 128;
     auto* card = new QPushButton(this);
     card->setMinimumSize(180, 84);
     card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     card->setCursor(Qt::PointingHandCursor);
     card->setStyleSheet(QStringLiteral(
         "QPushButton {"
-        "  background-color: #232730;"
-        "  border: 1px solid #333945;"
+        "  background-color: %1;"
+        "  border: 1px solid %2;"
         "  border-radius: 8px;"
         "  padding: 10px;"
         "  text-align: left;"
         "}"
         "QPushButton:hover {"
-        "  background-color: #2b303c;"
+        "  background-color: %3;"
         "  border: 1px solid #2b78e4;"
         "}"
         "QPushButton:pressed {"
-        "  background-color: #1e222a;"
+        "  background-color: %4;"
         "}"
-    ));
+    ).arg(darkUi ? "#232730" : "#ffffff",
+          darkUi ? "#333945" : "#cbd5e1",
+          darkUi ? "#2b303c" : "#eef2f7",
+          darkUi ? "#1e222a" : "#e2e8f0"));
 
     auto* cardLayout = new QHBoxLayout(card);
     cardLayout->setContentsMargins(10, 8, 10, 8);
@@ -446,10 +472,12 @@ QWidget* StartScreen::createVisualCard(const QString& brandName, const QPixmap& 
     nf.setPointSize(11);
     nf.setBold(true);
     nameLabel->setFont(nf);
-    nameLabel->setStyleSheet(QStringLiteral("color: #ffffff; background: transparent; border: none;"));
+    nameLabel->setStyleSheet(QStringLiteral("color: %1; background: transparent; border: none;")
+        .arg(darkUi ? "#ffffff" : "#1f2937"));
 
     auto* dimLabel = new QLabel(QStringLiteral("%1  (%2)").arg(dimensions, ratio), card);
-    dimLabel->setStyleSheet(QStringLiteral("color: #8c97a8; font-size: 10px; background: transparent; border: none;"));
+    dimLabel->setStyleSheet(QStringLiteral("color: %1; font-size: 10px; background: transparent; border: none;")
+        .arg(darkUi ? "#8c97a8" : "#6b7280"));
 
     textContainer->addWidget(nameLabel);
     textContainer->addWidget(dimLabel);
@@ -498,6 +526,46 @@ void StartScreen::populateRecents()
 void StartScreen::refreshRecents()
 {
     populateRecents();
+    relayoutCards();
+}
+
+void StartScreen::resizeEvent(QResizeEvent* event)
+{
+    QWidget::resizeEvent(event);
+
+    // Keep useful margins on large windows without wasting most of a small
+    // laptop display on empty space.
+    const int horizontalMargin = qBound(16, width() / 20, 60);
+    if (auto* mainLayout = qobject_cast<QVBoxLayout*>(layout()))
+        mainLayout->setContentsMargins(horizontalMargin, 20,
+                                       horizontalMargin, 20);
+    relayoutCards();
+}
+
+void StartScreen::relayoutCards()
+{
+    if (!m_cardsGrid || !m_templatesGrid)
+        return;
+
+    // Four columns on wide screens, two on medium screens, and one on narrow
+    // windows.  Widgets are reused, so resizing does not rebuild the screen
+    // or lose signal connections.
+    const int columns = width() < 620 ? 1 : (width() < 980 ? 2 : 4);
+
+    auto relayout = [columns](QGridLayout* grid) {
+        QVector<QWidget*> widgets;
+        for (int i = 0; i < grid->count(); ++i) {
+            if (auto* widget = grid->itemAt(i)->widget())
+                widgets.append(widget);
+        }
+        for (int i = 0; i < widgets.size(); ++i)
+            grid->addWidget(widgets.at(i), i / columns, i % columns);
+        for (int col = 0; col < columns; ++col)
+            grid->setColumnStretch(col, 1);
+    };
+
+    relayout(m_cardsGrid);
+    relayout(m_templatesGrid);
 }
 
 void StartScreen::retranslateUi()
@@ -506,19 +574,28 @@ void StartScreen::retranslateUi()
         return;
 
     m_title->setText(m_i18n->t("common", "app.title"));
+    const bool darkUi = palette().color(QPalette::Window).value() < 128;
+    m_title->setStyleSheet(QStringLiteral("color: %1;").arg(darkUi ? "#f3f4f6" : "#1f2937"));
     m_tagline->setText(m_i18n->t("common", "app.tagline"));
+    m_tagline->setStyleSheet(QStringLiteral("color: %1;").arg(darkUi ? "#b0b5bf" : "#6b7280"));
 
     m_createDesignBtn->setText(m_i18n->t("common", "start.createDesign"));
     m_openProjectBtn->setText(m_i18n->t("common", "start.openProject"));
     m_customSizeBtn->setText(m_i18n->t("common", "start.custom"));
 
     m_popularLabel->setText(m_i18n->t("common", "start.popular"));
+    m_popularLabel->setStyleSheet(QStringLiteral("color: %1;").arg(darkUi ? "#f3f4f6" : "#1f2937"));
     if (m_templatesLabel)
         m_templatesLabel->setText(m_i18n->t("common", "start.templates"));
+    if (m_templatesLabel)
+        m_templatesLabel->setStyleSheet(QStringLiteral("color: %1;").arg(darkUi ? "#f3f4f6" : "#1f2937"));
     m_recentLabel->setText(m_i18n->t("common", "start.recent"));
+    m_recentLabel->setStyleSheet(QStringLiteral("color: %1;").arg(darkUi ? "#f3f4f6" : "#1f2937"));
 
     m_emptyStateTitle->setText(m_i18n->t("common", "start.emptyRecents"));
+    m_emptyStateTitle->setStyleSheet(QStringLiteral("color: %1; border: none; background: transparent;").arg(darkUi ? "#f3f4f6" : "#374151"));
     m_emptyStateSubtitle->setText(m_i18n->t("common", "start.emptyRecentsHint"));
+    m_emptyStateSubtitle->setStyleSheet(QStringLiteral("color: %1; font-size: 11px; border: none; background: transparent;").arg(darkUi ? "#b0b5bf" : "#6b7280"));
 }
 
 bool StartScreen::eventFilter(QObject* watched, QEvent* event)

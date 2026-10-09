@@ -2,6 +2,14 @@
     "dialog": {
         "title": "Configurações",
         "language": "Idioma",
-        "autosave": "Salvamento automático (minutos)"
+        "autosave": "Salvamento automático (minutos)",
+        "gpuAcceleration": "Aceleração por GPU",
+        "gpuAccelerationHint": "Alterações na aceleração por GPU entram em vigor após reiniciar o programa.",
+        "appearance": "Aparência",
+        "darkMode": "Usar modo escuro",
+        "confirmExit": "Confirmar antes de fechar com alterações não salvas",
+        "canvas": "Tela de desenho",
+        "showGrid": "Mostrar grade ao abrir um documento",
+        "snapToGrid": "Alinhar objetos à grade"
     }
 }

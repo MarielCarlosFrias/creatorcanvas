@@ -29,11 +29,16 @@ public:
     explicit TextInspector(I18nService* i18n, Document* document,
                            CommandStack* history = nullptr,
                            QWidget* parent = nullptr);
+    ~TextInspector() override;
 
     void setSelectedLayer(const LayerId& id);
     void setDocument(Document* document);
     void setHistory(CommandStack* history) { m_history = history; }
     void refresh();
+    void commitPendingTextChange();
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
     void buildUi();
@@ -46,6 +51,9 @@ private:
     CommandStack* m_history = nullptr;
     LayerId m_id;
     bool m_loading = false;
+    class QTimer* m_textDebounceTimer = nullptr;
+    QString m_initialTextContent;
+    bool m_isTypingText = false;
 
     QPlainTextEdit* m_content = nullptr;
     QFontComboBox* m_fontFamily = nullptr;
@@ -73,12 +81,24 @@ private:
     QDoubleSpinBox* m_shadowY = nullptr;
     QDoubleSpinBox* m_shadowBlur = nullptr;
 
+    // Interior Transparente / Vazado e Efeito Knockout (Chroma Cut)
+    QCheckBox* m_hollowOn = nullptr;
+    QCheckBox* m_knockoutOn = nullptr;
+
     // Gradiente de Texto
     QCheckBox* m_gradientOn = nullptr;
     QComboBox* m_gradientType = nullptr;
     QPushButton* m_gradientStartColor = nullptr;
     QPushButton* m_gradientEndColor = nullptr;
     QDoubleSpinBox* m_gradientAngle = nullptr;
+
+    // Textura de Preenchimento (Texture / Image Fill)
+    QCheckBox* m_textureOn = nullptr;
+    QPushButton* m_textureChooseBtn = nullptr;
+    QPushButton* m_textureClearBtn = nullptr;
+    QLabel* m_textureNameLabel = nullptr;
+    QDoubleSpinBox* m_textureOpacity = nullptr;
+    QLabel* m_textureOpacityLabel = nullptr;
 
     // Perspectiva 3D / Inclinação (Tilt / Shear)
     QLabel* m_perspectiveLabel = nullptr;
@@ -89,6 +109,7 @@ private:
     class CollapsibleSection* m_typographySection = nullptr;
     class CollapsibleSection* m_effectsSection = nullptr;
     class CollapsibleSection* m_gradientSection = nullptr;
+    class CollapsibleSection* m_textureSection = nullptr;
     class CollapsibleSection* m_perspectiveSection = nullptr;
 };
 

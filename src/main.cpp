@@ -33,8 +33,10 @@ int main(int argc, char *argv[])
     QApplication::setApplicationName(QStringLiteral("CreatorCanvas"));
     QApplication::setApplicationVersion(QStringLiteral(APP_VERSION));
 
-    cc::applyDarkTheme(app);
     app.setWindowIcon(cc::ThemeIcons::appIcon());
+
+    cc::SettingsService settings;
+    cc::applyTheme(app, settings.darkModeEnabled());
 
     const QString dataDir =
         QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
@@ -42,7 +44,6 @@ int main(int argc, char *argv[])
     cc::LogService::init(dataDir + QStringLiteral("/logs"));
     qInfo() << "Starting CreatorCanvas" << QApplication::applicationVersion();
 
-    cc::SettingsService settings;
     cc::I18nService i18n(&settings);
     if (!i18n.loadAvailableLanguages())
         qWarning() << "Localization catalogs unavailable;"

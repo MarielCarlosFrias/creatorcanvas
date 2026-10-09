@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QColor>
+#include <QUuid>
+#include <QtGlobal>
 
 namespace cc {
 
@@ -49,16 +51,33 @@ struct TextGradient
     }
 };
 
+struct TextTextureFill
+{
+    bool enabled = false;
+    QUuid assetId; // ID do asset de imagem registrado no AssetStore
+    double opacity = 1.0;
+
+    bool operator==(const TextTextureFill& other) const
+    {
+        return enabled == other.enabled && assetId == other.assetId
+               && qFuzzyCompare(opacity, other.opacity);
+    }
+};
+
 struct TextEffects
 {
     TextOutline outline;
     TextShadow shadow;
     TextGradient gradient;
+    TextTextureFill texture;
+    bool hollow = false;   // Interior transparente (apenas contorno)
+    bool knockout = false; // Efeito chroma cut / perfuração transparente
 
     bool operator==(const TextEffects& other) const
     {
         return outline == other.outline && shadow == other.shadow
-               && gradient == other.gradient;
+               && gradient == other.gradient && texture == other.texture
+               && hollow == other.hollow && knockout == other.knockout;
     }
     bool operator!=(const TextEffects& other) const { return !(*this == other); }
 };

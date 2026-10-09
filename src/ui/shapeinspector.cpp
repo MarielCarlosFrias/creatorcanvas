@@ -12,6 +12,7 @@
 #include <QGroupBox>
 #include <QLabel>
 #include <QPushButton>
+#include <QComboBox>
 #include <QVBoxLayout>
 
 namespace cc {
@@ -109,6 +110,14 @@ void ShapeInspector::refresh()
     // Flag m_loading previne que os sinais dos widgets disparem mutações durante a carga inicial
     m_loading = true;
 
+    // Atualiza o tipo de forma selecionado no combo
+    for (int i = 0; i < m_kindCombo->count(); ++i) {
+        if (m_kindCombo->itemData(i).toInt() == static_cast<int>(layer->kind)) {
+            m_kindCombo->setCurrentIndex(i);
+            break;
+        }
+    }
+
     // Atualiza os botões de cores
     updateColorButton(m_fillColorBtn, layer->fill);
     updateColorButton(m_strokeColorBtn, layer->stroke);
@@ -122,10 +131,10 @@ void ShapeInspector::refresh()
     m_fillColorBtn->setEnabled(canHaveFill);
     m_fillLabel->setEnabled(canHaveFill);
 
-    // O raio dos cantos só se aplica a retângulos arredondados (RoundedRect)
-    const bool isRounded = (layer->kind == ShapeKind::RoundedRect);
-    m_cornerRadiusLabel->setVisible(isRounded);
-    m_cornerRadiusSpin->setVisible(isRounded);
+    // O raio dos cantos aplica-se a retângulos arredondados e balões de fala
+    const bool canHaveRadius = (layer->kind == ShapeKind::RoundedRect || layer->kind == ShapeKind::SpeechBubble);
+    m_cornerRadiusLabel->setVisible(canHaveRadius);
+    m_cornerRadiusSpin->setVisible(canHaveRadius);
 
     m_loading = false;
 }
@@ -138,6 +147,39 @@ void ShapeInspector::buildUi()
 
     m_groupBox = new QGroupBox(this);
     m_formLayout = new QFormLayout(m_groupBox);
+
+    // 0. Seletor de Tipo de Forma (Shape Kind)
+    m_kindLabel = new QLabel(m_groupBox);
+    m_kindCombo = new QComboBox(m_groupBox);
+    m_formLayout->addRow(m_kindLabel, m_kindCombo);
+
+    connect(m_kindCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int idx) {
+        if (m_loading || idx < 0)
+            return;
+        ShapeLayer* layer = nullptr;
+        if (!editingLayer(&layer))
+            return;
+
+        const auto newKind = static_cast<ShapeKind>(m_kindCombo->itemData(idx).toInt());
+        if (layer->kind == newKind)
+            return;
+
+        if (m_history && m_document) {
+            m_history->execute(std::make_unique<SetShapeKindCommand>(
+                *m_document, m_id, QStringLiteral("shape.kind"),
+                &Document::setShapeKind, layer->kind, newKind));
+        } else if (m_document) {
+            m_document->setShapeKind(m_id, newKind);
+        }
+
+        const bool canHaveFill = (newKind != ShapeKind::Line);
+        m_fillColorBtn->setEnabled(canHaveFill);
+        m_fillLabel->setEnabled(canHaveFill);
+
+        const bool canHaveRadius = (newKind == ShapeKind::RoundedRect || newKind == ShapeKind::SpeechBubble);
+        m_cornerRadiusLabel->setVisible(canHaveRadius);
+        m_cornerRadiusSpin->setVisible(canHaveRadius);
+    });
 
     // 1. Botão e label de Cor de Preenchimento (Fill Color)
     m_fillLabel = new QLabel(m_groupBox);
@@ -242,10 +284,32 @@ void ShapeInspector::retranslateUi()
         return;
 
     m_groupBox->setTitle(m_i18n->t("editor", "shape.title"));
+    m_kindLabel->setText(m_i18n->t("editor", "shape.type"));
     m_fillLabel->setText(m_i18n->t("editor", "shape.fill"));
     m_strokeLabel->setText(m_i18n->t("editor", "shape.stroke"));
     m_strokeWidthLabel->setText(m_i18n->t("editor", "shape.strokeWidth"));
     m_cornerRadiusLabel->setText(m_i18n->t("editor", "shape.cornerRadius"));
+
+    const int currentIdx = m_kindCombo->currentIndex();
+    const int currentData = (currentIdx >= 0) ? m_kindCombo->itemData(currentIdx).toInt() : 0;
+    m_kindCombo->clear();
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.rect"), static_cast<int>(ShapeKind::Rectangle));
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.roundedRect"), static_cast<int>(ShapeKind::RoundedRect));
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.ellipse"), static_cast<int>(ShapeKind::Ellipse));
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.line"), static_cast<int>(ShapeKind::Line));
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.arrowRight"), static_cast<int>(ShapeKind::ArrowRight));
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.arrowCurved"), static_cast<int>(ShapeKind::ArrowCurved));
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.star"), static_cast<int>(ShapeKind::Star));
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.badge"), static_cast<int>(ShapeKind::Badge));
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.speechBubble"), static_cast<int>(ShapeKind::SpeechBubble));
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.heart"), static_cast<int>(ShapeKind::Heart));
+
+    for (int i = 0; i < m_kindCombo->count(); ++i) {
+        if (m_kindCombo->itemData(i).toInt() == currentData) {
+            m_kindCombo->setCurrentIndex(i);
+            break;
+        }
+    }
 }
 
 } // namespace cc

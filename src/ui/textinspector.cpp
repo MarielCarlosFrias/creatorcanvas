@@ -5,6 +5,8 @@
 #include "core/history/DocumentCommands.h"
 
 #include <QColorDialog>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QCheckBox>
 #include <QHBoxLayout>
 #include <QDoubleSpinBox>
@@ -18,6 +20,8 @@
 #include <QSpinBox>
 #include <QToolButton>
 #include <QVBoxLayout>
+#include <QTimer>
+#include <QEvent>
 
 namespace cc {
 
@@ -28,6 +32,12 @@ TextInspector::TextInspector(I18nService* i18n, Document* document,
     , m_document(document)
     , m_history(history)
 {
+    m_textDebounceTimer = new QTimer(this);
+    m_textDebounceTimer->setSingleShot(true);
+    m_textDebounceTimer->setInterval(500);
+    connect(m_textDebounceTimer, &QTimer::timeout,
+            this, &TextInspector::commitPendingTextChange);
+
     buildUi();
 
     if (m_i18n)
@@ -35,6 +45,11 @@ TextInspector::TextInspector(I18nService* i18n, Document* document,
                 this, &TextInspector::retranslateUi);
     retranslateUi();
     setVisible(false);
+}
+
+TextInspector::~TextInspector()
+{
+    commitPendingTextChange();
 }
 
 bool TextInspector::editingLayer(TextLayer** out) const
@@ -50,6 +65,7 @@ bool TextInspector::editingLayer(TextLayer** out) const
 
 void TextInspector::setDocument(Document* document)
 {
+    commitPendingTextChange();
     m_document = document;
     m_id = LayerId();
     refresh();
@@ -57,12 +73,56 @@ void TextInspector::setDocument(Document* document)
 
 void TextInspector::setSelectedLayer(const LayerId& id)
 {
+    if (m_id != id) {
+        commitPendingTextChange();
+    }
     m_id = id;
     refresh();
 }
 
+void TextInspector::commitPendingTextChange()
+{
+    if (m_textDebounceTimer && m_textDebounceTimer->isActive())
+        m_textDebounceTimer->stop();
+
+    if (!m_isTypingText)
+        return;
+
+    m_isTypingText = false;
+
+    TextLayer* layer = nullptr;
+    if (!editingLayer(&layer))
+        return;
+
+    const QString newContent = m_content ? m_content->toPlainText() : QString();
+    if (newContent == m_initialTextContent)
+        return;
+
+    if (m_history && m_document) {
+        m_history->execute(std::make_unique<LayerPropertyCommand<QString>>(
+            *m_document, m_id, QStringLiteral("layer.text"),
+            &Document::setLayerTextContent, m_initialTextContent, newContent));
+    }
+    m_initialTextContent = newContent;
+}
+
+bool TextInspector::eventFilter(QObject* watched, QEvent* event)
+{
+    if (watched == m_content && event->type() == QEvent::FocusOut) {
+        commitPendingTextChange();
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
 void TextInspector::refresh()
 {
+    if (m_isTypingText && (!m_content || !m_content->hasFocus())) {
+        commitPendingTextChange();
+    } else if (m_textDebounceTimer && m_textDebounceTimer->isActive()) {
+        m_textDebounceTimer->stop();
+        m_isTypingText = false;
+    }
+
     TextLayer* layer = nullptr;
     const bool isText = editingLayer(&layer);
     setVisible(isText);
@@ -95,6 +155,9 @@ void TextInspector::refresh()
     m_shadowY->setValue(fx.shadow.offsetY);
     m_shadowBlur->setValue(fx.shadow.blur);
 
+    m_hollowOn->setChecked(fx.hollow);
+    m_knockoutOn->setChecked(fx.knockout);
+
     const TextGradient& grad = fx.gradient;
     m_gradientOn->setChecked(grad.enabled);
     m_gradientType->setCurrentIndex(grad.type);
@@ -105,6 +168,15 @@ void TextInspector::refresh()
     m_gradientEndColor->setText(gradEndHex);
     m_gradientEndColor->setStyleSheet(QStringLiteral("background: %1;").arg(gradEndHex));
     m_gradientAngle->setValue(grad.angleDeg);
+
+    const TextTextureFill& tex = fx.texture;
+    m_textureOn->setChecked(tex.enabled);
+    m_textureOpacity->setValue(tex.opacity * 100.0);
+    if (!tex.assetId.isNull()) {
+        m_textureNameLabel->setText(QStringLiteral("Textura ativa"));
+    } else {
+        m_textureNameLabel->setText(QStringLiteral("Nenhuma imagem"));
+    }
 
     m_tiltX->setValue(layer->transform.shearX);
     m_tiltY->setValue(layer->transform.shearY);
@@ -130,6 +202,7 @@ void TextInspector::buildUi()
 
     m_content = new QPlainTextEdit(this);
     m_content->setMaximumHeight(70);
+    m_content->installEventFilter(this);
     m_contentLabel = new QLabel(this);
     typoForm->addRow(m_contentLabel, m_content);
 
@@ -210,6 +283,14 @@ void TextInspector::buildUi()
     shadowRow->addStretch();
     fxLayout->addLayout(shadowRow);
 
+    m_hollowOn = new QCheckBox(this);
+    m_knockoutOn = new QCheckBox(this);
+    auto* cutRow = new QHBoxLayout;
+    cutRow->addWidget(m_hollowOn);
+    cutRow->addWidget(m_knockoutOn);
+    cutRow->addStretch();
+    fxLayout->addLayout(cutRow);
+
     m_effectsSection->setContentLayout(fxLayout);
     layout->addWidget(m_effectsSection);
 
@@ -242,7 +323,42 @@ void TextInspector::buildUi()
     m_gradientSection->setContentLayout(gradLayout);
     layout->addWidget(m_gradientSection);
 
-    // 4. Seção Perspectiva 3D (Recolhida por padrão)
+    // 4. Seção Textura / Imagem de Preenchimento (Recolhida por padrão)
+    m_textureSection = new CollapsibleSection(QStringLiteral("Texture / Image Fill"), false, this);
+    auto* texLayout = new QVBoxLayout;
+    texLayout->setContentsMargins(4, 4, 4, 4);
+
+    m_textureOn = new QCheckBox(this);
+    m_textureChooseBtn = new QPushButton(this);
+    m_textureClearBtn = new QPushButton(this);
+    m_textureNameLabel = new QLabel(QStringLiteral("Nenhuma imagem"), this);
+    m_textureNameLabel->setStyleSheet(QStringLiteral("color: #888888; font-style: italic;"));
+
+    auto* texRow1 = new QHBoxLayout;
+    texRow1->addWidget(m_textureOn);
+    texRow1->addWidget(m_textureChooseBtn);
+    texRow1->addWidget(m_textureClearBtn);
+    texRow1->addWidget(m_textureNameLabel);
+    texRow1->addStretch();
+    texLayout->addLayout(texRow1);
+
+    m_textureOpacityLabel = new QLabel(this);
+    m_textureOpacity = new QDoubleSpinBox(this);
+    m_textureOpacity->setRange(0.0, 100.0);
+    m_textureOpacity->setValue(100.0);
+    m_textureOpacity->setSingleStep(5.0);
+    m_textureOpacity->setSuffix(QStringLiteral("%"));
+
+    auto* texRow2 = new QHBoxLayout;
+    texRow2->addWidget(m_textureOpacityLabel);
+    texRow2->addWidget(m_textureOpacity);
+    texRow2->addStretch();
+    texLayout->addLayout(texRow2);
+
+    m_textureSection->setContentLayout(texLayout);
+    layout->addWidget(m_textureSection);
+
+    // 5. Seção Perspectiva 3D (Recolhida por padrão)
     m_perspectiveSection = new CollapsibleSection(QStringLiteral("3D Tilt & Perspective"), false, this);
     auto* tiltLayout = new QVBoxLayout;
     tiltLayout->setContentsMargins(4, 4, 4, 4);
@@ -296,12 +412,18 @@ void TextInspector::buildUi()
         const QString newContent = m_content->toPlainText();
         if (layer->content == newContent) return;
 
-        if (m_history && m_document) {
-            m_history->execute(std::make_unique<LayerPropertyCommand<QString>>(
-                *m_document, m_id, QStringLiteral("layer.text"),
-                &Document::setLayerTextContent, layer->content, newContent));
-        } else if (m_document) {
+        if (!m_isTypingText) {
+            m_isTypingText = true;
+            m_initialTextContent = layer->content;
+        }
+
+        // Live update on document/canvas without spamming history
+        if (m_document) {
             m_document->setLayerTextContent(m_id, newContent);
+        }
+
+        if (m_textDebounceTimer) {
+            m_textDebounceTimer->start(500);
         }
     });
     connect(m_fontFamily, &QFontComboBox::currentTextChanged, this, [this](const QString& family) {
@@ -446,6 +568,12 @@ void TextInspector::buildUi()
             [applyEffects](double value) {
         applyEffects([value](TextEffects& fx) { fx.shadow.blur = value; });
     });
+    connect(m_hollowOn, &QCheckBox::toggled, this, [applyEffects](bool on) {
+        applyEffects([on](TextEffects& fx) { fx.hollow = on; });
+    });
+    connect(m_knockoutOn, &QCheckBox::toggled, this, [applyEffects](bool on) {
+        applyEffects([on](TextEffects& fx) { fx.knockout = on; });
+    });
     connect(m_gradientOn, &QCheckBox::toggled, this, [applyEffects](bool on) {
         applyEffects([on](TextEffects& fx) { fx.gradient.enabled = on; });
     });
@@ -478,6 +606,41 @@ void TextInspector::buildUi()
             [applyEffects](double value) {
         applyEffects([value](TextEffects& fx) { fx.gradient.angleDeg = value; });
     });
+
+    connect(m_textureOn, &QCheckBox::toggled, this, [applyEffects](bool on) {
+        applyEffects([on](TextEffects& fx) { fx.texture.enabled = on; });
+    });
+    connect(m_textureChooseBtn, &QPushButton::clicked, this, [this, applyEffects] {
+        TextLayer* layer = nullptr;
+        if (!editingLayer(&layer) || !m_document) return;
+        const QString path = QFileDialog::getOpenFileName(
+            this, QStringLiteral("Selecionar Imagem / Textura"), QString(),
+            QStringLiteral("Imagens (*.png *.jpg *.jpeg *.webp *.bmp)"));
+        if (path.isEmpty()) return;
+        const QImage img(path);
+        if (img.isNull()) return;
+
+        const LayerId assetId = m_document->assets().addImage(img);
+        applyEffects([assetId](TextEffects& fx) {
+            fx.texture.enabled = true;
+            fx.texture.assetId = assetId;
+        });
+        m_textureOn->setChecked(true);
+        m_textureNameLabel->setText(QFileInfo(path).fileName());
+    });
+    connect(m_textureClearBtn, &QPushButton::clicked, this, [this, applyEffects] {
+        applyEffects([](TextEffects& fx) {
+            fx.texture.enabled = false;
+            fx.texture.assetId = LayerId();
+        });
+        m_textureOn->setChecked(false);
+        m_textureNameLabel->setText(QStringLiteral("Nenhuma imagem"));
+    });
+    connect(m_textureOpacity, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
+            [applyEffects](double value) {
+        applyEffects([value](TextEffects& fx) { fx.texture.opacity = value / 100.0; });
+    });
+
     connect(m_tiltX, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
             [this](double value) {
         TextLayer* layer = nullptr;
@@ -519,6 +682,8 @@ void TextInspector::retranslateUi()
         m_effectsSection->setTitle(m_i18n->t("editor", "section.textEffects"));
     if (m_gradientSection)
         m_gradientSection->setTitle(m_i18n->t("editor", "section.gradient"));
+    if (m_textureSection)
+        m_textureSection->setTitle(m_i18n ? m_i18n->t("editor", "section.textureFill") : QStringLiteral("Texture / Image Fill"));
     if (m_perspectiveSection)
         m_perspectiveSection->setTitle(m_i18n->t("editor", "section.perspective"));
 
@@ -529,7 +694,13 @@ void TextInspector::retranslateUi()
     m_alignLabel->setText(m_i18n->t("editor", "text.align"));
     m_outlineOn->setText(m_i18n->t("editor", "effects.outline"));
     m_shadowOn->setText(m_i18n->t("editor", "effects.shadow"));
+    m_hollowOn->setText(m_i18n ? m_i18n->t("editor", "effects.hollow") : QStringLiteral("Interior Vazado"));
+    m_knockoutOn->setText(m_i18n ? m_i18n->t("editor", "effects.knockout") : QStringLiteral("Recorte / Chroma Cut"));
     m_gradientOn->setText(m_i18n ? m_i18n->t("editor", "effects.gradient") : QStringLiteral("Gradient"));
+    m_textureOn->setText(m_i18n ? m_i18n->t("editor", "effects.texture") : QStringLiteral("Texture Fill"));
+    m_textureChooseBtn->setText(m_i18n ? m_i18n->t("editor", "effects.textureChoose") : QStringLiteral("Choose..."));
+    m_textureClearBtn->setText(m_i18n ? m_i18n->t("editor", "effects.textureClear") : QStringLiteral("Clear"));
+    m_textureOpacityLabel->setText(m_i18n ? m_i18n->t("editor", "effects.textureOpacity") : QStringLiteral("Opacity:"));
     m_perspectiveLabel->setText(m_i18n ? m_i18n->t("editor", "effects.perspective") : QStringLiteral("3D Tilt / Perspective"));
 
     m_loading = true;

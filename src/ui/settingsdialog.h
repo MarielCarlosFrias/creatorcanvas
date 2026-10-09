@@ -3,6 +3,7 @@
 #include <QDialog>
 
 class QComboBox;
+class QCheckBox;
 class QLabel;
 
 namespace cc {
@@ -27,8 +28,17 @@ private:
     SettingsService* m_settings = nullptr;
     QComboBox* m_language = nullptr;
     QComboBox* m_autosave = nullptr;
+    QCheckBox* m_gpuAcceleration = nullptr;
+    QCheckBox* m_darkMode = nullptr;
+    QCheckBox* m_confirmExit = nullptr;
+    QCheckBox* m_showGrid = nullptr;
+    QCheckBox* m_snapToGrid = nullptr;
     QLabel* m_languageLabel = nullptr;
     QLabel* m_autosaveLabel = nullptr;
+    QLabel* m_gpuAccelerationLabel = nullptr;
+    QLabel* m_restartHintLabel = nullptr;
+    QLabel* m_appearanceLabel = nullptr;
+    QLabel* m_canvasLabel = nullptr;
 };
 
 } // namespace cc

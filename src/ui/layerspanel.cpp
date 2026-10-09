@@ -8,6 +8,7 @@
 #include <QApplication>
 #include <QComboBox>
 #include <QContextMenuEvent>
+#include <QEvent>
 #include <QDrag>
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
@@ -268,32 +269,12 @@ void LayersPanel::buildUi()
 
     // --- 2. Lista interativa de camadas com miniaturas ---
     m_list = new LayerListWidget(this);
+    m_list->setObjectName(QStringLiteral("LayerListWidget"));
     m_list->setDragDropMode(QAbstractItemView::DropOnly);
     m_list->setAcceptDrops(true);
     m_list->setDropIndicatorShown(true);
     m_list->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_list->setContextMenuPolicy(Qt::CustomContextMenu);
-    m_list->setStyleSheet(QStringLiteral(
-        "QListWidget {"
-        "  background-color: #1e222a;"
-        "  border: 1px solid #2d333f;"
-        "  border-radius: 6px;"
-        "  padding: 2px;"
-        "}"
-        "QListWidget::item {"
-        "  border-radius: 4px;"
-        "  border: 1px solid transparent;"
-        "  padding: 2px;"
-        "  margin: 1px 0px;"
-        "}"
-        "QListWidget::item:hover {"
-        "  background-color: #282d38;"
-        "}"
-        "QListWidget::item:selected {"
-        "  background-color: #2b3a52;"
-        "  border: 1px solid #2b78e4;"
-        "}"
-    ));
 
     connect(m_list, &QListWidget::currentRowChanged,
             this, &LayersPanel::onCurrentRowChanged);
@@ -319,21 +300,6 @@ void LayersPanel::buildUi()
         btn->setIcon(icon);
         btn->setIconSize(QSize(18, 18));
         btn->setToolTip(tip);
-        btn->setFixedSize(28, 28);
-        btn->setStyleSheet(QStringLiteral(
-            "QToolButton {"
-            "  border: 1px solid transparent;"
-            "  border-radius: 4px;"
-            "  background-color: transparent;"
-            "}"
-            "QToolButton:hover {"
-            "  background-color: #353b49;"
-            "  border-color: #4a5366;"
-            "}"
-            "QToolButton:pressed {"
-            "  background-color: #22262f;"
-            "}"
-        ));
         return btn;
     };
 
@@ -586,6 +552,8 @@ void LayersPanel::rebuild()
 
             // Custom Widget for each layer row
             auto* rowWidget = new LayerRowWidget(layerId, m_list, m_list);
+            rowWidget->setAttribute(Qt::WA_StyledBackground, true);
+            rowWidget->setStyleSheet(QStringLiteral("background: transparent;"));
             auto* rowLayout = new QHBoxLayout(rowWidget);
             rowLayout->setContentsMargins(4, 2, 6, 2);
             rowLayout->setSpacing(6);
@@ -615,7 +583,10 @@ void LayersPanel::rebuild()
             thumbLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
             thumbLabel->setPixmap(renderLayerThumbnail(*layer, 32));
             thumbLabel->setFixedSize(32, 32);
-            thumbLabel->setStyleSheet(QStringLiteral("border: 1px solid #333a46; border-radius: 4px;"));
+            const bool darkUi = palette().color(QPalette::Window).value() < 128;
+            thumbLabel->setStyleSheet(darkUi
+                ? QStringLiteral("border: 1px solid #333a46; border-radius: 4px;")
+                : QStringLiteral("border: 1px solid #cbd5e1; border-radius: 4px;"));
 
             // Type Badge Icon
             auto* typeIcon = new QLabel(rowWidget);
@@ -638,9 +609,13 @@ void LayersPanel::rebuild()
             QFont nf = nameLabel->font();
             if (layer->locked) {
                 nf.setItalic(true);
-                nameLabel->setStyleSheet(QStringLiteral("color: #7b889b;"));
+                nameLabel->setStyleSheet(darkUi
+                    ? QStringLiteral("color: #7b889b; background: transparent;")
+                    : QStringLiteral("color: #94a3b8; background: transparent;"));
             } else {
-                nameLabel->setStyleSheet(QStringLiteral("color: #e5e9f0;"));
+                nameLabel->setStyleSheet(darkUi
+                    ? QStringLiteral("color: #e5e9f0; background: transparent;")
+                    : QStringLiteral("color: #1e293b; background: transparent;"));
             }
             nameLabel->setFont(nf);
 
@@ -788,15 +763,43 @@ void LayersPanel::onMoved()
     // A lista UI exibe as camadas do topo para a base (inverso da ordem do Document).
     // O item na linha 0 da lista corresponde ao topo da pilha (índice total - 1 no Document).
     // Vamos sincronizar a nova ordem da lista diretamente com o Document.
-    m_updating = true;
+    // Preserve the order emitted by the widget before applying changes.  The
+    // custom drag path emits layerReordered directly; this fallback path is
+    // used by native QListWidget moves and must use the same history command.
+    QList<QPair<LayerId, int>> desiredOrder;
+    desiredOrder.reserve(m_list->count());
     for (int row = 0; row < m_list->count(); ++row) {
         QListWidgetItem* item = m_list->item(row);
-        if (!item) continue;
+        if (!item)
+            continue;
         const LayerId id = item->data(Qt::UserRole).value<LayerId>();
-        if (id.isNull()) continue;
+        if (!id.isNull())
+            desiredOrder.append({id, total - 1 - row});
+    }
 
-        const int targetDocIndex = total - 1 - row;
-        m_document->reorderLayer(id, m_document->rootGroup(), targetDocIndex);
+    m_updating = true;
+    if (m_history) {
+        auto compound = std::make_unique<CompoundCommand>(QStringLiteral("layer.reorder"));
+        for (const auto& entry : desiredOrder) {
+            const LayerId& id = entry.first;
+            const int targetDocIndex = entry.second;
+            const int currentDocIndex = m_document->indexOf(id);
+            if (currentDocIndex == targetDocIndex || currentDocIndex < 0)
+                continue;
+            compound->addCommand(std::make_unique<ReorderLayerCommand>(
+                *m_document, id, m_document->rootGroup(), targetDocIndex));
+        }
+        if (!compound->isEmpty())
+            m_history->execute(std::move(compound));
+    } else {
+        for (const auto& entry : desiredOrder) {
+            const LayerId& id = entry.first;
+            const int targetDocIndex = entry.second;
+            const int currentDocIndex = m_document->indexOf(id);
+            if (currentDocIndex == targetDocIndex || currentDocIndex < 0)
+                continue;
+            m_document->reorderLayer(id, m_document->rootGroup(), targetDocIndex);
+        }
     }
     m_updating = false;
 
@@ -897,6 +900,14 @@ void LayersPanel::retranslateUi()
     m_updating = prevUpdating;
 
     rebuild();
+}
+
+void LayersPanel::changeEvent(QEvent* event)
+{
+    QWidget::changeEvent(event);
+    if (event->type() == QEvent::PaletteChange || event->type() == QEvent::StyleChange) {
+        rebuild();
+    }
 }
 
 } // namespace cc

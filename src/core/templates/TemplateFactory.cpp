@@ -88,6 +88,46 @@ QVector<TemplateMeta> TemplateFactory::availableTemplates()
             QStringLiteral("Banner panorâmico moderno para cabeçalho de perfil pessoal ou corporativo."),
             1584, 396,
             QStringLiteral("LinkedIn")
+        },
+        {
+            TemplateKind::YouTubeShortsTrending,
+            QStringLiteral("yt_shorts_trending"),
+            QStringLiteral("templates.yt_shorts.title"),
+            QStringLiteral("YouTube Shorts Viral / Trending"),
+            QStringLiteral("templates.yt_shorts.desc"),
+            QStringLiteral("Layout vertical 9:16 com gancho explosivo, balão de fala e badge em destaque."),
+            1080, 1920,
+            QStringLiteral("YouTube")
+        },
+        {
+            TemplateKind::InstagramCarouselSlide,
+            QStringLiteral("insta_carousel_slide"),
+            QStringLiteral("templates.insta_carousel.title"),
+            QStringLiteral("Slide de Carrossel (Instagram)"),
+            QStringLiteral("templates.insta_carousel.desc"),
+            QStringLiteral("Formato retrato 4:5 moderno para carrosséis educativos com indicador de páginas e coração."),
+            1080, 1350,
+            QStringLiteral("Instagram")
+        },
+        {
+            TemplateKind::TwitchStreamOffline,
+            QStringLiteral("twitch_stream_offline"),
+            QStringLiteral("templates.twitch_offline.title"),
+            QStringLiteral("Tela Offline / Intervalo (Twitch Stream)"),
+            QStringLiteral("templates.twitch_offline.desc"),
+            QStringLiteral("Tela 16:9 estilizada com gradiente escuro, redes sociais e aviso de transmissão encerrada."),
+            1920, 1080,
+            QStringLiteral("Twitch")
+        },
+        {
+            TemplateKind::YouTubeTrueCrimeMystery,
+            QStringLiteral("yt_true_crime_mystery"),
+            QStringLiteral("templates.yt_true_crime.title"),
+            QStringLiteral("Documentário & Mistério / True Crime (YouTube)"),
+            QStringLiteral("templates.yt_true_crime.desc"),
+            QStringLiteral("Thumbnail 16:9 de alto impacto dramático com tipografia gigante, contraste sombrio e badge de tempo."),
+            1280, 720,
+            QStringLiteral("YouTube")
         }
     };
 }
@@ -641,6 +681,366 @@ std::unique_ptr<Document> TemplateFactory::createTemplate(TemplateKind kind, I18
         siteText->align = TextAlignment::Left;
         siteText->transform.position = QPointF(320, 280);
         doc->addLayer(std::move(siteText));
+
+        return doc;
+    }
+    case TemplateKind::YouTubeShortsTrending: {
+        auto doc = std::make_unique<Document>(1080, 1920, 96);
+
+        // Fundo escuro vibrante
+        auto bg = std::make_unique<BackgroundLayer>();
+        bg->name = QStringLiteral("Fundo Escuro");
+        bg->fill = QColor(0x0f, 0x17, 0x2a); // Slate escuro
+        doc->addLayer(std::move(bg));
+
+        // Balão de fala chamativo no topo/centro
+        auto bubble = std::make_unique<ShapeLayer>();
+        bubble->name = QStringLiteral("Balão de Destaque");
+        bubble->kind = ShapeKind::SpeechBubble;
+        bubble->points = makeRectPolygon(800, 240);
+        bubble->cornerRadius = 32;
+        bubble->fill = QColor(0xff, 0x00, 0x55); // Neon Red/Pink
+        bubble->strokeWidth = 0.0;
+        bubble->transform.position = QPointF(540, 480);
+        doc->addLayer(std::move(bubble));
+
+        // Texto dentro do balão de fala
+        auto bubbleText = std::make_unique<TextLayer>();
+        bubbleText->name = QStringLiteral("Texto do Balão");
+        bubbleText->content = QStringLiteral("VOCÊ SABIA DISSO?!");
+        bubbleText->sizePt = 38;
+        bubbleText->bold = true;
+        bubbleText->color = Qt::white;
+        bubbleText->align = TextAlignment::Center;
+        bubbleText->transform.position = QPointF(540, 460);
+        doc->addLayer(std::move(bubbleText));
+
+        // Frame central para vídeo/foto
+        auto frame = std::make_unique<ShapeLayer>();
+        frame->name = QStringLiteral("Moldura Conteúdo");
+        frame->kind = ShapeKind::RoundedRect;
+        frame->points = makeRectPolygon(880, 720);
+        frame->cornerRadius = 24;
+        frame->fill = QColor(0x1e, 0x29, 0x3b);
+        frame->stroke = QColor(0x38, 0xbd, 0xf8);
+        frame->strokeWidth = 4.0;
+        frame->transform.position = QPointF(540, 1020);
+        doc->addLayer(std::move(frame));
+
+        auto framePlaceholder = std::make_unique<TextLayer>();
+        framePlaceholder->name = QStringLiteral("Dica Frame");
+        framePlaceholder->content = QStringLiteral("Insira o clipe ou imagem principal");
+        framePlaceholder->sizePt = 24;
+        framePlaceholder->color = QColor(0x94, 0xa3, 0xb8);
+        framePlaceholder->align = TextAlignment::Center;
+        framePlaceholder->transform.position = QPointF(540, 1020);
+        doc->addLayer(std::move(framePlaceholder));
+
+        // Badge Pill de Trending
+        auto pill = std::make_unique<ShapeLayer>();
+        pill->name = QStringLiteral("Badge Trending");
+        pill->kind = ShapeKind::RoundedRect;
+        pill->points = makeRectPolygon(360, 70);
+        pill->cornerRadius = 35;
+        pill->fill = QColor(0xf5, 0x9e, 0x0b); // Amber
+        pill->strokeWidth = 0.0;
+        pill->transform.position = QPointF(540, 1460);
+        doc->addLayer(std::move(pill));
+
+        auto pillText = std::make_unique<TextLayer>();
+        pillText->name = QStringLiteral("Texto Badge");
+        pillText->content = QStringLiteral("🔥 TRENDING SHORTS");
+        pillText->sizePt = 20;
+        pillText->bold = true;
+        pillText->color = QColor(0x0f, 0x17, 0x2a);
+        pillText->align = TextAlignment::Center;
+        pillText->transform.position = QPointF(540, 1460);
+        doc->addLayer(std::move(pillText));
+
+        // Call to action inferior
+        auto ctaText = std::make_unique<TextLayer>();
+        ctaText->name = QStringLiteral("CTA Inscreva-se");
+        ctaText->content = QStringLiteral("INSCREVA-SE PARA MAIS DICAS");
+        ctaText->sizePt = 22;
+        ctaText->bold = true;
+        ctaText->color = Qt::white;
+        ctaText->align = TextAlignment::Center;
+        ctaText->transform.position = QPointF(540, 1600);
+        doc->addLayer(std::move(ctaText));
+
+        return doc;
+    }
+    case TemplateKind::InstagramCarouselSlide: {
+        auto doc = std::make_unique<Document>(1080, 1350, 96);
+
+        // Fundo elegante off-white / dark clean
+        auto bg = std::make_unique<BackgroundLayer>();
+        bg->name = QStringLiteral("Fundo Dark Clean");
+        bg->fill = QColor(0x18, 0x18, 0x1b); // Zinc escuro
+        doc->addLayer(std::move(bg));
+
+        // Ícone de Coração no topo direito
+        auto heart = std::make_unique<ShapeLayer>();
+        heart->name = QStringLiteral("Coração Like");
+        heart->kind = ShapeKind::Heart;
+        heart->points = makeRectPolygon(70, 70);
+        heart->fill = QColor(0xf4, 0x3f, 0x5e); // Rose vibrante
+        heart->strokeWidth = 0.0;
+        heart->transform.position = QPointF(960, 110);
+        doc->addLayer(std::move(heart));
+
+        // Indicador de Slide (Pílula "02 / 05")
+        auto indicator = std::make_unique<ShapeLayer>();
+        indicator->name = QStringLiteral("Pílula Slide");
+        indicator->kind = ShapeKind::RoundedRect;
+        indicator->points = makeRectPolygon(140, 48);
+        indicator->cornerRadius = 24;
+        indicator->fill = QColor(0x27, 0x27, 0x2a);
+        indicator->stroke = QColor(0x3f, 0x3f, 0x46);
+        indicator->strokeWidth = 1.5;
+        indicator->transform.position = QPointF(140, 110);
+        doc->addLayer(std::move(indicator));
+
+        auto indicatorText = std::make_unique<TextLayer>();
+        indicatorText->name = QStringLiteral("Texto Indicador");
+        indicatorText->content = QStringLiteral("02 / 05");
+        indicatorText->sizePt = 16;
+        indicatorText->bold = true;
+        indicatorText->color = QColor(0xa1, 0xa1, 0xaa);
+        indicatorText->align = TextAlignment::Center;
+        indicatorText->transform.position = QPointF(140, 110);
+        doc->addLayer(std::move(indicatorText));
+
+        // Título do Tópico
+        auto topicText = std::make_unique<TextLayer>();
+        topicText->name = QStringLiteral("Título do Slide");
+        topicText->content = QStringLiteral("DICA PRÁTICA #2");
+        topicText->sizePt = 42;
+        topicText->bold = true;
+        topicText->color = Qt::white;
+        topicText->align = TextAlignment::Left;
+        topicText->transform.position = QPointF(100, 240);
+        doc->addLayer(std::move(topicText));
+
+        // Bloco de Cartão com conteúdo principal
+        auto card = std::make_unique<ShapeLayer>();
+        card->name = QStringLiteral("Cartão de Conteúdo");
+        card->kind = ShapeKind::RoundedRect;
+        card->points = makeRectPolygon(880, 700);
+        card->cornerRadius = 28;
+        card->fill = QColor(0x27, 0x27, 0x2a);
+        card->stroke = QColor(0x3f, 0x3f, 0x46);
+        card->strokeWidth = 2.0;
+        card->transform.position = QPointF(540, 700);
+        doc->addLayer(std::move(card));
+
+        // Texto dentro do cartão
+        auto cardBody = std::make_unique<TextLayer>();
+        cardBody->name = QStringLiteral("Texto do Cartão");
+        cardBody->content = QStringLiteral("Escreva aqui o ponto principal ou insira uma ilustração impactante que retenha a atenção de quem está passando o carrossel.");
+        cardBody->sizePt = 24;
+        cardBody->color = QColor(0xd4, 0xd4, 0xd8);
+        cardBody->align = TextAlignment::Center;
+        cardBody->transform.position = QPointF(540, 700);
+        doc->addLayer(std::move(cardBody));
+
+        // Rodapé "Arraste para o lado 👉"
+        auto footerText = std::make_unique<TextLayer>();
+        footerText->name = QStringLiteral("Rodapé Arraste");
+        footerText->content = QStringLiteral("Arraste para o lado 👉  |  Salve para consultar depois 📌");
+        footerText->sizePt = 18;
+        footerText->bold = true;
+        footerText->color = QColor(0x71, 0x71, 0x7a);
+        footerText->align = TextAlignment::Center;
+        footerText->transform.position = QPointF(540, 1220);
+        doc->addLayer(std::move(footerText));
+
+        return doc;
+    }
+    case TemplateKind::TwitchStreamOffline: {
+        auto doc = std::make_unique<Document>(1920, 1080, 96);
+
+        // Fundo Roxo Twitch escuro
+        auto bg = std::make_unique<BackgroundLayer>();
+        bg->name = QStringLiteral("Fundo Twitch");
+        bg->fill = QColor(0x0e, 0x0e, 0x10);
+        doc->addLayer(std::move(bg));
+
+        // Barra de destaque Twitch Purple
+        auto bar = std::make_unique<ShapeLayer>();
+        bar->name = QStringLiteral("Barra Twitch Roxo");
+        bar->kind = ShapeKind::RoundedRect;
+        bar->points = makeRectPolygon(1920, 8);
+        bar->cornerRadius = 0;
+        bar->fill = QColor(0x91, 0x46, 0xff); // Twitch Purple
+        bar->strokeWidth = 0.0;
+        bar->transform.position = QPointF(960, 4);
+        doc->addLayer(std::move(bar));
+
+        // Cartão Central "TRANSMISSÃO OFFLINE"
+        auto card = std::make_unique<ShapeLayer>();
+        card->name = QStringLiteral("Painel Central");
+        card->kind = ShapeKind::RoundedRect;
+        card->points = makeRectPolygon(960, 420);
+        card->cornerRadius = 32;
+        card->fill = QColor(0x18, 0x18, 0x1b);
+        card->stroke = QColor(0x91, 0x46, 0xff);
+        card->strokeWidth = 3.0;
+        card->transform.position = QPointF(960, 480);
+        doc->addLayer(std::move(card));
+
+        // Título OFFLINE
+        auto title = std::make_unique<TextLayer>();
+        title->name = QStringLiteral("Título Offline");
+        title->content = QStringLiteral("TRANSMISSÃO OFFLINE");
+        title->sizePt = 44;
+        title->bold = true;
+        title->color = Qt::white;
+        title->align = TextAlignment::Center;
+        title->transform.position = QPointF(960, 400);
+        doc->addLayer(std::move(title));
+
+        // Subtítulo / Próxima Live
+        auto scheduleText = std::make_unique<TextLayer>();
+        scheduleText->name = QStringLiteral("Horário Próxima Live");
+        scheduleText->content = QStringLiteral("Obrigado por assistir! Voltamos amanhã às 19:00.");
+        scheduleText->sizePt = 22;
+        scheduleText->color = QColor(0xa1, 0xa1, 0xaa);
+        scheduleText->align = TextAlignment::Center;
+        scheduleText->transform.position = QPointF(960, 480);
+        doc->addLayer(std::move(scheduleText));
+
+        // Pílula / Botão de Redes
+        auto badge = std::make_unique<ShapeLayer>();
+        badge->name = QStringLiteral("Pílula Notificações");
+        badge->kind = ShapeKind::RoundedRect;
+        badge->points = makeRectPolygon(440, 56);
+        badge->cornerRadius = 28;
+        badge->fill = QColor(0x91, 0x46, 0xff);
+        badge->strokeWidth = 0.0;
+        badge->transform.position = QPointF(960, 570);
+        doc->addLayer(std::move(badge));
+
+        auto badgeText = std::make_unique<TextLayer>();
+        badgeText->name = QStringLiteral("Texto Notificações");
+        badgeText->content = QStringLiteral("🔔 ATIVE O SININHO");
+        badgeText->sizePt = 18;
+        badgeText->bold = true;
+        badgeText->color = Qt::white;
+        badgeText->align = TextAlignment::Center;
+        badgeText->transform.position = QPointF(960, 570);
+        doc->addLayer(std::move(badgeText));
+
+        // Barra inferior com redes sociais
+        auto socialsText = std::make_unique<TextLayer>();
+        socialsText->name = QStringLiteral("Redes Sociais");
+        socialsText->content = QStringLiteral("TWITTER: @seucanal   •   YOUTUBE: @seucanal   •   DISCORD: discord.gg/seucanal");
+        socialsText->sizePt = 18;
+        socialsText->bold = true;
+        socialsText->color = QColor(0x71, 0x71, 0x7a);
+        socialsText->align = TextAlignment::Center;
+        socialsText->transform.position = QPointF(960, 940);
+        doc->addLayer(std::move(socialsText));
+
+        return doc;
+    }
+    case TemplateKind::YouTubeTrueCrimeMystery: {
+        auto doc = std::make_unique<Document>(1280, 720, 96);
+
+        // 1. Fundo Textura / Papel Escuro Grunge
+        auto bg = std::make_unique<BackgroundLayer>();
+        bg->name = QStringLiteral("Fundo Dark Vinheta");
+        bg->fill = QColor(0x12, 0x14, 0x16); // Escuro profundo
+        doc->addLayer(std::move(bg));
+
+        // 2. Vinheta / Luz fria lateral esquerda para contraste dramático
+        auto glow = std::make_unique<ShapeLayer>();
+        glow->name = QStringLiteral("Luz de Fundo Cinza");
+        glow->kind = ShapeKind::Rectangle;
+        glow->points = makeRectPolygon(1280, 720);
+        glow->fill = QColor(0x2a, 0x2e, 0x33);
+        glow->setOpacity(0.35f);
+        glow->strokeWidth = 0.0;
+        glow->transform.position = QPointF(640, 360);
+        doc->addLayer(std::move(glow));
+
+        // 3. Subtítulo / Gancho Superior ("ELE NÃO É")
+        auto subText = std::make_unique<TextLayer>();
+        subText->name = QStringLiteral("Gancho Superior");
+        subText->content = QStringLiteral("ELE NÃO É");
+        subText->sizePt = 38;
+        subText->bold = true;
+        subText->color = Qt::white;
+        subText->align = TextAlignment::Left;
+        subText->effects.shadow.enabled = true;
+        subText->effects.shadow.color = QColor(0, 0, 0, 220);
+        subText->effects.shadow.offsetX = 3.0;
+        subText->effects.shadow.offsetY = 3.0;
+        subText->effects.shadow.blur = 6.0;
+        subText->transform.position = QPointF(70, 160);
+        doc->addLayer(std::move(subText));
+
+        // 4. Título Principal Gigante ("HUMANO") com letras maciças e sombra
+        auto mainText = std::make_unique<TextLayer>();
+        mainText->name = QStringLiteral("Título Principal");
+        mainText->content = QStringLiteral("HUMANO");
+        mainText->sizePt = 165;
+        mainText->bold = true;
+        mainText->color = Qt::black; // Fundo ou cor base (suporta textura)
+        mainText->align = TextAlignment::Left;
+        mainText->effects.outline.enabled = true;
+        mainText->effects.outline.color = QColor(0x33, 0x33, 0x33);
+        mainText->effects.outline.width = 3.0;
+        mainText->effects.shadow.enabled = true;
+        mainText->effects.shadow.color = QColor(0, 0, 0, 240);
+        mainText->effects.shadow.offsetX = 5.0;
+        mainText->effects.shadow.offsetY = 5.0;
+        mainText->effects.shadow.blur = 10.0;
+        mainText->transform.position = QPointF(70, 390);
+        doc->addLayer(std::move(mainText));
+
+        // 5. Placeholder para Foto Recortada / Rosto Central
+        auto portraitFrame = std::make_unique<ShapeLayer>();
+        portraitFrame->name = QStringLiteral("Guia Foto / Personagem");
+        portraitFrame->kind = ShapeKind::RoundedRect;
+        portraitFrame->points = makeRectPolygon(540, 640);
+        portraitFrame->cornerRadius = 24.0;
+        portraitFrame->fill = QColor(0x1a, 0x1f, 0x24);
+        portraitFrame->stroke = QColor(0x55, 0x66, 0x77);
+        portraitFrame->strokeWidth = 2.0;
+        portraitFrame->setOpacity(0.65f);
+        portraitFrame->transform.position = QPointF(700, 400);
+        doc->addLayer(std::move(portraitFrame));
+
+        auto portraitTip = std::make_unique<TextLayer>();
+        portraitTip->name = QStringLiteral("Dica Personagem");
+        portraitTip->content = QStringLiteral("Posicione a foto recortada\ndo personagem aqui");
+        portraitTip->sizePt = 22;
+        portraitTip->color = QColor(0x88, 0x99, 0xaa);
+        portraitTip->align = TextAlignment::Center;
+        portraitTip->transform.position = QPointF(700, 390);
+        doc->addLayer(std::move(portraitTip));
+
+        // 6. Badge de Duração de Vídeo (Estilo YouTube "25:25")
+        auto timeBadge = std::make_unique<ShapeLayer>();
+        timeBadge->name = QStringLiteral("Badge Minutagem");
+        timeBadge->kind = ShapeKind::RoundedRect;
+        timeBadge->points = makeRectPolygon(120, 46);
+        timeBadge->cornerRadius = 8.0;
+        timeBadge->fill = QColor(0, 0, 0, 225);
+        timeBadge->strokeWidth = 0.0;
+        timeBadge->transform.position = QPointF(1200, 675);
+        doc->addLayer(std::move(timeBadge));
+
+        auto timeText = std::make_unique<TextLayer>();
+        timeText->name = QStringLiteral("Texto Minutagem");
+        timeText->content = QStringLiteral("25:25");
+        timeText->sizePt = 16;
+        timeText->bold = true;
+        timeText->color = Qt::white;
+        timeText->align = TextAlignment::Center;
+        timeText->transform.position = QPointF(1200, 675);
+        doc->addLayer(std::move(timeText));
 
         return doc;
     }

@@ -11,6 +11,7 @@
 #include <QIcon>
 #include <QFont>
 #include <QPainter>
+#include <QEvent>
 
 namespace cc {
 
@@ -55,29 +56,6 @@ void HistoryPanel::buildUi()
     m_list->setObjectName(QStringLiteral("HistoryListWidget"));
     m_list->setSelectionMode(QAbstractItemView::SingleSelection);
     m_list->setFocusPolicy(Qt::NoFocus);
-    m_list->setStyleSheet(QStringLiteral(
-        "QListWidget {"
-        "  background-color: #1a1d24;"
-        "  border: 1px solid #2b303c;"
-        "  border-radius: 6px;"
-        "  outline: none;"
-        "  padding: 4px;"
-        "}"
-        "QListWidget::item {"
-        "  border-radius: 4px;"
-        "  padding: 6px 8px;"
-        "  margin-bottom: 2px;"
-        "  color: #dcdcdc;"
-        "}"
-        "QListWidget::item:hover {"
-        "  background-color: #262b36;"
-        "}"
-        "QListWidget::item:selected {"
-        "  background-color: #2b78e4;"
-        "  color: #ffffff;"
-        "  font-weight: bold;"
-        "}"
-    ));
 
     connect(m_list, &QListWidget::itemClicked, this, &HistoryPanel::onItemClicked);
     mainLayout->addWidget(m_list, 1);
@@ -88,19 +66,15 @@ void HistoryPanel::buildUi()
     bottomLayout->setSpacing(6);
 
     m_statusLabel = new QLabel(this);
-    m_statusLabel->setStyleSheet(QStringLiteral("color: #888888; font-size: 11px;"));
+    m_statusLabel->setObjectName(QStringLiteral("HistoryStatusLabel"));
+    m_statusLabel->setStyleSheet(QStringLiteral("font-size: 11px;"));
     bottomLayout->addWidget(m_statusLabel, 1);
 
     m_undoBtn = new QToolButton(this);
+    m_undoBtn->setObjectName(QStringLiteral("HistoryUndoButton"));
     m_undoBtn->setIcon(ThemeIcons::actionUndo());
     m_undoBtn->setIconSize(QSize(18, 18));
     m_undoBtn->setAutoRaise(true);
-    m_undoBtn->setStyleSheet(QStringLiteral(
-        "QToolButton { background-color: #262b36; border: 1px solid #3b4252; border-radius: 4px; padding: 4px; }"
-        "QToolButton:hover { background-color: #3b4252; border-color: #4b5568; }"
-        "QToolButton:pressed { background-color: #20242c; }"
-        "QToolButton:disabled { background-color: #1a1d24; border-color: #232730; color: #555555; }"
-    ));
     connect(m_undoBtn, &QToolButton::clicked, this, [this] {
         if (m_history && m_history->canUndo())
             m_history->undo();
@@ -108,15 +82,10 @@ void HistoryPanel::buildUi()
     bottomLayout->addWidget(m_undoBtn);
 
     m_redoBtn = new QToolButton(this);
+    m_redoBtn->setObjectName(QStringLiteral("HistoryRedoButton"));
     m_redoBtn->setIcon(ThemeIcons::actionRedo());
     m_redoBtn->setIconSize(QSize(18, 18));
     m_redoBtn->setAutoRaise(true);
-    m_redoBtn->setStyleSheet(QStringLiteral(
-        "QToolButton { background-color: #262b36; border: 1px solid #3b4252; border-radius: 4px; padding: 4px; }"
-        "QToolButton:hover { background-color: #3b4252; border-color: #4b5568; }"
-        "QToolButton:pressed { background-color: #20242c; }"
-        "QToolButton:disabled { background-color: #1a1d24; border-color: #232730; color: #555555; }"
-    ));
     connect(m_redoBtn, &QToolButton::clicked, this, [this] {
         if (m_history && m_history->canRedo())
             m_history->redo();
@@ -149,15 +118,15 @@ QString HistoryPanel::friendlyCommandName(const QString& rawName) const
     } else if (rawName == QLatin1String("layer.reorder")) {
         return m_i18n ? m_i18n->t(QStringLiteral("common"), QStringLiteral("panel.moveUp")) : QStringLiteral("Reorder Layer");
     } else if (rawName == QLatin1String("layer.transform")) {
-        return QStringLiteral("Transform Layer");
+        return m_i18n ? m_i18n->t(QStringLiteral("common"), QStringLiteral("panel.history.transform")) : QStringLiteral("Transform Layer");
     } else if (rawName == QLatin1String("layer.text")) {
-        return QStringLiteral("Edit Text");
+        return m_i18n ? m_i18n->t(QStringLiteral("common"), QStringLiteral("panel.history.text")) : QStringLiteral("Edit Text");
     } else if (rawName == QLatin1String("layer.textBox")) {
-        return QStringLiteral("Resize Text Box");
+        return m_i18n ? m_i18n->t(QStringLiteral("common"), QStringLiteral("panel.history.textBox")) : QStringLiteral("Resize Text Box");
     } else if (rawName == QLatin1String("layer.textEffects")) {
-        return QStringLiteral("Text Effects");
+        return m_i18n ? m_i18n->t(QStringLiteral("common"), QStringLiteral("panel.history.textEffects")) : QStringLiteral("Text Effects");
     } else if (rawName == QLatin1String("layer.imageEffects")) {
-        return QStringLiteral("Image Effects");
+        return m_i18n ? m_i18n->t(QStringLiteral("common"), QStringLiteral("panel.history.imageEffects")) : QStringLiteral("Image Effects");
     } else if (rawName == QLatin1String("layer.opacity")) {
         return m_i18n ? m_i18n->t(QStringLiteral("common"), QStringLiteral("panel.opacity")) : QStringLiteral("Opacity");
     } else if (rawName == QLatin1String("layer.blendMode")) {
@@ -187,7 +156,7 @@ QString HistoryPanel::friendlyCommandName(const QString& rawName) const
     } else if (rawName == QLatin1String("layer.group")) {
         return m_i18n ? m_i18n->t(QStringLiteral("editor"), QStringLiteral("canvas.layer.group")) : QStringLiteral("Group Layers");
     } else if (rawName.startsWith(QLatin1String("layer.color."))) {
-        return QStringLiteral("Layer Color");
+        return m_i18n ? m_i18n->t(QStringLiteral("common"), QStringLiteral("panel.history.layerColor")) : QStringLiteral("Layer Color");
     } else if (rawName.startsWith(QLatin1String("layer."))) {
         return rawName.mid(6);
     }
@@ -225,11 +194,16 @@ void HistoryPanel::refresh()
     initItem->setIcon(ThemeIcons::actionNewDocument());
     initItem->setData(Qt::UserRole, 0);
 
+    const bool darkUi = palette().color(QPalette::Window).value() < 128;
+    const QColor initialPastColor = darkUi ? QColor(180, 185, 195) : QColor(71, 85, 105);
+    const QColor futureColor = darkUi ? QColor(95, 102, 115) : QColor(148, 163, 184);
+    const QColor pastColor = darkUi ? QColor(210, 215, 225) : QColor(30, 41, 59);
+
     if (current == 0) {
         initItem->setSelected(true);
     } else {
         // Already executed state
-        initItem->setForeground(QColor(180, 185, 195));
+        initItem->setForeground(initialPastColor);
     }
 
     // Following states: recorded commands
@@ -264,10 +238,10 @@ void HistoryPanel::refresh()
             item->setSelected(true);
         } else if (i + 1 > current) {
             // Future state (redoable): dimmed text style
-            item->setForeground(QColor(95, 102, 115));
+            item->setForeground(futureColor);
         } else {
             // Past state (already executed): crisp normal text
-            item->setForeground(QColor(210, 215, 225));
+            item->setForeground(pastColor);
         }
     }
 
@@ -287,6 +261,14 @@ void HistoryPanel::onItemClicked(QListWidgetItem* item)
     int targetIndex = item->data(Qt::UserRole).toInt();
     if (targetIndex != m_history->currentIndex()) {
         m_history->jumpToState(targetIndex);
+    }
+}
+
+void HistoryPanel::changeEvent(QEvent* event)
+{
+    QWidget::changeEvent(event);
+    if (event->type() == QEvent::PaletteChange || event->type() == QEvent::StyleChange) {
+        refresh();
     }
 }
 

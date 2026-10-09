@@ -79,21 +79,25 @@ QString shapeKindToString(ShapeKind kind)
     case ShapeKind::ArrowCurved: return QStringLiteral("arrowCurved");
     case ShapeKind::Star:        return QStringLiteral("star");
     case ShapeKind::Badge:       return QStringLiteral("badge");
+    case ShapeKind::SpeechBubble: return QStringLiteral("speechBubble");
+    case ShapeKind::Heart:       return QStringLiteral("heart");
     }
     return QStringLiteral("rectangle");
 }
 
 std::optional<ShapeKind> shapeKindFromString(const QString& value)
 {
-    if (value == QLatin1String("rectangle"))   return ShapeKind::Rectangle;
-    if (value == QLatin1String("roundedRect")) return ShapeKind::RoundedRect;
-    if (value == QLatin1String("ellipse"))     return ShapeKind::Ellipse;
-    if (value == QLatin1String("line"))        return ShapeKind::Line;
-    if (value == QLatin1String("polygon"))     return ShapeKind::Polygon;
-    if (value == QLatin1String("arrowRight"))  return ShapeKind::ArrowRight;
-    if (value == QLatin1String("arrowCurved")) return ShapeKind::ArrowCurved;
-    if (value == QLatin1String("star"))        return ShapeKind::Star;
-    if (value == QLatin1String("badge"))       return ShapeKind::Badge;
+    if (value == QLatin1String("rectangle"))    return ShapeKind::Rectangle;
+    if (value == QLatin1String("roundedRect"))  return ShapeKind::RoundedRect;
+    if (value == QLatin1String("ellipse"))      return ShapeKind::Ellipse;
+    if (value == QLatin1String("line"))         return ShapeKind::Line;
+    if (value == QLatin1String("polygon"))      return ShapeKind::Polygon;
+    if (value == QLatin1String("arrowRight"))   return ShapeKind::ArrowRight;
+    if (value == QLatin1String("arrowCurved"))  return ShapeKind::ArrowCurved;
+    if (value == QLatin1String("star"))         return ShapeKind::Star;
+    if (value == QLatin1String("badge"))        return ShapeKind::Badge;
+    if (value == QLatin1String("speechBubble")) return ShapeKind::SpeechBubble;
+    if (value == QLatin1String("heart"))        return ShapeKind::Heart;
     return std::nullopt;
 }
 
@@ -211,6 +215,15 @@ QJsonObject writeLayer(const Layer& layer)
         gradient.insert(QStringLiteral("endColor"), colorToString(text.effects.gradient.endColor));
         gradient.insert(QStringLiteral("angleDeg"), text.effects.gradient.angleDeg);
         effects.insert(QStringLiteral("gradient"), gradient);
+
+        QJsonObject texture;
+        texture.insert(QStringLiteral("enabled"), text.effects.texture.enabled);
+        texture.insert(QStringLiteral("assetId"), text.effects.texture.assetId.toString(QUuid::WithoutBraces));
+        texture.insert(QStringLiteral("opacity"), text.effects.texture.opacity);
+        effects.insert(QStringLiteral("texture"), texture);
+
+        effects.insert(QStringLiteral("hollow"), text.effects.hollow);
+        effects.insert(QStringLiteral("knockout"), text.effects.knockout);
 
         o.insert(QStringLiteral("effects"), effects);
         break;
@@ -598,6 +611,14 @@ private:
         text->effects.gradient.startColor = colorFromString(gradient.value(QStringLiteral("startColor")).toString());
         text->effects.gradient.endColor = colorFromString(gradient.value(QStringLiteral("endColor")).toString());
         text->effects.gradient.angleDeg = gradient.value(QStringLiteral("angleDeg")).toDouble(0.0);
+
+        const QJsonObject texture = effects.value(QStringLiteral("texture")).toObject();
+        text->effects.texture.enabled = texture.value(QStringLiteral("enabled")).toBool(false);
+        text->effects.texture.assetId = QUuid::fromString(texture.value(QStringLiteral("assetId")).toString());
+        text->effects.texture.opacity = texture.value(QStringLiteral("opacity")).toDouble(1.0);
+
+        text->effects.hollow = effects.value(QStringLiteral("hollow")).toBool(false);
+        text->effects.knockout = effects.value(QStringLiteral("knockout")).toBool(false);
 
         finishLayer(*text, o, id);
         *out = std::move(text);

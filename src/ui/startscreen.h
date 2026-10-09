@@ -9,6 +9,8 @@ class QListWidget;
 class QListWidgetItem;
 class QPushButton;
 class QStackedWidget;
+class QGridLayout;
+class QResizeEvent;
 
 namespace cc {
 
@@ -39,6 +41,7 @@ signals:
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
 private:
     void buildUi();
@@ -47,6 +50,7 @@ private:
     QWidget* createVisualCard(const QString& brandName, const QPixmap& icon,
                               const QString& dimensions, const QString& ratio,
                               const NewDocumentSpec& spec);
+    void relayoutCards();
 
     I18nService* m_i18n = nullptr;
     PresetStore* m_presets = nullptr;
@@ -62,10 +66,12 @@ private:
     // Visual Cards Section
     QLabel* m_popularLabel = nullptr;
     QWidget* m_cardsHost = nullptr;
+    QGridLayout* m_cardsGrid = nullptr;
 
     // Templates Section
     QLabel* m_templatesLabel = nullptr;
     QWidget* m_templatesHost = nullptr;
+    QGridLayout* m_templatesGrid = nullptr;
 
     // Recents Section
     QLabel* m_recentLabel = nullptr;

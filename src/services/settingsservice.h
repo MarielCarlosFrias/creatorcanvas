@@ -31,6 +31,15 @@ public:
     bool gpuAccelerationEnabled() const;   // default false (software renderer)
     void setGpuAccelerationEnabled(bool enabled);
 
+    bool darkModeEnabled() const;
+    void setDarkModeEnabled(bool enabled);
+    bool confirmBeforeExit() const;
+    void setConfirmBeforeExit(bool enabled);
+    bool showGridByDefault() const;
+    void setShowGridByDefault(bool enabled);
+    bool snapToGridByDefault() const;
+    void setSnapToGridByDefault(bool enabled);
+
 signals:
     /// Emitted once after any value actually changes.
     void changed();

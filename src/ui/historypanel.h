@@ -28,6 +28,9 @@ public:
     void setHistory(CommandStack* history);
     void refresh();
 
+protected:
+    void changeEvent(QEvent* event) override;
+
 private slots:
     void onItemClicked(QListWidgetItem* item);
 

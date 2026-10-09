@@ -25,7 +25,7 @@ inline LayerId newLayerId() { return QUuid::createUuid(); }
 enum class LayerType { Group, Image, Text, Shape, Background };
 enum class BlendMode { Normal, Multiply, Screen, Overlay, Darken, Lighten, Add };
 enum class TextAlignment { Left, Center, Right };
-enum class ShapeKind { Rectangle, RoundedRect, Ellipse, Line, Polygon, ArrowRight, ArrowCurved, Star, Badge };
+enum class ShapeKind { Rectangle, RoundedRect, Ellipse, Line, Polygon, ArrowRight, ArrowCurved, Star, Badge, SpeechBubble, Heart };
 
 /// Base class of every layer. UI/commands mutate layers ONLY through
 /// Document methods; direct field access is the read path (renderer,

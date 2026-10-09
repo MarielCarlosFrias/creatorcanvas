@@ -72,6 +72,7 @@ public:
     bool setShapeStroke(const LayerId& id, QColor stroke);
     bool setShapeStrokeWidth(const LayerId& id, double width);
     bool setShapeCornerRadius(const LayerId& id, double radius);
+    bool setShapeKind(const LayerId& id, ShapeKind kind);
 
     // Atualiza o asset associado a uma camada de imagem (ImageLayer), com dimensões naturais
     bool setImageLayerAsset(const LayerId& id, const LayerId& newAssetId, int naturalWidth, int naturalHeight);

@@ -19,6 +19,16 @@ void CommandStack::execute(std::unique_ptr<Command> command)
     const bool wasRedoable = canRedo();
 
     command->redo();
+
+    // A continuous edit should not flood the history with intermediate
+    // slider values. The existing command keeps its original value and lets
+    // the incoming command provide the final value.
+    if (!m_undoStack.empty() && m_undoStack.back()->mergeWith(*command)) {
+        m_redoStack.clear();
+        emitStateChanged(wasUndoable, wasRedoable);
+        return;
+    }
+
     m_redoStack.clear();
     m_undoStack.push_back(std::move(command));
     if (m_undoStack.size() > static_cast<std::size_t>(m_limit))
