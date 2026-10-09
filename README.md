@@ -14,6 +14,18 @@ A fast, layer-based image editor designed specifically for digital content creat
 
 <br/>
 
+![CreatorCanvas Mockup Preview](docs/images/mockup_layers.png)
+
+*Mockup workflow: existing canvas images can be used as the source for a perspective replacement.*
+
+<br/>
+
+![CreatorCanvas Free Mockup Selection](docs/images/mockup_selection.png)
+
+*Free-form selection over the canvas with live perspective placement and preview controls.*
+
+<br/>
+
 ![CreatorCanvas Start Screen](docs/images/start_screen.png)
 
 *Welcome & Start Screen: Preset cards for YouTube/Instagram/TikTok, ready-to-edit templates, and recent project thumbnails.*
