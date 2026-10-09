@@ -24,6 +24,19 @@ A fast, layer-based image editor designed specifically for digital content creat
 
 *Free-form selection over the canvas with live perspective placement and preview controls.*
 
+<br/>
+
+![CreatorCanvas Template Canvas](docs/images/template_canvas.png)
+
+*Editable template canvas with typography, badges, image slots, and a dark workspace.*
+
+<br/>
+
+![CreatorCanvas Start Screen](docs/images/start_screen.png)
+
+*Welcome & Start Screen: Preset cards for YouTube/Instagram/TikTok, ready-to-edit templates, and recent project thumbnails.*
+
+---
 ## Key Features
 
 - **Layer-Based Compositing** — Support for Image, Text, Shape, Group, and Background layers with Photoshop-style drag-and-drop reordering, visibility, locking, opacity, and blend modes.
