@@ -24,7 +24,8 @@ enum class CanvasTool {
     MagicWand,
     CloneStamp,
     Paint,
-    FloodFill
+    FloodFill,
+    Eyedropper
 };
 
 using CanvasToolType = CanvasTool;

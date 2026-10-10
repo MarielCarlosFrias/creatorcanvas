@@ -273,6 +273,61 @@ void ImageInspector::buildUi()
     m_outlineSection->setContentLayout(fxLayout);
     mainLayout->addWidget(m_outlineSection);
 
+    // --- Chroma Key / Color to Alpha (Recolhido por padrão) ---
+    m_chromaKeySection = new CollapsibleSection(QStringLiteral("Chroma Key (Color to Alpha)"), false, this);
+    auto* chromaLayout = new QFormLayout;
+    chromaLayout->setContentsMargins(4, 4, 4, 4);
+
+    auto* chromaColorRow = new QHBoxLayout;
+    m_chromaKeyColorBtn = new QPushButton(this);
+    m_chromaKeyColorBtn->setFixedSize(50, 24);
+    m_chromaKeyColorBtn->setStyleSheet(QStringLiteral("background: #00ff00; border: 1px solid #555; border-radius: 3px;"));
+    auto* greenBtn = new QPushButton(QStringLiteral("Verde"), this);
+    greenBtn->setStyleSheet(QStringLiteral("background: #00ff00; color: black; font-size: 10px; font-weight: bold; border-radius: 3px; padding: 2px 4px;"));
+    auto* blueBtn = new QPushButton(QStringLiteral("Azul"), this);
+    blueBtn->setStyleSheet(QStringLiteral("background: #0044ff; color: white; font-size: 10px; font-weight: bold; border-radius: 3px; padding: 2px 4px;"));
+    auto* whiteBtn = new QPushButton(QStringLiteral("Branco"), this);
+    whiteBtn->setStyleSheet(QStringLiteral("background: #ffffff; color: black; font-size: 10px; font-weight: bold; border-radius: 3px; padding: 2px 4px;"));
+    auto* blackBtn = new QPushButton(QStringLiteral("Preto"), this);
+    blackBtn->setStyleSheet(QStringLiteral("background: #000000; color: white; font-size: 10px; font-weight: bold; border-radius: 3px; padding: 2px 4px;"));
+
+    chromaColorRow->addWidget(m_chromaKeyColorBtn);
+    chromaColorRow->addWidget(greenBtn);
+    chromaColorRow->addWidget(blueBtn);
+    chromaColorRow->addWidget(whiteBtn);
+    chromaColorRow->addWidget(blackBtn);
+    chromaColorRow->addStretch();
+    chromaLayout->addRow(QStringLiteral("Cor Chave:"), chromaColorRow);
+
+    auto makeChromaSlider = [this](QSlider*& slider, QLabel*& valLabel, int minVal, int maxVal, int defaultVal) {
+        auto* row = new QHBoxLayout;
+        slider = new QSlider(Qt::Horizontal, this);
+        slider->setRange(minVal, maxVal);
+        slider->setValue(defaultVal);
+        valLabel = new QLabel(QString::number(defaultVal) + QStringLiteral("%"), this);
+        valLabel->setFixedWidth(36);
+        connect(slider, &QSlider::valueChanged, this, [valLabel](int v) {
+            valLabel->setText(QString::number(v) + QStringLiteral("%"));
+        });
+        row->addWidget(slider);
+        row->addWidget(valLabel);
+        return row;
+    };
+
+    chromaLayout->addRow(QStringLiteral("Transparência:"), makeChromaSlider(m_chromaTranspSlider, m_chromaTranspValue, 0, 100, 0));
+    chromaLayout->addRow(QStringLiteral("Opacidade:"), makeChromaSlider(m_chromaOpacitySlider, m_chromaOpacityValue, 0, 100, 100));
+
+    auto* chromaBtnRow = new QHBoxLayout;
+    m_chromaApplyBtn = new QPushButton(QStringLiteral("Remover Fundo"), this);
+    m_chromaApplyBtn->setStyleSheet(QStringLiteral("background: #2b78e4; color: white; font-weight: bold; padding: 5px; border-radius: 4px;"));
+    m_chromaResetBtn = new QPushButton(QStringLiteral("Restaurar"), this);
+    chromaBtnRow->addWidget(m_chromaApplyBtn);
+    chromaBtnRow->addWidget(m_chromaResetBtn);
+    chromaLayout->addRow(chromaBtnRow);
+
+    m_chromaKeySection->setContentLayout(chromaLayout);
+    mainLayout->addWidget(m_chromaKeySection);
+
     // --- 3. Ajustes Manuais de Cor e Filtros (Recolhido por padrão) ---
     m_adjustmentsSection = new CollapsibleSection(QStringLiteral("Color Adjustments & Filters"), false, this);
     auto* adjLayout = new QFormLayout;
@@ -454,6 +509,58 @@ void ImageInspector::buildUi()
     });
 
     connect(m_mockupButton, &QPushButton::clicked, this, &ImageInspector::openMockupDialog);
+
+    // Conexões de Chroma Key (Color to Alpha)
+    auto updateChromaColorBtn = [this](const QColor& c) {
+        m_chromaKeyColor = c;
+        m_chromaKeyColorBtn->setStyleSheet(QStringLiteral("background: %1; border: 1px solid #555; border-radius: 3px;").arg(c.name()));
+    };
+
+    connect(m_chromaKeyColorBtn, &QPushButton::clicked, this, [this, updateChromaColorBtn] {
+        const QColor chosen = QColorDialog::getColor(m_chromaKeyColor, this);
+        if (chosen.isValid()) updateChromaColorBtn(chosen);
+    });
+    connect(greenBtn, &QPushButton::clicked, this, [updateChromaColorBtn] { updateChromaColorBtn(QColor(0, 255, 0)); });
+    connect(blueBtn, &QPushButton::clicked, this, [updateChromaColorBtn] { updateChromaColorBtn(QColor(0, 68, 255)); });
+    connect(whiteBtn, &QPushButton::clicked, this, [updateChromaColorBtn] { updateChromaColorBtn(QColor(255, 255, 255)); });
+    connect(blackBtn, &QPushButton::clicked, this, [updateChromaColorBtn] { updateChromaColorBtn(QColor(0, 0, 0)); });
+
+    connect(m_chromaApplyBtn, &QPushButton::clicked, this, [this] {
+        ImageLayer* layer = nullptr;
+        if (!editingLayer(&layer) || !m_document || m_originalAssetId.isNull())
+            return;
+
+        const QImage current = m_document->assets().decodedImage(layer->assetId);
+        if (current.isNull()) return;
+
+        const double t = m_chromaTranspSlider->value() / 100.0;
+        const double o = m_chromaOpacitySlider->value() / 100.0;
+        const QImage processed = ImageProcessing::colorToAlpha(current, m_chromaKeyColor, t, o);
+        if (processed.isNull()) return;
+
+        const LayerId origAssetId = layer->assetId;
+        const LayerId newAssetId = m_document->assets().addImage(processed);
+
+        if (m_history) {
+            m_history->execute(std::make_unique<ModifyImageLayerCommand>(
+                *m_document, m_id,
+                origAssetId, layer->naturalWidth, layer->naturalHeight, layer->transform,
+                newAssetId, processed.width(), processed.height(), layer->transform,
+                QStringLiteral("image.chromaKey")));
+        } else {
+            m_document->setImageLayerAsset(m_id, newAssetId, processed.width(), processed.height());
+            m_document->touchLayer(m_id);
+        }
+        m_originalAssetId = newAssetId;
+    });
+
+    connect(m_chromaResetBtn, &QPushButton::clicked, this, [this] {
+        ImageLayer* layer = nullptr;
+        if (!editingLayer(&layer) || !m_document || m_originalAssetId.isNull())
+            return;
+        m_chromaTranspSlider->setValue(0);
+        m_chromaOpacitySlider->setValue(100);
+    });
 }
 
 void ImageInspector::openMockupDialog()
@@ -830,6 +937,8 @@ void ImageInspector::retranslateUi()
         m_adjustmentsSection->setTitle(m_i18n ? m_i18n->t("editor", "section.manualAdjustments") : QStringLiteral("Color Adjustments & Filters"));
     if (m_perspectiveSection)
         m_perspectiveSection->setTitle(m_i18n ? m_i18n->t("editor", "section.perspective") : QStringLiteral("3D Tilt & Perspective"));
+    if (m_chromaKeySection)
+        m_chromaKeySection->setTitle(m_i18n ? m_i18n->t("editor", "section.chromaKey") : QStringLiteral("Chroma Key (Color to Alpha)"));
 
     if (m_resetTiltBtn)
         m_resetTiltBtn->setText(m_i18n ? m_i18n->t("common", "action.reset") : QStringLiteral("Reset"));

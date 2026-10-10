@@ -436,6 +436,9 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
         font.setItalic(text.italic);
         font.setUnderline(text.underline);
         font.setPointSizeF(text.sizePt > 0 ? text.sizePt : 1.0);
+        if (text.letterSpacingPx != 0.0) {
+            font.setLetterSpacing(QFont::AbsoluteSpacing, text.letterSpacingPx);
+        }
 
         const bool hasOutline = text.effects.outline.enabled
                                 && text.effects.outline.width > 0.0;
@@ -457,8 +460,9 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
 
         const bool isHollow = text.effects.hollow;
         const bool isKnockout = text.effects.knockout;
+        const bool customLineHeight = !qFuzzyCompare(text.lineHeightMult, 1.0) && text.lineHeightMult > 0.0;
 
-        if (!hasOutline && !hasShadow && !hasGradient && !hasTexture && !isHollow && !isKnockout) {
+        if (!hasOutline && !hasShadow && !hasGradient && !hasTexture && !isHollow && !isKnockout && !customLineHeight) {
             painter->setFont(font);
             painter->setPen(text.color);
             painter->drawText(drawRect,
@@ -471,6 +475,7 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
         // shadow (blurred silhouette) -> outline stroke -> fill/gradient.
         const QFontMetrics metrics(font);
         const QStringList lines = text.content.split(QLatin1Char('\n'));
+        const double lineSpacing = metrics.lineSpacing() * (text.lineHeightMult > 0.0 ? text.lineHeightMult : 1.0);
         QPainterPath path;
         double lineY = metrics.ascent();
         for (const QString& lineText : lines) {
@@ -482,7 +487,7 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
                 lineX = qMax(0.0, drawRect.width() - lw);
 
             path.addText(QPointF(lineX, lineY), font, lineText);
-            lineY += metrics.lineSpacing();
+            lineY += lineSpacing;
         }
 
         if (hasShadow) {

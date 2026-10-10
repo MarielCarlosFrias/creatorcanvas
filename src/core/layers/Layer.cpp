@@ -112,14 +112,19 @@ QRectF TextLayer::contentBounds() const
         QFont font(fontFamily);
         font.setBold(bold);
         font.setItalic(italic);
+        font.setUnderline(underline);
         font.setPointSizeF(sizePt > 0 ? sizePt : 1.0);
+        if (letterSpacingPx != 0.0) {
+            font.setLetterSpacing(QFont::AbsoluteSpacing, letterSpacingPx);
+        }
         const QFontMetrics metrics(font);
         const QStringList lines = content.split(QLatin1Char('\n'));
         double maxWidth = 0.0;
         for (const QString& line : lines) {
             maxWidth = qMax(maxWidth, double(metrics.horizontalAdvance(line)));
         }
-        const double totalHeight = qMax(double(metrics.height()), double(lines.size()) * metrics.lineSpacing());
+        const double lineSpacing = metrics.lineSpacing() * (lineHeightMult > 0.0 ? lineHeightMult : 1.0);
+        const double totalHeight = qMax(double(metrics.height()), double(lines.size()) * lineSpacing);
         base = QRectF(0, 0, maxWidth > 0 ? maxWidth : 20.0, totalHeight > 0 ? totalHeight : 20.0);
     }
 

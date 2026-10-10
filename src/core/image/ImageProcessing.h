@@ -91,6 +91,13 @@ public:
 
     /// Aplica filtros rápidos em 1 clique.
     static QImage applyPresetFilter(const QImage& source, PresetFilter preset);
+
+    /// Remove uma cor da imagem (Chroma Key / Color to Alpha), tornando-a transparente
+    /// e desmisturando as bordas perfeitamente sem halos residuais.
+    /// transparency: threshold abaixo do qual fica 100% transparente (0.0 padrão)
+    /// opacityThreshold: threshold acima do qual permanece opaco (1.0 padrão)
+    static QImage colorToAlpha(const QImage& source, const QColor& keyColor,
+                               double transparency = 0.0, double opacityThreshold = 1.0);
 };
 
 } // namespace cc

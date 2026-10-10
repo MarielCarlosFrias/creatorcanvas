@@ -28,6 +28,7 @@ private slots:
     void testScissorsCutFreehand();
     void testAssetStoreAddImage();
     void testModifyImageLayerCommand();
+    void testColorToAlpha();
 };
 
 void TestImageProcessing::testCropImage()
@@ -329,6 +330,33 @@ void TestImageProcessing::testModifyImageLayerCommand()
     QCOMPARE(imgLayer->naturalWidth, 50);
     QCOMPARE(imgLayer->naturalHeight, 50);
     QCOMPARE(imgLayer->transform.position, QPointF(225, 225));
+}
+
+void TestImageProcessing::testColorToAlpha()
+{
+    // 1. Pure green should become completely transparent when key is green
+    QImage greenImg(10, 10, QImage::Format_ARGB32);
+    greenImg.fill(QColor(0, 255, 0));
+    QImage res1 = ImageProcessing::colorToAlpha(greenImg, QColor(0, 255, 0));
+    QCOMPARE(res1.pixelColor(5, 5).alpha(), 0);
+
+    // 2. Pure black should stay opaque black when key is white
+    QImage blackImg(10, 10, QImage::Format_ARGB32);
+    blackImg.fill(QColor(0, 0, 0));
+    QImage res2 = ImageProcessing::colorToAlpha(blackImg, QColor(255, 255, 255));
+    QCOMPARE(res2.pixelColor(5, 5).alpha(), 255);
+    QCOMPARE(res2.pixelColor(5, 5).red(), 0);
+    QCOMPARE(res2.pixelColor(5, 5).green(), 0);
+    QCOMPARE(res2.pixelColor(5, 5).blue(), 0);
+
+    // 3. Gray (128, 128, 128) over white key becomes black with ~50% alpha
+    QImage grayImg(10, 10, QImage::Format_ARGB32);
+    grayImg.fill(QColor(128, 128, 128));
+    QImage res3 = ImageProcessing::colorToAlpha(grayImg, QColor(255, 255, 255));
+    QVERIFY(res3.pixelColor(5, 5).alpha() > 100 && res3.pixelColor(5, 5).alpha() < 155);
+    QVERIFY(res3.pixelColor(5, 5).red() < 10);
+    QVERIFY(res3.pixelColor(5, 5).green() < 10);
+    QVERIFY(res3.pixelColor(5, 5).blue() < 10);
 }
 
 QTEST_MAIN(TestImageProcessing)

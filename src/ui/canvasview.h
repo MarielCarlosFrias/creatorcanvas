@@ -110,6 +110,9 @@ public:
     void beginMockupPlacement();
     void cancelMockupPlacement();
 
+    /// Amostra a cor composta na coordenada do documento
+    QColor sampleColorAt(const QPointF& docPos) const;
+
 public slots:
     void zoomIn();
     void zoomOut();
@@ -142,6 +145,7 @@ signals:
     void statusMessageRequested(const QString& message);
     void quickAiBusyChanged(bool busy);
     void mockupAreaSelected(const QPolygonF& corners);
+    void colorPicked(const QColor& color);
 
 protected:
     void paintEvent(QPaintEvent*) override;

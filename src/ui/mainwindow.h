@@ -73,6 +73,7 @@ private:
     void importImageViaDialog();
     void importImage(const QString& filePath);
     void exportImage();
+    void quickExportLayerPng(const LayerId& id);
     void flipLayer(bool horizontal);
     void rotateLayer(double degrees);
     void addText();
@@ -219,6 +220,7 @@ private:
     QAction* m_toolCloneAction = nullptr;
     QAction* m_toolPaintAction = nullptr;
     QAction* m_toolFloodAction = nullptr;
+    QAction* m_toolEyedropperAction = nullptr;
     QMenu* m_toolsMenu = nullptr;
     QMenu* m_selectionToolsMenu = nullptr;
     QMenu* m_retouchToolsMenu = nullptr;

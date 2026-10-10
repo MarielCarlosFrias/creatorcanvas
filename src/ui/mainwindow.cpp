@@ -385,9 +385,51 @@ void MainWindow::buildCentralWidget()
                     case CanvasTool::FloodFill:
                         if (m_toolFloodAction) m_toolFloodAction->setChecked(true);
                         break;
+                    case CanvasTool::Eyedropper:
+                        if (m_toolEyedropperAction) m_toolEyedropperAction->setChecked(true);
+                        break;
                     }
                 }
             });
+
+    connect(m_canvas, &CanvasView::colorPicked, this, [this](const QColor& color) {
+        if (!color.isValid())
+            return;
+        m_currentPaintColor = color;
+        if (m_paintColorBtn)
+            m_paintColorBtn->setStyleSheet(QStringLiteral("background-color: %1; border: 1px solid #555; border-radius: 3px;").arg(color.name()));
+        if (m_floodColorBtn)
+            m_floodColorBtn->setStyleSheet(QStringLiteral("background-color: %1; border: 1px solid #555; border-radius: 3px;").arg(color.name()));
+        if (m_canvas)
+            m_canvas->setPaintColor(color);
+
+        // If a TextLayer or ShapeLayer is selected, update its color
+        if (m_document && !m_selectedId.isNull()) {
+            if (auto* layer = m_document->findLayer(m_selectedId)) {
+                if (layer->type() == LayerType::Text) {
+                    if (m_history) {
+                        m_history->execute(std::make_unique<SetTextColorCommand>(
+                            *m_document, m_selectedId, QStringLiteral("text.color"),
+                            &Document::setLayerTextColor, static_cast<TextLayer*>(layer)->color, color));
+                    } else {
+                        m_document->setLayerTextColor(m_selectedId, color);
+                    }
+                    if (m_textInspector) m_textInspector->refresh();
+                } else if (layer->type() == LayerType::Shape) {
+                    if (m_history) {
+                        m_history->execute(std::make_unique<SetShapeFillCommand>(
+                            *m_document, m_selectedId, QStringLiteral("shape.fill"),
+                            &Document::setShapeFill, static_cast<ShapeLayer*>(layer)->fill, color));
+                    } else {
+                        m_document->setShapeFill(m_selectedId, color);
+                    }
+                    if (m_shapeInspector) m_shapeInspector->refresh();
+                }
+            }
+        }
+
+        statusBar()->showMessage(QStringLiteral("Color sampled: %1 (R:%2 G:%3 B:%4)").arg(color.name()).arg(color.red()).arg(color.green()).arg(color.blue()), 3000);
+    });
 
     setCentralWidget(m_centralStack);
 }
@@ -422,6 +464,8 @@ void MainWindow::buildLayersDock()
                     m_history->execute(
                         std::make_unique<DuplicateLayerCommand>(*m_document, id));
             });
+    connect(m_layersPanel, &LayersPanel::quickExportRequested,
+            this, &MainWindow::quickExportLayerPng);
     connect(m_layersPanel, &LayersPanel::addTextRequested, this, [this] {
         if (m_addTextAction) m_addTextAction->trigger();
     });
@@ -919,6 +963,14 @@ void MainWindow::buildActions()
     connect(m_toolFloodAction, &QAction::triggered, this, [this] {
         if (m_canvas) m_canvas->setTool(CanvasTool::FloodFill);
     });
+
+    m_toolEyedropperAction = new QAction(this);
+    m_toolEyedropperAction->setCheckable(true);
+    m_toolEyedropperAction->setShortcut(QKeySequence(QStringLiteral("I")));
+    m_toolGroup->addAction(m_toolEyedropperAction);
+    connect(m_toolEyedropperAction, &QAction::triggered, this, [this] {
+        if (m_canvas) m_canvas->setTool(CanvasTool::Eyedropper);
+    });
 }
 
 void MainWindow::buildToolBars()
@@ -940,6 +992,7 @@ void MainWindow::buildToolBars()
     m_toolCloneAction->setIcon(ThemeIcons::toolClone());
     m_toolPaintAction->setIcon(ThemeIcons::toolPaint());
     m_toolFloodAction->setIcon(ThemeIcons::toolFlood());
+    m_toolEyedropperAction->setIcon(ThemeIcons::toolEyedropper());
     m_addTextAction->setIcon(ThemeIcons::toolText());
     m_addRectAction->setIcon(ThemeIcons::toolShape());
 
@@ -950,6 +1003,7 @@ void MainWindow::buildToolBars()
     m_toolsBar->addAction(m_toolCloneAction);
     m_toolsBar->addAction(m_toolPaintAction);
     m_toolsBar->addAction(m_toolFloodAction);
+    m_toolsBar->addAction(m_toolEyedropperAction);
     m_toolsBar->addSeparator();
     m_toolsBar->addAction(m_addTextAction);
     m_toolsBar->addAction(m_addRectAction);
@@ -1295,6 +1349,16 @@ void MainWindow::buildToolBars()
     floodLayout->addWidget(m_floodTolValueLabel);
     floodLayout->addStretch();
     m_toolOptionsStack->addWidget(floodPage);
+
+    // --- Página 7: Conta-gotas (Eyedropper Tool) ---
+    QWidget* eyedropperPage = new QWidget(this);
+    QHBoxLayout* eyedropperLayout = new QHBoxLayout(eyedropperPage);
+    eyedropperLayout->setContentsMargins(8, 2, 8, 2);
+    eyedropperLayout->setSpacing(8);
+    auto* eyedropperHint = new QLabel(QStringLiteral("Clique no canvas para amostrar a cor. (Dica: Segurar Alt em qualquer ferramenta também ativa o conta-gotas)"), this);
+    eyedropperLayout->addWidget(eyedropperHint);
+    eyedropperLayout->addStretch();
+    m_toolOptionsStack->addWidget(eyedropperPage);
 
     // Tool option pages contain several controls and can be wider than the
     // available window.  Keep their natural width and let the toolbar scroll
@@ -2405,6 +2469,52 @@ void MainWindow::exportImage()
         m_i18n->t("editor", "export.success").arg(path));
 }
 
+void MainWindow::quickExportLayerPng(const LayerId& id)
+{
+    if (!m_document || id.isNull())
+        return;
+
+    const auto* layer = m_document->findLayer(id);
+    if (!layer)
+        return;
+
+    QString defaultName = layer->name.trimmed();
+    if (defaultName.isEmpty())
+        defaultName = QStringLiteral("layer");
+    // Sanitize filename
+    defaultName.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|]")), QStringLiteral("_"));
+
+    QString exportDir = QDir::homePath();
+    if (!m_currentFilePath.isEmpty()) {
+        exportDir = QFileInfo(m_currentFilePath).absolutePath();
+    }
+
+    const QString defaultPath = QDir(exportDir).filePath(defaultName + QStringLiteral(".png"));
+
+    const QString path = QFileDialog::getSaveFileName(
+        this,
+        m_i18n ? m_i18n->t("common", "panel.quickExportPng") : QStringLiteral("Quick Export as PNG"),
+        defaultPath,
+        QStringLiteral("PNG (*.png)"));
+
+    if (path.isEmpty())
+        return;
+
+    QString error;
+    const bool success = exportLayerToImage(*m_document, id, path,
+                                            QStringLiteral("png"), 95, 1.0, &error);
+    if (!success) {
+        QMessageBox::warning(this,
+                             m_i18n ? m_i18n->t("editor", "export.error.title") : QStringLiteral("Export failed"),
+                             error);
+        return;
+    }
+
+    statusBar()->showMessage(
+        m_i18n ? m_i18n->t("editor", "export.success").arg(path) : QStringLiteral("Exported to %1").arg(path),
+        4000);
+}
+
 void MainWindow::flipLayer(bool horizontal)
 {
     if (!m_document || m_selectedId.isNull())
@@ -2726,6 +2836,8 @@ void MainWindow::retranslateUi()
                            m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Pincel") : QStringLiteral("Brush"), "B");
     setToolTipWithShortcut(m_toolFloodAction,
                            m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Preenchimento") : QStringLiteral("Fill"), "G");
+    setToolTipWithShortcut(m_toolEyedropperAction,
+                           m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Conta-gotas") : QStringLiteral("Eyedropper"), "I");
     setToolTipWithShortcut(m_addTextAction,
                            m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Texto") : QStringLiteral("Text"), "T");
     setToolTipWithShortcut(m_addRectAction,
@@ -2838,6 +2950,11 @@ void MainWindow::retranslateUi()
     if (m_toolFloodAction) {
         m_toolFloodAction->setText(m_i18n->t("editor", "tools.floodName"));
         m_toolFloodAction->setToolTip(QStringLiteral("%1 (G)").arg(m_i18n->t("editor", "tools.floodName")));
+    }
+    if (m_toolEyedropperAction) {
+        const QString eyedropperText = m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Conta-gotas") : QStringLiteral("Eyedropper");
+        m_toolEyedropperAction->setText(eyedropperText);
+        m_toolEyedropperAction->setToolTip(QStringLiteral("%1 (I)").arg(eyedropperText));
     }
 
 

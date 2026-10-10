@@ -1005,6 +1005,8 @@ void LayersPanel::showContextMenu(const QPoint& pos)
     QAction* duplicateAction = menu.addAction(m_i18n->t("common", "panel.duplicate"));
     QAction* deleteAction = menu.addAction(m_i18n->t("common", "panel.delete"));
     menu.addSeparator();
+    QAction* quickExportAction = menu.addAction(m_i18n ? m_i18n->t("common", "panel.quickExportPng") : QStringLiteral("Quick Export as PNG"));
+    menu.addSeparator();
     QAction* groupAction = menu.addAction(m_i18n->t("common", "menu.layer.group"));
     QAction* ungroupAction = menu.addAction(m_i18n->t("common", "menu.layer.ungroup"));
     QAction* maskAction = menu.addAction(QStringLiteral("Apply mask from selection"));
@@ -1048,6 +1050,8 @@ void LayersPanel::showContextMenu(const QPoint& pos)
         emit duplicateRequested(id);
     } else if (chosen == deleteAction) {
         emit deleteRequested(id);
+    } else if (chosen == quickExportAction) {
+        emit quickExportRequested(id);
     } else if (chosen == groupAction) {
         if (!m_history)
             return;

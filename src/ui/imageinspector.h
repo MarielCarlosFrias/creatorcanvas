@@ -142,6 +142,17 @@ private:
     QLabel* m_outlineWidthLabel = nullptr;
     QLabel* m_outlineBlurLabel = nullptr;
 
+    // Chroma Key / Color to Alpha
+    class CollapsibleSection* m_chromaKeySection = nullptr;
+    QPushButton* m_chromaKeyColorBtn = nullptr;
+    QColor m_chromaKeyColor{0, 255, 0};
+    QSlider* m_chromaTranspSlider = nullptr;
+    QLabel* m_chromaTranspValue = nullptr;
+    QSlider* m_chromaOpacitySlider = nullptr;
+    QLabel* m_chromaOpacityValue = nullptr;
+    QPushButton* m_chromaApplyBtn = nullptr;
+    QPushButton* m_chromaResetBtn = nullptr;
+
     // Seções recolhíveis
     class CollapsibleSection* m_quickFiltersSection = nullptr;
     class CollapsibleSection* m_adjustmentsSection = nullptr;

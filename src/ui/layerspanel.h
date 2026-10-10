@@ -49,6 +49,7 @@ signals:
     void focusRequested(const QPointF& documentPos);
     void addTextRequested();
     void addShapeRequested();
+    void quickExportRequested(const cc::LayerId& id);
 
 private:
     void buildUi();

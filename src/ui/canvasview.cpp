@@ -710,6 +710,15 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
         }
     }
 
+    if (m_tool == CanvasTool::Eyedropper || ((event->modifiers() & Qt::AltModifier) && event->button() == Qt::LeftButton)) {
+        const QColor sampled = sampleColorAt(docPos);
+        if (sampled.isValid()) {
+            emit colorPicked(sampled);
+        }
+        event->accept();
+        return;
+    }
+
     if (m_tool != CanvasTool::Select) {
         if (m_activeTool) {
             m_activeTool->mousePress(event, docPos, makeToolContext());
@@ -1463,6 +1472,14 @@ void CanvasView::setTool(CanvasTool tool)
     case CanvasTool::FloodFill:
         m_activeTool = m_floodTool.get();
         break;
+    case CanvasTool::Eyedropper:
+        m_activeTool = nullptr;
+        setCursor(Qt::CrossCursor);
+        break;
+    }
+
+    if (m_tool != CanvasTool::Eyedropper && !m_activeTool) {
+        unsetCursor();
     }
 
     if (m_activeTool) {
@@ -1493,6 +1510,34 @@ void CanvasView::cancelMockupPlacement()
     setCursor(Qt::ArrowCursor);
     emit statusMessageRequested(QStringLiteral("Posicionamento do mockup cancelado."));
     update();
+}
+
+QColor CanvasView::sampleColorAt(const QPointF& docPos) const
+{
+    if (!m_document)
+        return {};
+
+    const int px = qFloor(docPos.x());
+    const int py = qFloor(docPos.y());
+    if (px < 0 || px >= m_document->width() || py < 0 || py >= m_document->height())
+        return {};
+
+    // Render 1x1 pixel into an offscreen image using renderDocument
+    QImage pixelImg(1, 1, QImage::Format_ARGB32_Premultiplied);
+    pixelImg.fill(Qt::transparent);
+
+    QPainter p(&pixelImg);
+    // Translate so docPos maps to (0, 0)
+    p.translate(-px, -py);
+
+    RenderOptions opt;
+    opt.previewLayerId = m_previewLayerId;
+    opt.previewImage = m_previewImage;
+    renderDocument(*m_document, &p, QTransform(), opt);
+    p.end();
+
+    const QRgb rgb = pixelImg.pixel(0, 0);
+    return QColor::fromRgba(rgb);
 }
 
 void CanvasView::finishMockupPlacement()

@@ -37,7 +37,9 @@
         "align": "Alinhamento",
         "align.left": "Esquerda",
         "align.center": "Centro",
-        "align.right": "Direita"
+        "align.right": "Direita",
+        "letterSpacing": "Espaçamento (Tracking)",
+        "lineHeight": "Altura da Linha (Leading)"
     },
     "effects": {
         "title": "Efeitos",
@@ -140,6 +142,7 @@
         "perspective": "Inclinação 3D & Perspectiva",
         "quickFilters": "Filtros Rápidos de 1 Clique",
         "manualAdjustments": "Ajustes de Cor e Filtros",
+        "chromaKey": "Chroma Key (Remover Fundo por Cor)",
         "fillStroke": "Preenchimento e Contorno",
         "geometry": "Geometria e Dimensões"
     },

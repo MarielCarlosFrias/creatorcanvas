@@ -140,6 +140,8 @@ void TextInspector::refresh()
     m_color->setText(hex);
     m_color->setStyleSheet(QStringLiteral("background: %1;").arg(hex));
     m_align->setCurrentIndex(static_cast<int>(layer->align));
+    m_letterSpacing->setValue(layer->letterSpacingPx);
+    m_lineHeight->setValue(layer->lineHeightMult > 0.0 ? layer->lineHeightMult : 1.0);
 
     const TextEffects& fx = layer->effects;
     m_outlineOn->setChecked(fx.outline.enabled);
@@ -243,6 +245,22 @@ void TextInspector::buildUi()
     m_align = new QComboBox(this);
     m_alignLabel = new QLabel(this);
     typoForm->addRow(m_alignLabel, m_align);
+
+    m_letterSpacing = new QDoubleSpinBox(this);
+    m_letterSpacing->setRange(-50.0, 200.0);
+    m_letterSpacing->setSingleStep(0.5);
+    m_letterSpacing->setDecimals(1);
+    m_letterSpacing->setSuffix(QStringLiteral(" px"));
+    m_letterSpacingLabel = new QLabel(this);
+    typoForm->addRow(m_letterSpacingLabel, m_letterSpacing);
+
+    m_lineHeight = new QDoubleSpinBox(this);
+    m_lineHeight->setRange(0.2, 5.0);
+    m_lineHeight->setSingleStep(0.1);
+    m_lineHeight->setDecimals(2);
+    m_lineHeight->setValue(1.0);
+    m_lineHeightLabel = new QLabel(this);
+    typoForm->addRow(m_lineHeightLabel, m_lineHeight);
 
     m_typographySection->setContentLayout(typoForm);
     layout->addWidget(m_typographySection);
@@ -507,6 +525,34 @@ void TextInspector::buildUi()
         }
     });
 
+    connect(m_letterSpacing, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double val) {
+        TextLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        if (qFuzzyCompare(layer->letterSpacingPx, val)) return;
+
+        if (m_history && m_document) {
+            m_history->execute(std::make_unique<SetTextLetterSpacingCommand>(
+                *m_document, m_id, QStringLiteral("text.letterSpacing"),
+                &Document::setLayerLetterSpacing, layer->letterSpacingPx, val));
+        } else if (m_document) {
+            m_document->setLayerLetterSpacing(m_id, val);
+        }
+    });
+
+    connect(m_lineHeight, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double val) {
+        TextLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        if (qFuzzyCompare(layer->lineHeightMult, val)) return;
+
+        if (m_history && m_document) {
+            m_history->execute(std::make_unique<SetTextLineHeightCommand>(
+                *m_document, m_id, QStringLiteral("text.lineHeight"),
+                &Document::setLayerLineHeight, layer->lineHeightMult, val));
+        } else if (m_document) {
+            m_document->setLayerLineHeight(m_id, val);
+        }
+    });
+
     connect(m_color, &QPushButton::clicked, this, [this] {
         TextLayer* layer = nullptr;
         if (!editingLayer(&layer)) return;
@@ -692,6 +738,8 @@ void TextInspector::retranslateUi()
     m_sizeLabel->setText(m_i18n->t("editor", "text.size"));
     m_styleLabel->setText(m_i18n->t("editor", "text.style"));
     m_alignLabel->setText(m_i18n->t("editor", "text.align"));
+    m_letterSpacingLabel->setText(m_i18n ? m_i18n->t("editor", "text.letterSpacing") : QStringLiteral("Tracking (Spacing)"));
+    m_lineHeightLabel->setText(m_i18n ? m_i18n->t("editor", "text.lineHeight") : QStringLiteral("Leading (Line Height)"));
     m_outlineOn->setText(m_i18n->t("editor", "effects.outline"));
     m_shadowOn->setText(m_i18n->t("editor", "effects.shadow"));
     m_hollowOn->setText(m_i18n ? m_i18n->t("editor", "effects.hollow") : QStringLiteral("Interior Vazado"));

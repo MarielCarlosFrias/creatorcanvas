@@ -57,6 +57,7 @@
     "panel.back": "Send to Back",
     "panel.duplicate": "Duplicate",
     "panel.delete": "Delete",
+    "panel.quickExportPng": "Quick Export as PNG",
     "panel.addLayer": "Add Layer",
     "panel.moveUp": "Move Up",
     "panel.moveDown": "Move Down",

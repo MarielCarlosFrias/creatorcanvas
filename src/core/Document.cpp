@@ -405,6 +405,34 @@ bool Document::setLayerTextAlign(const LayerId& id, TextAlignment align)
     return true;
 }
 
+bool Document::setLayerLetterSpacing(const LayerId& id, double letterSpacingPx)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Text)
+        return false;
+    auto* text = static_cast<TextLayer*>(layer);
+    if (qFuzzyCompare(text->letterSpacingPx, letterSpacingPx))
+        return true;
+    text->letterSpacingPx = letterSpacingPx;
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
+bool Document::setLayerLineHeight(const LayerId& id, double lineHeightMult)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Text)
+        return false;
+    auto* text = static_cast<TextLayer*>(layer);
+    if (qFuzzyCompare(text->lineHeightMult, lineHeightMult))
+        return true;
+    text->lineHeightMult = lineHeightMult;
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
 void Document::touchLayer(const LayerId& id)
 {
     if (findLayer(id)) {

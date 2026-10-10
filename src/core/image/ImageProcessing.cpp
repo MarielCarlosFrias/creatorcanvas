@@ -632,4 +632,92 @@ QImage ImageProcessing::applyPresetFilter(const QImage& source, PresetFilter pre
     return result;
 }
 
+QImage ImageProcessing::colorToAlpha(const QImage& source, const QColor& keyColor,
+                                     double transparency, double opacityThreshold)
+{
+    if (source.isNull())
+        return {};
+
+    QImage result = source.convertToFormat(QImage::Format_ARGB32);
+    const int w = result.width();
+    const int h = result.height();
+
+    const double cr = keyColor.redF();
+    const double cg = keyColor.greenF();
+    const double cb = keyColor.blueF();
+
+    const double t = std::clamp(transparency, 0.0, 1.0);
+    const double o = std::clamp(opacityThreshold, 0.0, 1.0);
+
+    for (int y = 0; y < h; ++y) {
+        auto* scanLine = reinterpret_cast<QRgb*>(result.scanLine(y));
+        for (int x = 0; x < w; ++x) {
+            const QRgb px = scanLine[x];
+            const double origA = qAlpha(px) / 255.0;
+            if (origA <= 0.0)
+                continue;
+
+            const double pr = qRed(px) / 255.0;
+            const double pg = qGreen(px) / 255.0;
+            const double pb = qBlue(px) / 255.0;
+
+            // Opacity requirement per channel i:
+            // if P_i > C_i: ai = (P_i - C_i) / (1 - C_i)
+            // if P_i < C_i: ai = (C_i - P_i) / C_i
+            // if P_i == C_i: ai = 0
+            auto channelOpacity = [](double p, double c) -> double {
+                if (p > c) {
+                    return (c < 1.0) ? ((p - c) / (1.0 - c)) : 1.0;
+                } else if (p < c) {
+                    return (c > 0.0) ? ((c - p) / c) : 1.0;
+                }
+                return 0.0;
+            };
+
+            const double ar = channelOpacity(pr, cr);
+            const double ag = channelOpacity(pg, cg);
+            const double ab = channelOpacity(pb, cb);
+
+            double a = std::max({ar, ag, ab});
+            a = std::clamp(a, 0.0, 1.0);
+
+            // Remap thresholds: a <= transparency -> 0, a >= opacityThreshold -> 1, linear between
+            if (a <= t) {
+                a = 0.0;
+            } else if (a >= o) {
+                a = 1.0;
+            } else if (o > t) {
+                a = (a - t) / (o - t);
+                a = std::clamp(a, 0.0, 1.0);
+            }
+
+            double qr = pr;
+            double qg = pg;
+            double qb = pb;
+
+            if (a < 1.0) {
+                if (a <= 0.0) {
+                    qr = cr;
+                    qg = cg;
+                    qb = cb;
+                } else {
+                    qr = std::clamp(cr + (pr - cr) / a, 0.0, 1.0);
+                    qg = std::clamp(cg + (pg - cg) / a, 0.0, 1.0);
+                    qb = std::clamp(cb + (pb - cb) / a, 0.0, 1.0);
+                }
+            }
+
+            const double finalAlpha = origA * a;
+            scanLine[x] = qRgba(
+                std::clamp(static_cast<int>(std::round(qr * 255.0)), 0, 255),
+                std::clamp(static_cast<int>(std::round(qg * 255.0)), 0, 255),
+                std::clamp(static_cast<int>(std::round(qb * 255.0)), 0, 255),
+                std::clamp(static_cast<int>(std::round(finalAlpha * 255.0)), 0, 255)
+            );
+        }
+    }
+
+    return result;
+}
+
 } // namespace cc

@@ -440,6 +440,8 @@ using SetTextItalicCommand     = LayerPropertyCommand<bool>;
 using SetTextUnderlineCommand  = LayerPropertyCommand<bool>;
 using SetTextColorCommand      = LayerPropertyCommand<QColor>;
 using SetTextAlignCommand      = LayerPropertyCommand<TextAlignment>;
+using SetTextLetterSpacingCommand = LayerPropertyCommand<double>;
+using SetTextLineHeightCommand   = LayerPropertyCommand<double>;
 
 /// Comando reversível para modificações de conteúdo em camadas de imagem (corte, varinha mágica, tesoura, clone stamp).
 /// Preserva o asset anterior e novo, dimensões naturais e transformações (posição/escala) para suporte completo a Desfazer/Refazer.

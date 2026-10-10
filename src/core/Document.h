@@ -66,6 +66,8 @@ public:
     bool setLayerTextUnderline(const LayerId& id, bool underline);
     bool setLayerTextColor(const LayerId& id, QColor color);
     bool setLayerTextAlign(const LayerId& id, TextAlignment align);
+    bool setLayerLetterSpacing(const LayerId& id, double letterSpacingPx);
+    bool setLayerLineHeight(const LayerId& id, double lineHeightMult);
 
     // Propriedades de ShapeLayer (retângulos, elipses, linhas)
     // Passadas por valor para garantir compatibilidade com LayerPropertyCommand (Undo/Redo)

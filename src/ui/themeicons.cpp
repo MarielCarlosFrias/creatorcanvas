@@ -190,6 +190,35 @@ QIcon ThemeIcons::toolFlood(const QColor& color)
     });
 }
 
+QIcon ThemeIcons::toolEyedropper(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.setBrush(Qt::NoBrush);
+
+        // Pipette bulb and glass tube pointing towards bottom-left (4, 20)
+        QPainterPath pipette;
+        pipette.moveTo(15 * scale, 9 * scale);
+        pipette.lineTo(8 * scale, 16 * scale);
+        pipette.lineTo(4 * scale, 20 * scale);
+        pipette.lineTo(8 * scale, 20 * scale);
+        pipette.lineTo(15 * scale, 13 * scale);
+        pipette.closeSubpath();
+        p.drawPath(pipette);
+
+        // Bulb / Top
+        p.setBrush(color);
+        QPainterPath bulb;
+        bulb.moveTo(14 * scale, 10 * scale);
+        bulb.lineTo(17 * scale, 7 * scale);
+        bulb.lineTo(20 * scale, 10 * scale);
+        bulb.lineTo(17 * scale, 13 * scale);
+        bulb.closeSubpath();
+        p.drawPath(bulb);
+    });
+}
+
 QIcon ThemeIcons::toolText(const QColor& color)
 {
     return makeMultiSizeIcon([color](QPainter& p, int s) {

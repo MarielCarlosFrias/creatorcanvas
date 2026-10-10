@@ -65,6 +65,8 @@ private:
     QToolButton* m_underline = nullptr;
     QPushButton* m_color = nullptr;
     QComboBox* m_align = nullptr;
+    QDoubleSpinBox* m_letterSpacing = nullptr;
+    QDoubleSpinBox* m_lineHeight = nullptr;
 
     QLabel* m_contentLabel = nullptr;
     QLabel* m_fontLabel = nullptr;
@@ -72,6 +74,8 @@ private:
     QLabel* m_styleLabel = nullptr;
     QLabel* m_colorLabel = nullptr;
     QLabel* m_alignLabel = nullptr;
+    QLabel* m_letterSpacingLabel = nullptr;
+    QLabel* m_lineHeightLabel = nullptr;
 
     QLabel* m_effectsLabel = nullptr;
     QCheckBox* m_outlineOn = nullptr;

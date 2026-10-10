@@ -37,7 +37,9 @@
         "align": "Align",
         "align.left": "Left",
         "align.center": "Center",
-        "align.right": "Right"
+        "align.right": "Right",
+        "letterSpacing": "Tracking (Spacing)",
+        "lineHeight": "Leading (Line Height)"
     },
     "effects": {
         "title": "Effects",
@@ -140,6 +142,7 @@
         "perspective": "3D Tilt & Perspective",
         "quickFilters": "Quick 1-Click Filters",
         "manualAdjustments": "Color Adjustments & Filters",
+        "chromaKey": "Chroma Key (Color to Alpha)",
         "fillStroke": "Fill & Stroke",
         "geometry": "Geometry & Dimensions"
     },
