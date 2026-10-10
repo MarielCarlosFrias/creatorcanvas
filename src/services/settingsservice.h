@@ -27,6 +27,9 @@ public:
     int autosaveIntervalMinutes() const;   // 0 = autosave disabled; default 5
     void setAutosaveIntervalMinutes(int minutes);
 
+    int historyLimit() const;
+    void setHistoryLimit(int limit);
+
     // Performance ----------------------------------------------------------
     bool gpuAccelerationEnabled() const;   // default false (software renderer)
     void setGpuAccelerationEnabled(bool enabled);

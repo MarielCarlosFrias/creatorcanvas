@@ -575,10 +575,38 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
     }
     case LayerType::Image: {
         const auto& image = static_cast<const ImageLayer&>(layer);
-        const QImage pixels = options.interactive
+        const QImage pixels = (options.previewLayerId == image.id() && !options.previewImage.isNull())
+            ? options.previewImage
+            : options.interactive
             ? doc.assets().previewImage(image.assetId)
             : doc.assets().decodedImage(image.assetId);
         if (!pixels.isNull()) {
+            QImage maskedPixels = pixels;
+            if (!image.alphaMask.isNull() && image.alphaMask.size() == pixels.size()) {
+                const qint64 sourceKey = static_cast<qint64>(pixels.cacheKey());
+                const qint64 maskKey = static_cast<qint64>(image.alphaMask.cacheKey());
+                if (image.maskedRenderCache.isNull()
+                    || image.maskedRenderSourceKey != sourceKey
+                    || image.maskedRenderMaskKey != maskKey
+                    || image.maskedRenderCache.size() != pixels.size()) {
+                    // We write straight RGBA values below. Using a premultiplied
+                    // buffer here corrupts partially masked pixels (white/black
+                    // halos and blocks), so keep the non-premultiplied format.
+                    QImage composed = pixels.convertToFormat(QImage::Format_ARGB32);
+                    const QImage mask = image.alphaMask.convertToFormat(QImage::Format_Alpha8);
+                    for (int y = 0; y < composed.height(); ++y) {
+                        QRgb* dst = reinterpret_cast<QRgb*>(composed.scanLine(y));
+                        const uchar* src = mask.constScanLine(y);
+                        for (int x = 0; x < composed.width(); ++x)
+                            dst[x] = qRgba(qRed(dst[x]), qGreen(dst[x]), qBlue(dst[x]),
+                                           (qAlpha(dst[x]) * src[x]) / 255);
+                    }
+                    image.maskedRenderCache = std::move(composed);
+                    image.maskedRenderSourceKey = sourceKey;
+                    image.maskedRenderMaskKey = maskKey;
+                }
+                maskedPixels = image.maskedRenderCache;
+            }
             const QRectF targetRect(0, 0, image.naturalWidth, image.naturalHeight);
 
             // Efeito Contorno / Glow ("Sticker Effect")
@@ -586,7 +614,7 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
                 renderImageOutline(painter, image, doc);
             }
 
-            painter->drawImage(targetRect, pixels);
+            painter->drawImage(targetRect, maskedPixels);
         } else {
             // Placeholder while the asset has no decoded pixels.
             painter->fillRect(
@@ -630,6 +658,35 @@ void renderDocument(const Document& doc, QPainter* painter,
     painter->setPen(QPen(options.canvasBorder, 1.0));
     painter->setBrush(Qt::NoBrush);
     painter->drawRect(canvasOnDevice);
+    painter->restore();
+}
+
+void renderSiblingLayers(const Document& doc, const QList<QUuid>& layerIds,
+                         QPainter* painter, const RenderOptions& options)
+{
+    if (!painter || layerIds.isEmpty())
+        return;
+
+    const QRectF canvasRect(0, 0, doc.width(), doc.height());
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing, true);
+    painter->setRenderHint(QPainter::TextAntialiasing, true);
+    painter->setRenderHint(QPainter::SmoothPixmapTransform, true);
+    painter->setClipRect(canvasRect);
+
+    // Keep document paint order, rather than the row-click order.
+    GroupLayer* parent = doc.parentOf(layerIds.first());
+    if (parent == doc.rootGroup()) {
+        for (const auto& child : parent->children) {
+            if (layerIds.contains(child->id()))
+                drawLayer(painter, *child, doc, canvasRect, 1.0f, options);
+        }
+    } else if (parent) {
+        for (const auto& child : parent->children) {
+            if (layerIds.contains(child->id()))
+                drawLayer(painter, *child, doc, canvasRect, 1.0f, options);
+        }
+    }
     painter->restore();
 }
 

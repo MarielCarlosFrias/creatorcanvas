@@ -204,6 +204,17 @@ bool Document::setLayerLocked(const LayerId& id, bool locked)
     return true;
 }
 
+bool Document::setLayerColorTag(const LayerId& id, LayerColorTag tag)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->colorTag == tag)
+        return layer != nullptr;
+    layer->colorTag = tag;
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
 bool Document::setLayerOpacity(const LayerId& id, float opacity)
 {
     Layer* layer = findLayer(id);
@@ -491,6 +502,35 @@ bool Document::setImageLayerAsset(const LayerId& id, const LayerId& newAssetId, 
     bumpRevision();
     emit layerPropertyChanged(id);
     return true;
+}
+
+bool Document::setLayerAlphaMask(const LayerId& id, QImage mask)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Image)
+        return false;
+    static_cast<ImageLayer*>(layer)->alphaMask = std::move(mask);
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
+void Document::setPixelSelection(QImage selection)
+{
+    if (!selection.isNull())
+        selection = selection.convertToFormat(QImage::Format_Alpha8);
+    m_pixelSelection = std::move(selection);
+    bumpRevision();
+    emit structureChanged();
+}
+
+void Document::clearPixelSelection()
+{
+    if (m_pixelSelection.isNull())
+        return;
+    m_pixelSelection = QImage();
+    bumpRevision();
+    emit structureChanged();
 }
 
 } // namespace cc

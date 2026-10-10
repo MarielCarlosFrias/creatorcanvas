@@ -3,6 +3,9 @@
 #include "aibackgrounddialog.h"
 #include "core/image/BackgroundRemover.h"
 #include "core/image/ImageProcessing.h"
+#include "core/history/DocumentCommands.h"
+#include "core/selection/SelectionOperations.h"
+#include "core/history/CommandStack.h"
 #include "rendering/CanvasRenderer.h"
 #include "tools/SelectTool.h"
 #include "tools/CropTool.h"
@@ -36,6 +39,36 @@
 
 namespace cc {
 namespace {
+
+QImage composeAlphaMask(const QImage& existing, const QImage& operation)
+{
+    const QImage op = operation.convertToFormat(QImage::Format_Alpha8);
+    if (existing.isNull() || existing.size() != op.size())
+        return op;
+    QImage result = existing.convertToFormat(QImage::Format_Alpha8);
+    for (int y = 0; y < result.height(); ++y) {
+        uchar* dst = result.scanLine(y);
+        const uchar* src = op.constScanLine(y);
+        for (int x = 0; x < result.width(); ++x)
+            dst[x] = static_cast<uchar>((int(dst[x]) * int(src[x])) / 255);
+    }
+    return result;
+}
+
+QImage alphaMaskFromImage(const QImage& image)
+{
+    if (image.isNull())
+        return {};
+    const QImage rgba = image.convertToFormat(QImage::Format_RGBA8888);
+    QImage mask(rgba.size(), QImage::Format_Alpha8);
+    for (int y = 0; y < rgba.height(); ++y) {
+        const uchar* src = rgba.constScanLine(y);
+        uchar* dst = mask.scanLine(y);
+        for (int x = 0; x < rgba.width(); ++x)
+            dst[x] = src[x * 4 + 3];
+    }
+    return mask;
+}
 
 constexpr double kMinZoom = 0.05;
 constexpr double kMaxZoom = 32.0;
@@ -530,11 +563,68 @@ void CanvasView::paintEvent(QPaintEvent*)
         return;
 
     RenderOptions options;
+    options.previewLayerId = m_previewLayerId;
+    options.previewImage = m_previewImage;
     options.interactive = (m_gesture != Gesture::None) || m_panning;
     if (!dark) {
         options.canvasBorder = QColor(0x94, 0xa3, 0xb8);
     }
     renderDocument(*m_document, &painter, docToDevice(), options);
+
+    // Mostra a seleção de pixels criada pela Varinha/Tesoura sem alterar a
+    // camada original. A sobreposição vermelha permite confirmar a área antes
+    // de aplicar uma máscara.
+    const QImage& pixelSelection = m_document->pixelSelection();
+    if (!pixelSelection.isNull()) {
+        // A seleção da varinha é guardada em coordenadas da própria imagem,
+        // não em coordenadas do documento. Desenhá-la como se fosse um bitmap
+        // do documento fazia com que ela desaparecesse (e parecia que a
+        // imagem tinha ficado transparente). Mostramos agora a área que será
+        // removida, transformada exatamente como a camada selecionada.
+        Layer* selectionLayer = m_selectedId.isNull() ? nullptr : m_document->findLayer(m_selectedId);
+        if (selectionLayer && selectionLayer->type() == LayerType::Image) {
+            auto* imageLayer = static_cast<ImageLayer*>(selectionLayer);
+            const QImage source = m_document->assets().decodedImage(imageLayer->assetId);
+            if (!source.isNull() && pixelSelection.size() == source.size()) {
+                // Use a non-premultiplied image for the marching-ants mask;
+                // writing straight qRgba values into ARGB32_Premultiplied
+                // produces neon colour artifacts.
+                QImage selectionOverlay(pixelSelection.size(), QImage::Format_ARGB32);
+                selectionOverlay.fill(Qt::transparent);
+                for (int y = 0; y < pixelSelection.height(); ++y) {
+                    QRgb* dst = reinterpret_cast<QRgb*>(selectionOverlay.scanLine(y));
+                    const uchar* src = pixelSelection.constScanLine(y);
+                    for (int x = 0; x < pixelSelection.width(); ++x) {
+                        // Draw only the boundary of the selected region. A
+                        // full red fill looked like the image had become
+                        // transparent, especially on large backgrounds.
+                        const uchar here = src[x];
+                        const uchar left = x > 0 ? src[x - 1] : here;
+                        const uchar right = x + 1 < pixelSelection.width() ? src[x + 1] : here;
+                        const uchar up = y > 0 ? pixelSelection.constScanLine(y - 1)[x] : here;
+                        const uchar down = y + 1 < pixelSelection.height() ? pixelSelection.constScanLine(y + 1)[x] : here;
+                        const bool edge = qAbs(int(here) - int(left)) > 20
+                                       || qAbs(int(here) - int(right)) > 20
+                                       || qAbs(int(here) - int(up)) > 20
+                                       || qAbs(int(here) - int(down)) > 20;
+                        // Photo editors show a selection as a black/white
+                        // dashed boundary, not as a coloured fill.
+                        if (edge)
+                            dst[x] = ((x + y) / 3) % 2
+                                ? qRgba(255, 255, 255, 255)
+                                : qRgba(0, 0, 0, 255);
+                    }
+                }
+                // Keep the same multiplication order used by the renderer
+                // and the layer handles: layer transform, then canvas view
+                // transform. Reversing these offsets the selection when the
+                // layer is moved or scaled.
+                painter.setTransform(imageLayer->transform.matrix(imageLayer->contentBounds()) * docToDevice());
+                painter.drawImage(QPointF(0, 0), selectionOverlay);
+                painter.setTransform(QTransform());
+            }
+        }
+    }
 
     if (m_activeTool) {
         m_activeTool->drawOverlay(&painter, makeToolContext());
@@ -561,6 +651,20 @@ void CanvasView::paintEvent(QPaintEvent*)
         drawMockupPlacementOverlay(&painter);
 
     drawSnapGuides(&painter);
+}
+
+void CanvasView::setImagePreview(const LayerId& id, const QImage& image)
+{
+    m_previewLayerId = id;
+    m_previewImage = image;
+    update();
+}
+
+void CanvasView::clearImagePreview()
+{
+    m_previewLayerId = LayerId();
+    m_previewImage = QImage();
+    update();
 }
 
 void CanvasView::wheelEvent(QWheelEvent* event)
@@ -662,10 +766,11 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
                 else
                     addToSelection(layer->id());
             } else {
-                if (!m_multiSelection.contains(layer->id())) {
-                    m_multiSelection.clear();
-                    selectLayer(layer->id());
-                }
+                // Um clique normal seleciona apenas o objeto clicado. A
+                // seleção múltipla só permanece quando o utilizador segura
+                // Shift, evitando que camadas antigas se movam juntas.
+                m_multiSelection.clear();
+                selectLayer(layer->id());
             }
             m_gestureStart = layer->transform;
             m_gestureStartDoc = docPos;
@@ -892,7 +997,8 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event)
                 // para permitir ajustes finos manuais sem interferência das guias.
                 const bool snapDisabled = (event->modifiers() & Qt::AltModifier);
 
-                if (!snapDisabled) {
+                const bool isMockup = layer->name.startsWith(QStringLiteral("Mockup"), Qt::CaseInsensitive);
+                if (!snapDisabled && !isMockup) {
                     // 1. Sensibilidade dinâmica baseada no zoom da tela:
                     // Definimos um limiar confortável de cerca de 10 pixels físicos na tela.
                     // Em zoom 100% -> limiar de 10px em coordenadas do documento.
@@ -1143,6 +1249,8 @@ void CanvasView::contextMenuEvent(QContextMenuEvent* event)
 
     const QPointF docPos = deviceToDoc().map(QPointF(event->pos()));
     Layer* layer = hitTestLayer(docPos);
+    if (!layer && !m_selectedId.isNull())
+        layer = m_document->findLayer(m_selectedId);
     if (!layer || layer->type() == LayerType::Background)
         return;
 
@@ -1176,7 +1284,23 @@ void CanvasView::contextMenuEvent(QContextMenuEvent* event)
 
     QAction* removeBgAiDialogAction = nullptr;
     QAction* removeBgAiQuickAction = nullptr;
+    QAction* maskInsideAction = nullptr;
+    QAction* maskOutsideAction = nullptr;
+    QAction* copySelectionAction = nullptr;
+    QAction* cutSelectionAction = nullptr;
+    QAction* invertSelectionAction = nullptr;
+    QAction* clearSelectionAction = nullptr;
     if (layer->type() == LayerType::Image) {
+        if (!m_document->pixelSelection().isNull()) {
+            menu.addSeparator();
+            maskInsideAction = menu.addAction(QStringLiteral("Mask: keep inside selection"));
+            maskOutsideAction = menu.addAction(QStringLiteral("Mask: keep outside selection"));
+            copySelectionAction = menu.addAction(QStringLiteral("Copy selection to new layer"));
+            cutSelectionAction = menu.addAction(QStringLiteral("Cut selection to new layer"));
+            menu.addSeparator();
+            invertSelectionAction = menu.addAction(QStringLiteral("Invert selection"));
+            clearSelectionAction = menu.addAction(QStringLiteral("Cancel selection"));
+        }
         menu.addSeparator();
         const QString aiDialogText = m_i18n ? m_i18n->t("editor", "canvas.context.aiDialog")
                                             : QStringLiteral("✨ Remove Background with AI...");
@@ -1191,7 +1315,29 @@ void CanvasView::contextMenuEvent(QContextMenuEvent* event)
         return;
 
     const LayerId id = layer->id();
-    if (chosen == removeBgAiDialogAction) {
+    if (chosen == invertSelectionAction) {
+        m_document->setPixelSelection(
+            SelectionOperations::inverted(m_document->pixelSelection()));
+        update();
+    } else if (chosen == clearSelectionAction) {
+        m_document->clearPixelSelection();
+        update();
+    } else if (chosen == copySelectionAction || chosen == cutSelectionAction) {
+        LayerId createdId;
+        if (SelectionOperations::extractToLayer(
+                *m_document, m_history, id, chosen == cutSelectionAction, &createdId)) {
+            if (chosen == cutSelectionAction) {
+                m_selectedId = createdId;
+                emit selectionChanged(m_selectedId);
+            }
+            update();
+        }
+    } else if (chosen == maskInsideAction || chosen == maskOutsideAction) {
+        if (SelectionOperations::applyMask(
+                *m_document, m_history, id, chosen == maskInsideAction)) {
+            update();
+        }
+    } else if (chosen == removeBgAiDialogAction) {
         openAiBackgroundRemoval(id);
     } else if (chosen == removeBgAiQuickAction) {
         removeBackgroundAiQuick(id);
@@ -1424,6 +1570,15 @@ void CanvasView::setWandContiguous(bool contiguous)
         m_wandTool->setContiguous(contiguous);
 }
 
+void CanvasView::openSelectionActionsMenu()
+{
+    if (!m_document || m_document->pixelSelection().isNull() || m_selectedId.isNull())
+        return;
+    const QPoint center = rect().center();
+    QContextMenuEvent event(QContextMenuEvent::Mouse, center, mapToGlobal(center));
+    contextMenuEvent(&event);
+}
+
 void CanvasView::setCloneRadius(int radius)
 {
     if (m_cloneTool)
@@ -1489,14 +1644,15 @@ void CanvasView::openAiBackgroundRemoval(const LayerId& id)
     AiBackgroundDialog dlg(srcImg, m_i18n, this);
     if (dlg.exec() == QDialog::Accepted) {
         const QImage result = dlg.finalImage();
-        if (!result.isNull()) {
-            LayerId newAssetId = m_document->assets().addImage(result);
+        if (!result.isNull() && result.size() == srcImg.size()) {
             const QString cmdName = m_i18n ? m_i18n->t("editor", "canvas.command.aiBackground")
                                            : QStringLiteral("AI Background Removal");
-            emit imageLayerModified(imgLayer->id(),
-                                    imgLayer->assetId, imgLayer->naturalWidth, imgLayer->naturalHeight, layer->transform,
-                                    newAssetId, result.width(), result.height(), layer->transform,
-                                    cmdName);
+            const QImage oldMask = imgLayer->alphaMask;
+            const QImage newMask = composeAlphaMask(oldMask, alphaMaskFromImage(result));
+            if (m_history)
+                m_history->execute(std::make_unique<LayerPropertyCommand<QImage>>(
+                    *m_document, imgLayer->id(), cmdName,
+                    &Document::setLayerAlphaMask, oldMask, newMask));
             update();
         }
     }
@@ -1548,7 +1704,9 @@ void CanvasView::removeBackgroundAiQuick(const LayerId& id)
 
     auto* thread = QThread::create([self, cancelFlag, layerId, oldAssetId, oldW, oldH, oldT, srcImg]() {
         BackgroundRemover remover;
-        const QImage result = remover.removeBackground(srcImg, cancelFlag.get());
+        const QImage result = remover.isLoaded()
+                                  ? remover.removeBackground(srcImg, cancelFlag.get())
+                                  : QImage();
 
         if (cancelFlag->load())
             return;
@@ -1563,13 +1721,19 @@ void CanvasView::removeBackgroundAiQuick(const LayerId& id)
                 emit self->statusMessageRequested(failMsg);
                 return;
             }
-            LayerId newAssetId = self->m_document->assets().addImage(result);
             const QString cmdName = self->m_i18n ? self->m_i18n->t("editor", "canvas.command.aiBackgroundQuick")
                                                  : QStringLiteral("AI Background Removal (Quick)");
-            emit self->imageLayerModified(layerId,
-                                          oldAssetId, oldW, oldH, oldT,
-                                          newAssetId, result.width(), result.height(), oldT,
-                                          cmdName);
+            Layer* currentLayer = self->m_document->findLayer(layerId);
+            if (currentLayer && currentLayer->type() == LayerType::Image
+                && result.size() == QSize(oldW, oldH)) {
+                auto* imageLayer = static_cast<ImageLayer*>(currentLayer);
+                const QImage oldMask = imageLayer->alphaMask;
+                const QImage newMask = composeAlphaMask(oldMask, alphaMaskFromImage(result));
+                if (self->m_history)
+                    self->m_history->execute(std::make_unique<LayerPropertyCommand<QImage>>(
+                        *self->m_document, layerId, cmdName,
+                        &Document::setLayerAlphaMask, oldMask, newMask));
+            }
             const QString successMsg = self->m_i18n ? self->m_i18n->t("editor", "canvas.status.aiQuickSuccess")
                                                    : QStringLiteral("✓ Background removed successfully with AI!");
             emit self->statusMessageRequested(successMsg);

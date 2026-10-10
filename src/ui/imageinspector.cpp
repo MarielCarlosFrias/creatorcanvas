@@ -23,6 +23,9 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPolygonF>
+#include <future>
+#include <thread>
+#include <QMetaObject>
 
 namespace cc {
 
@@ -62,6 +65,7 @@ void ImageInspector::setDocument(Document* document)
     m_id = LayerId();
     m_originalAssetId = LayerId();
     m_currentPreviewAssetId = LayerId();
+    m_originalPreviewImage = QImage();
     refresh();
 }
 
@@ -87,6 +91,7 @@ void ImageInspector::setSelectedLayer(const LayerId& id)
     ImageLayer* newLayer = nullptr;
     if (editingLayer(&newLayer)) {
         m_originalAssetId = newLayer->assetId;
+        m_originalPreviewImage = m_document->assets().decodedImage(m_originalAssetId);
     }
 
     refresh();
@@ -103,6 +108,7 @@ void ImageInspector::refresh()
     m_loading = true;
     m_originalAssetId = layer->assetId;
     m_currentPreviewAssetId = LayerId();
+    m_originalPreviewImage = m_document->assets().decodedImage(m_originalAssetId);
     m_tiltX->setValue(layer->transform.shearX);
     m_tiltY->setValue(layer->transform.shearY);
 
@@ -128,6 +134,7 @@ void ImageInspector::resetAdjustments()
     m_previewTimer.stop();
     m_loading = true;
     m_brightnessSlider->setValue(0);
+    m_exposureSlider->setValue(0);
     m_brightnessValue->setText(QStringLiteral("0%"));
     m_contrastSlider->setValue(0);
     m_contrastValue->setText(QStringLiteral("0%"));
@@ -140,6 +147,9 @@ void ImageInspector::resetAdjustments()
     m_blurSlider->setValue(0);
     m_blurValue->setText(QStringLiteral("0px"));
     m_sharpenSlider->setValue(0);
+    m_shadowsSlider->setValue(0);
+    m_highlightsSlider->setValue(0);
+    m_vignetteSlider->setValue(0);
     m_sharpenValue->setText(QStringLiteral("0%"));
     m_loading = false;
 
@@ -292,6 +302,9 @@ void ImageInspector::buildUi()
     m_brightnessLabel = new QLabel(this);
     adjLayout->addRow(m_brightnessLabel, makeSliderRow(m_brightnessLabel, m_brightnessSlider, m_brightnessValue, -100, 100, 0, QStringLiteral("%")));
 
+    m_exposureLabel = new QLabel(this);
+    adjLayout->addRow(m_exposureLabel, makeSliderRow(m_exposureLabel, m_exposureSlider, m_exposureValue, -100, 100, 0, QStringLiteral("%")));
+
     m_contrastLabel = new QLabel(this);
     adjLayout->addRow(m_contrastLabel, makeSliderRow(m_contrastLabel, m_contrastSlider, m_contrastValue, -100, 100, 0, QStringLiteral("%")));
 
@@ -309,6 +322,12 @@ void ImageInspector::buildUi()
 
     m_sharpenLabel = new QLabel(this);
     adjLayout->addRow(m_sharpenLabel, makeSliderRow(m_sharpenLabel, m_sharpenSlider, m_sharpenValue, 0, 100, 0, QStringLiteral("%")));
+    m_shadowsLabel = new QLabel(this);
+    adjLayout->addRow(m_shadowsLabel, makeSliderRow(m_shadowsLabel, m_shadowsSlider, m_shadowsValue, -100, 100, 0, QStringLiteral("%")));
+    m_highlightsLabel = new QLabel(this);
+    adjLayout->addRow(m_highlightsLabel, makeSliderRow(m_highlightsLabel, m_highlightsSlider, m_highlightsValue, -100, 100, 0, QStringLiteral("%")));
+    m_vignetteLabel = new QLabel(this);
+    adjLayout->addRow(m_vignetteLabel, makeSliderRow(m_vignetteLabel, m_vignetteSlider, m_vignetteValue, 0, 100, 0, QStringLiteral("%")));
 
     auto* btnRow = new QHBoxLayout;
     m_applyAdjustBtn = new QPushButton(this);
@@ -526,7 +545,21 @@ void ImageInspector::setMockupArea(const QPolygonF& destination)
     // da área marcada, nunca a caixa alfa dos pixels da fonte. Assim nenhum
     // pixel visível do PNG é eliminado; as zonas transparentes continuam
     // transparentes dentro do mockup.
-    const QRect contentRect = destination.boundingRect().toAlignedRect().intersected(canvas.rect());
+    // Recorta apenas o bounding box dos pixels realmente visíveis. Nunca
+    // usamos a caixa da seleção como limite, pois isso elimina partes da
+    // imagem deformada quando a fonte ultrapassa ligeiramente o quadrilátero.
+    QRect contentRect;
+    int left = canvas.width(), top = canvas.height(), right = -1, bottom = -1;
+    for (int y = 0; y < canvas.height(); ++y) {
+        const QRgb* line = reinterpret_cast<const QRgb*>(canvas.constScanLine(y));
+        for (int x = 0; x < canvas.width(); ++x) {
+            if (qAlpha(line[x]) == 0) continue;
+            left = std::min(left, x); top = std::min(top, y);
+            right = std::max(right, x); bottom = std::max(bottom, y);
+        }
+    }
+    if (right >= left && bottom >= top)
+        contentRect = QRect(QPoint(left, top), QPoint(right, bottom)).intersected(canvas.rect());
     if (contentRect.isEmpty())
         return;
     const QImage cropped = canvas.copy(contentRect);
@@ -586,7 +619,9 @@ void ImageInspector::setMockupArea(const QPolygonF& destination)
 
 void ImageInspector::schedulePreview()
 {
-    m_previewTimer.start(40);
+    // Evita recalcular a imagem a cada evento individual do slider.
+    // O último valor é aplicado quando o utilizador abranda ou para o arrasto.
+    m_previewTimer.start(100);
 }
 
 void ImageInspector::onPreviewTimeout()
@@ -596,18 +631,24 @@ void ImageInspector::onPreviewTimeout()
         return;
 
     const int b = m_brightnessSlider->value();
+    const int exposure = m_exposureSlider->value();
     const int c = m_contrastSlider->value();
     const int s = m_saturationSlider->value();
     const int t = m_temperatureSlider->value();
     const int h = m_hueSlider->value();
     const int blur = m_blurSlider->value();
     const int sharp = m_sharpenSlider->value();
+    const int shadows = m_shadowsSlider->value();
+    const int highlights = m_highlightsSlider->value();
+    const int vignette = m_vignetteSlider->value();
 
-    const QImage original = m_document->assets().decodedImage(m_originalAssetId);
+    const QImage original = m_originalPreviewImage.isNull()
+        ? m_document->assets().decodedImage(m_originalAssetId)
+        : m_originalPreviewImage;
     if (original.isNull())
         return;
 
-    if (b == 0 && c == 0 && s == 0 && t == 0 && h == 0 && blur == 0 && sharp == 0) {
+    if (b == 0 && exposure == 0 && c == 0 && s == 0 && t == 0 && h == 0 && blur == 0 && sharp == 0 && shadows == 0 && highlights == 0 && vignette == 0) {
         if (layer->assetId != m_originalAssetId) {
             m_document->setImageLayerAsset(m_id, m_originalAssetId, original.width(), original.height());
             m_document->touchLayer(m_id);
@@ -616,21 +657,36 @@ void ImageInspector::onPreviewTimeout()
         return;
     }
 
-    QImage adjusted = original;
-    if (b != 0 || c != 0 || s != 0 || t != 0 || h != 0) {
-        adjusted = ImageProcessing::adjustColors(adjusted, b, c, s, t, h);
-    }
-    if (blur > 0) {
-        adjusted = ImageProcessing::applyBlur(adjusted, blur);
-    }
-    if (sharp > 0) {
-        adjusted = ImageProcessing::applySharpen(adjusted, sharp);
-    }
-
-    const LayerId previewId = m_document->assets().addImage(adjusted);
-    m_currentPreviewAssetId = previewId;
-    m_document->setImageLayerAsset(m_id, previewId, adjusted.width(), adjusted.height());
-    m_document->touchLayer(m_id);
+    // Processa uma versão reduzida durante o preview para manter os sliders
+    // responsivos. O resultado volta ao tamanho original antes de ser exibido.
+    constexpr qint64 kPreviewPixels = 1600000;
+    const bool reducedPreview = qint64(original.width()) * original.height() > kPreviewPixels;
+    const QImage previewSource = reducedPreview
+        ? original.scaled(QSize(1400, 1400), Qt::KeepAspectRatio, Qt::SmoothTransformation)
+        : original;
+    const unsigned generation = ++m_previewGeneration;
+    const LayerId layerId = m_id;
+    const QImage source = previewSource;
+    auto future = std::async(std::launch::async, [source, b, exposure, c, s, t, h, blur, sharp, shadows, highlights, vignette,
+                                                   reducedPreview, originalSize = original.size()] {
+        QImage adjusted = source;
+        if (b != 0 || exposure != 0 || c != 0 || s != 0 || t != 0 || h != 0 || shadows != 0 || highlights != 0 || vignette != 0)
+            adjusted = ImageProcessing::adjustColors(adjusted, b + exposure, c, s, t, h, shadows, highlights, vignette);
+        if (blur > 0) adjusted = ImageProcessing::applyBlur(adjusted, blur);
+        if (sharp > 0) adjusted = ImageProcessing::applySharpen(adjusted, sharp);
+        if (reducedPreview && adjusted.size() != originalSize)
+            adjusted = adjusted.scaled(originalSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        return adjusted;
+    });
+    std::thread([this, generation, layerId, future = std::move(future)]() mutable {
+        QImage adjusted = future.get();
+        QMetaObject::invokeMethod(this, [this, generation, layerId, adjusted = std::move(adjusted)]() mutable {
+            if (generation != m_previewGeneration.load() || layerId != m_id || !m_document)
+                return;
+            m_latestPreviewImage = adjusted;
+            emit imagePreviewReady(layerId, adjusted);
+        }, Qt::QueuedConnection);
+    }).detach();
 }
 
 void ImageInspector::applyAdjustments()
@@ -640,10 +696,15 @@ void ImageInspector::applyAdjustments()
     if (!editingLayer(&layer) || !m_document || m_originalAssetId.isNull())
         return;
 
-    if (m_currentPreviewAssetId.isNull() || m_currentPreviewAssetId == m_originalAssetId)
+    if (m_latestPreviewImage.isNull() && (m_currentPreviewAssetId.isNull() || m_currentPreviewAssetId == m_originalAssetId))
         return;
 
-    const QImage finalImg = m_document->assets().decodedImage(m_currentPreviewAssetId);
+    if (m_currentPreviewAssetId.isNull() && !m_latestPreviewImage.isNull())
+        m_currentPreviewAssetId = m_document->assets().addImage(m_latestPreviewImage);
+
+    const QImage finalImg = m_latestPreviewImage.isNull()
+        ? m_document->assets().decodedImage(m_currentPreviewAssetId)
+        : m_latestPreviewImage;
     if (finalImg.isNull())
         return;
 
@@ -666,9 +727,12 @@ void ImageInspector::applyAdjustments()
 
     m_originalAssetId = finalAssetId;
     m_currentPreviewAssetId = LayerId();
+    m_latestPreviewImage = QImage();
+    emit imagePreviewCleared();
 
     m_loading = true;
     m_brightnessSlider->setValue(0);
+    m_exposureSlider->setValue(0);
     m_brightnessValue->setText(QStringLiteral("0%"));
     m_contrastSlider->setValue(0);
     m_contrastValue->setText(QStringLiteral("0%"));
@@ -689,6 +753,7 @@ void ImageInspector::applyPreset(int presetIndex)
 {
     m_loading = true;
     m_brightnessSlider->setValue(0);
+    m_exposureSlider->setValue(0);
     m_contrastSlider->setValue(0);
     m_saturationSlider->setValue(0);
     m_temperatureSlider->setValue(0);
@@ -771,6 +836,11 @@ void ImageInspector::retranslateUi()
 
     if (m_brightnessLabel)
         m_brightnessLabel->setText(m_i18n ? m_i18n->t("editor", "image.brightness") : QStringLiteral("Brightness:"));
+    if (m_exposureLabel)
+        m_exposureLabel->setText(m_i18n ? m_i18n->t("editor", "image.exposure") : QStringLiteral("Exposure:"));
+    if (m_shadowsLabel) m_shadowsLabel->setText(m_i18n ? m_i18n->t("editor", "image.shadows") : QStringLiteral("Shadows:"));
+    if (m_highlightsLabel) m_highlightsLabel->setText(m_i18n ? m_i18n->t("editor", "image.highlights") : QStringLiteral("Highlights:"));
+    if (m_vignetteLabel) m_vignetteLabel->setText(m_i18n ? m_i18n->t("editor", "image.vignette") : QStringLiteral("Vignette:"));
     if (m_contrastLabel)
         m_contrastLabel->setText(m_i18n ? m_i18n->t("editor", "image.contrast") : QStringLiteral("Contrast:"));
     if (m_saturationLabel)

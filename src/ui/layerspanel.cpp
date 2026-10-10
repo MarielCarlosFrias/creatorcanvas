@@ -4,6 +4,7 @@
 #include "core/history/CommandStack.h"
 #include "core/history/DocumentCommands.h"
 #include "core/layers/Layer.h"
+#include "core/selection/SelectionOperations.h"
 
 #include <QApplication>
 #include <QComboBox>
@@ -25,6 +26,9 @@
 #include <QSpinBox>
 #include <QToolButton>
 #include <QVBoxLayout>
+#include <QLineEdit>
+#include <QInputDialog>
+#include <functional>
 
 namespace cc {
 
@@ -53,6 +57,21 @@ QString fallbackName(const Layer& layer, I18nService* i18n)
     case LayerType::Background: return i18n->t("common", "layer.typeBackground");
     }
     return i18n->t("common", "layer.typeImage");
+}
+
+QColor colorTagColor(LayerColorTag tag)
+{
+    switch (tag) {
+    case LayerColorTag::Red: return QColor("#ef4444");
+    case LayerColorTag::Orange: return QColor("#f97316");
+    case LayerColorTag::Yellow: return QColor("#eab308");
+    case LayerColorTag::Green: return QColor("#22c55e");
+    case LayerColorTag::Blue: return QColor("#3b82f6");
+    case LayerColorTag::Purple: return QColor("#a855f7");
+    case LayerColorTag::Gray: return QColor("#94a3b8");
+    case LayerColorTag::None: break;
+    }
+    return {};
 }
 
 class LayerRowWidget final : public QWidget
@@ -148,6 +167,7 @@ public:
 signals:
     void moved();
     void layerReordered(const LayerId& id, int targetDocIndex);
+    void layerDroppedOn(const LayerId& id, const LayerId& targetId, int targetRow);
 
 protected:
     void dragEnterEvent(QDragEnterEvent* event) override
@@ -176,6 +196,8 @@ protected:
 
             const QPoint pos = event->position().toPoint();
             QListWidgetItem* targetItem = itemAt(pos);
+            const LayerId targetId = targetItem
+                ? targetItem->data(Qt::UserRole).value<LayerId>() : LayerId();
             int targetRow = count() - 1;
             if (targetItem) {
                 targetRow = row(targetItem);
@@ -185,6 +207,11 @@ protected:
                 }
             }
             targetRow = qBound(0, targetRow, count() - 1);
+            if (targetItem && !targetId.isNull()) {
+                emit layerDroppedOn(draggedId, targetId, targetRow);
+                event->acceptProposedAction();
+                return;
+            }
 
             const int total = count();
             if (total > 0 && !draggedId.isNull()) {
@@ -260,7 +287,25 @@ void LayersPanel::buildUi()
     opacityRow->addWidget(m_opacitySpin);
     controlsLayout->addLayout(opacityRow);
 
+
     layout->addWidget(controlsFrame);
+
+    m_searchEdit = new QLineEdit(this);
+    m_searchEdit->setClearButtonEnabled(true);
+    m_searchEdit->setPlaceholderText(QStringLiteral("Search layers..."));
+    connect(m_searchEdit, &QLineEdit::textChanged, this, [this] { rebuild(); });
+    layout->addWidget(m_searchEdit);
+
+    m_typeFilter = new QComboBox(this);
+    m_typeFilter->addItem(QStringLiteral("All types"), -1);
+    m_typeFilter->addItem(QStringLiteral("Text"), static_cast<int>(LayerType::Text));
+    m_typeFilter->addItem(QStringLiteral("Image"), static_cast<int>(LayerType::Image));
+    m_typeFilter->addItem(QStringLiteral("Shape"), static_cast<int>(LayerType::Shape));
+    m_typeFilter->addItem(QStringLiteral("Group"), static_cast<int>(LayerType::Group));
+    m_typeFilter->addItem(QStringLiteral("Background"), static_cast<int>(LayerType::Background));
+    connect(m_typeFilter, qOverload<int>(&QComboBox::currentIndexChanged),
+            this, [this] { rebuild(); });
+    layout->addWidget(m_typeFilter);
 
     auto* separator = new QFrame(this);
     separator->setFrameShape(QFrame::HLine);
@@ -284,6 +329,22 @@ void LayersPanel::buildUi()
             this, &LayersPanel::onMoved);
     connect(static_cast<LayerListWidget*>(m_list), &LayerListWidget::layerReordered,
             this, &LayersPanel::onLayerReordered);
+    connect(static_cast<LayerListWidget*>(m_list), &LayerListWidget::layerDroppedOn,
+            this, [this](const LayerId& id, const LayerId& targetId, int targetRow) {
+                if (!m_document || id == targetId) return;
+                Layer* target = m_document->findLayer(targetId);
+                if (!target || !m_history) return;
+                if (target->type() == LayerType::Group) {
+                    m_history->execute(std::make_unique<ReorderLayerCommand>(
+                        *m_document, id, static_cast<GroupLayer*>(target), -1));
+                } else {
+                    onLayerReordered(id, docIndexFromRow(targetRow));
+                    return;
+                }
+                m_selectedId = id;
+                rebuild();
+                emit selectionRequested(id);
+            });
     connect(m_list, &QListWidget::customContextMenuRequested,
             this, &LayersPanel::showContextMenu);
 
@@ -321,6 +382,7 @@ void LayersPanel::buildUi()
     m_moveUpBtn = makeActionBtn(ThemeIcons::actionMoveUp(), QStringLiteral("Move Up"));
     connect(m_moveUpBtn, &QToolButton::clicked, this, [this] {
         if (!m_document || m_selectedId.isNull()) return;
+        if (m_document->parentOf(m_selectedId) != m_document->rootGroup()) return;
         int row = m_list->currentRow();
         if (row > 0) {
             int newDocIdx = docIndexFromRow(row - 1);
@@ -331,6 +393,7 @@ void LayersPanel::buildUi()
     m_moveDownBtn = makeActionBtn(ThemeIcons::actionMoveDown(), QStringLiteral("Move Down"));
     connect(m_moveDownBtn, &QToolButton::clicked, this, [this] {
         if (!m_document || m_selectedId.isNull()) return;
+        if (m_document->parentOf(m_selectedId) != m_document->rootGroup()) return;
         int row = m_list->currentRow();
         if (row >= 0 && row < m_list->count() - 1) {
             int newDocIdx = docIndexFromRow(row + 1);
@@ -343,6 +406,38 @@ void LayersPanel::buildUi()
         if (!m_selectedId.isNull())
             emit deleteRequested(m_selectedId);
     });
+
+    m_applyMaskBtn = new QToolButton(this);
+    m_applyMaskBtn->setText(QStringLiteral("Mask ▾"));
+    m_applyMaskBtn->setMinimumWidth(86);
+    m_applyMaskBtn->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    m_applyMaskBtn->setToolTip(QStringLiteral("Apply the current selection as a layer mask"));
+    m_applyMaskBtn->setPopupMode(QToolButton::MenuButtonPopup);
+    auto* maskMenu = new QMenu(m_applyMaskBtn);
+    auto* keepInside = maskMenu->addAction(QStringLiteral("Keep inside selection"));
+    auto* keepOutside = maskMenu->addAction(QStringLiteral("Keep outside selection"));
+    maskMenu->addSeparator();
+    auto* removeInside = maskMenu->addAction(QStringLiteral("Remove inside selection"));
+    auto* removeOutside = maskMenu->addAction(QStringLiteral("Remove outside selection"));
+    m_applyMaskBtn->setMenu(maskMenu);
+    // Some styles only open MenuButtonPopup from the small arrow area. Make
+    // the main button area open the same menu as well.
+    connect(m_applyMaskBtn, &QToolButton::clicked, this, [this] {
+        if (m_applyMaskBtn && m_applyMaskBtn->menu())
+            m_applyMaskBtn->showMenu();
+    });
+    auto applySelectionMask = [this](bool invert) {
+        if (m_document && SelectionOperations::applyMask(
+                *m_document, m_history, m_selectedId, !invert))
+            rebuild();
+    };
+    connect(keepInside, &QAction::triggered, this, [applySelectionMask] { applySelectionMask(false); });
+    connect(keepOutside, &QAction::triggered, this, [applySelectionMask] { applySelectionMask(true); });
+    connect(removeInside, &QAction::triggered, this, [applySelectionMask] { applySelectionMask(true); });
+    connect(removeOutside, &QAction::triggered, this, [applySelectionMask] { applySelectionMask(false); });
+    // Primary selection/mask action stays beside the layer controls so it is
+    // easy to discover; it is no longer hidden in the tiny footer.
+    controlsLayout->addWidget(m_applyMaskBtn);
 
     actionsLayout->addWidget(m_addLayerBtn);
     actionsLayout->addWidget(m_duplicateBtn);
@@ -467,10 +562,14 @@ QPixmap LayersPanel::renderLayerThumbnail(const Layer& layer, int size) const
         const auto* txtLayer = static_cast<const TextLayer*>(&layer);
         p.setPen(txtLayer->color.isValid() ? txtLayer->color : QColor(240, 240, 240));
         QFont f = p.font();
-        f.setPixelSize(size * 0.65);
-        f.setBold(true);
+        f.setPixelSize(qMax(8, size / 4));
+        f.setBold(txtLayer->bold);
+        f.setItalic(txtLayer->italic);
         p.setFont(f);
-        p.drawText(QRect(0, 0, size, size), Qt::AlignCenter, QStringLiteral("T"));
+        const QString previewText = txtLayer->content.simplified();
+        p.drawText(QRect(2, 2, size - 4, size - 4),
+                   Qt::AlignCenter | Qt::TextWordWrap,
+                   previewText.isEmpty() ? QStringLiteral("T") : previewText);
     } else if (layer.type() == LayerType::Shape) {
         const auto* shapeLayer = static_cast<const ShapeLayer*>(&layer);
         p.setPen(QPen(shapeLayer->stroke.isValid() ? shapeLayer->stroke : QColor(100, 100, 100), 1.5));
@@ -494,6 +593,10 @@ void LayersPanel::updateControlsForSelection()
     const bool hasSelection = (layer != nullptr && layer->type() != LayerType::Background);
     m_blendLabel->setEnabled(hasSelection);
     m_blendCombo->setEnabled(hasSelection);
+    m_blendCombo->setToolTip(hasSelection
+        ? QString()
+        : (m_i18n ? m_i18n->t("common", "panel.selectLayerToEdit")
+                  : QStringLiteral("Select a layer to edit blending")));
     m_opacityLabel->setEnabled(hasSelection);
     m_opacitySlider->setEnabled(hasSelection);
     m_opacitySpin->setEnabled(hasSelection);
@@ -502,6 +605,11 @@ void LayersPanel::updateControlsForSelection()
     if (m_deleteBtn) m_deleteBtn->setEnabled(hasSelection);
     if (m_moveUpBtn) m_moveUpBtn->setEnabled(hasSelection);
     if (m_moveDownBtn) m_moveDownBtn->setEnabled(hasSelection);
+    if (m_applyMaskBtn) {
+        const bool canMask = hasSelection && layer->type() == LayerType::Image
+            && m_document && !m_document->pixelSelection().isNull();
+        m_applyMaskBtn->setEnabled(canMask);
+    }
 
     if (hasSelection && layer) {
         const bool prevUpdating = m_updating;
@@ -520,6 +628,10 @@ void LayersPanel::setDocument(Document* document)
         return;
     m_document = document;
     m_selectedId = LayerId();
+    if (m_searchEdit)
+        m_searchEdit->clear();
+    if (m_typeFilter)
+        m_typeFilter->setCurrentIndex(0);
     refresh();
 }
 
@@ -541,9 +653,26 @@ void LayersPanel::rebuild()
     m_list->clear();
 
     if (m_document) {
-        const auto& children = m_document->rootGroup()->children;
-        for (auto it = children.rbegin(); it != children.rend(); ++it) {
-            Layer* layer = it->get();
+        QVector<QPair<Layer*, int>> visibleLayers;
+        std::function<void(const GroupLayer*, int)> collect = [&](const GroupLayer* group, int depth) {
+            for (auto it = group->children.rbegin(); it != group->children.rend(); ++it) {
+                Layer* child = it->get();
+                visibleLayers.append({child, depth});
+                if (child->type() == LayerType::Group)
+                    collect(static_cast<const GroupLayer*>(child), depth + 1);
+            }
+        };
+        collect(m_document->rootGroup(), 0);
+
+        for (const auto& entry : visibleLayers) {
+            Layer* layer = entry.first;
+            const int depth = entry.second;
+            if (m_searchEdit && !m_searchEdit->text().trimmed().isEmpty()
+                && !layer->name.contains(m_searchEdit->text().trimmed(), Qt::CaseInsensitive))
+                continue;
+            const int typeFilter = m_typeFilter ? m_typeFilter->currentData().toInt() : -1;
+            if (typeFilter >= 0 && static_cast<int>(layer->type()) != typeFilter)
+                continue;
             const LayerId layerId = layer->id();
 
             auto* item = new QListWidgetItem(m_list);
@@ -555,14 +684,14 @@ void LayersPanel::rebuild()
             rowWidget->setAttribute(Qt::WA_StyledBackground, true);
             rowWidget->setStyleSheet(QStringLiteral("background: transparent;"));
             auto* rowLayout = new QHBoxLayout(rowWidget);
-            rowLayout->setContentsMargins(4, 2, 6, 2);
+            rowLayout->setContentsMargins(4 + depth * 16, 2, 6, 2);
             rowLayout->setSpacing(6);
 
             // Visibility Toggle Button
             auto* visBtn = new QToolButton(rowWidget);
             visBtn->setIcon(ThemeIcons::layerVisibility(layer->visible));
-            visBtn->setIconSize(QSize(18, 18));
-            visBtn->setFixedSize(22, 22);
+            visBtn->setIconSize(QSize(22, 22));
+            visBtn->setFixedSize(30, 30);
             visBtn->setStyleSheet(QStringLiteral("border: none; background: transparent;"));
             visBtn->setToolTip(m_i18n ? m_i18n->t("common", "panel.visibility") : QStringLiteral("Toggle Visibility"));
             connect(visBtn, &QToolButton::clicked, this, [this, layerId, layer] {
@@ -602,6 +731,19 @@ void LayersPanel::rebuild()
             typeIcon->setPixmap(badgeIcon.pixmap(14, 14));
             typeIcon->setFixedSize(14, 14);
 
+            // An applied mask is persistent document data, unlike an active
+            // selection. Make that distinction visible in the layer list.
+            QLabel* maskBadge = nullptr;
+            if (layer->type() == LayerType::Image
+                && !static_cast<const ImageLayer*>(layer)->alphaMask.isNull()) {
+                maskBadge = new QLabel(QStringLiteral("MASK"), rowWidget);
+                maskBadge->setAttribute(Qt::WA_TransparentForMouseEvents);
+                maskBadge->setToolTip(QStringLiteral("This layer has an applied alpha mask"));
+                maskBadge->setStyleSheet(darkUi
+                    ? QStringLiteral("color: #7dd3fc; font-size: 9px; font-weight: 700; background: transparent;")
+                    : QStringLiteral("color: #0369a1; font-size: 9px; font-weight: 700; background: transparent;"));
+            }
+
             // Layer Name Label
             auto* nameLabel = new QLabel(fallbackName(*layer, m_i18n), rowWidget);
             nameLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
@@ -619,11 +761,19 @@ void LayersPanel::rebuild()
             }
             nameLabel->setFont(nf);
 
+            auto* colorTag = new QLabel(rowWidget);
+            colorTag->setFixedSize(8, 22);
+            const QColor tagColor = colorTagColor(layer->colorTag);
+            colorTag->setStyleSheet(tagColor.isValid()
+                ? QStringLiteral("background: %1; border-radius: 3px;").arg(tagColor.name())
+                : QStringLiteral("background: transparent; border: none;"));
+            colorTag->setAttribute(Qt::WA_TransparentForMouseEvents);
+
             // Lock Toggle Button
             auto* lockBtn = new QToolButton(rowWidget);
             lockBtn->setIcon(ThemeIcons::layerLock(layer->locked));
-            lockBtn->setIconSize(QSize(16, 16));
-            lockBtn->setFixedSize(20, 20);
+            lockBtn->setIconSize(QSize(22, 22));
+            lockBtn->setFixedSize(30, 30);
             lockBtn->setStyleSheet(QStringLiteral("border: none; background: transparent;"));
             lockBtn->setToolTip(m_i18n ? m_i18n->t("common", "panel.lockToggle") : QStringLiteral("Toggle Lock"));
             connect(lockBtn, &QToolButton::clicked, this, [this, layerId, layer] {
@@ -642,6 +792,9 @@ void LayersPanel::rebuild()
             rowLayout->addWidget(visBtn);
             rowLayout->addWidget(thumbLabel);
             rowLayout->addWidget(typeIcon);
+            if (maskBadge)
+                rowLayout->addWidget(maskBadge);
+            rowLayout->addWidget(colorTag);
             rowLayout->addWidget(nameLabel);
             rowLayout->addWidget(lockBtn);
 
@@ -681,6 +834,10 @@ void LayersPanel::setSelectedLayer(const LayerId& id)
 
     if (m_updating || !m_document)
         return;
+    // A seleção normal no canvas deve ser exclusiva. Sem limpar os itens
+    // anteriores, o QListWidget mantinha várias camadas visualmente ativas e
+    // o movimento parecia arrastar objetos que já não deviam estar no grupo.
+    m_list->clearSelection();
     for (int row = 0; row < m_list->count(); ++row) {
         const QVariant data = m_list->item(row)->data(Qt::UserRole);
         if (data.value<LayerId>() == id) {
@@ -847,6 +1004,30 @@ void LayersPanel::showContextMenu(const QPoint& pos)
     menu.addSeparator();
     QAction* duplicateAction = menu.addAction(m_i18n->t("common", "panel.duplicate"));
     QAction* deleteAction = menu.addAction(m_i18n->t("common", "panel.delete"));
+    menu.addSeparator();
+    QAction* groupAction = menu.addAction(m_i18n->t("common", "menu.layer.group"));
+    QAction* ungroupAction = menu.addAction(m_i18n->t("common", "menu.layer.ungroup"));
+    QAction* maskAction = menu.addAction(QStringLiteral("Apply mask from selection"));
+    groupAction->setEnabled(m_list->selectedItems().size() >= 2);
+    ungroupAction->setEnabled(layer->type() == LayerType::Group);
+    maskAction->setEnabled(layer->type() == LayerType::Image && !m_document->pixelSelection().isNull());
+    QAction* renameAction = menu.addAction(m_i18n->t("common", "action.rename"));
+    QMenu* colorMenu = menu.addMenu(QStringLiteral("Color label"));
+    const QList<QPair<QString, LayerColorTag>> colors = {
+        {QStringLiteral("None"), LayerColorTag::None},
+        {QStringLiteral("Red"), LayerColorTag::Red},
+        {QStringLiteral("Orange"), LayerColorTag::Orange},
+        {QStringLiteral("Yellow"), LayerColorTag::Yellow},
+        {QStringLiteral("Green"), LayerColorTag::Green},
+        {QStringLiteral("Blue"), LayerColorTag::Blue},
+        {QStringLiteral("Purple"), LayerColorTag::Purple},
+        {QStringLiteral("Gray"), LayerColorTag::Gray}
+    };
+    QHash<QAction*, LayerColorTag> colorActions;
+    for (const auto& color : colors) {
+        QAction* action = colorMenu->addAction(color.first);
+        colorActions.insert(action, color.second);
+    }
 
     QAction* chosen = menu.exec(m_list->mapToGlobal(pos));
     if (chosen == lockAction) {
@@ -867,6 +1048,55 @@ void LayersPanel::showContextMenu(const QPoint& pos)
         emit duplicateRequested(id);
     } else if (chosen == deleteAction) {
         emit deleteRequested(id);
+    } else if (chosen == groupAction) {
+        if (!m_history)
+            return;
+        QList<LayerId> ids;
+        for (QListWidgetItem* selected : m_list->selectedItems())
+            ids.append(selected->data(Qt::UserRole).value<LayerId>());
+        if (!ids.contains(id))
+            ids.append(id);
+        if (ids.size() < 2)
+            return;
+        auto command = std::make_unique<GroupLayersCommand>(*m_document, ids);
+        const LayerId groupId = command->groupId();
+        m_history->execute(std::move(command));
+        m_selectedId = groupId;
+        rebuild();
+        emit selectionRequested(groupId);
+    } else if (chosen == ungroupAction) {
+        if (!m_history || layer->type() != LayerType::Group)
+            return;
+        m_history->execute(std::make_unique<UngroupLayersCommand>(*m_document, id));
+        rebuild();
+    } else if (chosen == maskAction) {
+        if (layer->type() != LayerType::Image || m_document->pixelSelection().isNull())
+            return;
+        if (SelectionOperations::applyMask(*m_document, m_history, id, true))
+            rebuild();
+    } else if (chosen == renameAction) {
+        bool accepted = false;
+        const QString name = QInputDialog::getText(this, m_i18n->t("common", "action.rename"),
+                                                    m_i18n->t("common", "panel.layerName"),
+                                                    QLineEdit::Normal, layer->name, &accepted);
+        if (accepted && !name.trimmed().isEmpty()) {
+            if (m_history)
+                m_history->execute(std::make_unique<RenameLayerCommand>(
+                    *m_document, id, QStringLiteral("layer.rename"),
+                    &Document::setLayerName, layer->name, name.trimmed()));
+            else
+                m_document->setLayerName(id, name.trimmed());
+            rebuild();
+        }
+    } else if (colorActions.contains(chosen)) {
+        const LayerColorTag next = colorActions.value(chosen);
+        if (m_history)
+            m_history->execute(std::make_unique<LayerColorTagCommand>(
+                *m_document, id, QStringLiteral("layer.colorTag"),
+                &Document::setLayerColorTag, layer->colorTag, next));
+        else
+            m_document->setLayerColorTag(id, next);
+        rebuild();
     }
 }
 
@@ -883,6 +1113,18 @@ void LayersPanel::retranslateUi()
     if (m_moveUpBtn) m_moveUpBtn->setToolTip(m_i18n->t("common", "panel.moveUp"));
     if (m_moveDownBtn) m_moveDownBtn->setToolTip(m_i18n->t("common", "panel.moveDown"));
     if (m_deleteBtn) m_deleteBtn->setToolTip(m_i18n->t("common", "panel.delete"));
+    if (m_searchEdit)
+        m_searchEdit->setPlaceholderText(m_i18n->t("common", "panel.searchLayers"));
+    if (m_typeFilter) {
+        const int current = m_typeFilter->currentIndex();
+        m_typeFilter->setItemText(0, m_i18n->t("common", "panel.allTypes"));
+        m_typeFilter->setItemText(1, m_i18n->t("common", "layer.typeText"));
+        m_typeFilter->setItemText(2, m_i18n->t("common", "layer.typeImage"));
+        m_typeFilter->setItemText(3, m_i18n->t("common", "layer.typeShape"));
+        m_typeFilter->setItemText(4, m_i18n->t("common", "layer.typeGroup"));
+        m_typeFilter->setItemText(5, m_i18n->t("common", "layer.typeBackground"));
+        m_typeFilter->setCurrentIndex(current);
+    }
 
     const bool prevUpdating = m_updating;
     m_updating = true;

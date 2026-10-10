@@ -88,6 +88,11 @@ private slots:
         image->assetId = assetId;
         image->naturalWidth = 1920;
         image->naturalHeight = 1080;
+        image->alphaMask = QImage(3, 2, QImage::Format_Alpha8);
+        image->alphaMask.fill(0);
+        image->alphaMask.scanLine(0)[0] = 255;
+        image->alphaMask.scanLine(0)[1] = 127;
+        image->alphaMask.scanLine(1)[2] = 64;
 
         group->children.push_back(std::move(text));
         group->children.push_back(std::move(shape));
@@ -147,6 +152,11 @@ private slots:
         QCOMPARE(loadedImage->assetId, assetId);
         QCOMPARE(loadedImage->naturalWidth, 1920);
         QCOMPARE(loadedImage->naturalHeight, 1080);
+        QCOMPARE(loadedImage->alphaMask.format(), QImage::Format_Alpha8);
+        QCOMPARE(loadedImage->alphaMask.size(), QSize(3, 2));
+        QCOMPARE(loadedImage->alphaMask.constScanLine(0)[0], uchar(255));
+        QCOMPARE(loadedImage->alphaMask.constScanLine(0)[1], uchar(127));
+        QCOMPARE(loadedImage->alphaMask.constScanLine(1)[2], uchar(64));
     }
 
     void roundTripEmptyDocument()

@@ -425,7 +425,8 @@ QImage ImageProcessing::floodFill(const QImage& source, const QPoint& seedPoint,
 }
 
 QImage ImageProcessing::adjustColors(const QImage& source, double brightness, double contrast,
-                                    double saturation, double temperature, double hue)
+                                    double saturation, double temperature, double hue,
+                                    double shadows, double highlights, double vignette)
 {
     if (source.isNull())
         return source;
@@ -454,6 +455,15 @@ QImage ImageProcessing::adjustColors(const QImage& source, double brightness, do
             double g = qGreen(px);
             double b = qBlue(px);
 
+            const double luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0;
+            const double shadowWeight = std::clamp(1.0 - luminance * 2.0, 0.0, 1.0);
+            const double highlightWeight = std::clamp((luminance - 0.5) * 2.0, 0.0, 1.0);
+            const double shadowOffset = (shadows / 100.0) * 90.0 * shadowWeight;
+            const double highlightOffset = (highlights / 100.0) * 90.0 * highlightWeight;
+            r += shadowOffset + highlightOffset;
+            g += shadowOffset + highlightOffset;
+            b += shadowOffset + highlightOffset;
+
             // 1. Brilho
             r += bFactor;
             g += bFactor;
@@ -477,6 +487,16 @@ QImage ImageProcessing::adjustColors(const QImage& source, double brightness, do
             int clampedR = std::clamp(static_cast<int>(std::round(r)), 0, 255);
             int clampedG = std::clamp(static_cast<int>(std::round(g)), 0, 255);
             int clampedB = std::clamp(static_cast<int>(std::round(b)), 0, 255);
+
+            if (!qFuzzyIsNull(vignette)) {
+                const double dx = (x - (w - 1) * 0.5) / (w * 0.5);
+                const double dy = (y - (h - 1) * 0.5) / (h * 0.5);
+                const double edge = std::clamp((dx * dx + dy * dy) * 0.5, 0.0, 1.0);
+                const double factor = 1.0 - (vignette / 100.0) * edge;
+                clampedR = std::clamp(static_cast<int>(std::round(clampedR * factor)), 0, 255);
+                clampedG = std::clamp(static_cast<int>(std::round(clampedG * factor)), 0, 255);
+                clampedB = std::clamp(static_cast<int>(std::round(clampedB * factor)), 0, 255);
+            }
 
             // 5. Matiz / Tint (Hue Shift)
             if (hasHue) {

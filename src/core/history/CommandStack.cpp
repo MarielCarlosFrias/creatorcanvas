@@ -10,6 +10,14 @@ CommandStack::CommandStack(int limit, QObject* parent)
 {
 }
 
+void CommandStack::setLimit(int limit)
+{
+    m_limit = qMax(1, limit);
+    while (m_undoStack.size() > static_cast<std::size_t>(m_limit))
+        m_undoStack.erase(m_undoStack.begin());
+    emit stateChanged();
+}
+
 void CommandStack::execute(std::unique_ptr<Command> command)
 {
     if (!command)

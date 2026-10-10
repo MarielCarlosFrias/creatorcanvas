@@ -121,32 +121,29 @@ void ScissorsTool::applyCut(const ToolContext& ctx)
         return;
     }
 
-    const ScissorsCutResult res = ImageProcessing::scissorsCut(oldImg, m_polygon, m_keepInside, m_autoCrop);
-    if (!res.image.isNull()) {
-        const LayerId newAssetId = ctx.document->assets().addImage(res.image);
-
-        AffineTransform newTransform = layer->transform;
-        if (res.offset != QPoint(0, 0)) {
-            QTransform rotScale;
-            rotScale.rotate(layer->transform.rotationDeg);
-            rotScale.scale(layer->transform.scaleX, layer->transform.scaleY);
-            const QPointF worldOffset = rotScale.map(QPointF(res.offset));
-            newTransform.position = layer->transform.position + worldOffset;
-        }
-
-        const QString cmdName = ctx.i18n ? ctx.i18n->t("editor", "canvas.command.scissorsCut") : QStringLiteral("Scissors Cut");
-
-        if (ctx.history) {
-            ctx.history->execute(std::make_unique<ModifyImageLayerCommand>(
-                *ctx.document, imgLayer->id(),
-                imgLayer->assetId, oldImg.width(), oldImg.height(), imgLayer->transform,
-                newAssetId, res.image.width(), res.image.height(), newTransform,
-                cmdName
-            ));
+    QImage selection(oldImg.size(), QImage::Format_Alpha8);
+    selection.fill(0);
+    QPainter maskPainter(&selection);
+    maskPainter.setPen(Qt::NoPen);
+    maskPainter.setBrush(Qt::white);
+    maskPainter.drawPolygon(QPolygonF(m_polygon));
+    maskPainter.end();
+    if (!m_keepInside) {
+        for (int y = 0; y < selection.height(); ++y) {
+            uchar* row = selection.scanLine(y);
+            for (int x = 0; x < selection.width(); ++x) row[x] = 255 - row[x];
         }
     }
 
-    cancel(ctx);
+    // Scissors creates an active selection. The user chooses the operation
+    // afterwards (mask, delete, copy, cut, invert or cancel).
+    ctx.document->setPixelSelection(selection);
+    m_polygon.clear();
+    m_isDrawing = false;
+    if (ctx.requestStatusMessage)
+        ctx.requestStatusMessage(QStringLiteral("Selection created. Choose an operation from the layer menu."));
+    if (ctx.requestUpdate)
+        ctx.requestUpdate();
 }
 
 void ScissorsTool::drawOverlay(QPainter* painter, const ToolContext& ctx)

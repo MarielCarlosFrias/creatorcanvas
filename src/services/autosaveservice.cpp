@@ -52,13 +52,30 @@ void AutosaveService::saveNow()
     if (m_document.isNull())
         return;
 
+    // Se o DocumentController indicar que o documento não foi modificado,
+    // não há necessidade de reescrever o ficheiro de recuperação
+    if (m_docController && !m_docController->isModified())
+        return;
+
     QDir().mkpath(QFileInfo(m_recoveryPath).absolutePath());
+    const QString tempPath = m_recoveryPath + QStringLiteral(".tmp");
+
     QString error;
-    if (!cc::saveDocument(*m_document, m_recoveryPath, &error)) {
+    if (!cc::saveDocument(*m_document, tempPath, &error)) {
         qCWarning(lcAutosave) << "Autosave failed:" << error;
         return;
     }
-    qCInfo(lcAutosave) << "Autosave written:" << m_recoveryPath;
+
+    // Atomic replacement para nunca corromper a última versão válida
+    if (QFile::exists(m_recoveryPath)) {
+        QFile::remove(m_recoveryPath);
+    }
+    if (!QFile::rename(tempPath, m_recoveryPath)) {
+        qCWarning(lcAutosave) << "Autosave atomic rename failed from" << tempPath << "to" << m_recoveryPath;
+        return;
+    }
+
+    qCInfo(lcAutosave) << "Autosave written safely:" << m_recoveryPath;
 }
 
 void AutosaveService::onSettingsChanged()

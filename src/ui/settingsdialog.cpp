@@ -47,6 +47,18 @@ SettingsDialog::SettingsDialog(I18nService* i18n, SettingsService* settings,
     m_autosaveLabel = new QLabel(this);
     form->addRow(m_autosaveLabel, m_autosave);
 
+    m_historyLimit = new QComboBox(this);
+    m_historyLimit->addItem(QStringLiteral("50"), 50);
+    m_historyLimit->addItem(QStringLiteral("100"), 100);
+    m_historyLimit->addItem(QStringLiteral("200"), 200);
+    m_historyLimit->addItem(QStringLiteral("500"), 500);
+    const int historyLimit = m_settings ? m_settings->historyLimit() : 100;
+    const int historyIndex = m_historyLimit->findData(historyLimit);
+    if (historyIndex >= 0)
+        m_historyLimit->setCurrentIndex(historyIndex);
+    m_historyLimitLabel = new QLabel(this);
+    form->addRow(m_historyLimitLabel, m_historyLimit);
+
     m_gpuAcceleration = new QCheckBox(this);
     m_gpuAcceleration->setChecked(m_settings && m_settings->gpuAccelerationEnabled());
     m_gpuAccelerationLabel = new QLabel(this);
@@ -96,6 +108,9 @@ void SettingsDialog::retranslateUi()
     setWindowTitle(m_i18n->t("settings", "dialog.title"));
     m_languageLabel->setText(m_i18n->t("settings", "dialog.language"));
     m_autosaveLabel->setText(m_i18n->t("settings", "dialog.autosave"));
+    if (m_historyLimitLabel)
+        m_historyLimitLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
+            ? QStringLiteral("Estados do histórico") : QStringLiteral("History states"));
     if (m_gpuAccelerationLabel)
         m_gpuAccelerationLabel->setText(m_i18n->t("settings", "dialog.gpuAcceleration"));
     if (m_restartHintLabel)
@@ -126,6 +141,11 @@ void SettingsDialog::accept()
         const int minutes = m_autosave->currentData().toInt(&ok);
         if (ok)
             m_settings->setAutosaveIntervalMinutes(minutes);
+        if (m_historyLimit) {
+            const int limit = m_historyLimit->currentData().toInt(&ok);
+            if (ok)
+                m_settings->setHistoryLimit(limit);
+        }
         m_settings->setGpuAccelerationEnabled(m_gpuAcceleration->isChecked());
         m_settings->setDarkModeEnabled(m_darkMode->isChecked());
         m_settings->setConfirmBeforeExit(m_confirmExit->isChecked());

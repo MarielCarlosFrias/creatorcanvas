@@ -72,7 +72,9 @@ public:
     // Ajustes Rápidos de Imagem e Correção de Cor
     /// Aplica ajustes de brilho (-100 a +100), contraste (-100 a +100), saturação (-100 a +100), temperatura (-100 a +100) e matiz (-180 a +180).
     static QImage adjustColors(const QImage& source, double brightness, double contrast,
-                              double saturation, double temperature, double hue = 0.0);
+                              double saturation, double temperature, double hue = 0.0,
+                              double shadows = 0.0, double highlights = 0.0,
+                              double vignette = 0.0);
 
     /// Aplica desfoque gaussiano / suavização rápida.
     static QImage applyBlur(const QImage& source, double radius);

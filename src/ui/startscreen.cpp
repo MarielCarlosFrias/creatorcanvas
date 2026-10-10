@@ -5,6 +5,8 @@
 #include "services/recentfiles.h"
 #include "core/serialization/ProjectFile.h"
 #include "core/templates/TemplateFactory.h"
+#include "core/Document.h"
+#include "rendering/CanvasRenderer.h"
 
 #include <QFileInfo>
 #include <QFont>
@@ -24,6 +26,8 @@
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QShowEvent>
+#include <QPainter>
+#include <QHash>
 
 namespace cc {
 
@@ -253,7 +257,7 @@ void StartScreen::buildUi()
     for (int i = 0; i < templates.size(); ++i) {
         const auto& tmpl = templates[i];
         auto* card = new QPushButton(m_templatesHost);
-        card->setMinimumHeight(72);
+        card->setMinimumHeight(178);
         card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         card->setCursor(Qt::PointingHandCursor);
 
@@ -297,30 +301,34 @@ void StartScreen::buildUi()
               accentColor,
               darkUi ? "#1e222a" : "#e2e8f0"));
 
-        auto* cardLayout = new QHBoxLayout(card);
+        auto* cardLayout = new QVBoxLayout(card);
         cardLayout->setContentsMargins(8, 8, 8, 8);
-        cardLayout->setSpacing(10);
+        cardLayout->setSpacing(5);
 
-        if (!brandIcon.isNull()) {
-            auto* iconLabel = new QLabel(card);
-            iconLabel->setPixmap(brandIcon);
-            iconLabel->setFixedSize(brandIcon.size());
-            iconLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
-            iconLabel->setStyleSheet(QStringLiteral("background: transparent; border: none;"));
-            cardLayout->addWidget(iconLabel, 0, Qt::AlignTop);
-        }
+        const auto preview = templatePreview(tmpl.kind);
+        auto* previewLabel = new QLabel(card);
+        previewLabel->setPixmap(preview);
+        previewLabel->setMinimumHeight(104);
+        previewLabel->setAlignment(Qt::AlignCenter);
+        previewLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
+        previewLabel->setStyleSheet(QStringLiteral("background: #151820; border: none; border-radius: 5px;"));
+        cardLayout->addWidget(previewLabel, 1);
 
         auto* textContainer = new QVBoxLayout;
         textContainer->setContentsMargins(0, 0, 0, 0);
         textContainer->setSpacing(2);
 
         auto* platformLabel = new QLabel(tmpl.platform, card);
+        m_templatePlatformLabels.append(platformLabel);
         platformLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
         platformLabel->setStyleSheet(QStringLiteral(
             "color: %1; font-size: 10px; font-weight: bold; border: none; background: transparent;"
         ).arg(accentColor));
 
         auto* titleLabel = new QLabel(tmpl.defaultTitle, card);
+        if (m_i18n)
+            titleLabel->setText(m_i18n->t("templates", tmpl.titleKey));
+        m_templateTitleLabels.append(titleLabel);
         titleLabel->setWordWrap(true);
         titleLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
         titleLabel->setStyleSheet(QStringLiteral(
@@ -338,7 +346,17 @@ void StartScreen::buildUi()
         textContainer->addStretch();
         textContainer->addWidget(dimLabel);
 
-        cardLayout->addLayout(textContainer, 1);
+        auto* metaRow = new QHBoxLayout;
+        if (!brandIcon.isNull()) {
+            auto* iconLabel = new QLabel(card);
+            iconLabel->setPixmap(brandIcon);
+            iconLabel->setFixedSize(brandIcon.size());
+            iconLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
+            iconLabel->setStyleSheet(QStringLiteral("background: transparent; border: none;"));
+            metaRow->addWidget(iconLabel);
+        }
+        metaRow->addLayout(textContainer, 1);
+        cardLayout->addLayout(metaRow);
 
         const int kindInt = static_cast<int>(tmpl.kind);
         connect(card, &QPushButton::clicked, this, [this, kindInt] {
@@ -359,8 +377,8 @@ void StartScreen::buildUi()
     mainLayout->addWidget(m_recentLabel);
 
     m_recentStack = new QStackedWidget(this);
-    m_recentStack->setMinimumHeight(110);
-    m_recentStack->setMaximumHeight(180);
+    m_recentStack->setMinimumHeight(140);
+    m_recentStack->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
 
     // Page 0: List of recent files
     m_recentList = new QListWidget(this);
@@ -400,6 +418,7 @@ void StartScreen::buildUi()
 
     // Page 1: Empty state widget
     m_emptyStateWidget = new QWidget(this);
+    m_emptyStateWidget->setMinimumHeight(140);
     m_emptyStateWidget->setStyleSheet(QStringLiteral(
         "QWidget {"
         "  background-color: %1;"
@@ -615,6 +634,13 @@ void StartScreen::retranslateUi()
         m_templatesLabel->setText(m_i18n->t("common", "start.templates"));
     if (m_templatesLabel)
         m_templatesLabel->setStyleSheet(QStringLiteral("color: %1;").arg(darkUi ? "#f3f4f6" : "#1f2937"));
+    const auto templates = TemplateFactory::availableTemplates();
+    for (int i = 0; i < templates.size() && i < m_templateTitleLabels.size(); ++i) {
+        if (m_templateTitleLabels[i])
+            m_templateTitleLabels[i]->setText(m_i18n->t("templates", templates[i].titleKey));
+        if (m_templatePlatformLabels[i])
+            m_templatePlatformLabels[i]->setText(templates[i].platform);
+    }
     m_recentLabel->setText(m_i18n->t("common", "start.recent"));
     m_recentLabel->setStyleSheet(QStringLiteral("color: %1;").arg(darkUi ? "#f3f4f6" : "#1f2937"));
 
@@ -622,6 +648,39 @@ void StartScreen::retranslateUi()
     m_emptyStateTitle->setStyleSheet(QStringLiteral("color: %1; border: none; background: transparent;").arg(darkUi ? "#f3f4f6" : "#374151"));
     m_emptyStateSubtitle->setText(m_i18n->t("common", "start.emptyRecentsHint"));
     m_emptyStateSubtitle->setStyleSheet(QStringLiteral("color: %1; font-size: 11px; border: none; background: transparent;").arg(darkUi ? "#b0b5bf" : "#6b7280"));
+}
+
+QPixmap StartScreen::templatePreview(TemplateKind kind)
+{
+    const int key = static_cast<int>(kind);
+    if (m_templatePreviewCache.contains(key))
+        return m_templatePreviewCache.value(key);
+
+    auto doc = TemplateFactory::createTemplate(kind, m_i18n);
+    if (!doc)
+        return {};
+
+    constexpr int maxW = 300;
+    constexpr int maxH = 112;
+    const double scale = qMin(static_cast<double>(maxW) / doc->width(),
+                              static_cast<double>(maxH) / doc->height());
+    const QSize size(qMax(1, qRound(doc->width() * scale)),
+                     qMax(1, qRound(doc->height() * scale)));
+    QImage image(size, QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::transparent);
+    QPainter painter(&image);
+    painter.setRenderHint(QPainter::Antialiasing);
+    QTransform transform;
+    transform.scale(scale, scale);
+    RenderOptions options;
+    options.drawCheckerboard = false;
+    options.canvasBorder = Qt::transparent;
+    renderDocument(*doc, &painter, transform, options);
+    painter.end();
+
+    const QPixmap result = QPixmap::fromImage(image);
+    m_templatePreviewCache.insert(key, result);
+    return result;
 }
 
 bool StartScreen::eventFilter(QObject* watched, QEvent* event)

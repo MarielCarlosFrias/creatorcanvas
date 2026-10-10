@@ -207,6 +207,8 @@ QString BackgroundRemover::findModelPath(const QString& preferredName)
         appDir + QStringLiteral("/../share/creatorcanvas/models"),
         appDir + QStringLiteral("/share/creatorcanvas/models"),
         appDir + QStringLiteral("/models"),
+        // Development build: bin/ -> linux-debug/ -> build/ -> project root.
+        appDir + QStringLiteral("/../../../resources/models"),
         appDir,
         appDataDir + QStringLiteral("/models"),
         appDataDir

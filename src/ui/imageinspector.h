@@ -5,8 +5,10 @@
 #include <QPolygonF>
 #include <QImage>
 #include "core/Document.h"
+#include "core/DocumentController.h"
 
 #include <QTimer>
+#include <atomic>
 
 class QDoubleSpinBox;
 class QSlider;
@@ -25,7 +27,7 @@ class CommandStack;
 /// - Ajustes rápidos de cor (brilho, contraste, saturação, temperatura)
 /// - Efeitos de nitidez e desfoque
 /// - Filtros de 1 clique (P&B, Sépia, Vintage, Alto Contraste)
-class ImageInspector final : public QWidget
+class ImageInspector final : public QWidget, public IDocumentObserver
 {
     Q_OBJECT
 public:
@@ -33,13 +35,17 @@ public:
                            CommandStack* history = nullptr,
                            QWidget* parent = nullptr);
 
+    void onDocumentChanged(Document* doc) override { setDocument(doc); }
     void setSelectedLayer(const LayerId& id);
     void setDocument(Document* document);
     void refresh();
     void setMockupArea(const QPolygonF& corners);
+    void openMockupDialog();
 
 signals:
     void mockupPlacementRequested();
+    void imagePreviewReady(const cc::LayerId& id, const QImage& image);
+    void imagePreviewCleared();
 
 private:
     void buildUi();
@@ -50,7 +56,6 @@ private:
     void resetAdjustments();
     void schedulePreview();
     void onPreviewTimeout();
-    void openMockupDialog();
 
     I18nService* m_i18n = nullptr;
     QPointer<Document> m_document;
@@ -58,6 +63,9 @@ private:
     LayerId m_id;
     LayerId m_originalAssetId;
     LayerId m_currentPreviewAssetId;
+    QImage m_originalPreviewImage;
+    QImage m_latestPreviewImage;
+    std::atomic_uint m_previewGeneration{0};
     QTimer m_previewTimer;
     bool m_loading = false;
 
@@ -74,6 +82,10 @@ private:
     QLabel* m_brightnessLabel = nullptr;
     QSlider* m_brightnessSlider = nullptr;
     QLabel* m_brightnessValue = nullptr;
+
+    QLabel* m_exposureLabel = nullptr;
+    QSlider* m_exposureSlider = nullptr;
+    QLabel* m_exposureValue = nullptr;
 
     QLabel* m_contrastLabel = nullptr;
     QSlider* m_contrastSlider = nullptr;
@@ -98,6 +110,15 @@ private:
     QLabel* m_sharpenLabel = nullptr;
     QSlider* m_sharpenSlider = nullptr;
     QLabel* m_sharpenValue = nullptr;
+    QLabel* m_shadowsLabel = nullptr;
+    QSlider* m_shadowsSlider = nullptr;
+    QLabel* m_shadowsValue = nullptr;
+    QLabel* m_highlightsLabel = nullptr;
+    QSlider* m_highlightsSlider = nullptr;
+    QLabel* m_highlightsValue = nullptr;
+    QLabel* m_vignetteLabel = nullptr;
+    QSlider* m_vignetteSlider = nullptr;
+    QLabel* m_vignetteValue = nullptr;
 
     QLabel* m_presetLabel = nullptr;
     QPushButton* m_presetGrayscaleBtn = nullptr;

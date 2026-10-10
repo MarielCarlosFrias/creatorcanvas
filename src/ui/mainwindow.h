@@ -33,6 +33,7 @@ namespace cc {
 
 class I18nService;
 class SettingsService;
+class DocumentController;
 class CanvasView;
 class LayersPanel;
 class TextInspector;
@@ -65,6 +66,7 @@ private:
     void buildStatusBar();
     void showStartScreen();
     void enterEditor();
+    void attachDocument(std::unique_ptr<Document> doc, const QString& filePath = QString());
     void startFromPreset(const NewDocumentSpec& spec);
     void startFromTemplate(int templateKind);
     void newDocument();
@@ -72,6 +74,7 @@ private:
     void importImage(const QString& filePath);
     void exportImage();
     void flipLayer(bool horizontal);
+    void rotateLayer(double degrees);
     void addText();
     void addShape(ShapeKind kind);
     enum class AlignTarget {
@@ -85,6 +88,9 @@ private:
     void distributeVertically();
     void groupSelectedLayers();
     void ungroupSelectedLayer();
+    void mergeSelectedLayers();
+    void mergeVisibleLayers();
+    void flattenDocument();
     void textBehindSubject();
     void deleteSelectedLayer();
     bool saveDocument();
@@ -103,10 +109,11 @@ private:
     std::unique_ptr<PresetStore> m_presetStore;
     std::unique_ptr<RecentFiles> m_recentFiles;
     std::unique_ptr<CommandStack> m_history;
+    std::unique_ptr<DocumentController> m_docController;
     std::unique_ptr<AutosaveService> m_autosave;
     QString m_configDir;
 
-    std::unique_ptr<Document> m_document;
+    Document* m_document = nullptr;
     QStackedWidget* m_centralStack = nullptr;
     StartScreen* m_startScreen = nullptr;
     CanvasView* m_canvas = nullptr;
@@ -135,6 +142,10 @@ private:
     QAction* m_redoAction = nullptr;
     QAction* m_addTextAction = nullptr;
     QMenu* m_addShapeMenu = nullptr;
+    QMenu* m_imageMenu = nullptr;
+    QMenu* m_selectMenu = nullptr;
+    QMenu* m_filterMenu = nullptr;
+    QMenu* m_windowMenu = nullptr;
     QAction* m_addRectAction = nullptr;
     QAction* m_addRoundedRectAction = nullptr;
     QAction* m_addEllipseAction = nullptr;
@@ -157,6 +168,9 @@ private:
     QAction* m_distributeVAction = nullptr;
     QAction* m_groupAction = nullptr;
     QAction* m_ungroupAction = nullptr;
+    QAction* m_mergeSelectedAction = nullptr;
+    QAction* m_mergeVisibleAction = nullptr;
+    QAction* m_flattenAction = nullptr;
     QAction* m_textBehindSubjectAction = nullptr;
     QAction* m_toggleGridAction = nullptr;
     QAction* m_toggleSnapAction = nullptr;
@@ -165,6 +179,8 @@ private:
     QAction* m_toggleRightPanelAction = nullptr;
     QAction* m_flipHAction = nullptr;
     QAction* m_flipVAction = nullptr;
+    QAction* m_rotateLeftAction = nullptr;
+    QAction* m_rotateRightAction = nullptr;
     QAction* m_deleteAction = nullptr;
     QAction* m_settingsAction = nullptr;
     QAction* m_startScreenAction = nullptr;
@@ -172,6 +188,7 @@ private:
     QAction* m_aboutQtAction = nullptr;
     QAction* m_removeBgAiAction = nullptr;
     QAction* m_removeBgAiQuickAction = nullptr;
+    QAction* m_mockupAction = nullptr;
 
     QMenu* m_fileMenu = nullptr;
     QMenu* m_editMenu = nullptr;

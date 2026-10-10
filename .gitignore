@@ -47,3 +47,4 @@ resources/models/*.onnx
 
 # CTest temporary output
 Testing/
+CreatorCanvas-windows-build-kit.zip

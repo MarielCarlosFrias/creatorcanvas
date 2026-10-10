@@ -1,4 +1,5 @@
 #include "core/Document.h"
+#include "core/DocumentController.h"
 
 #include <QSignalSpy>
 #include <QtTest>
@@ -29,6 +30,19 @@ std::unique_ptr<ShapeLayer> makeShape(const QString& name, ShapeKind kind = Shap
     return layer;
 }
 
+class RecordingDocumentObserver final : public IDocumentObserver
+{
+public:
+    void onDocumentChanged(Document* document) override
+    {
+        documentChangedCount++;
+        lastDocument = document;
+    }
+
+    int documentChangedCount = 0;
+    Document* lastDocument = nullptr;
+};
+
 } // namespace
 
 class TestDocument final : public QObject
@@ -36,6 +50,40 @@ class TestDocument final : public QObject
     Q_OBJECT
 
 private slots:
+    void documentControllerRebindsAllObservers()
+    {
+        DocumentController controller;
+        RecordingDocumentObserver canvas;
+        RecordingDocumentObserver layers;
+        RecordingDocumentObserver inspector;
+
+        controller.registerObserver(&canvas);
+        controller.registerObserver(&layers);
+        controller.registerObserver(&inspector);
+        QCOMPARE(canvas.documentChangedCount, 1);
+        QVERIFY(canvas.lastDocument == nullptr);
+
+        auto first = std::make_unique<Document>(100, 100);
+        controller.setDocument(std::move(first));
+        Document* firstDocument = controller.currentDocument();
+        QVERIFY(firstDocument != nullptr);
+        QVERIFY(canvas.lastDocument == firstDocument);
+        QVERIFY(layers.lastDocument == firstDocument);
+        QVERIFY(inspector.lastDocument == firstDocument);
+
+        auto recovered = std::make_unique<Document>(200, 150);
+        controller.setDocument(std::move(recovered));
+        Document* recoveredDocument = controller.currentDocument();
+        QVERIFY(recoveredDocument != nullptr);
+        QCOMPARE(recoveredDocument->width(), 200);
+        QVERIFY(canvas.lastDocument == recoveredDocument);
+        QVERIFY(layers.lastDocument == recoveredDocument);
+        QVERIFY(inspector.lastDocument == recoveredDocument);
+        QCOMPARE(canvas.documentChangedCount, 3);
+        QCOMPARE(layers.documentChangedCount, 3);
+        QCOMPARE(inspector.documentChangedCount, 3);
+    }
+
     void constructorCreatesRootGroup()
     {
         Document doc(1280, 720, 96);

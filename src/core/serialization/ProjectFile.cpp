@@ -111,6 +111,33 @@ QString textAlignToString(TextAlignment align)
     return QStringLiteral("center");
 }
 
+QString layerColorTagToString(LayerColorTag tag)
+{
+    switch (tag) {
+    case LayerColorTag::None:   return QStringLiteral("none");
+    case LayerColorTag::Red:    return QStringLiteral("red");
+    case LayerColorTag::Orange: return QStringLiteral("orange");
+    case LayerColorTag::Yellow: return QStringLiteral("yellow");
+    case LayerColorTag::Green:  return QStringLiteral("green");
+    case LayerColorTag::Blue:   return QStringLiteral("blue");
+    case LayerColorTag::Purple: return QStringLiteral("purple");
+    case LayerColorTag::Gray:   return QStringLiteral("gray");
+    }
+    return QStringLiteral("none");
+}
+
+std::optional<LayerColorTag> layerColorTagFromString(const QString& value)
+{
+    if (value == QLatin1String("red"))    return LayerColorTag::Red;
+    if (value == QLatin1String("orange")) return LayerColorTag::Orange;
+    if (value == QLatin1String("yellow")) return LayerColorTag::Yellow;
+    if (value == QLatin1String("green"))  return LayerColorTag::Green;
+    if (value == QLatin1String("blue"))   return LayerColorTag::Blue;
+    if (value == QLatin1String("purple")) return LayerColorTag::Purple;
+    if (value == QLatin1String("gray"))   return LayerColorTag::Gray;
+    return LayerColorTag::None;
+}
+
 std::optional<TextAlignment> textAlignFromString(const QString& value)
 {
     if (value == QLatin1String("left"))   return TextAlignment::Left;
@@ -138,6 +165,7 @@ QJsonObject writeLayer(const Layer& layer)
     o.insert(QStringLiteral("name"), layer.name);
     o.insert(QStringLiteral("visible"), layer.visible);
     o.insert(QStringLiteral("locked"), layer.locked);
+    o.insert(QStringLiteral("colorTag"), layerColorTagToString(layer.colorTag));
     o.insert(QStringLiteral("opacity"), double(layer.opacity()));
     o.insert(QStringLiteral("blendMode"), blendModeToString(layer.blendMode));
     o.insert(QStringLiteral("transformX"), layer.transform.position.x());
@@ -165,6 +193,11 @@ QJsonObject writeLayer(const Layer& layer)
                  image.assetId.toString(QUuid::WithoutBraces));
         o.insert(QStringLiteral("naturalWidth"), image.naturalWidth);
         o.insert(QStringLiteral("naturalHeight"), image.naturalHeight);
+        if (!image.alphaMask.isNull()) {
+            o.insert(QStringLiteral("alphaMask"),
+                     QStringLiteral("masks/%1.png")
+                         .arg(image.id().toString(QUuid::WithoutBraces)));
+        }
 
         QJsonObject effects;
         QJsonObject outline;
@@ -250,6 +283,43 @@ QJsonObject writeLayer(const Layer& layer)
     }
     }
     return o;
+}
+
+QString alphaMaskEntry(const ImageLayer& image)
+{
+    return QStringLiteral("masks/%1.png")
+        .arg(image.id().toString(QUuid::WithoutBraces));
+}
+
+bool writeLayerMasks(mz_zip_archive* zip, const Layer& layer)
+{
+    if (layer.type() == LayerType::Group) {
+        const auto& group = static_cast<const GroupLayer&>(layer);
+        for (const auto& child : group.children) {
+            if (!writeLayerMasks(zip, *child))
+                return false;
+        }
+        return true;
+    }
+
+    if (layer.type() != LayerType::Image)
+        return true;
+
+    const auto& image = static_cast<const ImageLayer&>(layer);
+    if (image.alphaMask.isNull())
+        return true;
+
+    QByteArray pngBytes;
+    QBuffer buffer(&pngBytes);
+    if (!buffer.open(QIODevice::WriteOnly)
+        || !image.alphaMask.convertToFormat(QImage::Format_Alpha8).save(&buffer, "PNG")) {
+        return false;
+    }
+
+    const QByteArray entry = alphaMaskEntry(image).toUtf8();
+    return mz_zip_writer_add_mem(zip, entry.constData(), pngBytes.constData(),
+                                 static_cast<size_t>(pngBytes.size()),
+                                 MZ_DEFAULT_LEVEL);
 }
 
 QJsonObject buildProjectJson(const Document& doc)
@@ -341,6 +411,15 @@ bool writeArchive(const QString& filePath, const QByteArray& jsonBytes,
         }
     }
 
+    if (assetsOk) {
+        for (const auto& child : doc.rootGroup()->children) {
+            if (!writeLayerMasks(&zip, *child)) {
+                assetsOk = false;
+                break;
+            }
+        }
+    }
+
     if (assetsOk && thumbnail && !thumbnail->isNull()) {
         QByteArray thumbBytes;
         QBuffer buffer(&thumbBytes);
@@ -398,13 +477,13 @@ std::unique_ptr<Document> loadFail(QString* out, const QString& message,
 class ProjectReader
 {
 public:
-    explicit ProjectReader(const QJsonObject& root)
+    ProjectReader(const QJsonObject& root, const QHash<QString, QByteArray>& media)
         : m_root(root)
+        , m_media(media)
     {
     }
 
-    std::unique_ptr<Document> run(QString* error,
-                                  const QHash<QString, QByteArray>& media)
+    std::unique_ptr<Document> run(QString* error)
     {
         const QJsonValue format = m_root.value(QLatin1String(kFormatKey));
         if (!format.isDouble()) {
@@ -458,7 +537,7 @@ public:
                 return nullptr;
             }
 
-            asset.encoded = media.value(file);
+            asset.encoded = m_media.value(file);
             if (asset.encoded.isEmpty()) {
                 *error = QStringLiteral(
                     "An embedded image is missing from the project archive.");
@@ -503,7 +582,7 @@ private:
         if (type == QLatin1String("group"))
             return readGroup(o, id, error, out);
         if (type == QLatin1String("image"))
-            return readImage(o, id, out);
+            return readImage(o, id, error, out);
         if (type == QLatin1String("text"))
             return readText(o, id, out);
         if (type == QLatin1String("shape"))
@@ -548,13 +627,29 @@ private:
         return true;
     }
 
-    bool readImage(const QJsonObject& o, const LayerId& id,
+    bool readImage(const QJsonObject& o, const LayerId& id, QString* error,
                    std::unique_ptr<Layer>* out)
     {
         auto image = std::make_unique<ImageLayer>();
         image->assetId = LayerId(o.value(QStringLiteral("assetId")).toString());
         image->naturalWidth = o.value(QStringLiteral("naturalWidth")).toInt();
         image->naturalHeight = o.value(QStringLiteral("naturalHeight")).toInt();
+
+        const QString maskFile = o.value(QStringLiteral("alphaMask")).toString();
+        if (!maskFile.isEmpty()) {
+            const QByteArray maskBytes = m_media.value(maskFile);
+            QImage mask;
+            if (maskBytes.isEmpty() || !mask.loadFromData(maskBytes, "PNG")) {
+                *error = QStringLiteral("An image layer has an unreadable alpha mask.");
+                return false;
+            }
+            image->alphaMask = mask.convertToFormat(QImage::Format_Alpha8);
+            const QSize expectedSize(image->naturalWidth, image->naturalHeight);
+            if (expectedSize.isEmpty() || image->alphaMask.size() != expectedSize) {
+                *error = QStringLiteral("An image layer has an alpha mask with invalid dimensions.");
+                return false;
+            }
+        }
 
         const QJsonObject effects = o.value(QStringLiteral("effects")).toObject();
         const QJsonObject outline = effects.value(QStringLiteral("outline")).toObject();
@@ -670,6 +765,9 @@ private:
         layer.name = o.value(QStringLiteral("name")).toString();
         layer.visible = o.value(QStringLiteral("visible")).toBool(true);
         layer.locked = o.value(QStringLiteral("locked")).toBool(false);
+        layer.colorTag =
+            layerColorTagFromString(o.value(QStringLiteral("colorTag")).toString())
+                .value_or(LayerColorTag::None);
         layer.setOpacity(
             float(o.value(QStringLiteral("opacity")).toDouble(1.0)));
         layer.blendMode =
@@ -691,6 +789,7 @@ private:
     }
 
     QJsonObject m_root;
+    const QHash<QString, QByteArray>& m_media;
 };
 
 bool saveDocument(const Document& doc, const QString& filePath,
@@ -764,7 +863,8 @@ std::unique_ptr<Document> loadDocument(const QString& filePath,
                                             static_cast<qint64>(size));
                 if (entryName == QLatin1String(kEntryName))
                     bytes = entryBytes;
-                else if (entryName.startsWith(QLatin1String("media/")))
+                else if (entryName.startsWith(QLatin1String("media/"))
+                         || entryName.startsWith(QLatin1String("masks/")))
                     media.insert(entryName, entryBytes);
                 mz_free(data);
             }
@@ -787,8 +887,8 @@ std::unique_ptr<Document> loadDocument(const QString& filePath,
     }
 
     QString error;
-    ProjectReader reader(parsed.object());
-    auto document = reader.run(&error, media);
+    ProjectReader reader(parsed.object(), media);
+    auto document = reader.run(&error);
     if (!document) {
         qCWarning(lcSerialization) << "loadDocument failed:" << error
                                    << filePath;

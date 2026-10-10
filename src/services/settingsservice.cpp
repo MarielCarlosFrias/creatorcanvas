@@ -6,6 +6,7 @@ namespace cc {
 namespace {
 constexpr auto kLanguage         = "general/language";
 constexpr auto kAutosaveInterval = "general/autosaveIntervalMinutes";
+constexpr auto kHistoryLimit     = "general/historyLimit";
 constexpr auto kGpuAcceleration  = "performance/gpuAcceleration";
 constexpr auto kDarkMode         = "appearance/darkMode";
 constexpr auto kConfirmExit      = "general/confirmBeforeExit";
@@ -13,6 +14,7 @@ constexpr auto kShowGrid         = "canvas/showGridByDefault";
 constexpr auto kSnapToGrid       = "canvas/snapToGridByDefault";
 
 constexpr int kDefaultAutosaveInterval = 5;
+constexpr int kDefaultHistoryLimit = 100;
 } // namespace
 
 SettingsService::SettingsService(const QString &filePath, QObject *parent)
@@ -43,6 +45,18 @@ int SettingsService::autosaveIntervalMinutes() const
 void SettingsService::setAutosaveIntervalMinutes(int minutes)
 {
     setValue(kAutosaveInterval, minutes);
+}
+
+int SettingsService::historyLimit() const
+{
+    bool ok = false;
+    const int v = value(kHistoryLimit, kDefaultHistoryLimit).toInt(&ok);
+    return ok ? qBound(1, v, 5000) : kDefaultHistoryLimit;
+}
+
+void SettingsService::setHistoryLimit(int limit)
+{
+    setValue(kHistoryLimit, qBound(1, limit, 5000));
 }
 
 bool SettingsService::gpuAccelerationEnabled() const

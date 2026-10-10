@@ -270,6 +270,10 @@ void CropTool::applyCrop(const ToolContext& ctx)
     }
 
     const LayerId newAssetId = ctx.document->assets().addImage(cropped);
+    QImage oldAlphaMask = img->alphaMask;
+    QImage newAlphaMask;
+    if (!oldAlphaMask.isNull() && oldAlphaMask.size() == orig.size())
+        newAlphaMask = oldAlphaMask.copy(cropR);
 
     // Adjust layer position to preserve document-space center
     const QPointF oldCenter(img->naturalWidth / 2.0, img->naturalHeight / 2.0);
@@ -291,7 +295,7 @@ void CropTool::applyCrop(const ToolContext& ctx)
             *ctx.document, img->id(),
             img->assetId, img->naturalWidth, img->naturalHeight, layer->transform,
             newAssetId, cropped.width(), cropped.height(), newTransform,
-            cmdName
+            cmdName, oldAlphaMask, newAlphaMask
         ));
     }
 

@@ -1,0 +1,73 @@
+CREATORCANVAS - GERAR O INSTALADOR DO WINDOWS
+===============================================
+
+Este pacote contém o código do CreatorCanvas e os scripts para gerar uma
+versão portátil e um instalador .exe no Windows.
+
+REQUISITOS
+----------
+- Windows 10/11 64-bit
+- Visual Studio 2022 (Desktop development with C++)
+- Qt 6.2 ou superior, com o kit MSVC 2022 64-bit
+- CMake
+- Ninja (recomendado)
+- NSIS: https://nsis.sourceforge.io/Download
+
+O comando "windeployqt" deve estar disponível no PATH. Se não estiver,
+abra um Qt 6 Developer Command Prompt ou adicione a pasta bin do Qt ao PATH.
+
+1. ABRIR O TERMINAL
+-------------------
+Abra o "x64 Native Tools Command Prompt for VS 2022" ou um PowerShell com
+o ambiente do Visual Studio e do Qt configurado.
+
+2. CONFIGURAR E COMPILAR
+------------------------
+Na pasta raiz deste pacote, execute:
+
+    cmake --preset windows-release
+    cmake --build --preset windows-release --config Release
+
+3. CRIAR A VERSÃO PORTÁTIL
+---------------------------
+Execute:
+
+    powershell -ExecutionPolicy Bypass -File packaging\windows\build_portable.ps1 -BuildDir build\windows-release
+
+Será criado o ficheiro:
+
+    CreatorCanvas-portable.zip
+
+Essa versão pode ser extraída e executada sem instalação.
+
+4. CRIAR O INSTALADOR
+---------------------
+Depois de criar a versão portátil, execute:
+
+    cd packaging\windows
+    makensis installer.nsi
+    cd ..\..
+
+Será criado:
+
+    packaging\windows\CreatorCanvas-0.2.0-Setup.exe
+
+O instalador instala o programa em Program Files, cria atalhos, associa os
+ficheiros .creatorcanvas e verifica o Microsoft Visual C++ Redistributable
+x64. Se o runtime estiver ausente, o instalador pede autorização para o
+descarregar e instalar automaticamente da Microsoft.
+
+5. TESTAR
+---------
+Execute o instalador normalmente ou em modo silencioso:
+
+    packaging\windows\CreatorCanvas-0.2.0-Setup.exe /S
+
+Para testar o executável portátil:
+
+    packaging\windows\CreatorCanvas-portable\CreatorCanvas.exe --version
+
+NOTA
+----
+O ZIP deste pacote é o código-fonte para gerar o instalador. O instalador
+final só pode ser criado num Windows com Qt/MSVC e NSIS instalados.

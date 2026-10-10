@@ -2,12 +2,14 @@
 
 #include <QPointF>
 #include <QPolygonF>
+#include <QImage>
 #include <QWidget>
 
 #include <QPointer>
 #include <atomic>
 #include <memory>
 #include "core/Document.h"
+#include "core/DocumentController.h"
 #include "core/snap/SnapEngine.h"
 #include "tools/CanvasTool.h"
 
@@ -27,13 +29,14 @@ class FloodFillTool;
 
 /// Interactive document viewport: pan, zoom, selection with transform
 /// handles, gestures, inline text editing, software rendering, and raster tools.
-class CanvasView final : public QWidget
+class CanvasView final : public QWidget, public IDocumentObserver
 {
     Q_OBJECT
 public:
     explicit CanvasView(QWidget* parent = nullptr);
     ~CanvasView() override;
 
+    void onDocumentChanged(Document* doc) override { setDocument(doc); }
     void setDocument(Document* document);
     void setI18n(I18nService* i18n);
     void setHistory(CommandStack* history);
@@ -42,6 +45,8 @@ public:
     QList<LayerId> selectedLayers() const;
     void setMultiSelection(const QList<LayerId>& ids);
     void beginTextEdit(const LayerId& id);
+    void setImagePreview(const LayerId& id, const QImage& image);
+    void clearImagePreview();
 
     void setTool(CanvasTool tool);
     CanvasTool currentTool() const { return m_tool; }
@@ -68,6 +73,7 @@ public:
     // Configurações da Varinha Mágica (Magic Wand)
     void setWandTolerance(int tolerance);
     void setWandContiguous(bool contiguous);
+    void openSelectionActionsMenu();
 
     // Configurações do Carimbo (Clone Stamp)
     void setCloneRadius(int radius);
@@ -229,6 +235,8 @@ private:
     // Grid & Safe Zones
     bool m_showGrid = false;
     bool m_snapToGrid = false;
+    LayerId m_previewLayerId;
+    QImage m_previewImage;
     int m_gridSpacing = 50;
     int m_safeZoneMode = 0; // 0=None, 1=YouTube, 2=Instagram, 3=TikTok
 

@@ -155,6 +155,8 @@ QString HistoryPanel::friendlyCommandName(const QString& rawName) const
         return m_i18n ? m_i18n->t(QStringLiteral("editor"), QStringLiteral("canvas.command.aiBackgroundQuick")) : QStringLiteral("Quick AI Cutout");
     } else if (rawName == QLatin1String("layer.group")) {
         return m_i18n ? m_i18n->t(QStringLiteral("editor"), QStringLiteral("canvas.layer.group")) : QStringLiteral("Group Layers");
+    } else if (rawName == QLatin1String("layer.ungroup")) {
+        return m_i18n ? m_i18n->t(QStringLiteral("editor"), QStringLiteral("canvas.layer.ungroup")) : QStringLiteral("Ungroup Layers");
     } else if (rawName.startsWith(QLatin1String("layer.color."))) {
         return m_i18n ? m_i18n->t(QStringLiteral("common"), QStringLiteral("panel.history.layerColor")) : QStringLiteral("Layer Color");
     } else if (rawName.startsWith(QLatin1String("layer."))) {

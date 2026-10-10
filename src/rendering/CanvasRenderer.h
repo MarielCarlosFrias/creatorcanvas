@@ -2,6 +2,9 @@
 
 #include <QColor>
 #include <QTransform>
+#include <QImage>
+#include <QUuid>
+#include <QList>
 
 class QPainter;
 
@@ -19,6 +22,8 @@ struct RenderOptions
     QColor canvasBorder{0x50, 0x51, 0x57};
     /// Favor performance during interactive gestures (e.g. moving/scaling layers, panning).
     bool interactive = false;
+    QUuid previewLayerId;
+    QImage previewImage;
 };
 
 /// Renders the document through |painter| (already active on the target
@@ -34,5 +39,13 @@ void renderDocument(const Document& doc,
                     QPainter* painter,
                     const QTransform& docToDevice,
                     const RenderOptions& options = {});
+
+/// Renders only direct sibling layers into an already active painter. It is
+/// canvas-space based so a group can be merged without applying its transform
+/// twice.
+void renderSiblingLayers(const Document& doc,
+                         const QList<QUuid>& layerIds,
+                         QPainter* painter,
+                         const RenderOptions& options = {});
 
 } // namespace cc

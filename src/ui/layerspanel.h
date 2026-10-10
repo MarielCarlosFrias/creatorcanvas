@@ -3,6 +3,7 @@
 #include <QWidget>
 #include <QPointer>
 #include "core/Document.h"
+#include "core/DocumentController.h"
 
 class QListWidget;
 class QListWidgetItem;
@@ -11,6 +12,7 @@ class QSlider;
 class QSpinBox;
 class QLabel;
 class QToolButton;
+class QLineEdit;
 
 namespace cc {
 
@@ -23,13 +25,14 @@ class CommandStack;
 /// - Controles visuais inline de Visibilidade (olho) e Bloqueio (cadeado)
 /// - Modos de Mesclagem e Opacidade com histórico Undo/Redo
 /// - Barra de ações inferior: Nova Camada (+), Duplicar, Subir, Descer, Excluir
-class LayersPanel final : public QWidget
+class LayersPanel final : public QWidget, public IDocumentObserver
 {
     Q_OBJECT
 public:
     explicit LayersPanel(I18nService* i18n, CommandStack* history = nullptr,
                          QWidget* parent = nullptr);
 
+    void onDocumentChanged(Document* doc) override { setDocument(doc); }
     void setDocument(Document* document);
     void setHistory(CommandStack* history);
     void refresh();
@@ -82,6 +85,9 @@ private:
     QToolButton* m_moveUpBtn = nullptr;
     QToolButton* m_moveDownBtn = nullptr;
     QToolButton* m_deleteBtn = nullptr;
+    QToolButton* m_applyMaskBtn = nullptr;
+    QLineEdit* m_searchEdit = nullptr;
+    QComboBox* m_typeFilter = nullptr;
 };
 
 } // namespace cc

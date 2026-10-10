@@ -4,6 +4,7 @@
 
 #include <QPointer>
 #include "core/Document.h"
+#include "core/DocumentController.h"
 
 class QCheckBox;
 class QComboBox;
@@ -22,7 +23,7 @@ class CommandStack;
 
 /// Property panel for TextLayers: content, font, size, style, color, align, effects.
 /// Edits are executed via CommandStack for full Undo/Redo support.
-class TextInspector final : public QWidget
+class TextInspector final : public QWidget, public IDocumentObserver
 {
     Q_OBJECT
 public:
@@ -31,6 +32,7 @@ public:
                            QWidget* parent = nullptr);
     ~TextInspector() override;
 
+    void onDocumentChanged(Document* doc) override { setDocument(doc); }
     void setSelectedLayer(const LayerId& id);
     void setDocument(Document* document);
     void setHistory(CommandStack* history) { m_history = history; }

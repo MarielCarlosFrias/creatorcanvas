@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 
 #include "core/document/NewDocumentSpec.h"
+#include "core/DocumentController.h"
 #include "core/templates/TemplateFactory.h"
 #include "core/history/DocumentCommands.h"
 #include "core/layers/Layer.h"
@@ -17,10 +18,12 @@
 #include "ui/startscreen.h"
 #include "services/autosaveservice.h"
 #include "services/recentfiles.h"
+#include "services/settingsservice.h"
 #include "ui/textinspector.h"
 #include "ui/shapeinspector.h"
 #include "ui/imageinspector.h"
 #include "ui/historypanel.h"
+#include "ui/recoverydialog.h"
 #include "ui/themeicons.h"
 
 #include <QActionGroup>
@@ -46,6 +49,7 @@
 #include <QStackedWidget>
 #include <QToolBar>
 #include <QToolButton>
+#include <QStyle>
 #include <QScrollArea>
 #include <QTabWidget>
 
@@ -98,7 +102,14 @@ MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
         QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
     m_presetStore =
         std::make_unique<PresetStore>(configDir + QStringLiteral("/presets.json"));
-    m_history = std::make_unique<CommandStack>();
+    m_history = std::make_unique<CommandStack>(
+        m_settings ? m_settings->historyLimit() : 100);
+    if (m_settings) {
+        connect(m_settings, &SettingsService::changed, this, [this] {
+            if (m_settings && m_history)
+                m_history->setLimit(m_settings->historyLimit());
+        });
+    }
 
     const QString recoveryPath =
         configDir + QStringLiteral("/autosave/recovery.creatorcanvas");
@@ -106,10 +117,26 @@ MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
     m_recentFiles = std::make_unique<RecentFiles>(
         configDir + QStringLiteral("/recent.json"));
 
-    createDefaultDocument();
-    m_autosave->setDocument(m_document.get());
+    m_docController = std::make_unique<DocumentController>(this);
+    m_autosave->setDocumentController(m_docController.get());
+    m_docController->registerObserver(m_autosave.get());
+
     buildCentralWidget();
     buildLayersDock();
+
+    m_docController->registerObserver(m_canvas);
+    m_docController->registerObserver(m_layersPanel);
+    m_docController->registerObserver(m_textInspector);
+    m_docController->registerObserver(m_shapeInspector);
+    m_docController->registerObserver(m_imageInspector);
+
+    createDefaultDocument();
+
+    connect(m_docController.get(), &DocumentController::documentModifiedChanged, this, [this](bool mod) {
+        m_modified = mod;
+        updateWindowTitle();
+    });
+
     connectDocumentSignals();
     buildActions();
     buildToolBars();
@@ -120,6 +147,7 @@ MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
     connect(m_history.get(), &CommandStack::stateChanged, this, [this] {
         if (!m_modified) {
             m_modified = true;
+            if (m_docController) m_docController->setModified(true);
             updateWindowTitle();
         }
     });
@@ -141,26 +169,43 @@ void MainWindow::closeEvent(QCloseEvent* event)
     event->accept();
 }
 
+void MainWindow::attachDocument(std::unique_ptr<Document> doc, const QString& filePath)
+{
+    m_selectedId = LayerId();
+    m_currentFilePath = filePath;
+    m_modified = false;
+    if (m_history)
+        m_history->clear();
+
+    if (m_docController) {
+        // Ponto único central: notifica todos os observadores (Canvas, LayersPanel, todos os Inspetores, Autosave)
+        m_docController->setDocument(std::move(doc), filePath);
+        m_document = m_docController->currentDocument();
+    }
+    connectDocumentSignals();
+}
+
 void MainWindow::createDefaultDocument()
 {
     NewDocumentSpec spec;
     spec.backgroundColor = QColor(Qt::white);
-    m_document = createDocument(spec);
+    auto doc = createDocument(spec);
+    attachDocument(std::move(doc));
 }
 
 void MainWindow::connectDocumentSignals()
 {
     if (!m_document || !m_canvas)
         return;
-    connect(m_document.get(), &Document::structureChanged,
-            m_canvas, qOverload<>(&QWidget::update));
-    connect(m_document.get(), &Document::layerPropertyChanged,
-            m_canvas, qOverload<>(&QWidget::update));
+    connect(m_document, &Document::structureChanged,
+            m_canvas, qOverload<>(&QWidget::update), Qt::UniqueConnection);
+    connect(m_document, &Document::layerPropertyChanged,
+            m_canvas, qOverload<>(&QWidget::update), Qt::UniqueConnection);
     if (m_layersPanel) {
-        connect(m_document.get(), &Document::structureChanged,
-                m_layersPanel, &LayersPanel::refresh);
-        connect(m_document.get(), &Document::layerPropertyChanged,
-                m_layersPanel, &LayersPanel::refreshProperties);
+        connect(m_document, &Document::structureChanged,
+                m_layersPanel, &LayersPanel::refresh, Qt::UniqueConnection);
+        connect(m_document, &Document::layerPropertyChanged,
+                m_layersPanel, &LayersPanel::refreshProperties, Qt::UniqueConnection);
     }
 }
 
@@ -169,7 +214,6 @@ void MainWindow::buildCentralWidget()
     m_startScreen = new StartScreen(m_i18n, m_presetStore.get(),
                                     m_recentFiles.get(), this);
     m_canvas = new CanvasView(this);
-    m_canvas->setDocument(m_document.get());
     m_canvas->setI18n(m_i18n);
     m_canvas->setHistory(m_history.get());
 
@@ -215,6 +259,14 @@ void MainWindow::buildCentralWidget()
                     m_imageInspector->setSelectedLayer(id);
                 if (m_textBehindSubjectAction)
                     m_textBehindSubjectAction->setEnabled(false);
+                const Layer* selected = m_document ? m_document->findLayer(id) : nullptr;
+                const bool imageSelected = selected && selected->type() == LayerType::Image;
+                if (m_removeBgAiAction) m_removeBgAiAction->setEnabled(imageSelected);
+                if (m_removeBgAiQuickAction) m_removeBgAiQuickAction->setEnabled(imageSelected);
+                if (m_mockupAction) m_mockupAction->setEnabled(imageSelected);
+                if (m_mergeSelectedAction) m_mergeSelectedAction->setEnabled(false);
+                if (m_mergeVisibleAction) m_mergeVisibleAction->setEnabled(m_document != nullptr);
+                if (m_flattenAction) m_flattenAction->setEnabled(m_document != nullptr);
 
                 // Selecting a layer updates all inspectors, but deliberately
                 // does not change the active tab.  The user may be editing an
@@ -242,6 +294,25 @@ void MainWindow::buildCentralWidget()
                         }
                     }
                     m_textBehindSubjectAction->setEnabled(textCount == 1 && imageCount == 1);
+                    if (m_mockupAction)
+                        m_mockupAction->setEnabled(imageCount >= 2);
+
+                    bool mergeable = ids.size() >= 2 && m_document;
+                    GroupLayer* mergeParent = mergeable ? m_document->parentOf(ids.first()) : nullptr;
+                    for (const LayerId& id : ids) {
+                        const Layer* layer = m_document ? m_document->findLayer(id) : nullptr;
+                        if (!layer || layer->type() == LayerType::Background
+                            || m_document->parentOf(id) != mergeParent) {
+                            mergeable = false;
+                            break;
+                        }
+                    }
+                    if (m_mergeSelectedAction)
+                        m_mergeSelectedAction->setEnabled(mergeable);
+                    if (m_mergeVisibleAction)
+                        m_mergeVisibleAction->setEnabled(m_document != nullptr);
+                    if (m_flattenAction)
+                        m_flattenAction->setEnabled(m_document != nullptr);
                 }
             });
     connect(m_canvas, &CanvasView::transformCommitted, this,
@@ -324,8 +395,6 @@ void MainWindow::buildCentralWidget()
 void MainWindow::buildLayersDock()
 {
     m_layersPanel = new LayersPanel(m_i18n, m_history.get(), this);
-    m_layersPanel->setDocument(m_document.get());
-
     m_layersDock = new QDockWidget(QString(), this);
     m_layersDock->setMinimumWidth(240);
     m_layersDock->setWidget(m_layersPanel);
@@ -360,7 +429,7 @@ void MainWindow::buildLayersDock()
         if (m_addRectAction) m_addRectAction->trigger();
     });
 
-    m_textInspector = new TextInspector(m_i18n, m_document.get(), m_history.get(), this);
+    m_textInspector = new TextInspector(m_i18n, m_document, m_history.get(), this);
     m_textDock = new QDockWidget(QString(), this);
     m_textDock->setMinimumWidth(240);
     m_textDock->setWidget(m_textInspector);
@@ -370,7 +439,7 @@ void MainWindow::buildLayersDock()
     m_textDock->hide();
 
     // Cria o inspetor de formas e tabifica junto ao inspetor de texto na barra lateral direita
-    m_shapeInspector = new ShapeInspector(m_i18n, m_document.get(), m_history.get(), this);
+    m_shapeInspector = new ShapeInspector(m_i18n, m_document, m_history.get(), this);
     m_shapeDock = new QDockWidget(QString(), this);
     m_shapeDock->setMinimumWidth(240);
     m_shapeDock->setWidget(m_shapeInspector);
@@ -380,7 +449,7 @@ void MainWindow::buildLayersDock()
     m_shapeDock->hide();
 
     // Cria o inspetor de imagens e tabifica junto aos outros inspetores na barra lateral direita
-    m_imageInspector = new ImageInspector(m_i18n, m_document.get(), m_history.get(), this);
+    m_imageInspector = new ImageInspector(m_i18n, m_document, m_history.get(), this);
     m_imageDock = new QDockWidget(QString(), this);
     m_imageDock->setMinimumWidth(240);
     m_imageDock->setWidget(m_imageInspector);
@@ -393,6 +462,10 @@ void MainWindow::buildLayersDock()
     // direct four-corner interaction on top of the artwork.
     connect(m_imageInspector, &ImageInspector::mockupPlacementRequested,
             m_canvas, &CanvasView::beginMockupPlacement);
+    connect(m_imageInspector, &ImageInspector::imagePreviewReady,
+            m_canvas, &CanvasView::setImagePreview);
+    connect(m_imageInspector, &ImageInspector::imagePreviewCleared,
+            m_canvas, &CanvasView::clearImagePreview);
     connect(m_canvas, &CanvasView::mockupAreaSelected,
             m_imageInspector, &ImageInspector::setMockupArea);
 
@@ -645,8 +718,25 @@ void MainWindow::buildActions()
     connect(m_groupAction, &QAction::triggered, this, &MainWindow::groupSelectedLayers);
 
     m_ungroupAction = new QAction(this);
+    m_ungroupAction->setIcon(ThemeIcons::layerTypeGroup());
     m_ungroupAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_G));
     connect(m_ungroupAction, &QAction::triggered, this, &MainWindow::ungroupSelectedLayer);
+
+    m_mergeSelectedAction = new QAction(this);
+    m_mergeSelectedAction->setEnabled(false);
+    m_mergeSelectedAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+E")));
+    connect(m_mergeSelectedAction, &QAction::triggered,
+            this, &MainWindow::mergeSelectedLayers);
+
+    m_mergeVisibleAction = new QAction(this);
+    m_mergeVisibleAction->setEnabled(false);
+    connect(m_mergeVisibleAction, &QAction::triggered,
+            this, &MainWindow::mergeVisibleLayers);
+
+    m_flattenAction = new QAction(this);
+    m_flattenAction->setEnabled(false);
+    connect(m_flattenAction, &QAction::triggered,
+            this, &MainWindow::flattenDocument);
 
     m_textBehindSubjectAction = new QAction(this);
     m_textBehindSubjectAction->setEnabled(false);
@@ -712,6 +802,12 @@ void MainWindow::buildActions()
     m_flipVAction->setIcon(ThemeIcons::actionFlipV());
     connect(m_flipVAction, &QAction::triggered,
             this, [this] { flipLayer(false); });
+    m_rotateLeftAction = new QAction(this);
+    m_rotateLeftAction->setIcon(style()->standardIcon(QStyle::SP_ArrowBack));
+    connect(m_rotateLeftAction, &QAction::triggered, this, [this] { rotateLayer(-90.0); });
+    m_rotateRightAction = new QAction(this);
+    m_rotateRightAction->setIcon(style()->standardIcon(QStyle::SP_ArrowForward));
+    connect(m_rotateRightAction, &QAction::triggered, this, [this] { rotateLayer(90.0); });
 
     m_deleteAction = new QAction(this);
     m_deleteAction->setIcon(ThemeIcons::actionDelete());
@@ -1241,6 +1337,45 @@ void MainWindow::buildMenus()
     m_editMenu->addAction(m_undoAction);
     m_editMenu->addAction(m_redoAction);
 
+    m_imageMenu = menuBar()->addMenu(QStringLiteral("Image"));
+    m_imageMenu->addAction(m_importAction);
+    m_imageMenu->addAction(m_exportAction);
+    m_imageMenu->addSeparator();
+    m_imageMenu->addAction(m_removeBgAiAction);
+    m_imageMenu->addAction(m_removeBgAiQuickAction);
+    m_mockupAction = m_imageMenu->addAction(QStringLiteral("Mockup / Replace logo"));
+    m_mockupAction->setEnabled(false);
+    connect(m_mockupAction, &QAction::triggered, this, [this] {
+        if (m_imageInspector) m_imageInspector->openMockupDialog();
+    });
+    m_imageMenu->addSeparator();
+    auto* imagePanelInfo = m_imageMenu->addAction(QStringLiteral("Adjustments, filters and logo import are available in the Image panel"));
+    imagePanelInfo->setEnabled(false);
+    m_filterMenu = menuBar()->addMenu(QStringLiteral("Filter"));
+    auto* filterInfo = m_filterMenu->addAction(QStringLiteral("Adjustments are available in the Image panel"));
+    filterInfo->setEnabled(false);
+    m_selectMenu = menuBar()->addMenu(QStringLiteral("Select"));
+    auto* invertSelection = m_selectMenu->addAction(QStringLiteral("Invert selection"));
+    auto* clearSelection = m_selectMenu->addAction(QStringLiteral("Cancel selection"));
+    m_selectMenu->addSeparator();
+    auto* selectionOperations = m_selectMenu->addAction(QStringLiteral("Copy / Cut / Mask selection..."));
+    selectionOperations->setToolTip(QStringLiteral("Open the selection operations used by the canvas context menu"));
+    connect(invertSelection, &QAction::triggered, this, [this] {
+        if (!m_document || m_document->pixelSelection().isNull()) return;
+        QImage mask = m_document->pixelSelection().convertToFormat(QImage::Format_Alpha8);
+        for (int y = 0; y < mask.height(); ++y) {
+            uchar* row = mask.scanLine(y);
+            for (int x = 0; x < mask.width(); ++x) row[x] = 255 - row[x];
+        }
+        m_document->setPixelSelection(mask);
+    });
+    connect(clearSelection, &QAction::triggered, this, [this] {
+        if (m_document) m_document->clearPixelSelection();
+    });
+    connect(selectionOperations, &QAction::triggered, this, [this] {
+        if (m_canvas) m_canvas->openSelectionActionsMenu();
+    });
+
     m_layerMenu = menuBar()->addMenu(QString());
     m_layerMenu->addAction(m_addTextAction);
 
@@ -1277,10 +1412,16 @@ void MainWindow::buildMenus()
 
     m_layerMenu->addAction(m_groupAction);
     m_layerMenu->addAction(m_ungroupAction);
+    m_layerMenu->addSeparator();
+    m_layerMenu->addAction(m_mergeSelectedAction);
+    m_layerMenu->addAction(m_mergeVisibleAction);
+    m_layerMenu->addAction(m_flattenAction);
     m_layerMenu->addAction(m_textBehindSubjectAction);
     m_layerMenu->addSeparator();
     m_layerMenu->addAction(m_flipHAction);
     m_layerMenu->addAction(m_flipVAction);
+    m_layerMenu->addAction(m_rotateLeftAction);
+    m_layerMenu->addAction(m_rotateRightAction);
     m_layerMenu->addSeparator();
     m_layerMenu->addAction(m_removeBgAiAction);
     m_layerMenu->addAction(m_removeBgAiQuickAction);
@@ -1322,6 +1463,10 @@ void MainWindow::buildMenus()
     connect(m_safeTikTokAction, &QAction::triggered, this, [this]{ if(m_canvas) m_canvas->setSafeZoneMode(3); });
 
     m_toolsMenu = menuBar()->addMenu(QString());
+    m_windowMenu = menuBar()->addMenu(QStringLiteral("Window"));
+    m_windowMenu->addAction(m_toggleToolsBarAction);
+    m_windowMenu->addAction(m_toggleRightPanelAction);
+    m_windowMenu->addAction(m_toggleHistoryAction);
     m_selectionToolsMenu = m_toolsMenu->addMenu(m_i18n ? m_i18n->t("common", "menu.tools.selection") : QStringLiteral("Select & Cut"));
     m_selectionToolsMenu->addAction(m_toolSelectAction);
     m_selectionToolsMenu->addAction(m_toolCropAction);
@@ -1397,23 +1542,8 @@ void MainWindow::startFromPreset(const NewDocumentSpec& spec)
     if (!confirmDiscardUnsavedChanges())
         return;
 
-    m_document = createDocument(spec);
-    m_history->clear();
-    m_selectedId = LayerId();
-    m_currentFilePath.clear();
-    m_modified = false;
-    if (m_autosave)
-        m_autosave->setDocument(m_document.get());
-    m_canvas->setDocument(m_document.get());
-    if (m_layersPanel)
-        m_layersPanel->setDocument(m_document.get());
-    if (m_textInspector)
-        m_textInspector->setDocument(m_document.get());
-    if (m_shapeInspector)
-        m_shapeInspector->setDocument(m_document.get());
-    if (m_imageInspector)
-        m_imageInspector->setDocument(m_document.get());
-    connectDocumentSignals();
+    auto doc = createDocument(spec);
+    attachDocument(std::move(doc));
     enterEditor();
     updateWindowTitle();
 }
@@ -1433,25 +1563,10 @@ void MainWindow::openFromPath(const QString& path)
         return;
     }
 
-    m_document = std::move(loaded);
-    m_history->clear();
-    m_selectedId = LayerId();
-    m_currentFilePath = path;
-    m_modified = false;
     if (m_autosave) {
         m_autosave->discardRecovery();
-        m_autosave->setDocument(m_document.get());
     }
-    m_canvas->setDocument(m_document.get());
-    if (m_layersPanel)
-        m_layersPanel->setDocument(m_document.get());
-    if (m_textInspector)
-        m_textInspector->setDocument(m_document.get());
-    if (m_shapeInspector)
-        m_shapeInspector->setDocument(m_document.get());
-    if (m_imageInspector)
-        m_imageInspector->setDocument(m_document.get());
-    connectDocumentSignals();
+    attachDocument(std::move(loaded), path);
     if (m_recentFiles)
         m_recentFiles->push(path);
     enterEditor();
@@ -1467,25 +1582,11 @@ void MainWindow::newDocument()
     if (dialog.exec() != QDialog::Accepted)
         return;
 
-    m_document = createDocument(dialog.spec());
-    m_history->clear();
-    m_selectedId = LayerId();
-    m_currentFilePath.clear();
-    m_modified = false;
     if (m_autosave) {
         m_autosave->discardRecovery();
-        m_autosave->setDocument(m_document.get());
     }
-    m_canvas->setDocument(m_document.get());
-    if (m_layersPanel)
-        m_layersPanel->setDocument(m_document.get());
-    if (m_textInspector)
-        m_textInspector->setDocument(m_document.get());
-    if (m_shapeInspector)
-        m_shapeInspector->setDocument(m_document.get());
-    if (m_imageInspector)
-        m_imageInspector->setDocument(m_document.get());
-    connectDocumentSignals();
+    auto doc = createDocument(dialog.spec());
+    attachDocument(std::move(doc));
     updateWindowTitle();
     enterEditor();
 }
@@ -1543,6 +1644,15 @@ void MainWindow::importImage(const QString& filePath)
     layer->assetId = assetId;
     layer->naturalWidth = result.image.width();
     layer->naturalHeight = result.image.height();
+    // Importa a imagem inteira dentro da área de trabalho, preservando a
+    // proporção. Imagens pequenas não são ampliadas automaticamente.
+    const double margin = 0.92;
+    const double fitScale = std::min(
+        (m_document->width() * margin) / std::max(1, result.image.width()),
+        (m_document->height() * margin) / std::max(1, result.image.height()));
+    const double scale = std::min(1.0, fitScale);
+    layer->transform.scaleX = scale;
+    layer->transform.scaleY = scale;
     layer->transform.position = QPointF(m_document->width() / 2.0,
                                         m_document->height() / 2.0);
 
@@ -2070,6 +2180,129 @@ void MainWindow::ungroupSelectedLayer()
         m_layersPanel->refresh();
 }
 
+namespace {
+
+std::unique_ptr<ImageLayer> rasterLayerFor(Document& document,
+                                           const QList<LayerId>& layerIds,
+                                           const QString& name)
+{
+    QImage raster(document.width(), document.height(), QImage::Format_ARGB32_Premultiplied);
+    raster.fill(Qt::transparent);
+    {
+        QPainter painter(&raster);
+        RenderOptions options;
+        options.drawCheckerboard = false;
+        options.canvasBorder = Qt::transparent;
+        renderSiblingLayers(document, layerIds, &painter, options);
+    }
+
+    const LayerId assetId = document.assets().addImage(raster);
+    if (assetId.isNull())
+        return {};
+
+    auto layer = std::make_unique<ImageLayer>();
+    layer->name = name;
+    layer->assetId = assetId;
+    layer->naturalWidth = document.width();
+    layer->naturalHeight = document.height();
+    layer->transform.position = QPointF(document.width() / 2.0, document.height() / 2.0);
+    return layer;
+}
+
+bool areMergeableSiblings(const Document& document, const QList<LayerId>& ids)
+{
+    if (ids.size() < 2)
+        return false;
+    const GroupLayer* parent = document.parentOf(ids.first());
+    if (!parent)
+        return false;
+    for (const LayerId& id : ids) {
+        const Layer* layer = document.findLayer(id);
+        if (!layer || layer->type() == LayerType::Background || document.parentOf(id) != parent)
+            return false;
+    }
+    return true;
+}
+
+} // namespace
+
+void MainWindow::mergeSelectedLayers()
+{
+    if (!m_document || !m_canvas)
+        return;
+    const QList<LayerId> ids = m_canvas->selectedLayers();
+    if (!areMergeableSiblings(*m_document, ids)) {
+        statusBar()->showMessage(tr("Select two or more layers in the same group to merge."), 3500);
+        return;
+    }
+    auto raster = rasterLayerFor(*m_document, ids, tr("Merged layers"));
+    if (!raster || !m_history)
+        return;
+    const LayerId mergedId = raster->id();
+    m_history->execute(std::make_unique<ReplaceLayersWithRasterCommand>(
+        *m_document, ids, std::move(raster), QStringLiteral("layer.mergeSelected")));
+    m_canvas->setSelectedLayer(mergedId);
+    if (m_layersPanel) m_layersPanel->refresh();
+}
+
+void MainWindow::mergeVisibleLayers()
+{
+    if (!m_document || !m_canvas)
+        return;
+    QList<LayerId> ids;
+    for (const auto& child : m_document->rootGroup()->children) {
+        if (child->visible && child->type() != LayerType::Background)
+            ids.append(child->id());
+    }
+    if (ids.size() < 2) {
+        statusBar()->showMessage(tr("At least two visible layers are required."), 3500);
+        return;
+    }
+    auto raster = rasterLayerFor(*m_document, ids, tr("Visible merge"));
+    if (!raster || !m_history)
+        return;
+    const LayerId mergedId = raster->id();
+    m_history->execute(std::make_unique<ReplaceLayersWithRasterCommand>(
+        *m_document, ids, std::move(raster), QStringLiteral("layer.mergeVisible")));
+    m_canvas->setSelectedLayer(mergedId);
+    if (m_layersPanel) m_layersPanel->refresh();
+}
+
+void MainWindow::flattenDocument()
+{
+    if (!m_document || !m_canvas || !m_history)
+        return;
+    QList<LayerId> ids;
+    for (const auto& child : m_document->rootGroup()->children)
+        ids.append(child->id());
+    if (ids.isEmpty())
+        return;
+
+    QImage raster(m_document->width(), m_document->height(), QImage::Format_ARGB32_Premultiplied);
+    raster.fill(Qt::transparent);
+    {
+        QPainter painter(&raster);
+        RenderOptions options;
+        options.drawCheckerboard = false;
+        options.canvasBorder = Qt::transparent;
+        renderDocument(*m_document, &painter, QTransform(), options);
+    }
+    const LayerId assetId = m_document->assets().addImage(raster);
+    if (assetId.isNull())
+        return;
+    auto flat = std::make_unique<ImageLayer>();
+    flat->name = tr("Flattened image");
+    flat->assetId = assetId;
+    flat->naturalWidth = m_document->width();
+    flat->naturalHeight = m_document->height();
+    flat->transform.position = QPointF(m_document->width() / 2.0, m_document->height() / 2.0);
+    const LayerId flatId = flat->id();
+    m_history->execute(std::make_unique<ReplaceLayersWithRasterCommand>(
+        *m_document, ids, std::move(flat), QStringLiteral("layer.flatten")));
+    m_canvas->setSelectedLayer(flatId);
+    if (m_layersPanel) m_layersPanel->refresh();
+}
+
 void MainWindow::textBehindSubject()
 {
     if (!m_document || !m_canvas || !m_history)
@@ -2105,24 +2338,7 @@ void MainWindow::startFromTemplate(int templateKind)
     if (!doc)
         return;
 
-    m_document = std::move(doc);
-    m_currentFilePath.clear();
-    m_modified = false;
-    m_selectedId = LayerId();
-    if (m_history)
-        m_history->clear();
-    if (m_autosave)
-        m_autosave->setDocument(m_document.get());
-    m_canvas->setDocument(m_document.get());
-    if (m_layersPanel)
-        m_layersPanel->setDocument(m_document.get());
-    if (m_textInspector)
-        m_textInspector->setDocument(m_document.get());
-    if (m_shapeInspector)
-        m_shapeInspector->setDocument(m_document.get());
-    if (m_imageInspector)
-        m_imageInspector->setDocument(m_document.get());
-    connectDocumentSignals();
+    attachDocument(std::move(doc));
     m_canvas->fitToViewport();
     enterEditor();
     updateWindowTitle();
@@ -2181,6 +2397,21 @@ void MainWindow::flipLayer(bool horizontal)
     else
         newT.scaleY = -newT.scaleY;
 
+    if (m_history)
+        m_history->execute(std::make_unique<SetLayerTransformCommand>(
+            *m_document, m_selectedId, oldT, newT));
+}
+
+void MainWindow::rotateLayer(double degrees)
+{
+    if (!m_document || m_selectedId.isNull())
+        return;
+    Layer* layer = m_document->findLayer(m_selectedId);
+    if (!layer)
+        return;
+    const AffineTransform oldT = layer->transform;
+    AffineTransform newT = oldT;
+    newT.rotationDeg += degrees;
     if (m_history)
         m_history->execute(std::make_unique<SetLayerTransformCommand>(
             *m_document, m_selectedId, oldT, newT));
@@ -2285,22 +2516,15 @@ void MainWindow::checkForRecoveryFile()
 {
     if (!m_autosave || !m_autosave->hasRecoveryFile())
         return;
-    if (!m_i18n) {
+
+    RecoveryDialog dialog(m_i18n, m_autosave->recoveryFilePath(), this);
+    if (dialog.exec() != QDialog::Accepted) {
         m_autosave->discardRecovery();
         return;
     }
 
-    QMessageBox box(this);
-    box.setWindowTitle(m_i18n->t("common", "dialog.recovery.title"));
-    box.setText(m_i18n->t("common", "dialog.recovery.body"));
-    auto* recoverButton =
-        box.addButton(m_i18n->t("common", "dialog.recovery.recover"),
-                      QMessageBox::AcceptRole);
-    box.addButton(m_i18n->t("common", "dialog.recovery.discard"),
-                  QMessageBox::DestructiveRole);
-    box.exec();
-
-    if (box.clickedButton() != recoverButton) {
+    const auto choice = dialog.userChoice();
+    if (choice == RecoveryDialog::Choice::Discard) {
         m_autosave->discardRecovery();
         return;
     }
@@ -2308,28 +2532,24 @@ void MainWindow::checkForRecoveryFile()
     QString error;
     auto loaded = loadDocument(m_autosave->recoveryFilePath(), &error);
     if (!loaded) {
-        QMessageBox::warning(this,
-                             m_i18n->t("common", "dialog.openError.title"), error);
+        if (m_i18n)
+            QMessageBox::warning(this,
+                                 m_i18n->t("common", "dialog.openError.title"), error);
         m_autosave->discardRecovery();
         return;
     }
 
-    m_document = std::move(loaded);
-    m_history->clear();
-    m_selectedId = LayerId();
-    m_currentFilePath.clear();
+    attachDocument(std::move(loaded));
     m_modified = true; // recovered session stays unsaved until explicitly saved
-    m_canvas->setDocument(m_document.get());
-    if (m_layersPanel)
-        m_layersPanel->setDocument(m_document.get());
-    if (m_textInspector)
-        m_textInspector->setDocument(m_document.get());
-    if (m_shapeInspector)
-        m_shapeInspector->setDocument(m_document.get());
-    m_autosave->setDocument(m_document.get());
-    connectDocumentSignals();
+    if (m_docController) {
+        m_docController->setModified(true);
+    }
     updateWindowTitle();
     enterEditor();
+
+    if (choice == RecoveryDialog::Choice::OpenAsCopy) {
+        saveDocumentAs();
+    }
 }
 
 void MainWindow::openSettings()
@@ -2430,6 +2650,13 @@ void MainWindow::retranslateUi()
         m_groupAction->setText(m_i18n->t("common", "menu.layer.group"));
     if (m_ungroupAction)
         m_ungroupAction->setText(m_i18n->t("common", "menu.layer.ungroup"));
+    const bool portuguese = m_i18n && m_i18n->currentLanguage() == QStringLiteral("pt-BR");
+    if (m_mergeSelectedAction)
+        m_mergeSelectedAction->setText(portuguese ? QStringLiteral("Mesclar camadas selecionadas") : QStringLiteral("Merge selected layers"));
+    if (m_mergeVisibleAction)
+        m_mergeVisibleAction->setText(portuguese ? QStringLiteral("Mesclar camadas visíveis") : QStringLiteral("Merge visible layers"));
+    if (m_flattenAction)
+        m_flattenAction->setText(portuguese ? QStringLiteral("Achatar imagem") : QStringLiteral("Flatten image"));
 
     if (m_viewMenu)
         m_viewMenu->setTitle(m_i18n->t("common", "menu.view"));
@@ -2457,6 +2684,29 @@ void MainWindow::retranslateUi()
     m_exportAction->setToolTip(m_exportAction->text() + QStringLiteral(" (Ctrl+E)"));
     m_undoAction->setToolTip(m_undoAction->text() + QStringLiteral(" (Ctrl+Z)"));
     m_redoAction->setToolTip(m_redoAction->text() + QStringLiteral(" (Ctrl+Y)"));
+    auto setToolTipWithShortcut = [](QAction* action, const QString& label,
+                                     const QString& shortcut) {
+        if (action)
+            action->setToolTip(label + QStringLiteral("  ") + shortcut);
+    };
+    setToolTipWithShortcut(m_toolSelectAction,
+                           m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Mover") : QStringLiteral("Move"), "V");
+    setToolTipWithShortcut(m_toolCropAction,
+                           m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Cortar") : QStringLiteral("Crop"), "C");
+    setToolTipWithShortcut(m_toolScissorsAction,
+                           m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Tesoura") : QStringLiteral("Scissors Cut"), "X");
+    setToolTipWithShortcut(m_toolWandAction,
+                           m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Varinha mágica") : QStringLiteral("Magic Wand"), "W");
+    setToolTipWithShortcut(m_toolCloneAction,
+                           m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Carimbo") : QStringLiteral("Clone Stamp"), "S");
+    setToolTipWithShortcut(m_toolPaintAction,
+                           m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Pincel") : QStringLiteral("Brush"), "B");
+    setToolTipWithShortcut(m_toolFloodAction,
+                           m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Preenchimento") : QStringLiteral("Fill"), "G");
+    setToolTipWithShortcut(m_addTextAction,
+                           m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Texto") : QStringLiteral("Text"), "T");
+    setToolTipWithShortcut(m_addRectAction,
+                           m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Retângulo") : QStringLiteral("Rectangle"), "R");
     if (m_toggleGridAction) {
         m_toggleGridAction->setText(m_i18n->t("common", "menu.view.showGrid"));
         m_toggleGridAction->setToolTip(m_toggleGridAction->text() + QStringLiteral(" (Ctrl+')"));
@@ -2492,6 +2742,8 @@ void MainWindow::retranslateUi()
 
     m_flipHAction->setText(m_i18n->t("common", "menu.layer.flipH"));
     m_flipVAction->setText(m_i18n->t("common", "menu.layer.flipV"));
+    m_rotateLeftAction->setText(m_i18n->t("common", "menu.layer.rotateLeft"));
+    m_rotateRightAction->setText(m_i18n->t("common", "menu.layer.rotateRight"));
     m_deleteAction->setText(m_i18n->t("common", "menu.layer.delete"));
     if (m_textBehindSubjectAction)
         m_textBehindSubjectAction->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
@@ -2515,6 +2767,11 @@ void MainWindow::retranslateUi()
 
     m_fileMenu->setTitle(m_i18n->t("common", "menu.file"));
     m_editMenu->setTitle(m_i18n->t("common", "menu.edit"));
+    const bool pt = m_i18n->currentLanguage() == QStringLiteral("pt-BR");
+    if (m_imageMenu) m_imageMenu->setTitle(pt ? QStringLiteral("Imagem") : QStringLiteral("Image"));
+    if (m_selectMenu) m_selectMenu->setTitle(pt ? QStringLiteral("Selecionar") : QStringLiteral("Select"));
+    if (m_filterMenu) m_filterMenu->setTitle(pt ? QStringLiteral("Filtro") : QStringLiteral("Filter"));
+    if (m_windowMenu) m_windowMenu->setTitle(pt ? QStringLiteral("Janela") : QStringLiteral("Window"));
     m_layerMenu->setTitle(m_i18n->t("common", "menu.layer"));
     m_settingsMenu->setTitle(m_i18n->t("common", "menu.settings"));
     m_helpMenu->setTitle(m_i18n->t("common", "menu.help"));
@@ -2620,7 +2877,7 @@ void MainWindow::retranslateUi()
     if (m_wandHintLabel)
         m_wandHintLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
             ? QStringLiteral("Clique em uma cor na imagem para torná-la transparente.")
-            : QStringLiteral("Click a color on the image to make it transparent."));
+            : QStringLiteral("Click a color on the image to create a selection. The image is not changed."));
 
     if (m_cloneRadiusLabel)
         m_cloneRadiusLabel->setText(m_i18n->t("editor", "tools.clone.radius") + QStringLiteral(":"));

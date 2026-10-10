@@ -55,21 +55,25 @@ void MagicWandTool::mousePress(QMouseEvent* event, const QPointF& docPos, const 
             const QPoint imgPos = matrix.inverted().map(docPos).toPoint();
             if (imgPos.x() >= 0 && imgPos.x() < oldImg.width() && imgPos.y() >= 0 && imgPos.y() < oldImg.height()) {
                 QImage clearedImg = ImageProcessing::removeBackground(oldImg, imgPos, m_tolerance, m_contiguous);
-                const LayerId newAssetId = ctx.document->assets().addImage(clearedImg);
-                const QString cmdName = ctx.i18n ? ctx.i18n->t("editor", "canvas.command.magicWand") : QStringLiteral("Magic Wand Cut");
-
-                if (ctx.history) {
-                    ctx.history->execute(std::make_unique<ModifyImageLayerCommand>(
-                        *ctx.document, imgLayer->id(),
-                        imgLayer->assetId, oldImg.width(), oldImg.height(), imgLayer->transform,
-                        newAssetId, clearedImg.width(), clearedImg.height(), imgLayer->transform,
-                        cmdName
-                    ));
+                // Qt 6 does not expose alphaChannel(); copy the alpha plane
+                // explicitly. removeBackground returns alpha=0 for pixels
+                // matching the clicked colour, so invert it to store the
+                // actual selected region (as PhotoCraft does).
+                const QImage rgba = clearedImg.convertToFormat(QImage::Format_RGBA8888);
+                QImage newMask(rgba.size(), QImage::Format_Alpha8);
+                for (int y = 0; y < rgba.height(); ++y) {
+                    const uchar* src = rgba.constScanLine(y);
+                    uchar* dst = newMask.scanLine(y);
+                    for (int x = 0; x < rgba.width(); ++x)
+                        dst[x] = 255 - src[x * 4 + 3];
                 }
+                // Keep the result as an active selection. Applying a mask,
+                // deleting, copying or cutting is an explicit layer action.
+                ctx.document->setPixelSelection(newMask);
 
                 if (ctx.requestStatusMessage) {
                     const QString msg = ctx.i18n ? ctx.i18n->t("editor", "canvas.status.wandSuccess").arg(m_tolerance)
-                                                 : QStringLiteral("✓ Color area removed (Tolerance: %1)").arg(m_tolerance);
+                                                 : QStringLiteral("✓ Selection created (Tolerance: %1)").arg(m_tolerance);
                     ctx.requestStatusMessage(msg);
                 }
 

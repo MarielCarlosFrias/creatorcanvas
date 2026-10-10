@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QColor>
+#include <QImage>
 #include <QPolygonF>
 #include <QRectF>
 #include <QSizeF>
@@ -26,6 +27,7 @@ enum class LayerType { Group, Image, Text, Shape, Background };
 enum class BlendMode { Normal, Multiply, Screen, Overlay, Darken, Lighten, Add };
 enum class TextAlignment { Left, Center, Right };
 enum class ShapeKind { Rectangle, RoundedRect, Ellipse, Line, Polygon, ArrowRight, ArrowCurved, Star, Badge, SpeechBubble, Heart };
+enum class LayerColorTag { None, Red, Orange, Yellow, Green, Blue, Purple, Gray };
 
 /// Base class of every layer. UI/commands mutate layers ONLY through
 /// Document methods; direct field access is the read path (renderer,
@@ -46,6 +48,7 @@ public:
     bool visible = true;
     bool locked = false;
     BlendMode blendMode = BlendMode::Normal;
+    LayerColorTag colorTag = LayerColorTag::None;
 
     AffineTransform transform;
 
@@ -89,7 +92,15 @@ public:
     LayerId assetId;
     int naturalWidth = 0;
     int naturalHeight = 0;
+    // Máscara alfa opcional, não destrutiva. Branco mantém, preto oculta.
+    QImage alphaMask;
     ImageEffects effects;
+
+    // Cache transitória usada pelo renderizador durante gestos interativos.
+    // Não é serializada: é reconstruída quando a imagem/máscara muda.
+    mutable QImage maskedRenderCache;
+    mutable qint64 maskedRenderSourceKey = 0;
+    mutable qint64 maskedRenderMaskKey = 0;
 };
 
 class TextLayer final : public Layer

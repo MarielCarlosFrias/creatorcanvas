@@ -2,6 +2,7 @@
 
 #include <QWidget>
 #include <QVector>
+#include <QHash>
 #include "core/document/NewDocumentSpec.h"
 
 class QLabel;
@@ -20,6 +21,7 @@ class I18nService;
 class PresetStore;
 class RecentFiles;
 struct DocumentPreset;
+enum class TemplateKind;
 
 /// Modern Start / Welcome Screen for CreatorCanvas:
 /// - Prominent "Create Design" & "Open Project" actions
@@ -54,6 +56,7 @@ private:
                               const QString& dimensions, const QString& ratio,
                               const NewDocumentSpec& spec);
     void relayoutCards();
+    QPixmap templatePreview(TemplateKind kind);
 
     I18nService* m_i18n = nullptr;
     PresetStore* m_presets = nullptr;
@@ -85,6 +88,9 @@ private:
     QLabel* m_emptyStateSubtitle = nullptr;
     QLabel* m_emptyStateIcon = nullptr;
     QScrollArea* m_scrollArea = nullptr;
+    QHash<int, QPixmap> m_templatePreviewCache;
+    QVector<QLabel*> m_templateTitleLabels;
+    QVector<QLabel*> m_templatePlatformLabels;
 };
 
 } // namespace cc

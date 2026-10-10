@@ -3,6 +3,7 @@
 #include <QWidget>
 #include <QPointer>
 #include "core/Document.h"
+#include "core/DocumentController.h"
 
 // Forward declarations de classes Qt necessárias para a interface gráfica
 class QDoubleSpinBox;
@@ -20,7 +21,7 @@ class CommandStack;
 /// Painel de propriedades para ShapeLayers (retângulos, elipses, linhas, etc.):
 /// Permite alterar a cor de preenchimento, cor de contorno, espessura da linha e raio dos cantos.
 /// Projetado com suporte a C++20/Qt6 e compatibilidade multiplataforma (Linux/Windows).
-class ShapeInspector final : public QWidget
+class ShapeInspector final : public QWidget, public IDocumentObserver
 {
     Q_OBJECT
 public:
@@ -28,6 +29,7 @@ public:
                             CommandStack* history = nullptr,
                             QWidget* parent = nullptr);
 
+    void onDocumentChanged(Document* doc) override { setDocument(doc); }
     // Define qual camada está selecionada atualmente no canvas
     void setSelectedLayer(const LayerId& id);
 

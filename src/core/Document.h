@@ -50,6 +50,7 @@ public:
     bool setLayerName(const LayerId& id, QString name);
     bool setLayerVisible(const LayerId& id, bool visible);
     bool setLayerLocked(const LayerId& id, bool locked);
+    bool setLayerColorTag(const LayerId& id, LayerColorTag tag);
     bool setLayerOpacity(const LayerId& id, float opacity);
     bool setLayerBlendMode(const LayerId& id, BlendMode mode);
     bool setLayerTransform(const LayerId& id, const AffineTransform& transform);
@@ -76,6 +77,11 @@ public:
 
     // Atualiza o asset associado a uma camada de imagem (ImageLayer), com dimensões naturais
     bool setImageLayerAsset(const LayerId& id, const LayerId& newAssetId, int naturalWidth, int naturalHeight);
+    bool setLayerAlphaMask(const LayerId& id, QImage mask);
+
+    const QImage& pixelSelection() const { return m_pixelSelection; }
+    void setPixelSelection(QImage selection);
+    void clearPixelSelection();
 
     quint64 revision() const { return m_revision; }
 
@@ -95,6 +101,7 @@ private:
     std::unique_ptr<GroupLayer> m_root;
     quint64 m_revision = 0;
     AssetStore m_assets;
+    QImage m_pixelSelection;
 };
 
 } // namespace cc

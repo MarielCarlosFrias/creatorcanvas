@@ -7,6 +7,7 @@
 #include <type_traits>
 
 #include <memory>
+#include <limits>
 
 namespace cc {
 
@@ -419,6 +420,7 @@ private:
 using RenameLayerCommand     = LayerPropertyCommand<QString>;
 using LayerVisibilityCommand = LayerPropertyCommand<bool>;
 using LayerLockCommand       = LayerPropertyCommand<bool>;
+using LayerColorTagCommand   = LayerPropertyCommand<LayerColorTag>;
 using LayerOpacityCommand    = LayerPropertyCommand<float>;
 using LayerBlendModeCommand  = LayerPropertyCommand<BlendMode>;
 
@@ -447,7 +449,8 @@ public:
     ModifyImageLayerCommand(Document& doc, const LayerId& id,
                             LayerId oldAssetId, int oldWidth, int oldHeight, AffineTransform oldTransform,
                             LayerId newAssetId, int newWidth, int newHeight, AffineTransform newTransform,
-                            QString commandName = QStringLiteral("image.modify"))
+                            QString commandName = QStringLiteral("image.modify"),
+                            QImage oldAlphaMask = {}, QImage newAlphaMask = {})
         : Command(std::move(commandName))
         , m_doc(&doc)
         , m_id(id)
@@ -459,18 +462,25 @@ public:
         , m_newWidth(newWidth)
         , m_newHeight(newHeight)
         , m_newTransform(std::move(newTransform))
+        , m_oldAlphaMask(std::move(oldAlphaMask))
+        , m_newAlphaMask(std::move(newAlphaMask))
+        , m_hasAlphaMasks(!m_oldAlphaMask.isNull() || !m_newAlphaMask.isNull())
     {
     }
 
     void redo() override
     {
         m_doc->setImageLayerAsset(m_id, m_newAssetId, m_newWidth, m_newHeight);
+        if (m_hasAlphaMasks)
+            m_doc->setLayerAlphaMask(m_id, m_newAlphaMask);
         m_doc->setLayerTransform(m_id, m_newTransform);
     }
 
     void undo() override
     {
         m_doc->setImageLayerAsset(m_id, m_oldAssetId, m_oldWidth, m_oldHeight);
+        if (m_hasAlphaMasks)
+            m_doc->setLayerAlphaMask(m_id, m_oldAlphaMask);
         m_doc->setLayerTransform(m_id, m_oldTransform);
     }
 
@@ -485,6 +495,9 @@ private:
     int m_newWidth;
     int m_newHeight;
     AffineTransform m_newTransform;
+    QImage m_oldAlphaMask;
+    QImage m_newAlphaMask;
+    bool m_hasAlphaMasks = false;
 };
 
 /// Macro command that executes multiple commands sequentially as a single undo/redo step.
@@ -519,6 +532,76 @@ public:
 
 private:
     std::vector<std::unique_ptr<Command>> m_commands;
+};
+
+/// Replaces sibling layers with one raster layer while retaining every source
+/// layer for undo. The raster pixels are prepared through CanvasRenderer.
+class ReplaceLayersWithRasterCommand final : public Command
+{
+public:
+    ReplaceLayersWithRasterCommand(Document& doc, QList<LayerId> layerIds,
+                                   std::unique_ptr<ImageLayer> raster,
+                                   QString commandName)
+        : Command(std::move(commandName))
+        , m_doc(&doc)
+        , m_layerIds(std::move(layerIds))
+        , m_raster(std::move(raster))
+    {
+        Q_ASSERT(m_raster && !m_layerIds.isEmpty());
+        GroupLayer* parent = doc.parentOf(m_layerIds.first());
+        Q_ASSERT(parent);
+        m_parentId = parent ? parent->id() : doc.rootGroup()->id();
+        m_rasterId = m_raster->id();
+        m_insertIndex = std::numeric_limits<int>::max();
+        for (const LayerId& id : m_layerIds) {
+            Q_ASSERT(doc.parentOf(id) == parent);
+            SourceInfo info;
+            info.id = id;
+            info.index = doc.indexOf(id);
+            m_insertIndex = qMin(m_insertIndex, info.index);
+            m_sources.push_back(std::move(info));
+        }
+        std::sort(m_sources.begin(), m_sources.end(),
+                  [](const SourceInfo& a, const SourceInfo& b) { return a.index < b.index; });
+    }
+
+    const LayerId& rasterId() const { return m_rasterId; }
+
+    void redo() override
+    {
+        for (auto& source : m_sources) {
+            if (auto taken = m_doc->takeLayer(source.id))
+                source.layer = std::move(taken);
+        }
+        Q_ASSERT(m_raster);
+        m_doc->addLayer(std::move(m_raster), detail::resolveGroup(m_doc, m_parentId), m_insertIndex);
+    }
+
+    void undo() override
+    {
+        m_raster = m_doc->takeLayer(m_rasterId);
+        Q_ASSERT(m_raster);
+        GroupLayer* parent = detail::resolveGroup(m_doc, m_parentId);
+        for (auto& source : m_sources) {
+            Q_ASSERT(source.layer);
+            m_doc->addLayer(std::move(source.layer), parent, source.index);
+        }
+    }
+
+private:
+    struct SourceInfo {
+        LayerId id;
+        int index = -1;
+        std::unique_ptr<Layer> layer;
+    };
+
+    Document* m_doc;
+    QList<LayerId> m_layerIds;
+    LayerId m_parentId;
+    LayerId m_rasterId;
+    int m_insertIndex = 0;
+    std::vector<SourceInfo> m_sources;
+    std::unique_ptr<Layer> m_raster;
 };
 
 /// Groups multiple layers into a single GroupLayer with full undo/redo support.

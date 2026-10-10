@@ -28,6 +28,7 @@ private:
     SettingsService* m_settings = nullptr;
     QComboBox* m_language = nullptr;
     QComboBox* m_autosave = nullptr;
+    QComboBox* m_historyLimit = nullptr;
     QCheckBox* m_gpuAcceleration = nullptr;
     QCheckBox* m_darkMode = nullptr;
     QCheckBox* m_confirmExit = nullptr;
@@ -35,6 +36,7 @@ private:
     QCheckBox* m_snapToGrid = nullptr;
     QLabel* m_languageLabel = nullptr;
     QLabel* m_autosaveLabel = nullptr;
+    QLabel* m_historyLimitLabel = nullptr;
     QLabel* m_gpuAccelerationLabel = nullptr;
     QLabel* m_restartHintLabel = nullptr;
     QLabel* m_appearanceLabel = nullptr;

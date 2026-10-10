@@ -28,6 +28,7 @@ public:
     int undoCount() const { return static_cast<int>(m_undoStack.size()); }
     int redoCount() const { return static_cast<int>(m_redoStack.size()); }
     int limit() const { return m_limit; }
+    void setLimit(int limit);
 
     QString nextUndoName() const;
     QString nextRedoName() const;

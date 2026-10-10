@@ -22,9 +22,9 @@ QVector<TemplateMeta> TemplateFactory::availableTemplates()
         {
             TemplateKind::YouTubeTechReview,
             QStringLiteral("yt_tech_review"),
-            QStringLiteral("templates.yt_tech.title"),
+            QStringLiteral("builtIn.yt_tech.title"),
             QStringLiteral("Review de Tecnologia (YouTube)"),
-            QStringLiteral("templates.yt_tech.desc"),
+            QStringLiteral("builtIn.yt_tech.desc"),
             QStringLiteral("Thumbnail 16:9 profissional com contraste para reviews e análises."),
             1280, 720,
             QStringLiteral("YouTube")
@@ -32,9 +32,9 @@ QVector<TemplateMeta> TemplateFactory::availableTemplates()
         {
             TemplateKind::YouTubeGamingEpic,
             QStringLiteral("yt_gaming_epic"),
-            QStringLiteral("templates.yt_gaming.title"),
+            QStringLiteral("builtIn.yt_gaming.title"),
             QStringLiteral("Gaming / Gameplay Épica (YouTube)"),
-            QStringLiteral("templates.yt_gaming.desc"),
+            QStringLiteral("builtIn.yt_gaming.desc"),
             QStringLiteral("Thumbnail de alto impacto visual com texto em destaque e badge 4K."),
             1280, 720,
             QStringLiteral("YouTube")
@@ -42,9 +42,9 @@ QVector<TemplateMeta> TemplateFactory::availableTemplates()
         {
             TemplateKind::InstagramPromoSale,
             QStringLiteral("insta_promo_sale"),
-            QStringLiteral("templates.insta_promo.title"),
+            QStringLiteral("builtIn.insta_promo.title"),
             QStringLiteral("Post Promocional / Oferta (Instagram)"),
-            QStringLiteral("templates.insta_promo.desc"),
+            QStringLiteral("builtIn.insta_promo.desc"),
             QStringLiteral("Formato quadrado 1:1 limpo e moderno com chamada para ação."),
             1080, 1080,
             QStringLiteral("Instagram")
@@ -52,9 +52,9 @@ QVector<TemplateMeta> TemplateFactory::availableTemplates()
         {
             TemplateKind::TikTokReelsViral,
             QStringLiteral("tiktok_reels_viral"),
-            QStringLiteral("templates.tiktok_viral.title"),
+            QStringLiteral("builtIn.tiktok_viral.title"),
             QStringLiteral("Curiosidade / Dica Viral (TikTok & Reels)"),
-            QStringLiteral("templates.tiktok_viral.desc"),
+            QStringLiteral("builtIn.tiktok_viral.desc"),
             QStringLiteral("Formato vertical 9:16 perfeitamente alinhado na zona segura dos botões."),
             1080, 1920,
             QStringLiteral("TikTok")
@@ -62,9 +62,9 @@ QVector<TemplateMeta> TemplateFactory::availableTemplates()
         {
             TemplateKind::YouTubePodcast,
             QStringLiteral("yt_podcast"),
-            QStringLiteral("templates.yt_podcast.title"),
+            QStringLiteral("builtIn.yt_podcast.title"),
             QStringLiteral("Podcast / Entrevista (YouTube)"),
-            QStringLiteral("templates.yt_podcast.desc"),
+            QStringLiteral("builtIn.yt_podcast.desc"),
             QStringLiteral("Thumbnail 16:9 sofisticada para podcasts e mesas redondas com moldura e selo de episódio."),
             1280, 720,
             QStringLiteral("YouTube")
@@ -72,9 +72,9 @@ QVector<TemplateMeta> TemplateFactory::availableTemplates()
         {
             TemplateKind::YouTubeFinance,
             QStringLiteral("yt_finance"),
-            QStringLiteral("templates.yt_finance.title"),
+            QStringLiteral("builtIn.yt_finance.title"),
             QStringLiteral("Finanças & Investimentos (YouTube)"),
-            QStringLiteral("templates.yt_finance.desc"),
+            QStringLiteral("builtIn.yt_finance.desc"),
             QStringLiteral("Thumbnail 16:9 de alta conversão com setas e badges de ganhos/estatísticas."),
             1280, 720,
             QStringLiteral("YouTube")
@@ -82,9 +82,9 @@ QVector<TemplateMeta> TemplateFactory::availableTemplates()
         {
             TemplateKind::SocialBanner,
             QStringLiteral("social_banner"),
-            QStringLiteral("templates.social_banner.title"),
+            QStringLiteral("builtIn.social_banner.title"),
             QStringLiteral("Banner para Redes Sociais (LinkedIn / X)"),
-            QStringLiteral("templates.social_banner.desc"),
+            QStringLiteral("builtIn.social_banner.desc"),
             QStringLiteral("Banner panorâmico moderno para cabeçalho de perfil pessoal ou corporativo."),
             1584, 396,
             QStringLiteral("LinkedIn")
@@ -92,9 +92,9 @@ QVector<TemplateMeta> TemplateFactory::availableTemplates()
         {
             TemplateKind::YouTubeShortsTrending,
             QStringLiteral("yt_shorts_trending"),
-            QStringLiteral("templates.yt_shorts.title"),
+            QStringLiteral("builtIn.yt_shorts.title"),
             QStringLiteral("YouTube Shorts Viral / Trending"),
-            QStringLiteral("templates.yt_shorts.desc"),
+            QStringLiteral("builtIn.yt_shorts.desc"),
             QStringLiteral("Layout vertical 9:16 com gancho explosivo, balão de fala e badge em destaque."),
             1080, 1920,
             QStringLiteral("YouTube")
@@ -102,9 +102,9 @@ QVector<TemplateMeta> TemplateFactory::availableTemplates()
         {
             TemplateKind::InstagramCarouselSlide,
             QStringLiteral("insta_carousel_slide"),
-            QStringLiteral("templates.insta_carousel.title"),
+            QStringLiteral("builtIn.insta_carousel.title"),
             QStringLiteral("Slide de Carrossel (Instagram)"),
-            QStringLiteral("templates.insta_carousel.desc"),
+            QStringLiteral("builtIn.insta_carousel.desc"),
             QStringLiteral("Formato retrato 4:5 moderno para carrosséis educativos com indicador de páginas e coração."),
             1080, 1350,
             QStringLiteral("Instagram")
@@ -112,9 +112,9 @@ QVector<TemplateMeta> TemplateFactory::availableTemplates()
         {
             TemplateKind::TwitchStreamOffline,
             QStringLiteral("twitch_stream_offline"),
-            QStringLiteral("templates.twitch_offline.title"),
+            QStringLiteral("builtIn.twitch_offline.title"),
             QStringLiteral("Tela Offline / Intervalo (Twitch Stream)"),
-            QStringLiteral("templates.twitch_offline.desc"),
+            QStringLiteral("builtIn.twitch_offline.desc"),
             QStringLiteral("Tela 16:9 estilizada com gradiente escuro, redes sociais e aviso de transmissão encerrada."),
             1920, 1080,
             QStringLiteral("Twitch")
@@ -122,9 +122,9 @@ QVector<TemplateMeta> TemplateFactory::availableTemplates()
         {
             TemplateKind::YouTubeTrueCrimeMystery,
             QStringLiteral("yt_true_crime_mystery"),
-            QStringLiteral("templates.yt_true_crime.title"),
+            QStringLiteral("builtIn.yt_true_crime.title"),
             QStringLiteral("Documentário & Mistério / True Crime (YouTube)"),
-            QStringLiteral("templates.yt_true_crime.desc"),
+            QStringLiteral("builtIn.yt_true_crime.desc"),
             QStringLiteral("Thumbnail 16:9 de alto impacto dramático com tipografia gigante, contraste sombrio e badge de tempo."),
             1280, 720,
             QStringLiteral("YouTube")
@@ -250,6 +250,7 @@ std::unique_ptr<Document> TemplateFactory::createTemplate(TemplateKind kind, I18
         frameText->name = QStringLiteral("Dica Personagem");
         frameText->content = QStringLiteral("Coloque seu personagem / face aqui");
         frameText->sizePt = 22;
+        frameText->box = QSizeF(350, 100);
         frameText->color = QColor(0xb3, 0x88, 0xff);
         frameText->align = TextAlignment::Center;
         frameText->transform.position = QPointF(980, 360);
@@ -277,8 +278,9 @@ std::unique_ptr<Document> TemplateFactory::createTemplate(TemplateKind kind, I18
 
         auto title = std::make_unique<TextLayer>();
         title->name = QStringLiteral("Título Épico");
-        title->content = QStringLiteral("O FINAL SECRETO!");
-        title->sizePt = 78;
+        title->content = QStringLiteral("FINAL\nSECRETO!");
+        title->sizePt = 72;
+        title->box = QSizeF(520, 190);
         title->bold = true;
         title->color = Qt::white;
         title->align = TextAlignment::Left;
@@ -290,17 +292,18 @@ std::unique_ptr<Document> TemplateFactory::createTemplate(TemplateKind kind, I18
         title->effects.shadow.offsetX = 4.0;
         title->effects.shadow.offsetY = 4.0;
         title->effects.shadow.blur = 6.0;
-        title->transform.position = QPointF(380, 240);
+        title->transform.position = QPointF(350, 270);
         doc->addLayer(std::move(title));
 
         auto sub = std::make_unique<TextLayer>();
         sub->name = QStringLiteral("Subtítulo");
         sub->content = QStringLiteral("EPISÓDIO FINAL");
         sub->sizePt = 38;
+        sub->box = QSizeF(520, 56);
         sub->bold = true;
         sub->color = QColor(0x00, 0xff, 0xff);
         sub->align = TextAlignment::Left;
-        sub->transform.position = QPointF(380, 360);
+        sub->transform.position = QPointF(350, 515);
         doc->addLayer(std::move(sub));
 
         return doc;
@@ -532,13 +535,14 @@ std::unique_ptr<Document> TemplateFactory::createTemplate(TemplateKind kind, I18
         title->name = QStringLiteral("Título Revelador");
         title->content = QStringLiteral("ELE CONTOU\nTUDO SOBRE\nO SEGREDO!");
         title->sizePt = 54;
+        title->box = QSizeF(520, 220);
         title->bold = true;
         title->color = Qt::white;
         title->align = TextAlignment::Left;
         title->effects.shadow.enabled = true;
         title->effects.shadow.blur = 12.0;
         title->effects.shadow.offsetY = 4.0;
-        title->transform.position = QPointF(80, 240);
+        title->transform.position = QPointF(340, 240);
         doc->addLayer(std::move(title));
 
         // Nome do Convidado
@@ -546,10 +550,11 @@ std::unique_ptr<Document> TemplateFactory::createTemplate(TemplateKind kind, I18
         guest->name = QStringLiteral("Nome Convidado");
         guest->content = QStringLiteral("COM NOME DO CONVIDADO");
         guest->sizePt = 22;
+        guest->box = QSizeF(500, 42);
         guest->bold = true;
         guest->color = QColor(0xc0, 0x84, 0xfc);
         guest->align = TextAlignment::Left;
-        guest->transform.position = QPointF(80, 590);
+        guest->transform.position = QPointF(330, 590);
         doc->addLayer(std::move(guest));
 
         return doc;
@@ -600,23 +605,25 @@ std::unique_ptr<Document> TemplateFactory::createTemplate(TemplateKind kind, I18
         tag->name = QStringLiteral("Tag Alerta");
         tag->content = QStringLiteral("URGENTE: NÃO COMPRE ANTES DE VER");
         tag->sizePt = 20;
+        tag->box = QSizeF(760, 42);
         tag->bold = true;
         tag->color = QColor(0xfb, 0xbf, 0x24); // Amarelo ouro
         tag->align = TextAlignment::Left;
-        tag->transform.position = QPointF(80, 180);
+        tag->transform.position = QPointF(460, 180);
         doc->addLayer(std::move(tag));
 
         auto headline = std::make_unique<TextLayer>();
         headline->name = QStringLiteral("Manchete Finanças");
         headline->content = QStringLiteral("COMO MULTIPLICAR\nSEU CAPITAL\nEM 2026");
         headline->sizePt = 56;
+        headline->box = QSizeF(650, 245);
         headline->bold = true;
         headline->color = Qt::white;
         headline->align = TextAlignment::Left;
         headline->effects.outline.enabled = true;
         headline->effects.outline.color = Qt::black;
         headline->effects.outline.width = 5.0;
-        headline->transform.position = QPointF(80, 260);
+        headline->transform.position = QPointF(405, 260);
         doc->addLayer(std::move(headline));
 
         return doc;
@@ -655,10 +662,11 @@ std::unique_ptr<Document> TemplateFactory::createTemplate(TemplateKind kind, I18
         nameText->name = QStringLiteral("Nome / Especialidade");
         nameText->content = QStringLiteral("SEU NOME | ESPECIALISTA & CRIADOR");
         nameText->sizePt = 36;
+        nameText->box = QSizeF(1000, 55);
         nameText->bold = true;
         nameText->color = Qt::white;
         nameText->align = TextAlignment::Left;
-        nameText->transform.position = QPointF(320, 130);
+        nameText->transform.position = QPointF(820, 130);
         doc->addLayer(std::move(nameText));
 
         // Subtítulo / Proposta de Valor
@@ -666,9 +674,10 @@ std::unique_ptr<Document> TemplateFactory::createTemplate(TemplateKind kind, I18
         subText->name = QStringLiteral("Bio / Contato");
         subText->content = QStringLiteral("Ajudando empresas e marcas a escalarem com conteúdo visual e tecnologia.");
         subText->sizePt = 20;
+        subText->box = QSizeF(1000, 42);
         subText->color = QColor(0x94, 0xa3, 0xb8);
         subText->align = TextAlignment::Left;
-        subText->transform.position = QPointF(320, 210);
+        subText->transform.position = QPointF(820, 210);
         doc->addLayer(std::move(subText));
 
         // Redes / Site
@@ -676,10 +685,11 @@ std::unique_ptr<Document> TemplateFactory::createTemplate(TemplateKind kind, I18
         siteText->name = QStringLiteral("Website / Contato");
         siteText->content = QStringLiteral("🔗 seudominio.com  •  ✉ contato@seudominio.com");
         siteText->sizePt = 16;
+        siteText->box = QSizeF(800, 34);
         siteText->bold = true;
         siteText->color = QColor(0x38, 0xbd, 0xf8);
         siteText->align = TextAlignment::Left;
-        siteText->transform.position = QPointF(320, 280);
+        siteText->transform.position = QPointF(720, 280);
         doc->addLayer(std::move(siteText));
 
         return doc;
@@ -816,10 +826,11 @@ std::unique_ptr<Document> TemplateFactory::createTemplate(TemplateKind kind, I18
         topicText->name = QStringLiteral("Título do Slide");
         topicText->content = QStringLiteral("DICA PRÁTICA #2");
         topicText->sizePt = 42;
+        topicText->box = QSizeF(760, 64);
         topicText->bold = true;
         topicText->color = Qt::white;
         topicText->align = TextAlignment::Left;
-        topicText->transform.position = QPointF(100, 240);
+        topicText->transform.position = QPointF(480, 240);
         doc->addLayer(std::move(topicText));
 
         // Bloco de Cartão com conteúdo principal
@@ -969,6 +980,7 @@ std::unique_ptr<Document> TemplateFactory::createTemplate(TemplateKind kind, I18
         subText->name = QStringLiteral("Gancho Superior");
         subText->content = QStringLiteral("ELE NÃO É");
         subText->sizePt = 38;
+        subText->box = QSizeF(500, 56);
         subText->bold = true;
         subText->color = Qt::white;
         subText->align = TextAlignment::Left;
@@ -977,7 +989,7 @@ std::unique_ptr<Document> TemplateFactory::createTemplate(TemplateKind kind, I18
         subText->effects.shadow.offsetX = 3.0;
         subText->effects.shadow.offsetY = 3.0;
         subText->effects.shadow.blur = 6.0;
-        subText->transform.position = QPointF(70, 160);
+        subText->transform.position = QPointF(320, 160);
         doc->addLayer(std::move(subText));
 
         // 4. Título Principal Gigante ("HUMANO") com letras maciças e sombra
@@ -985,6 +997,7 @@ std::unique_ptr<Document> TemplateFactory::createTemplate(TemplateKind kind, I18
         mainText->name = QStringLiteral("Título Principal");
         mainText->content = QStringLiteral("HUMANO");
         mainText->sizePt = 165;
+        mainText->box = QSizeF(600, 220);
         mainText->bold = true;
         mainText->color = Qt::black; // Fundo ou cor base (suporta textura)
         mainText->align = TextAlignment::Left;
@@ -996,7 +1009,7 @@ std::unique_ptr<Document> TemplateFactory::createTemplate(TemplateKind kind, I18
         mainText->effects.shadow.offsetX = 5.0;
         mainText->effects.shadow.offsetY = 5.0;
         mainText->effects.shadow.blur = 10.0;
-        mainText->transform.position = QPointF(70, 390);
+        mainText->transform.position = QPointF(370, 390);
         doc->addLayer(std::move(mainText));
 
         // 5. Placeholder para Foto Recortada / Rosto Central

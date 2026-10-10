@@ -32,6 +32,8 @@ add_library(cc_core STATIC
     core/layers/Layer.cpp
     core/Document.h
     core/Document.cpp
+    core/DocumentController.h
+    core/DocumentController.cpp
     core/document/NewDocumentSpec.h
     core/document/NewDocumentSpec.cpp
     core/templates/TemplateFactory.h
@@ -41,6 +43,8 @@ add_library(cc_core STATIC
     core/history/CommandStack.h
     core/history/CommandStack.cpp
     core/history/DocumentCommands.h
+    core/selection/SelectionOperations.h
+    core/selection/SelectionOperations.cpp
     core/snap/SnapEngine.h
     core/snap/SnapEngine.cpp
     core/serialization/ProjectFile.h
@@ -86,7 +90,7 @@ add_library(cc_services STATIC
     services/autosaveservice.cpp
     ${PROJECT_SOURCE_DIR}/resources/presets.qrc
 )
-target_link_libraries(cc_services PUBLIC Qt6::Core Qt6::Gui)
+target_link_libraries(cc_services PUBLIC Qt6::Core Qt6::Gui cc_core)
 target_include_directories(cc_services PUBLIC ${PROJECT_SOURCE_DIR}/src)
 cc_enable_warnings(cc_services)
 
@@ -154,6 +158,8 @@ add_executable(creatorcanvas
     ui/themeicons.cpp
     ui/collapsiblesection.h
     ui/collapsiblesection.cpp
+    ui/recoverydialog.h
+    ui/recoverydialog.cpp
 )
 target_link_libraries(creatorcanvas
     PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets
