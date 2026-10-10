@@ -2349,7 +2349,10 @@ void MainWindow::exportImage()
     if (!m_i18n || !m_document)
         return;
 
-    ExportDialog dialog(m_i18n, this);
+    const QUuid selectedLayerId = (m_canvas && !m_canvas->selectedLayers().isEmpty())
+                                       ? m_canvas->selectedLayers().first()
+                                       : QUuid();
+    ExportDialog dialog(m_document, m_i18n, selectedLayerId, this);
     if (dialog.exec() != QDialog::Accepted)
         return;
 
@@ -2360,19 +2363,36 @@ void MainWindow::exportImage()
     else if (settings.format == QLatin1String("webp"))
         filter = QStringLiteral("WebP (*.webp)");
 
+    QString defaultName = QStringLiteral("export");
+    if (settings.exportSelectedLayerOnly && !settings.selectedLayerId.isNull()) {
+        if (const auto* layer = m_document->findLayer(settings.selectedLayerId)) {
+            if (!layer->name.trimmed().isEmpty())
+                defaultName = layer->name.trimmed();
+        }
+    }
+
     QString path = QFileDialog::getSaveFileName(
         this, m_i18n->t("editor", "export.dialog.title"),
-        QStringLiteral("export"), filter);
+        defaultName, filter);
     if (path.isEmpty())
         return;
 
     const QString suffix = QStringLiteral(".") + settings.format;
-    if (!path.endsWith(suffix))
+    if (!path.endsWith(suffix, Qt::CaseInsensitive))
         path += suffix;
 
     QString error;
-    if (!exportDocumentToImage(*m_document, path, settings.format,
-                               settings.quality, settings.scale, &error)) {
+    bool success = false;
+    if (settings.exportSelectedLayerOnly && !settings.selectedLayerId.isNull()) {
+        success = exportLayerToImage(*m_document, settings.selectedLayerId, path,
+                                     settings.format, settings.quality,
+                                     settings.scale, &error);
+    } else {
+        success = exportDocumentToImage(*m_document, path, settings.format,
+                                        settings.quality, settings.scale, &error);
+    }
+
+    if (!success) {
         QMessageBox::warning(this,
                              m_i18n->t("editor", "export.error.title"), error);
         return;

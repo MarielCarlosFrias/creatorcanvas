@@ -86,8 +86,8 @@ private slots:
         image->name = QStringLiteral("Photo");
         const LayerId assetId = newLayerId();
         image->assetId = assetId;
-        image->naturalWidth = 1920;
-        image->naturalHeight = 1080;
+        image->naturalWidth = 3;
+        image->naturalHeight = 2;
         image->alphaMask = QImage(3, 2, QImage::Format_Alpha8);
         image->alphaMask.fill(0);
         image->alphaMask.scanLine(0)[0] = 255;
@@ -150,8 +150,8 @@ private slots:
 
         auto* loadedImage = static_cast<ImageLayer*>(root->children[2].get());
         QCOMPARE(loadedImage->assetId, assetId);
-        QCOMPARE(loadedImage->naturalWidth, 1920);
-        QCOMPARE(loadedImage->naturalHeight, 1080);
+        QCOMPARE(loadedImage->naturalWidth, 3);
+        QCOMPARE(loadedImage->naturalHeight, 2);
         QCOMPARE(loadedImage->alphaMask.format(), QImage::Format_Alpha8);
         QCOMPARE(loadedImage->alphaMask.size(), QSize(3, 2));
         QCOMPARE(loadedImage->alphaMask.constScanLine(0)[0], uchar(255));

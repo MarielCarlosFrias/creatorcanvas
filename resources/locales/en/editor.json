@@ -80,10 +80,13 @@
         "cornerRadius": "Corner Radius"
     },
     "export": {
-        "dialog.title": "Export",
+        "dialog.title": "Export As...",
         "format": "Format",
         "quality": "Quality",
         "scale": "Scale",
+        "preset": "Platform Preset",
+        "scopeEntire": "Full Canvas",
+        "scopeLayer": "Selected Layer Only",
         "success.title": "Export successful",
         "success": "Exported to %1",
         "error.title": "Export failed"

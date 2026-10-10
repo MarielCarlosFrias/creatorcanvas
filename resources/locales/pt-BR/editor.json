@@ -80,10 +80,13 @@
         "cornerRadius": "Raio dos Cantos"
     },
     "export": {
-        "dialog.title": "Exportar",
+        "dialog.title": "Exportar Como...",
         "format": "Formato",
         "quality": "Qualidade",
         "scale": "Escala",
+        "preset": "Predefinição da Plataforma",
+        "scopeEntire": "Canvas Completo",
+        "scopeLayer": "Apenas Camada Selecionada",
         "success.title": "Exportação concluída",
         "success": "Exportado para %1",
         "error.title": "Falha na exportação"
