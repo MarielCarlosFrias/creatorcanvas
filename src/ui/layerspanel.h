@@ -39,6 +39,7 @@ public:
     void refreshProperties();
     void setSelectedLayer(const LayerId& id);
     void setSelectedLayers(const QList<LayerId>& ids);
+    LayerId selectedLayer() const { return m_selectedId; }
 
 signals:
     void selectionRequested(const cc::LayerId& id);

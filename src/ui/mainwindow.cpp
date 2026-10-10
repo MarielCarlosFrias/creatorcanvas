@@ -2349,9 +2349,12 @@ void MainWindow::exportImage()
     if (!m_i18n || !m_document)
         return;
 
-    const QUuid selectedLayerId = (m_canvas && !m_canvas->selectedLayers().isEmpty())
-                                       ? m_canvas->selectedLayers().first()
-                                       : QUuid();
+    QUuid selectedLayerId;
+    if (m_canvas && !m_canvas->selectedLayers().isEmpty())
+        selectedLayerId = m_canvas->selectedLayers().first();
+    else if (m_layersPanel && !m_layersPanel->selectedLayer().isNull())
+        selectedLayerId = m_layersPanel->selectedLayer();
+
     ExportDialog dialog(m_document, m_i18n, selectedLayerId, this);
     if (dialog.exec() != QDialog::Accepted)
         return;
