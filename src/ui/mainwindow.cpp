@@ -423,7 +423,10 @@ void MainWindow::buildCentralWidget()
                     } else {
                         m_document->setShapeFill(m_selectedId, color);
                     }
-                    if (m_shapeInspector) m_shapeInspector->refresh();
+                } else if (layer->type() == LayerType::Image) {
+                    if (m_imageInspector) {
+                        m_imageInspector->setChromaKeyColor(color);
+                    }
                 }
             }
         }
@@ -506,6 +509,11 @@ void MainWindow::buildLayersDock()
     // direct four-corner interaction on top of the artwork.
     connect(m_imageInspector, &ImageInspector::mockupPlacementRequested,
             m_canvas, &CanvasView::beginMockupPlacement);
+    connect(m_imageInspector, &ImageInspector::eyedropperRequested, this, [this] {
+        if (m_canvas) m_canvas->setTool(CanvasTool::Eyedropper);
+        if (m_toolEyedropperAction) m_toolEyedropperAction->setChecked(true);
+        statusBar()->showMessage(QStringLiteral("Pipeta ativada: Clique sobre o fundo verde na imagem para capturar a cor exata."), 5000);
+    });
     connect(m_imageInspector, &ImageInspector::imagePreviewReady,
             m_canvas, &CanvasView::setImagePreview);
     connect(m_imageInspector, &ImageInspector::imagePreviewCleared,

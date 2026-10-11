@@ -1,5 +1,6 @@
 #include "imageinspector.h"
 #include "collapsiblesection.h"
+#include "themeicons.h"
 #include "core/history/CommandStack.h"
 #include "core/history/DocumentCommands.h"
 #include "core/image/ImageProcessing.h"
@@ -280,8 +281,15 @@ void ImageInspector::buildUi()
 
     auto* chromaColorRow = new QHBoxLayout;
     m_chromaKeyColorBtn = new QPushButton(this);
-    m_chromaKeyColorBtn->setFixedSize(50, 24);
+    m_chromaKeyColorBtn->setFixedSize(36, 24);
+    m_chromaKeyColorBtn->setToolTip(QStringLiteral("Clique para escolher uma cor no diálogo"));
     m_chromaKeyColorBtn->setStyleSheet(QStringLiteral("background: #00ff00; border: 1px solid #555; border-radius: 3px;"));
+
+    m_chromaPipetteBtn = new QPushButton(QStringLiteral(" Pipeta"), this);
+    m_chromaPipetteBtn->setIcon(ThemeIcons::toolEyedropper());
+    m_chromaPipetteBtn->setToolTip(QStringLiteral("Clique na pipeta e depois clique diretamente no fundo da imagem na tela para capturar o verde exato!"));
+    m_chromaPipetteBtn->setStyleSheet(QStringLiteral("background: #3a3f4b; color: white; font-weight: bold; font-size: 11px; padding: 3px 6px; border-radius: 3px;"));
+
     auto* greenBtn = new QPushButton(QStringLiteral("Verde"), this);
     greenBtn->setStyleSheet(QStringLiteral("background: #00ff00; color: black; font-size: 10px; font-weight: bold; border-radius: 3px; padding: 2px 4px;"));
     auto* blueBtn = new QPushButton(QStringLiteral("Azul"), this);
@@ -292,6 +300,7 @@ void ImageInspector::buildUi()
     blackBtn->setStyleSheet(QStringLiteral("background: #000000; color: white; font-size: 10px; font-weight: bold; border-radius: 3px; padding: 2px 4px;"));
 
     chromaColorRow->addWidget(m_chromaKeyColorBtn);
+    chromaColorRow->addWidget(m_chromaPipetteBtn);
     chromaColorRow->addWidget(greenBtn);
     chromaColorRow->addWidget(blueBtn);
     chromaColorRow->addWidget(whiteBtn);
@@ -314,6 +323,7 @@ void ImageInspector::buildUi()
         return row;
     };
 
+    chromaLayout->addRow(QStringLiteral("Tolerância:"), makeChromaSlider(m_chromaToleranceSlider, m_chromaToleranceValue, 0, 100, 20));
     chromaLayout->addRow(QStringLiteral("Transparência:"), makeChromaSlider(m_chromaTranspSlider, m_chromaTranspValue, 0, 100, 0));
     chromaLayout->addRow(QStringLiteral("Opacidade:"), makeChromaSlider(m_chromaOpacitySlider, m_chromaOpacityValue, 0, 100, 100));
 
@@ -512,13 +522,17 @@ void ImageInspector::buildUi()
 
     // Conexões de Chroma Key (Color to Alpha)
     auto updateChromaColorBtn = [this](const QColor& c) {
-        m_chromaKeyColor = c;
-        m_chromaKeyColorBtn->setStyleSheet(QStringLiteral("background: %1; border: 1px solid #555; border-radius: 3px;").arg(c.name()));
+        setChromaKeyColor(c);
     };
 
     connect(m_chromaKeyColorBtn, &QPushButton::clicked, this, [this, updateChromaColorBtn] {
         const QColor chosen = QColorDialog::getColor(m_chromaKeyColor, this);
         if (chosen.isValid()) updateChromaColorBtn(chosen);
+    });
+    connect(m_chromaPipetteBtn, &QPushButton::clicked, this, [this] {
+        m_pickingChromaColor = true;
+        m_chromaPipetteBtn->setStyleSheet(QStringLiteral("background: #2b78e4; color: white; font-weight: bold; font-size: 11px; padding: 3px 6px; border-radius: 3px;"));
+        emit eyedropperRequested();
     });
     connect(greenBtn, &QPushButton::clicked, this, [updateChromaColorBtn] { updateChromaColorBtn(QColor(0, 255, 0)); });
     connect(blueBtn, &QPushButton::clicked, this, [updateChromaColorBtn] { updateChromaColorBtn(QColor(0, 68, 255)); });
@@ -533,9 +547,10 @@ void ImageInspector::buildUi()
         const QImage current = m_document->assets().decodedImage(layer->assetId);
         if (current.isNull()) return;
 
+        const double tol = m_chromaToleranceSlider->value() / 100.0;
         const double t = m_chromaTranspSlider->value() / 100.0;
         const double o = m_chromaOpacitySlider->value() / 100.0;
-        const QImage processed = ImageProcessing::colorToAlpha(current, m_chromaKeyColor, t, o);
+        const QImage processed = ImageProcessing::colorToAlpha(current, m_chromaKeyColor, t, o, tol);
         if (processed.isNull()) return;
 
         const LayerId origAssetId = layer->assetId;
@@ -558,9 +573,23 @@ void ImageInspector::buildUi()
         ImageLayer* layer = nullptr;
         if (!editingLayer(&layer) || !m_document || m_originalAssetId.isNull())
             return;
+        m_chromaToleranceSlider->setValue(20);
         m_chromaTranspSlider->setValue(0);
         m_chromaOpacitySlider->setValue(100);
     });
+}
+
+void ImageInspector::setChromaKeyColor(const QColor& color)
+{
+    if (!color.isValid()) return;
+    m_chromaKeyColor = color;
+    if (m_chromaKeyColorBtn) {
+        m_chromaKeyColorBtn->setStyleSheet(QStringLiteral("background: %1; border: 1px solid #555; border-radius: 3px;").arg(color.name()));
+    }
+    if (m_chromaPipetteBtn) {
+        m_chromaPipetteBtn->setStyleSheet(QStringLiteral("background: #3a3f4b; color: white; font-weight: bold; font-size: 11px; padding: 3px 6px; border-radius: 3px;"));
+    }
+    m_pickingChromaColor = false;
 }
 
 void ImageInspector::openMockupDialog()

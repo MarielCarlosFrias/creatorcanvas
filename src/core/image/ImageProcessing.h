@@ -96,8 +96,10 @@ public:
     /// e desmisturando as bordas perfeitamente sem halos residuais.
     /// transparency: threshold abaixo do qual fica 100% transparente (0.0 padrão)
     /// opacityThreshold: threshold acima do qual permanece opaco (1.0 padrão)
+    /// tolerance: tolerância de distância da cor chave (0.0 a 1.0, padrão 0.0)
     static QImage colorToAlpha(const QImage& source, const QColor& keyColor,
-                               double transparency = 0.0, double opacityThreshold = 1.0);
+                               double transparency = 0.0, double opacityThreshold = 1.0,
+                               double tolerance = 0.0);
 };
 
 } // namespace cc

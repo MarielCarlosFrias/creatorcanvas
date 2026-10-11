@@ -633,7 +633,8 @@ QImage ImageProcessing::applyPresetFilter(const QImage& source, PresetFilter pre
 }
 
 QImage ImageProcessing::colorToAlpha(const QImage& source, const QColor& keyColor,
-                                     double transparency, double opacityThreshold)
+                                     double transparency, double opacityThreshold,
+                                     double tolerance)
 {
     if (source.isNull())
         return {};
@@ -648,6 +649,7 @@ QImage ImageProcessing::colorToAlpha(const QImage& source, const QColor& keyColo
 
     const double t = std::clamp(transparency, 0.0, 1.0);
     const double o = std::clamp(opacityThreshold, 0.0, 1.0);
+    const double tol = std::clamp(tolerance, 0.0, 1.0);
 
     for (int y = 0; y < h; ++y) {
         auto* scanLine = reinterpret_cast<QRgb*>(result.scanLine(y));
@@ -679,6 +681,20 @@ QImage ImageProcessing::colorToAlpha(const QImage& source, const QColor& keyColo
             const double ab = channelOpacity(pb, cb);
 
             double a = std::max({ar, ag, ab});
+
+            // Se tolerance > 0, calcula a distância cromática (Euclidean distance)
+            if (tol > 0.0) {
+                const double dist = std::sqrt((pr - cr) * (pr - cr) +
+                                              (pg - cg) * (pg - cg) +
+                                              (pb - cb) * (pb - cb)) / 1.7320508; // normalizado [0, 1]
+                if (dist <= tol) {
+                    a = 0.0;
+                } else if (dist < tol + 0.15) {
+                    const double factor = (dist - tol) / 0.15;
+                    a = std::min(a, factor);
+                }
+            }
+
             a = std::clamp(a, 0.0, 1.0);
 
             // Remap thresholds: a <= transparency -> 0, a >= opacityThreshold -> 1, linear between
@@ -701,9 +717,24 @@ QImage ImageProcessing::colorToAlpha(const QImage& source, const QColor& keyColo
                     qg = cg;
                     qb = cb;
                 } else {
+                    // Desmistura da cor chave com salvaguarda contra saturação exagerada
                     qr = std::clamp(cr + (pr - cr) / a, 0.0, 1.0);
                     qg = std::clamp(cg + (pg - cg) / a, 0.0, 1.0);
                     qb = std::clamp(cb + (pb - cb) / a, 0.0, 1.0);
+
+                    // Spill suppression: se a cor chave era predominantemente verde, limita o verde
+                    // residual das bordas sem deixar estourar em roxo intenso.
+                    if (cg > cr + 0.15 && cg > cb + 0.15) {
+                        const double maxAllowedG = std::max(qr, qb);
+                        if (qg > maxAllowedG) {
+                            qg = maxAllowedG;
+                        }
+                    } else if (cb > cr + 0.15 && cb > cg + 0.15) {
+                        const double maxAllowedB = std::max(qr, qg);
+                        if (qb > maxAllowedB) {
+                            qb = maxAllowedB;
+                        }
+                    }
                 }
             }
 

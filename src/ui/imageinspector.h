@@ -42,7 +42,11 @@ public:
     void setMockupArea(const QPolygonF& corners);
     void openMockupDialog();
 
+public slots:
+    void setChromaKeyColor(const QColor& color);
+
 signals:
+    void eyedropperRequested();
     void mockupPlacementRequested();
     void imagePreviewReady(const cc::LayerId& id, const QImage& image);
     void imagePreviewCleared();
@@ -145,13 +149,17 @@ private:
     // Chroma Key / Color to Alpha
     class CollapsibleSection* m_chromaKeySection = nullptr;
     QPushButton* m_chromaKeyColorBtn = nullptr;
+    QPushButton* m_chromaPipetteBtn = nullptr;
     QColor m_chromaKeyColor{0, 255, 0};
+    QSlider* m_chromaToleranceSlider = nullptr;
+    QLabel* m_chromaToleranceValue = nullptr;
     QSlider* m_chromaTranspSlider = nullptr;
     QLabel* m_chromaTranspValue = nullptr;
     QSlider* m_chromaOpacitySlider = nullptr;
     QLabel* m_chromaOpacityValue = nullptr;
     QPushButton* m_chromaApplyBtn = nullptr;
     QPushButton* m_chromaResetBtn = nullptr;
+    bool m_pickingChromaColor = false;
 
     // Seções recolhíveis
     class CollapsibleSection* m_quickFiltersSection = nullptr;
