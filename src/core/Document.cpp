@@ -204,6 +204,20 @@ bool Document::setLayerLocked(const LayerId& id, bool locked)
     return true;
 }
 
+bool Document::setGroupExpanded(const LayerId& id, bool expanded)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Group)
+        return false;
+    auto* group = static_cast<GroupLayer*>(layer);
+    if (group->isExpanded == expanded)
+        return true;
+    group->isExpanded = expanded;
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
 bool Document::setLayerColorTag(const LayerId& id, LayerColorTag tag)
 {
     Layer* layer = findLayer(id);
@@ -235,6 +249,17 @@ bool Document::setLayerBlendMode(const LayerId& id, BlendMode mode)
     if (!layer || layer->blendMode == mode)
         return layer != nullptr;
     layer->blendMode = mode;
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
+bool Document::setLayerBlendIf(const LayerId& id, BlendIf blendIf)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->blendIf == blendIf)
+        return layer != nullptr;
+    layer->blendIf = std::move(blendIf);
     bumpRevision();
     emit layerPropertyChanged(id);
     return true;

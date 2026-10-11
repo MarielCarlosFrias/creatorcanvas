@@ -169,6 +169,14 @@ private:
     QPushButton* m_mockupButton = nullptr;
     QLabel* m_mockupHint = nullptr;
     QImage m_pendingMockupLogo;
+
+    // Blend If (Mesclagem Avançada por Luminância)
+    class CollapsibleSection* m_blendIfSection = nullptr;
+    QSlider* m_blendThisBlackSlider = nullptr;
+    QLabel* m_blendThisBlackValue = nullptr;
+    QSlider* m_blendThisWhiteSlider = nullptr;
+    QLabel* m_blendThisWhiteValue = nullptr;
+    QPushButton* m_blendIfResetBtn = nullptr;
 };
 
 } // namespace cc

@@ -32,6 +32,39 @@ QPainter::CompositionMode compositionMode(BlendMode mode)
     return QPainter::CompositionMode_SourceOver;
 }
 
+QImage applyBlendIf(const QImage& source, const BlendIf& blendIf)
+{
+    if (source.isNull() || blendIf.isDefault())
+        return source;
+
+    const BlendRange grayRange = blendIf.get(0)[0]; // This layer Gray
+    QImage result = source.convertToFormat(QImage::Format_ARGB32);
+    const int w = result.width();
+    const int h = result.height();
+
+    for (int y = 0; y < h; ++y) {
+        QRgb* scan = reinterpret_cast<QRgb*>(result.scanLine(y));
+        for (int x = 0; x < w; ++x) {
+            const QRgb pixel = scan[x];
+            const int a = qAlpha(pixel);
+            if (a == 0)
+                continue;
+
+            // Perceived luminance (Rec. 601)
+            const float lum = 0.299f * qRed(pixel) + 0.587f * qGreen(pixel) + 0.114f * qBlue(pixel);
+            const float wFactor = grayRange.weight(lum);
+
+            if (wFactor <= 0.0f) {
+                scan[x] = 0;
+            } else if (wFactor < 1.0f) {
+                const int newAlpha = static_cast<int>(std::round(a * wFactor));
+                scan[x] = qRgba(qRed(pixel), qGreen(pixel), qBlue(pixel), newAlpha);
+            }
+        }
+    }
+    return result;
+}
+
 void drawCheckerboard(QPainter* painter, const QRectF& canvasOnDevice,
                       const RenderOptions& options)
 {
@@ -612,6 +645,10 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
                 }
                 maskedPixels = image.maskedRenderCache;
             }
+            if (!image.blendIf.isDefault()) {
+                maskedPixels = applyBlendIf(maskedPixels, image.blendIf);
+            }
+
             const QRectF targetRect(0, 0, image.naturalWidth, image.naturalHeight);
 
             // Efeito Contorno / Glow ("Sticker Effect")

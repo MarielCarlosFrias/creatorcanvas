@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "../geometry/AffineTransform.h"
+#include "BlendIf.h"
 #include "ImageEffects.h"
 #include "TextEffects.h"
 
@@ -48,6 +49,7 @@ public:
     bool visible = true;
     bool locked = false;
     BlendMode blendMode = BlendMode::Normal;
+    BlendIf blendIf;
     LayerColorTag colorTag = LayerColorTag::None;
 
     AffineTransform transform;
@@ -79,6 +81,7 @@ public:
     std::unique_ptr<Layer> deepCopy() const override;
     QRectF contentBounds() const override;
 
+    bool isExpanded = true;
     std::vector<std::unique_ptr<Layer>> children; // index 0 = bottom
 };
 

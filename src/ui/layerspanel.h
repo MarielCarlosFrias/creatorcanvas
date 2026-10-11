@@ -50,6 +50,8 @@ signals:
     void addTextRequested();
     void addShapeRequested();
     void quickExportRequested(const cc::LayerId& id);
+    void mergeRequested();
+    void flattenRequested();
 
 private:
     void buildUi();

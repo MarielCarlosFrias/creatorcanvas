@@ -423,6 +423,7 @@ using LayerLockCommand       = LayerPropertyCommand<bool>;
 using LayerColorTagCommand   = LayerPropertyCommand<LayerColorTag>;
 using LayerOpacityCommand    = LayerPropertyCommand<float>;
 using LayerBlendModeCommand  = LayerPropertyCommand<BlendMode>;
+using LayerBlendIfCommand    = LayerPropertyCommand<BlendIf>;
 
 // Comandos de histórico fortemente tipados para operações de formas geométricas (ShapeLayer)
 // Permitem desfazer (Undo) e refazer (Redo) edições de cores, bordas e cantos arredondados

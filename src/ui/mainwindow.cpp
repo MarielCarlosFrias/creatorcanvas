@@ -264,7 +264,18 @@ void MainWindow::buildCentralWidget()
                 if (m_removeBgAiAction) m_removeBgAiAction->setEnabled(imageSelected);
                 if (m_removeBgAiQuickAction) m_removeBgAiQuickAction->setEnabled(imageSelected);
                 if (m_mockupAction) m_mockupAction->setEnabled(imageSelected);
-                if (m_mergeSelectedAction) m_mergeSelectedAction->setEnabled(false);
+                bool canMergeDown = false;
+                if (m_document && selected && selected->type() != LayerType::Background) {
+                    GroupLayer* p = m_document->parentOf(id);
+                    if (p) {
+                        const int idx = m_document->indexOf(id);
+                        if (idx > 0 && idx < static_cast<int>(p->children.size())) {
+                            const Layer* below = p->children[static_cast<std::size_t>(idx - 1)].get();
+                            canMergeDown = (below && below->type() != LayerType::Background);
+                        }
+                    }
+                }
+                if (m_mergeSelectedAction) m_mergeSelectedAction->setEnabled(canMergeDown);
                 if (m_mergeVisibleAction) m_mergeVisibleAction->setEnabled(m_document != nullptr);
                 if (m_flattenAction) m_flattenAction->setEnabled(m_document != nullptr);
 
@@ -480,6 +491,8 @@ void MainWindow::buildLayersDock()
     connect(m_layersPanel, &LayersPanel::addShapeRequested, this, [this] {
         if (m_addRectAction) m_addRectAction->trigger();
     });
+    connect(m_layersPanel, &LayersPanel::mergeRequested, this, &MainWindow::mergeSelectedLayers);
+    connect(m_layersPanel, &LayersPanel::flattenRequested, this, &MainWindow::flattenDocument);
 
     m_textInspector = new TextInspector(m_i18n, m_document, m_history.get(), this);
     m_textDock = new QDockWidget(QString(), this);
@@ -781,7 +794,8 @@ void MainWindow::buildActions()
 
     m_mergeSelectedAction = new QAction(this);
     m_mergeSelectedAction->setEnabled(false);
-    m_mergeSelectedAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+E")));
+    m_mergeSelectedAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+E")));
+    m_mergeSelectedAction->setShortcuts({QKeySequence(QStringLiteral("Ctrl+E")), QKeySequence(QStringLiteral("Ctrl+Shift+E"))});
     connect(m_mergeSelectedAction, &QAction::triggered,
             this, &MainWindow::mergeSelectedLayers);
 
@@ -2307,9 +2321,24 @@ void MainWindow::mergeSelectedLayers()
 {
     if (!m_document || !m_canvas)
         return;
-    const QList<LayerId> ids = m_canvas->selectedLayers();
+    QList<LayerId> ids = m_canvas->selectedLayers();
+    if (ids.size() == 1) {
+        // Merge Down: merge with the layer directly below it
+        const LayerId id = ids.first();
+        GroupLayer* parent = m_document->parentOf(id);
+        if (parent) {
+            const int idx = m_document->indexOf(id);
+            if (idx > 0 && idx < static_cast<int>(parent->children.size())) {
+                const Layer* below = parent->children[static_cast<std::size_t>(idx - 1)].get();
+                if (below && below->type() != LayerType::Background) {
+                    ids = {below->id(), id}; // in bottom-to-top order
+                }
+            }
+        }
+    }
+
     if (!areMergeableSiblings(*m_document, ids)) {
-        statusBar()->showMessage(tr("Select two or more layers in the same group to merge."), 3500);
+        statusBar()->showMessage(tr("Select two or more layers in the same group, or a layer above another, to merge."), 3500);
         return;
     }
     auto raster = rasterLayerFor(*m_document, ids, tr("Merged layers"));

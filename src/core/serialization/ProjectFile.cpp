@@ -176,10 +176,28 @@ QJsonObject writeLayer(const Layer& layer)
     o.insert(QStringLiteral("shearX"), layer.transform.shearX);
     o.insert(QStringLiteral("shearY"), layer.transform.shearY);
 
+    if (!layer.blendIf.isDefault()) {
+        QJsonArray rangesArr;
+        for (const auto& pair : layer.blendIf.ranges) {
+            QJsonObject rangeObj;
+            rangeObj.insert(QStringLiteral("thisBlackLo"), pair[0].black[0]);
+            rangeObj.insert(QStringLiteral("thisBlackHi"), pair[0].black[1]);
+            rangeObj.insert(QStringLiteral("thisWhiteLo"), pair[0].white[0]);
+            rangeObj.insert(QStringLiteral("thisWhiteHi"), pair[0].white[1]);
+            rangeObj.insert(QStringLiteral("underBlackLo"), pair[1].black[0]);
+            rangeObj.insert(QStringLiteral("underBlackHi"), pair[1].black[1]);
+            rangeObj.insert(QStringLiteral("underWhiteLo"), pair[1].white[0]);
+            rangeObj.insert(QStringLiteral("underWhiteHi"), pair[1].white[1]);
+            rangesArr.append(rangeObj);
+        }
+        o.insert(QStringLiteral("blendIf"), rangesArr);
+    }
+
     switch (layer.type()) {
     case LayerType::Group: {
         o.insert(QStringLiteral("type"), QStringLiteral("group"));
         const auto& group = static_cast<const GroupLayer&>(layer);
+        o.insert(QStringLiteral("isExpanded"), group.isExpanded);
         QJsonArray children;
         for (const auto& child : group.children)
             children.append(writeLayer(*child));
@@ -605,6 +623,7 @@ private:
                    std::unique_ptr<Layer>* out)
     {
         auto group = std::make_unique<GroupLayer>();
+        group->isExpanded = o.value(QStringLiteral("isExpanded")).toBool(true);
         if (!readChildren(o, group->children, error))
             return false;
         finishLayer(*group, o, id);
@@ -786,6 +805,26 @@ private:
             o.value(QStringLiteral("shearX")).toDouble(0.0);
         layer.transform.shearY =
             o.value(QStringLiteral("shearY")).toDouble(0.0);
+
+        if (o.contains(QStringLiteral("blendIf"))) {
+            const QJsonArray rangesArr = o.value(QStringLiteral("blendIf")).toArray();
+            for (std::size_t i = 0; i < static_cast<std::size_t>(rangesArr.size()); ++i) {
+                const QJsonObject rangeObj = rangesArr.at(static_cast<int>(i)).toObject();
+                BlendRange thisRange;
+                thisRange.black[0] = static_cast<quint8>(rangeObj.value(QStringLiteral("thisBlackLo")).toInt(0));
+                thisRange.black[1] = static_cast<quint8>(rangeObj.value(QStringLiteral("thisBlackHi")).toInt(0));
+                thisRange.white[0] = static_cast<quint8>(rangeObj.value(QStringLiteral("thisWhiteLo")).toInt(255));
+                thisRange.white[1] = static_cast<quint8>(rangeObj.value(QStringLiteral("thisWhiteHi")).toInt(255));
+
+                BlendRange underRange;
+                underRange.black[0] = static_cast<quint8>(rangeObj.value(QStringLiteral("underBlackLo")).toInt(0));
+                underRange.black[1] = static_cast<quint8>(rangeObj.value(QStringLiteral("underBlackHi")).toInt(0));
+                underRange.white[0] = static_cast<quint8>(rangeObj.value(QStringLiteral("underWhiteLo")).toInt(255));
+                underRange.white[1] = static_cast<quint8>(rangeObj.value(QStringLiteral("underWhiteHi")).toInt(255));
+
+                layer.blendIf.set(i, {thisRange, underRange});
+            }
+        }
     }
 
     QJsonObject m_root;

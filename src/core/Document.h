@@ -50,9 +50,11 @@ public:
     bool setLayerName(const LayerId& id, QString name);
     bool setLayerVisible(const LayerId& id, bool visible);
     bool setLayerLocked(const LayerId& id, bool locked);
+    bool setGroupExpanded(const LayerId& id, bool expanded);
     bool setLayerColorTag(const LayerId& id, LayerColorTag tag);
     bool setLayerOpacity(const LayerId& id, float opacity);
     bool setLayerBlendMode(const LayerId& id, BlendMode mode);
+    bool setLayerBlendIf(const LayerId& id, BlendIf blendIf);
     bool setLayerTransform(const LayerId& id, const AffineTransform& transform);
     bool setLayerTextBox(const LayerId& id, const QSizeF& box);
     bool setLayerTextEffects(const LayerId& id, const TextEffects& effects);

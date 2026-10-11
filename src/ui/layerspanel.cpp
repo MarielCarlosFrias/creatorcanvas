@@ -658,8 +658,12 @@ void LayersPanel::rebuild()
             for (auto it = group->children.rbegin(); it != group->children.rend(); ++it) {
                 Layer* child = it->get();
                 visibleLayers.append({child, depth});
-                if (child->type() == LayerType::Group)
-                    collect(static_cast<const GroupLayer*>(child), depth + 1);
+                if (child->type() == LayerType::Group) {
+                    const auto* childGroup = static_cast<const GroupLayer*>(child);
+                    if (childGroup->isExpanded) {
+                        collect(childGroup, depth + 1);
+                    }
+                }
             }
         };
         collect(m_document->rootGroup(), 0);
@@ -685,7 +689,29 @@ void LayersPanel::rebuild()
             rowWidget->setStyleSheet(QStringLiteral("background: transparent;"));
             auto* rowLayout = new QHBoxLayout(rowWidget);
             rowLayout->setContentsMargins(4 + depth * 16, 2, 6, 2);
-            rowLayout->setSpacing(6);
+            rowLayout->setSpacing(4);
+
+            // Expand/collapse arrow for Group layers
+            if (layer->type() == LayerType::Group) {
+                auto* groupLayer = static_cast<GroupLayer*>(layer);
+                auto* expandBtn = new QToolButton(rowWidget);
+                expandBtn->setText(groupLayer->isExpanded ? QStringLiteral("▼") : QStringLiteral("▶"));
+                expandBtn->setFixedSize(16, 24);
+                expandBtn->setStyleSheet(QStringLiteral("border: none; background: transparent; color: #94a3b8; font-size: 10px;"));
+                expandBtn->setToolTip(groupLayer->isExpanded ? QStringLiteral("Collapse Group") : QStringLiteral("Expand Group"));
+                connect(expandBtn, &QToolButton::clicked, this, [this, layerId, groupLayer] {
+                    if (!m_document) return;
+                    m_document->setGroupExpanded(layerId, !groupLayer->isExpanded);
+                    rebuild();
+                });
+                rowLayout->addWidget(expandBtn);
+            } else if (depth > 0) {
+                // Spacer matching the expand button width for alignment
+                auto* indentSpacer = new QLabel(rowWidget);
+                indentSpacer->setFixedWidth(16);
+                indentSpacer->setAttribute(Qt::WA_TransparentForMouseEvents);
+                rowLayout->addWidget(indentSpacer);
+            }
 
             // Visibility Toggle Button
             auto* visBtn = new QToolButton(rowWidget);
@@ -1007,6 +1033,10 @@ void LayersPanel::showContextMenu(const QPoint& pos)
     menu.addSeparator();
     QAction* quickExportAction = menu.addAction(m_i18n ? m_i18n->t("common", "panel.quickExportPng") : QStringLiteral("Quick Export as PNG"));
     menu.addSeparator();
+    const bool portuguese = m_i18n && m_i18n->currentLanguage() == QStringLiteral("pt-BR");
+    QAction* mergeAction = menu.addAction(portuguese ? QStringLiteral("Mesclar camadas (Ctrl+E)") : QStringLiteral("Merge layers (Ctrl+E)"));
+    QAction* flattenAction = menu.addAction(portuguese ? QStringLiteral("Achatar imagem") : QStringLiteral("Flatten image"));
+    menu.addSeparator();
     QAction* groupAction = menu.addAction(m_i18n->t("common", "menu.layer.group"));
     QAction* ungroupAction = menu.addAction(m_i18n->t("common", "menu.layer.ungroup"));
     QAction* maskAction = menu.addAction(QStringLiteral("Apply mask from selection"));
@@ -1052,6 +1082,10 @@ void LayersPanel::showContextMenu(const QPoint& pos)
         emit deleteRequested(id);
     } else if (chosen == quickExportAction) {
         emit quickExportRequested(id);
+    } else if (chosen == mergeAction) {
+        emit mergeRequested();
+    } else if (chosen == flattenAction) {
+        emit flattenRequested();
     } else if (chosen == groupAction) {
         if (!m_history)
             return;

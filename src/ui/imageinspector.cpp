@@ -126,6 +126,16 @@ void ImageInspector::refresh()
             .arg(hex, layer->effects.outline.color.lightness() > 128 ? QStringLiteral("#000000") : QStringLiteral("#ffffff")));
     }
 
+    if (m_blendThisBlackSlider && m_blendThisWhiteSlider) {
+        const BlendRange r = layer->blendIf.get(0)[0];
+        m_blendThisBlackSlider->setValue(r.black[0]);
+        m_blendThisWhiteSlider->setValue(r.white[1]);
+        if (m_blendThisBlackValue)
+            m_blendThisBlackValue->setText(QString::number(r.black[0]));
+        if (m_blendThisWhiteValue)
+            m_blendThisWhiteValue->setText(QString::number(r.white[1]));
+    }
+
     resetAdjustments();
     m_loading = false;
 }
@@ -449,6 +459,35 @@ void ImageInspector::buildUi()
     m_mockupSection->setContentLayout(mockupLayout);
     mainLayout->addWidget(m_mockupSection);
 
+    // --- Blend If: Faixas de Mesclagem de Luminância ---
+    m_blendIfSection = new CollapsibleSection(QStringLiteral("Blend If (Mesclagem Avançada)"), false, this);
+    auto* blendIfLayout = new QFormLayout;
+    blendIfLayout->setContentsMargins(4, 4, 4, 4);
+
+    auto makeBlendSlider = [this](QSlider*& slider, QLabel*& valLabel, int defaultVal) {
+        auto* row = new QHBoxLayout;
+        slider = new QSlider(Qt::Horizontal, this);
+        slider->setRange(0, 255);
+        slider->setValue(defaultVal);
+        valLabel = new QLabel(QString::number(defaultVal), this);
+        valLabel->setFixedWidth(32);
+        connect(slider, &QSlider::valueChanged, this, [valLabel](int v) {
+            valLabel->setText(QString::number(v));
+        });
+        row->addWidget(slider);
+        row->addWidget(valLabel);
+        return row;
+    };
+
+    blendIfLayout->addRow(QStringLiteral("Pretos (Esta Camada):"), makeBlendSlider(m_blendThisBlackSlider, m_blendThisBlackValue, 0));
+    blendIfLayout->addRow(QStringLiteral("Brancos (Esta Camada):"), makeBlendSlider(m_blendThisWhiteSlider, m_blendThisWhiteValue, 255));
+
+    m_blendIfResetBtn = new QPushButton(QStringLiteral("Restaurar Blend If"), this);
+    blendIfLayout->addRow(m_blendIfResetBtn);
+
+    m_blendIfSection->setContentLayout(blendIfLayout);
+    mainLayout->addWidget(m_blendIfSection);
+
     mainLayout->addStretch();
 
     // Signal connections
@@ -576,6 +615,34 @@ void ImageInspector::buildUi()
         m_chromaToleranceSlider->setValue(20);
         m_chromaTranspSlider->setValue(0);
         m_chromaOpacitySlider->setValue(100);
+    });
+
+    auto applyBlendIfChange = [this] {
+        ImageLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer) || !m_document)
+            return;
+        BlendIf next = layer->blendIf;
+        BlendRange thisRange;
+        thisRange.black[0] = static_cast<quint8>(m_blendThisBlackSlider->value());
+        thisRange.black[1] = static_cast<quint8>(m_blendThisBlackSlider->value());
+        thisRange.white[0] = static_cast<quint8>(m_blendThisWhiteSlider->value());
+        thisRange.white[1] = static_cast<quint8>(m_blendThisWhiteSlider->value());
+        next.set(0, {thisRange, next.get(0)[1]});
+
+        if (m_history) {
+            m_history->execute(std::make_unique<LayerBlendIfCommand>(
+                *m_document, m_id, QStringLiteral("layer.blendIf"),
+                &Document::setLayerBlendIf, layer->blendIf, next));
+        } else {
+            m_document->setLayerBlendIf(m_id, next);
+        }
+    };
+
+    connect(m_blendThisBlackSlider, &QSlider::valueChanged, this, applyBlendIfChange);
+    connect(m_blendThisWhiteSlider, &QSlider::valueChanged, this, applyBlendIfChange);
+    connect(m_blendIfResetBtn, &QPushButton::clicked, this, [this] {
+        m_blendThisBlackSlider->setValue(0);
+        m_blendThisWhiteSlider->setValue(255);
     });
 }
 
@@ -1015,6 +1082,12 @@ void ImageInspector::retranslateUi()
         m_presetGoldenHourBtn->setText(m_i18n ? m_i18n->t("editor", "image.filter.goldenHour") : QStringLiteral("Golden Hour"));
     if (m_presetNoirBtn)
         m_presetNoirBtn->setText(m_i18n ? m_i18n->t("editor", "image.filter.noir") : QStringLiteral("Noir"));
+
+    const bool portuguese = m_i18n && m_i18n->currentLanguage() == QStringLiteral("pt-BR");
+    if (m_blendIfSection)
+        m_blendIfSection->setTitle(portuguese ? QStringLiteral("Blend If (Mesclagem Avançada)") : QStringLiteral("Blend If (Luminance Range)"));
+    if (m_blendIfResetBtn)
+        m_blendIfResetBtn->setText(portuguese ? QStringLiteral("Restaurar Blend If") : QStringLiteral("Reset Blend If"));
 }
 
 } // namespace cc

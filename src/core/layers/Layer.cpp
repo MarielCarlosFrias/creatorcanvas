@@ -29,6 +29,7 @@ void Layer::copyCommonFrom(const Layer& other)
     visible = other.visible;
     locked = other.locked;
     blendMode = other.blendMode;
+    blendIf = other.blendIf;
     transform = other.transform;
     m_opacity = other.m_opacity;
 }
@@ -40,6 +41,7 @@ std::unique_ptr<Layer> GroupLayer::deepCopy() const
 {
     auto copy = std::make_unique<GroupLayer>();
     copy->copyCommonFrom(*this);
+    copy->isExpanded = isExpanded;
     copy->children.reserve(children.size());
     for (const auto& child : children)
         copy->children.push_back(child->deepCopy());
