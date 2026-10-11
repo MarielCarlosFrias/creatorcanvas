@@ -426,12 +426,17 @@ void MainWindow::buildCentralWidget()
                 } else if (layer->type() == LayerType::Image) {
                     if (m_imageInspector) {
                         m_imageInspector->setChromaKeyColor(color);
+                        // Restaura automaticamente a ferramenta Seleção para facilitar a navegação
+                        if (m_canvas && m_canvas->currentTool() == CanvasTool::Eyedropper) {
+                            m_canvas->setTool(CanvasTool::Select);
+                            if (m_toolSelectAction) m_toolSelectAction->setChecked(true);
+                        }
                     }
                 }
             }
         }
 
-        statusBar()->showMessage(QStringLiteral("Color sampled: %1 (R:%2 G:%3 B:%4)").arg(color.name()).arg(color.red()).arg(color.green()).arg(color.blue()), 3000);
+        statusBar()->showMessage(QStringLiteral("Cor capturada: %1 (R:%2 G:%3 B:%4)").arg(color.name()).arg(color.red()).arg(color.green()).arg(color.blue()), 3000);
     });
 
     setCentralWidget(m_centralStack);

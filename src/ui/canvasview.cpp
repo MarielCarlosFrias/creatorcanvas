@@ -1517,17 +1517,56 @@ QColor CanvasView::sampleColorAt(const QPointF& docPos) const
     if (!m_document)
         return {};
 
+    // 1. Se uma camada de imagem estiver selecionada, prioriza a amostragem direta dos pixels da camada
+    if (!m_selectedId.isNull()) {
+        if (auto* layer = m_document->findLayer(m_selectedId)) {
+            if (layer->type() == LayerType::Image) {
+                const auto* imgLayer = static_cast<const ImageLayer*>(layer);
+                const QRectF bounds = imgLayer->contentBounds();
+                if (!bounds.isEmpty()) {
+                    const QPointF local = imgLayer->transform.matrix(bounds).inverted().map(docPos);
+                    if (bounds.contains(local)) {
+                        const QImage img = (!m_previewImage.isNull() && m_previewLayerId == imgLayer->id())
+                            ? m_previewImage
+                            : m_document->assets().decodedImage(imgLayer->assetId);
+                        if (!img.isNull()) {
+                            const int imgX = qBound(0, qFloor(local.x() * img.width() / imgLayer->naturalWidth), img.width() - 1);
+                            const int imgY = qBound(0, qFloor(local.y() * img.height() / imgLayer->naturalHeight), img.height() - 1);
+                            return img.pixelColor(imgX, imgY);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Tenta amostragem em qualquer camada clicada (de cima para baixo)
+    if (Layer* hit = hitTestLayer(docPos)) {
+        if (hit->type() == LayerType::Image) {
+            const auto* imgLayer = static_cast<const ImageLayer*>(hit);
+            const QRectF bounds = imgLayer->contentBounds();
+            if (!bounds.isEmpty()) {
+                const QPointF local = imgLayer->transform.matrix(bounds).inverted().map(docPos);
+                const QImage img = m_document->assets().decodedImage(imgLayer->assetId);
+                if (!img.isNull() && bounds.contains(local)) {
+                    const int imgX = qBound(0, qFloor(local.x() * img.width() / imgLayer->naturalWidth), img.width() - 1);
+                    const int imgY = qBound(0, qFloor(local.y() * img.height() / imgLayer->naturalHeight), img.height() - 1);
+                    return img.pixelColor(imgX, imgY);
+                }
+            }
+        }
+    }
+
+    // 3. Fallback: Render 1x1 pixel into an offscreen image using renderDocument
     const int px = qFloor(docPos.x());
     const int py = qFloor(docPos.y());
     if (px < 0 || px >= m_document->width() || py < 0 || py >= m_document->height())
         return {};
 
-    // Render 1x1 pixel into an offscreen image using renderDocument
     QImage pixelImg(1, 1, QImage::Format_ARGB32_Premultiplied);
     pixelImg.fill(Qt::transparent);
 
     QPainter p(&pixelImg);
-    // Translate so docPos maps to (0, 0)
     p.translate(-px, -py);
 
     RenderOptions opt;
