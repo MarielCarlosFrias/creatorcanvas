@@ -1,5 +1,6 @@
 #include "startscreen.h"
 #include "themeicons.h"
+#include "designtokens.h"
 #include "localization/i18nservice.h"
 #include "services/presetstore.h"
 #include "services/recentfiles.h"
@@ -80,14 +81,14 @@ void StartScreen::buildUi()
     titleFont.setPointSize(24);
     titleFont.setBold(true);
     m_title->setFont(titleFont);
-    m_title->setStyleSheet(QStringLiteral("color: #1f2937;"));
+    m_title->setStyleSheet(QStringLiteral("color: %1;").arg(Design::LText().name()));
 
     m_tagline = new QLabel(this);
     m_tagline->setAlignment(Qt::AlignCenter);
     QFont tagFont = m_tagline->font();
     tagFont.setPointSize(12);
     m_tagline->setFont(tagFont);
-    m_tagline->setStyleSheet(QStringLiteral("color: #6b7280;"));
+    m_tagline->setStyleSheet(QStringLiteral("color: %1;").arg((palette().color(QPalette::Window).value()<128?Design::DTextMuted():Design::LTextMuted()).name()));
 
     headerLayout->addWidget(m_title);
     headerLayout->addWidget(m_tagline);
@@ -146,9 +147,9 @@ void StartScreen::buildUi()
         "QPushButton:pressed {"
         "  background-color: %5;"
         "}"
-    ).arg(darkUi ? "#262b35" : "#ffffff",
-          darkUi ? "#e5e9f0" : "#1f2937",
-          darkUi ? "#3b4252" : "#cbd5e1",
+    ).arg(darkUi ? Design::DCard().name() : Design::LSurface().name(),
+          darkUi ? Design::DText().name() : Design::LText().name(),
+          darkUi ? Design::DBorder().name() : Design::LBorder().name(),
           darkUi ? "#313744" : "#eef2f7",
           darkUi ? "#1e222a" : "#e2e8f0"));
     connect(m_openProjectBtn, &QPushButton::clicked,
@@ -171,7 +172,7 @@ void StartScreen::buildUi()
         "  border-color: %3;"
         "}"
     ).arg(darkUi ? "#5c9bff" : "#2563a8",
-          darkUi ? "#262b35" : "#eef2f7",
+          darkUi ? Design::DCard().name() : "#eef2f7",
           darkUi ? "#5c9bff" : "#94a3b8"));
     connect(m_customSizeBtn, &QPushButton::clicked,
             this, &StartScreen::customCreateRequested);
@@ -189,7 +190,7 @@ void StartScreen::buildUi()
     sectionFont.setPointSize(13);
     sectionFont.setBold(true);
     m_popularLabel->setFont(sectionFont);
-    m_popularLabel->setStyleSheet(QStringLiteral("color: #e5e9f0;"));
+    m_popularLabel->setStyleSheet(QStringLiteral("color: %1;").arg((palette().color(QPalette::Window).value()<128?Design::DText():Design::LText()).name()));
     mainLayout->addWidget(m_popularLabel);
 
     m_cardsHost = new QWidget(this);
@@ -245,7 +246,7 @@ void StartScreen::buildUi()
     // --- 3b. Ready-Made Templates ---
     m_templatesLabel = new QLabel(this);
     m_templatesLabel->setFont(sectionFont);
-    m_templatesLabel->setStyleSheet(QStringLiteral("color: #e5e9f0;"));
+    m_templatesLabel->setStyleSheet(QStringLiteral("color: %1;").arg((palette().color(QPalette::Window).value()<128?Design::DText():Design::LText()).name()));
     mainLayout->addWidget(m_templatesLabel);
 
     m_templatesHost = new QWidget(this);
@@ -295,7 +296,7 @@ void StartScreen::buildUi()
             "QPushButton:pressed {"
             "  background-color: %5;"
             "}"
-        ).arg(darkUi ? "#232730" : "#ffffff",
+        ).arg(darkUi ? Design::DCard().name() : Design::LSurface().name(),
               borderColor,
               darkUi ? "#2b303c" : "#eef2f7",
               accentColor,
@@ -333,13 +334,13 @@ void StartScreen::buildUi()
         titleLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
         titleLabel->setStyleSheet(QStringLiteral(
             "color: %1; font-size: 11px; font-weight: 600; border: none; background: transparent;"
-        ).arg(darkUi ? "#e5e9f0" : "#1f2937"));
+        ).arg(darkUi ? Design::DText().name() : Design::LText().name()));
 
         auto* dimLabel = new QLabel(QStringLiteral("%1 × %2 px").arg(tmpl.width).arg(tmpl.height), card);
         dimLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
         dimLabel->setStyleSheet(QStringLiteral(
             "color: %1; font-size: 9px; border: none; background: transparent;"
-        ).arg(darkUi ? "#8c97a8" : "#6b7280"));
+        ).arg(darkUi ? Design::DTextMuted().name() : Design::LTextMuted().name()));
 
         textContainer->addWidget(platformLabel);
         textContainer->addWidget(titleLabel);
@@ -373,7 +374,7 @@ void StartScreen::buildUi()
     // --- 4. Recent Projects Section ---
     m_recentLabel = new QLabel(this);
     m_recentLabel->setFont(sectionFont);
-    m_recentLabel->setStyleSheet(QStringLiteral("color: #e5e9f0;"));
+    m_recentLabel->setStyleSheet(QStringLiteral("color: %1;").arg((palette().color(QPalette::Window).value()<128?Design::DText():Design::LText()).name()));
     mainLayout->addWidget(m_recentLabel);
 
     m_recentStack = new QStackedWidget(this);
@@ -403,12 +404,12 @@ void StartScreen::buildUi()
         "  background-color: %5;"
         "  color: %6;"
         "}"
-    ).arg(darkUi ? "#22262e" : "#ffffff",
-          darkUi ? "#333a46" : "#cbd5e1",
-          darkUi ? "#e5e9f0" : "#1f2937",
+    ).arg(darkUi ? Design::DSurface().name() : Design::LSurface().name(),
+          darkUi ? Design::DBorder().name() : Design::LBorder().name(),
+          darkUi ? Design::DText().name() : Design::LText().name(),
           darkUi ? "#2e3440" : "#eef2f7",
-          darkUi ? "#3b4252" : "#dbeafe",
-          darkUi ? "#ffffff" : "#1f2937"));
+          darkUi ? Design::DBorder().name() : "#dbeafe",
+          darkUi ? Design::LSurface().name() : Design::LText().name()));
     connect(m_recentList, &QListWidget::itemActivated, this,
             [this](QListWidgetItem* item) {
                 if (item)
@@ -425,8 +426,8 @@ void StartScreen::buildUi()
         "  border: 1px dashed %2;"
         "  border-radius: 8px;"
         "}"
-    ).arg(darkUi ? "#22262e" : "#ffffff",
-          darkUi ? "#353c48" : "#cbd5e1"));
+    ).arg(darkUi ? Design::DSurface().name() : Design::LSurface().name(),
+          darkUi ? Design::DBorder().name() : Design::LBorder().name()));
     auto* emptyLayout = new QVBoxLayout(m_emptyStateWidget);
     emptyLayout->setContentsMargins(20, 24, 20, 24);
     emptyLayout->setAlignment(Qt::AlignCenter);
@@ -449,7 +450,7 @@ void StartScreen::buildUi()
     m_emptyStateSubtitle = new QLabel(m_emptyStateWidget);
     m_emptyStateSubtitle->setAlignment(Qt::AlignCenter);
     m_emptyStateSubtitle->setStyleSheet(QStringLiteral("color: %1; font-size: 11px; border: none; background: transparent;")
-        .arg(darkUi ? "#636d83" : "#6b7280"));
+        .arg(darkUi ? Design::DTextDim().name() : Design::LTextMuted().name()));
 
     emptyLayout->addWidget(m_emptyStateIcon);
     emptyLayout->addWidget(m_emptyStateTitle);
@@ -487,8 +488,8 @@ QWidget* StartScreen::createVisualCard(const QString& brandName, const QPixmap& 
         "QPushButton:pressed {"
         "  background-color: %4;"
         "}"
-    ).arg(darkUi ? "#232730" : "#ffffff",
-          darkUi ? "#333945" : "#cbd5e1",
+    ).arg(darkUi ? Design::DCard().name() : Design::LSurface().name(),
+          darkUi ? Design::DBorder().name() : Design::LBorder().name(),
           darkUi ? "#2b303c" : "#eef2f7",
           darkUi ? "#1e222a" : "#e2e8f0"));
 
@@ -511,11 +512,11 @@ QWidget* StartScreen::createVisualCard(const QString& brandName, const QPixmap& 
     nf.setBold(true);
     nameLabel->setFont(nf);
     nameLabel->setStyleSheet(QStringLiteral("color: %1; background: transparent; border: none;")
-        .arg(darkUi ? "#ffffff" : "#1f2937"));
+        .arg(darkUi ? Design::LSurface().name() : Design::LText().name()));
 
     auto* dimLabel = new QLabel(QStringLiteral("%1  (%2)").arg(dimensions, ratio), card);
     dimLabel->setStyleSheet(QStringLiteral("color: %1; font-size: 10px; background: transparent; border: none;")
-        .arg(darkUi ? "#8c97a8" : "#6b7280"));
+        .arg(darkUi ? Design::DTextMuted().name() : Design::LTextMuted().name()));
 
     textContainer->addWidget(nameLabel);
     textContainer->addWidget(dimLabel);
@@ -620,20 +621,20 @@ void StartScreen::retranslateUi()
 
     m_title->setText(m_i18n->t("common", "app.title"));
     const bool darkUi = palette().color(QPalette::Window).value() < 128;
-    m_title->setStyleSheet(QStringLiteral("color: %1;").arg(darkUi ? "#f3f4f6" : "#1f2937"));
+    m_title->setStyleSheet(QStringLiteral("color: %1;").arg(darkUi ? Design::DText().name() : Design::LText().name()));
     m_tagline->setText(m_i18n->t("common", "app.tagline"));
-    m_tagline->setStyleSheet(QStringLiteral("color: %1;").arg(darkUi ? "#b0b5bf" : "#6b7280"));
+    m_tagline->setStyleSheet(QStringLiteral("color: %1;").arg(darkUi ? Design::DTextMuted().name() : Design::LTextMuted().name()));
 
     m_createDesignBtn->setText(m_i18n->t("common", "start.createDesign"));
     m_openProjectBtn->setText(m_i18n->t("common", "start.openProject"));
     m_customSizeBtn->setText(m_i18n->t("common", "start.custom"));
 
     m_popularLabel->setText(m_i18n->t("common", "start.popular"));
-    m_popularLabel->setStyleSheet(QStringLiteral("color: %1;").arg(darkUi ? "#f3f4f6" : "#1f2937"));
+    m_popularLabel->setStyleSheet(QStringLiteral("color: %1;").arg(darkUi ? Design::DText().name() : Design::LText().name()));
     if (m_templatesLabel)
         m_templatesLabel->setText(m_i18n->t("common", "start.templates"));
     if (m_templatesLabel)
-        m_templatesLabel->setStyleSheet(QStringLiteral("color: %1;").arg(darkUi ? "#f3f4f6" : "#1f2937"));
+        m_templatesLabel->setStyleSheet(QStringLiteral("color: %1;").arg(darkUi ? Design::DText().name() : Design::LText().name()));
     const auto templates = TemplateFactory::availableTemplates();
     for (int i = 0; i < templates.size() && i < m_templateTitleLabels.size(); ++i) {
         if (m_templateTitleLabels[i])
@@ -642,12 +643,12 @@ void StartScreen::retranslateUi()
             m_templatePlatformLabels[i]->setText(templates[i].platform);
     }
     m_recentLabel->setText(m_i18n->t("common", "start.recent"));
-    m_recentLabel->setStyleSheet(QStringLiteral("color: %1;").arg(darkUi ? "#f3f4f6" : "#1f2937"));
+    m_recentLabel->setStyleSheet(QStringLiteral("color: %1;").arg(darkUi ? Design::DText().name() : Design::LText().name()));
 
     m_emptyStateTitle->setText(m_i18n->t("common", "start.emptyRecents"));
-    m_emptyStateTitle->setStyleSheet(QStringLiteral("color: %1; border: none; background: transparent;").arg(darkUi ? "#f3f4f6" : "#374151"));
+    m_emptyStateTitle->setStyleSheet(QStringLiteral("color: %1; border: none; background: transparent;").arg(darkUi ? Design::DText().name() : "#374151"));
     m_emptyStateSubtitle->setText(m_i18n->t("common", "start.emptyRecentsHint"));
-    m_emptyStateSubtitle->setStyleSheet(QStringLiteral("color: %1; font-size: 11px; border: none; background: transparent;").arg(darkUi ? "#b0b5bf" : "#6b7280"));
+    m_emptyStateSubtitle->setStyleSheet(QStringLiteral("color: %1; font-size: 11px; border: none; background: transparent;").arg(darkUi ? Design::DTextMuted().name() : Design::LTextMuted().name()));
 }
 
 QPixmap StartScreen::templatePreview(TemplateKind kind)
