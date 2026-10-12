@@ -1,4 +1,5 @@
 #include "darktheme.h"
+#include "designtokens.h"
 
 #include <QApplication>
 #include <QColor>
@@ -10,11 +11,11 @@ void applyDarkTheme(QApplication &app)
 {
     app.setStyle(QStringLiteral("Fusion"));
 
-    const QColor window(0x21, 0x22, 0x26);
-    const QColor base(0x17, 0x18, 0x1b);
-    const QColor alternate(0x1d, 0x1e, 0x22);
-    const QColor text(0xe7, 0xe8, 0xea);
-    const QColor dimmed(0x70, 0x73, 0x79);
+    const QColor window = Design::DElevated();
+    const QColor base = Design::DSurface();
+    const QColor alternate = Design::DCard();
+    const QColor text = Design::DText();
+    const QColor dimmed = Design::DTextDim();
 
     QPalette pal;
     pal.setColor(QPalette::Window, window);
@@ -282,11 +283,11 @@ void applyLightTheme(QApplication &app)
 {
     app.setStyle(QStringLiteral("Fusion"));
 
-    const QColor window(0xf1, 0xf3, 0xf6);
-    const QColor base(0xff, 0xff, 0xff);
+    const QColor window = Design::LWindow();
+    const QColor base = Design::LSurface();
     const QColor alternate(0xe8, 0xec, 0xf1);
-    const QColor text(0x1e, 0x22, 0x2b);
-    const QColor dimmed(0x6b, 0x72, 0x80);
+    const QColor text = Design::LText();
+    const QColor dimmed = Design::LTextMuted();
 
     QPalette pal;
     pal.setColor(QPalette::Window, window);
