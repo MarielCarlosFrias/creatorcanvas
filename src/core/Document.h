@@ -6,6 +6,8 @@
 #include <memory>
 
 #include "assets/AssetStore.h"
+#include "document/LayerComps.h"
+#include "document/WebSlice.h"
 #include "layers/Layer.h"
 
 namespace cc {
@@ -82,10 +84,24 @@ public:
     // Atualiza o asset associado a uma camada de imagem (ImageLayer), com dimensões naturais
     bool setImageLayerAsset(const LayerId& id, const LayerId& newAssetId, int naturalWidth, int naturalHeight);
     bool setLayerAlphaMask(const LayerId& id, QImage mask);
+    bool invertLayerAlphaMask(const LayerId& id);
+    bool removeLayerAlphaMask(const LayerId& id);
 
     const QImage& pixelSelection() const { return m_pixelSelection; }
     void setPixelSelection(QImage selection);
     void clearPixelSelection();
+
+    // Layer Comps (Composições de Camadas estilo PhotoCraft / Photoshop)
+    const std::vector<LayerComp>& layerComps() const { return m_layerComps; }
+    void addLayerComp(LayerComp comp);
+    bool applyLayerComp(const QString& compId);
+    bool removeLayerComp(const QString& compId);
+
+    // Web Slices (Fatias de Exportação Web)
+    const std::vector<WebSlice>& webSlices() const { return m_webSlices; }
+    void addWebSlice(WebSlice slice);
+    bool removeWebSlice(const QString& sliceId);
+    void clearWebSlices();
 
     quint64 revision() const { return m_revision; }
 
@@ -106,6 +122,8 @@ private:
     quint64 m_revision = 0;
     AssetStore m_assets;
     QImage m_pixelSelection;
+    std::vector<LayerComp> m_layerComps;
+    std::vector<WebSlice> m_webSlices;
 };
 
 } // namespace cc

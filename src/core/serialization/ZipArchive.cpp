@@ -13,23 +13,23 @@ extern "C" {
 
 namespace cc {
 
-ZipArchive::ZipArchive() : m_zip(nullptr), m_writing(false), m_reading(false) {}
+ZipArchive::ZipArchive() : m_writing(false), m_reading(false) {}
 ZipArchive::~ZipArchive() { close(); }
 
 bool ZipArchive::openForWriting(const QString& filePath)
 {
     close();
-    m_zip = new mz_zip_archive();
-    std::memset(m_zip, 0, sizeof(mz_zip_archive));
+    m_zip = std::make_unique<mz_zip_archive>();
+    std::memset(m_zip.get(), 0, sizeof(mz_zip_archive));
     m_writing = true;
-    return mz_zip_writer_init_file(m_zip, filePath.toUtf8().constData(), 0) != 0;
+    return mz_zip_writer_init_file(m_zip.get(), filePath.toUtf8().constData(), 0) != 0;
 }
 
 bool ZipArchive::addFile(const QString& name, const QByteArray& data, bool compress)
 {
     if (!m_zip || !m_writing) return false;
     int level = compress ? MZ_DEFAULT_LEVEL : 0;
-    return mz_zip_writer_add_mem(m_zip, name.toUtf8().constData(),
+    return mz_zip_writer_add_mem(m_zip.get(), name.toUtf8().constData(),
                                  data.constData(), data.size(), level) != 0;
 }
 
@@ -38,33 +38,32 @@ bool ZipArchive::close()
     if (!m_zip) return true;
     bool ok = false;
     if (m_writing) {
-        ok = mz_zip_writer_finalize_archive(m_zip) != 0;
-        mz_zip_writer_end(m_zip);
+        ok = mz_zip_writer_finalize_archive(m_zip.get()) != 0;
+        mz_zip_writer_end(m_zip.get());
     } else if (m_reading) {
-        mz_zip_reader_end(m_zip);
+        mz_zip_reader_end(m_zip.get());
     }
-    delete m_zip;
-    m_zip = nullptr;
+    m_zip.reset();
     m_writing = m_reading = false;
+    m_fileNames.clear();
     return ok;
 }
 
 bool ZipArchive::openForReading(const QString& filePath)
 {
     close();
-    m_zip = new mz_zip_archive();
-    std::memset(m_zip, 0, sizeof(mz_zip_archive));
+    m_zip = std::make_unique<mz_zip_archive>();
+    std::memset(m_zip.get(), 0, sizeof(mz_zip_archive));
     m_reading = true;
-    if (!mz_zip_reader_init_file(m_zip, filePath.toUtf8().constData(), 0)) {
-        delete m_zip;
-        m_zip = nullptr;
+    if (!mz_zip_reader_init_file(m_zip.get(), filePath.toUtf8().constData(), 0)) {
+        m_zip.reset();
         m_reading = false;
         return false;
     }
-    int count = mz_zip_reader_get_num_files(m_zip);
+    int count = mz_zip_reader_get_num_files(m_zip.get());
     for (int i = 0; i < count; ++i) {
         mz_zip_archive_file_stat stat;
-        if (mz_zip_reader_file_stat(m_zip, i, &stat)) {
+        if (mz_zip_reader_file_stat(m_zip.get(), i, &stat)) {
             m_fileNames << QString::fromUtf8(stat.m_filename);
         }
     }
@@ -80,11 +79,11 @@ QByteArray ZipArchive::readFile(const QString& name) const
 {
     if (!m_zip || !m_reading) return QByteArray();
 
-    int fileIndex = mz_zip_reader_locate_file(m_zip, name.toUtf8().constData(), nullptr, 0);
+    int fileIndex = mz_zip_reader_locate_file(m_zip.get(), name.toUtf8().constData(), nullptr, 0);
     if (fileIndex < 0) return QByteArray();
 
     mz_zip_archive_file_stat stat;
-    if (!mz_zip_reader_file_stat(m_zip, static_cast<mz_uint>(fileIndex), &stat))
+    if (!mz_zip_reader_file_stat(m_zip.get(), static_cast<mz_uint>(fileIndex), &stat))
         return QByteArray();
 
     constexpr mz_uint64 kMaxSafeFileSize = 64ULL * 1024ULL * 1024ULL; // 64 MB
@@ -92,7 +91,7 @@ QByteArray ZipArchive::readFile(const QString& name) const
         return QByteArray();
 
     size_t size = 0;
-    void* data = mz_zip_reader_extract_file_to_heap(m_zip,
+    void* data = mz_zip_reader_extract_file_to_heap(m_zip.get(),
                                                     name.toUtf8().constData(),
                                                     &size, 0);
     if (!data) return QByteArray();

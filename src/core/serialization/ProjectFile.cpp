@@ -44,26 +44,38 @@ constexpr mz_uint64 kMaxTotalUncompressedBytes = 256ULL * 1024ULL * 1024ULL; // 
 QString blendModeToString(BlendMode mode)
 {
     switch (mode) {
-    case BlendMode::Normal:   return QStringLiteral("normal");
-    case BlendMode::Multiply: return QStringLiteral("multiply");
-    case BlendMode::Screen:   return QStringLiteral("screen");
-    case BlendMode::Overlay:  return QStringLiteral("overlay");
-    case BlendMode::Darken:   return QStringLiteral("darken");
-    case BlendMode::Lighten:  return QStringLiteral("lighten");
-    case BlendMode::Add:      return QStringLiteral("add");
+    case BlendMode::Normal:     return QStringLiteral("normal");
+    case BlendMode::Multiply:   return QStringLiteral("multiply");
+    case BlendMode::Screen:     return QStringLiteral("screen");
+    case BlendMode::Overlay:    return QStringLiteral("overlay");
+    case BlendMode::Darken:     return QStringLiteral("darken");
+    case BlendMode::Lighten:    return QStringLiteral("lighten");
+    case BlendMode::Add:        return QStringLiteral("add");
+    case BlendMode::ColorDodge: return QStringLiteral("colorDodge");
+    case BlendMode::ColorBurn:  return QStringLiteral("colorBurn");
+    case BlendMode::HardLight:  return QStringLiteral("hardLight");
+    case BlendMode::SoftLight:  return QStringLiteral("softLight");
+    case BlendMode::Difference: return QStringLiteral("difference");
+    case BlendMode::Exclusion:  return QStringLiteral("exclusion");
     }
     return QStringLiteral("normal");
 }
 
 std::optional<BlendMode> blendModeFromString(const QString& value)
 {
-    if (value == QLatin1String("normal"))   return BlendMode::Normal;
-    if (value == QLatin1String("multiply")) return BlendMode::Multiply;
-    if (value == QLatin1String("screen"))   return BlendMode::Screen;
-    if (value == QLatin1String("overlay"))  return BlendMode::Overlay;
-    if (value == QLatin1String("darken"))   return BlendMode::Darken;
-    if (value == QLatin1String("lighten"))  return BlendMode::Lighten;
-    if (value == QLatin1String("add"))      return BlendMode::Add;
+    if (value == QLatin1String("normal"))     return BlendMode::Normal;
+    if (value == QLatin1String("multiply"))   return BlendMode::Multiply;
+    if (value == QLatin1String("screen"))     return BlendMode::Screen;
+    if (value == QLatin1String("overlay"))    return BlendMode::Overlay;
+    if (value == QLatin1String("darken"))     return BlendMode::Darken;
+    if (value == QLatin1String("lighten"))    return BlendMode::Lighten;
+    if (value == QLatin1String("add"))        return BlendMode::Add;
+    if (value == QLatin1String("colorDodge")) return BlendMode::ColorDodge;
+    if (value == QLatin1String("colorBurn"))  return BlendMode::ColorBurn;
+    if (value == QLatin1String("hardLight"))  return BlendMode::HardLight;
+    if (value == QLatin1String("softLight"))  return BlendMode::SoftLight;
+    if (value == QLatin1String("difference")) return BlendMode::Difference;
+    if (value == QLatin1String("exclusion"))  return BlendMode::Exclusion;
     return std::nullopt;
 }
 
@@ -225,6 +237,31 @@ QJsonObject writeLayer(const Layer& layer)
         outline.insert(QStringLiteral("blur"), image.effects.outline.blur);
         outline.insert(QStringLiteral("opacity"), image.effects.outline.opacity);
         effects.insert(QStringLiteral("outline"), outline);
+
+        QJsonObject dropShadow;
+        dropShadow.insert(QStringLiteral("enabled"), image.effects.dropShadow.enabled);
+        dropShadow.insert(QStringLiteral("color"), colorToString(image.effects.dropShadow.color));
+        dropShadow.insert(QStringLiteral("distance"), image.effects.dropShadow.distance);
+        dropShadow.insert(QStringLiteral("angleDeg"), image.effects.dropShadow.angleDeg);
+        dropShadow.insert(QStringLiteral("blur"), image.effects.dropShadow.blur);
+        dropShadow.insert(QStringLiteral("opacity"), image.effects.dropShadow.opacity);
+        effects.insert(QStringLiteral("dropShadow"), dropShadow);
+
+        QJsonObject innerShadow;
+        innerShadow.insert(QStringLiteral("enabled"), image.effects.innerShadow.enabled);
+        innerShadow.insert(QStringLiteral("color"), colorToString(image.effects.innerShadow.color));
+        innerShadow.insert(QStringLiteral("distance"), image.effects.innerShadow.distance);
+        innerShadow.insert(QStringLiteral("angleDeg"), image.effects.innerShadow.angleDeg);
+        innerShadow.insert(QStringLiteral("blur"), image.effects.innerShadow.blur);
+        innerShadow.insert(QStringLiteral("opacity"), image.effects.innerShadow.opacity);
+        effects.insert(QStringLiteral("innerShadow"), innerShadow);
+
+        QJsonObject colorOverlay;
+        colorOverlay.insert(QStringLiteral("enabled"), image.effects.colorOverlay.enabled);
+        colorOverlay.insert(QStringLiteral("color"), colorToString(image.effects.colorOverlay.color));
+        colorOverlay.insert(QStringLiteral("opacity"), image.effects.colorOverlay.opacity);
+        effects.insert(QStringLiteral("colorOverlay"), colorOverlay);
+
         o.insert(QStringLiteral("effects"), effects);
         break;
     }
@@ -379,6 +416,55 @@ QJsonObject buildProjectJson(const Document& doc)
     for (const auto& child : doc.rootGroup()->children)
         layers.append(writeLayer(*child));
     root.insert(QLatin1String(kLayersKey), layers);
+
+    if (!doc.layerComps().empty()) {
+        QJsonArray compsArr;
+        for (const auto& comp : doc.layerComps()) {
+            QJsonObject compObj;
+            compObj.insert(QStringLiteral("id"), comp.id);
+            compObj.insert(QStringLiteral("name"), comp.name);
+            compObj.insert(QStringLiteral("comment"), comp.comment);
+            compObj.insert(QStringLiteral("applyVisibility"), comp.applyVisibility);
+            compObj.insert(QStringLiteral("applyPosition"), comp.applyPosition);
+            compObj.insert(QStringLiteral("applyAppearance"), comp.applyAppearance);
+            QJsonArray statesArr;
+            for (const auto& s : comp.states) {
+                QJsonObject stateObj;
+                stateObj.insert(QStringLiteral("layerId"), s.layerId.toString(QUuid::WithoutBraces));
+                if (s.visible.has_value())
+                    stateObj.insert(QStringLiteral("visible"), *s.visible);
+                if (s.position.has_value()) {
+                    stateObj.insert(QStringLiteral("posX"), s.position->x());
+                    stateObj.insert(QStringLiteral("posY"), s.position->y());
+                }
+                if (s.opacity.has_value())
+                    stateObj.insert(QStringLiteral("opacity"), static_cast<double>(*s.opacity));
+                if (s.blendMode.has_value())
+                    stateObj.insert(QStringLiteral("blendMode"), blendModeToString(*s.blendMode));
+                statesArr.append(stateObj);
+            }
+            compObj.insert(QStringLiteral("states"), statesArr);
+            compsArr.append(compObj);
+        }
+        root.insert(QStringLiteral("layerComps"), compsArr);
+    }
+
+    if (!doc.webSlices().empty()) {
+        QJsonArray slicesArr;
+        for (const auto& slice : doc.webSlices()) {
+            QJsonObject sliceObj;
+            sliceObj.insert(QStringLiteral("id"), slice.id);
+            sliceObj.insert(QStringLiteral("name"), slice.name);
+            sliceObj.insert(QStringLiteral("x"), slice.rect.x());
+            sliceObj.insert(QStringLiteral("y"), slice.rect.y());
+            sliceObj.insert(QStringLiteral("w"), slice.rect.width());
+            sliceObj.insert(QStringLiteral("h"), slice.rect.height());
+            sliceObj.insert(QStringLiteral("kind"), slice.kind == SliceKind::Image ? QStringLiteral("image") : QStringLiteral("noImage"));
+            sliceObj.insert(QStringLiteral("format"), slice.exportFormat);
+            slicesArr.append(sliceObj);
+        }
+        root.insert(QStringLiteral("webSlices"), slicesArr);
+    }
 
     return root;
 }
@@ -581,6 +667,56 @@ public:
                 return nullptr;
             doc->addLayer(std::move(layer));
         }
+
+        if (m_root.contains(QStringLiteral("layerComps"))) {
+            const QJsonArray compsArr = m_root.value(QStringLiteral("layerComps")).toArray();
+            for (const QJsonValue& val : compsArr) {
+                const QJsonObject compObj = val.toObject();
+                LayerComp comp;
+                comp.id = compObj.value(QStringLiteral("id")).toString();
+                comp.name = compObj.value(QStringLiteral("name")).toString();
+                comp.comment = compObj.value(QStringLiteral("comment")).toString();
+                comp.applyVisibility = compObj.value(QStringLiteral("applyVisibility")).toBool(true);
+                comp.applyPosition = compObj.value(QStringLiteral("applyPosition")).toBool(true);
+                comp.applyAppearance = compObj.value(QStringLiteral("applyAppearance")).toBool(true);
+                const QJsonArray statesArr = compObj.value(QStringLiteral("states")).toArray();
+                for (const QJsonValue& sVal : statesArr) {
+                    const QJsonObject sObj = sVal.toObject();
+                    CompLayerState state;
+                    state.layerId = LayerId(sObj.value(QStringLiteral("layerId")).toString());
+                    if (sObj.contains(QStringLiteral("visible")))
+                        state.visible = sObj.value(QStringLiteral("visible")).toBool();
+                    if (sObj.contains(QStringLiteral("posX")) && sObj.contains(QStringLiteral("posY"))) {
+                        state.position = QPointF(sObj.value(QStringLiteral("posX")).toDouble(),
+                                                 sObj.value(QStringLiteral("posY")).toDouble());
+                    }
+                    if (sObj.contains(QStringLiteral("opacity")))
+                        state.opacity = static_cast<float>(sObj.value(QStringLiteral("opacity")).toDouble());
+                    if (sObj.contains(QStringLiteral("blendMode")))
+                        state.blendMode = blendModeFromString(sObj.value(QStringLiteral("blendMode")).toString());
+                    comp.states.push_back(std::move(state));
+                }
+                doc->addLayerComp(std::move(comp));
+            }
+        }
+
+        if (m_root.contains(QStringLiteral("webSlices"))) {
+            const QJsonArray slicesArr = m_root.value(QStringLiteral("webSlices")).toArray();
+            for (const QJsonValue& val : slicesArr) {
+                const QJsonObject sliceObj = val.toObject();
+                WebSlice slice;
+                slice.id = sliceObj.value(QStringLiteral("id")).toString();
+                slice.name = sliceObj.value(QStringLiteral("name")).toString();
+                slice.rect = QRectF(sliceObj.value(QStringLiteral("x")).toDouble(),
+                                    sliceObj.value(QStringLiteral("y")).toDouble(),
+                                    sliceObj.value(QStringLiteral("w")).toDouble(),
+                                    sliceObj.value(QStringLiteral("h")).toDouble());
+                slice.kind = sliceObj.value(QStringLiteral("kind")).toString() == QLatin1String("noImage") ? SliceKind::NoImage : SliceKind::Image;
+                slice.exportFormat = sliceObj.value(QStringLiteral("format")).toString(QStringLiteral("png"));
+                doc->addWebSlice(std::move(slice));
+            }
+        }
+
         return doc;
     }
 
@@ -677,6 +813,27 @@ private:
         image->effects.outline.width = outline.value(QStringLiteral("width")).toDouble(8.0);
         image->effects.outline.blur = outline.value(QStringLiteral("blur")).toDouble(0.0);
         image->effects.outline.opacity = outline.value(QStringLiteral("opacity")).toDouble(1.0);
+
+        const QJsonObject dropShadow = effects.value(QStringLiteral("dropShadow")).toObject();
+        image->effects.dropShadow.enabled = dropShadow.value(QStringLiteral("enabled")).toBool(false);
+        image->effects.dropShadow.color = colorFromString(dropShadow.value(QStringLiteral("color")).toString(QStringLiteral("#000000")));
+        image->effects.dropShadow.distance = dropShadow.value(QStringLiteral("distance")).toDouble(10.0);
+        image->effects.dropShadow.angleDeg = dropShadow.value(QStringLiteral("angleDeg")).toDouble(120.0);
+        image->effects.dropShadow.blur = dropShadow.value(QStringLiteral("blur")).toDouble(15.0);
+        image->effects.dropShadow.opacity = dropShadow.value(QStringLiteral("opacity")).toDouble(0.75);
+
+        const QJsonObject innerShadow = effects.value(QStringLiteral("innerShadow")).toObject();
+        image->effects.innerShadow.enabled = innerShadow.value(QStringLiteral("enabled")).toBool(false);
+        image->effects.innerShadow.color = colorFromString(innerShadow.value(QStringLiteral("color")).toString(QStringLiteral("#000000")));
+        image->effects.innerShadow.distance = innerShadow.value(QStringLiteral("distance")).toDouble(8.0);
+        image->effects.innerShadow.angleDeg = innerShadow.value(QStringLiteral("angleDeg")).toDouble(120.0);
+        image->effects.innerShadow.blur = innerShadow.value(QStringLiteral("blur")).toDouble(10.0);
+        image->effects.innerShadow.opacity = innerShadow.value(QStringLiteral("opacity")).toDouble(0.6);
+
+        const QJsonObject colorOverlay = effects.value(QStringLiteral("colorOverlay")).toObject();
+        image->effects.colorOverlay.enabled = colorOverlay.value(QStringLiteral("enabled")).toBool(false);
+        image->effects.colorOverlay.color = colorFromString(colorOverlay.value(QStringLiteral("color")).toString(QStringLiteral("#ff0000")));
+        image->effects.colorOverlay.opacity = colorOverlay.value(QStringLiteral("opacity")).toDouble(0.5);
 
         finishLayer(*image, o, id);
         *out = std::move(image);

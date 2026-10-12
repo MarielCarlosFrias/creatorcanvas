@@ -12,8 +12,6 @@
 #include "services/presetstore.h"
 #include "services/autosaveservice.h"
 #include "services/recentfiles.h"
-#include "services/autosaveservice.h"
-#include "services/recentfiles.h"
 
 class QCloseEvent;
 class QDockWidget;
@@ -178,6 +176,10 @@ private:
     QAction* m_toggleHistoryAction = nullptr;
     QAction* m_toggleToolsBarAction = nullptr;
     QAction* m_toggleRightPanelAction = nullptr;
+    QAction* m_toggleLayersDockAction = nullptr;
+    QAction* m_toggleTextDockAction = nullptr;
+    QAction* m_toggleShapeDockAction = nullptr;
+    QAction* m_toggleImageDockAction = nullptr;
     QAction* m_flipHAction = nullptr;
     QAction* m_flipVAction = nullptr;
     QAction* m_rotateLeftAction = nullptr;

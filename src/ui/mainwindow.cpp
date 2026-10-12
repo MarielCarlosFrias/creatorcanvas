@@ -279,9 +279,22 @@ void MainWindow::buildCentralWidget()
                 if (m_mergeVisibleAction) m_mergeVisibleAction->setEnabled(m_document != nullptr);
                 if (m_flattenAction) m_flattenAction->setEnabled(m_document != nullptr);
 
-                // Selecting a layer updates all inspectors, but deliberately
-                // does not change the active tab.  The user may be editing an
-                // image while selecting another layer for comparison.
+                // Auto-ativar a aba do inspetor correspondente ao tipo de camada selecionada
+                if (selected) {
+                    switch (selected->type()) {
+                    case LayerType::Text:
+                        if (m_textDock && m_textDock->isVisible()) m_textDock->raise();
+                        break;
+                    case LayerType::Shape:
+                        if (m_shapeDock && m_shapeDock->isVisible()) m_shapeDock->raise();
+                        break;
+                    case LayerType::Image:
+                        if (m_imageDock && m_imageDock->isVisible()) m_imageDock->raise();
+                        break;
+                    default:
+                        break;
+                    }
+                }
             });
     connect(m_canvas, &CanvasView::multiSelectionChanged, this,
             [this](const QList<LayerId>& ids) {
@@ -577,6 +590,22 @@ void MainWindow::buildLayersDock()
     connect(m_imageDock, &QDockWidget::visibilityChanged, this, refitCanvas);
     connect(m_historyDock, &QDockWidget::visibilityChanged, this, refitCanvas);
 
+    connect(m_layersDock, &QDockWidget::visibilityChanged, this, [this](bool visible) {
+        if (m_toggleLayersDockAction && m_toggleLayersDockAction->isChecked() != visible)
+            m_toggleLayersDockAction->setChecked(visible);
+    });
+    connect(m_textDock, &QDockWidget::visibilityChanged, this, [this](bool visible) {
+        if (m_toggleTextDockAction && m_toggleTextDockAction->isChecked() != visible)
+            m_toggleTextDockAction->setChecked(visible);
+    });
+    connect(m_shapeDock, &QDockWidget::visibilityChanged, this, [this](bool visible) {
+        if (m_toggleShapeDockAction && m_toggleShapeDockAction->isChecked() != visible)
+            m_toggleShapeDockAction->setChecked(visible);
+    });
+    connect(m_imageDock, &QDockWidget::visibilityChanged, this, [this](bool visible) {
+        if (m_toggleImageDockAction && m_toggleImageDockAction->isChecked() != visible)
+            m_toggleImageDockAction->setChecked(visible);
+    });
     connect(m_historyDock, &QDockWidget::visibilityChanged, this, [this](bool visible) {
         if (m_toggleHistoryAction && m_toggleHistoryAction->isChecked() != visible) {
             m_toggleHistoryAction->setChecked(visible);
@@ -862,6 +891,46 @@ void MainWindow::buildActions()
         for (auto* panel : panels)
             if (panel) panel->setVisible(checked);
         QTimer::singleShot(150, this, [this] { if (m_canvas) m_canvas->fitToViewport(); });
+    });
+
+    m_toggleLayersDockAction = new QAction(this);
+    m_toggleLayersDockAction->setCheckable(true);
+    m_toggleLayersDockAction->setChecked(true);
+    connect(m_toggleLayersDockAction, &QAction::triggered, this, [this](bool checked) {
+        if (m_layersDock) {
+            m_layersDock->setVisible(checked);
+            if (checked) m_layersDock->raise();
+        }
+    });
+
+    m_toggleTextDockAction = new QAction(this);
+    m_toggleTextDockAction->setCheckable(true);
+    m_toggleTextDockAction->setChecked(true);
+    connect(m_toggleTextDockAction, &QAction::triggered, this, [this](bool checked) {
+        if (m_textDock) {
+            m_textDock->setVisible(checked);
+            if (checked) m_textDock->raise();
+        }
+    });
+
+    m_toggleShapeDockAction = new QAction(this);
+    m_toggleShapeDockAction->setCheckable(true);
+    m_toggleShapeDockAction->setChecked(true);
+    connect(m_toggleShapeDockAction, &QAction::triggered, this, [this](bool checked) {
+        if (m_shapeDock) {
+            m_shapeDock->setVisible(checked);
+            if (checked) m_shapeDock->raise();
+        }
+    });
+
+    m_toggleImageDockAction = new QAction(this);
+    m_toggleImageDockAction->setCheckable(true);
+    m_toggleImageDockAction->setChecked(true);
+    connect(m_toggleImageDockAction, &QAction::triggered, this, [this](bool checked) {
+        if (m_imageDock) {
+            m_imageDock->setVisible(checked);
+            if (checked) m_imageDock->raise();
+        }
     });
 
     m_flipHAction = new QAction(this);
@@ -1432,25 +1501,93 @@ void MainWindow::buildMenus()
     m_imageMenu->addAction(m_importAction);
     m_imageMenu->addAction(m_exportAction);
     m_imageMenu->addSeparator();
+
+    // Rotação & Espelhamento da Imagem/Camada
+    auto* flipHAct = m_imageMenu->addAction(QStringLiteral("Virar Horizontalmente"));
+    flipHAct->setIcon(ThemeIcons::actionFlipH());
+    connect(flipHAct, &QAction::triggered, this, [this] { flipLayer(true); });
+    auto* flipVAct = m_imageMenu->addAction(QStringLiteral("Virar Verticalmente"));
+    flipVAct->setIcon(ThemeIcons::actionFlipV());
+    connect(flipVAct, &QAction::triggered, this, [this] { flipLayer(false); });
+    auto* rotLeftAct = m_imageMenu->addAction(QStringLiteral("Girar 90° para a Esquerda"));
+    rotLeftAct->setIcon(style()->standardIcon(QStyle::SP_ArrowBack));
+    connect(rotLeftAct, &QAction::triggered, this, [this] { rotateLayer(-90.0); });
+    auto* rotRightAct = m_imageMenu->addAction(QStringLiteral("Girar 90° para a Direita"));
+    rotRightAct->setIcon(style()->standardIcon(QStyle::SP_ArrowForward));
+    connect(rotRightAct, &QAction::triggered, this, [this] { rotateLayer(90.0); });
+    m_imageMenu->addSeparator();
+
+    // IA & Ferramentas Inteligentes
     m_imageMenu->addAction(m_removeBgAiAction);
     m_imageMenu->addAction(m_removeBgAiQuickAction);
-    m_mockupAction = m_imageMenu->addAction(QStringLiteral("Mockup / Replace logo"));
+    m_mockupAction = m_imageMenu->addAction(QStringLiteral("Mockup / Substituir Logo..."));
     m_mockupAction->setEnabled(false);
     connect(m_mockupAction, &QAction::triggered, this, [this] {
         if (m_imageInspector) m_imageInspector->openMockupDialog();
     });
     m_imageMenu->addSeparator();
-    auto* imagePanelInfo = m_imageMenu->addAction(QStringLiteral("Adjustments, filters and logo import are available in the Image panel"));
-    imagePanelInfo->setEnabled(false);
+
+    // Mesclagens do Documento
+    m_imageMenu->addAction(m_mergeSelectedAction);
+    m_imageMenu->addAction(m_mergeVisibleAction);
+    m_imageMenu->addAction(m_flattenAction);
+
+    // --- Menu Filtro (Filtros criativos e de estilo Photocraft) ---
     m_filterMenu = menuBar()->addMenu(QStringLiteral("Filter"));
-    auto* filterInfo = m_filterMenu->addAction(QStringLiteral("Adjustments are available in the Image panel"));
-    filterInfo->setEnabled(false);
+
+    auto addFilterAction = [this](QMenu* menu, const QString& title, int presetIdx) {
+        auto* act = menu->addAction(title);
+        connect(act, &QAction::triggered, this, [this, presetIdx] {
+            if (m_imageInspector) {
+                m_imageInspector->applyPreset(presetIdx);
+                if (m_imageDock && m_imageDock->isVisible())
+                    m_imageDock->raise();
+            }
+        });
+        return act;
+    };
+
+    auto* artisticMenu = m_filterMenu->addMenu(QStringLiteral("Artístico & Cor"));
+    addFilterAction(artisticMenu, QStringLiteral("Preto e Branco"), 0);
+    addFilterAction(artisticMenu, QStringLiteral("Sépia Clássico"), 1);
+    addFilterAction(artisticMenu, QStringLiteral("Vintage Nostálgico"), 2);
+    addFilterAction(artisticMenu, QStringLiteral("Alto Contraste"), 3);
+    addFilterAction(artisticMenu, QStringLiteral("Vivid Pop"), 4);
+    addFilterAction(artisticMenu, QStringLiteral("Cyberpunk Neon"), 5);
+    addFilterAction(artisticMenu, QStringLiteral("Golden Hour (Pôr do Sol)"), 6);
+    addFilterAction(artisticMenu, QStringLiteral("Cinema Noir"), 7);
+
+    auto* toneMenu = m_filterMenu->addMenu(QStringLiteral("Tonalidade & Efeitos Especiais"));
+    addFilterAction(toneMenu, QStringLiteral("Inverter Cores (Invert)"), 8);
+    addFilterAction(toneMenu, QStringLiteral("Posterizar (Posterize 4 Níveis)"), 9);
+    addFilterAction(toneMenu, QStringLiteral("Limiar P&B (Threshold)"), 10);
+
+    m_filterMenu->addSeparator();
+    auto* openInspectAct = m_filterMenu->addAction(QStringLiteral("Abrir Painel de Ajustes e Efeitos..."));
+    connect(openInspectAct, &QAction::triggered, this, [this] {
+        if (m_imageDock) {
+            m_imageDock->show();
+            m_imageDock->raise();
+        }
+    });
+
     m_selectMenu = menuBar()->addMenu(QStringLiteral("Select"));
-    auto* invertSelection = m_selectMenu->addAction(QStringLiteral("Invert selection"));
-    auto* clearSelection = m_selectMenu->addAction(QStringLiteral("Cancel selection"));
+    auto* selectAllAct = m_selectMenu->addAction(QStringLiteral("Selecionar Tudo"));
+    selectAllAct->setShortcut(QKeySequence::SelectAll);
+    connect(selectAllAct, &QAction::triggered, this, [this] {
+        if (m_document) {
+            QImage full(m_document->width(), m_document->height(), QImage::Format_Alpha8);
+            full.fill(255);
+            m_document->setPixelSelection(full);
+        }
+    });
+    auto* clearSelection = m_selectMenu->addAction(QStringLiteral("Desmarcar Seleção"));
+    clearSelection->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_D));
+    auto* invertSelection = m_selectMenu->addAction(QStringLiteral("Inverter Seleção"));
+    invertSelection->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_I));
     m_selectMenu->addSeparator();
-    auto* selectionOperations = m_selectMenu->addAction(QStringLiteral("Copy / Cut / Mask selection..."));
-    selectionOperations->setToolTip(QStringLiteral("Open the selection operations used by the canvas context menu"));
+    auto* selectionOperations = m_selectMenu->addAction(QStringLiteral("Operações de Seleção (Copiar / Cortar / Mascarar)..."));
+    selectionOperations->setToolTip(QStringLiteral("Abre o menu de operações com a seleção ativa"));
     connect(invertSelection, &QAction::triggered, this, [this] {
         if (!m_document || m_document->pixelSelection().isNull()) return;
         QImage mask = m_document->pixelSelection().convertToFormat(QImage::Format_Alpha8);
@@ -1557,6 +1694,11 @@ void MainWindow::buildMenus()
     m_windowMenu = menuBar()->addMenu(QStringLiteral("Window"));
     m_windowMenu->addAction(m_toggleToolsBarAction);
     m_windowMenu->addAction(m_toggleRightPanelAction);
+    m_windowMenu->addSeparator();
+    m_windowMenu->addAction(m_toggleLayersDockAction);
+    m_windowMenu->addAction(m_toggleTextDockAction);
+    m_windowMenu->addAction(m_toggleShapeDockAction);
+    m_windowMenu->addAction(m_toggleImageDockAction);
     m_windowMenu->addAction(m_toggleHistoryAction);
     m_selectionToolsMenu = m_toolsMenu->addMenu(m_i18n ? m_i18n->t("common", "menu.tools.selection") : QStringLiteral("Select & Cut"));
     m_selectionToolsMenu->addAction(m_toolSelectAction);
@@ -2905,6 +3047,22 @@ void MainWindow::retranslateUi()
     if (m_toggleRightPanelAction) {
         m_toggleRightPanelAction->setText(m_i18n->t("common", "menu.view.toggleRightPanel"));
         m_toggleRightPanelAction->setToolTip(m_toggleRightPanelAction->text() + QStringLiteral(" (Ctrl+J)"));
+    }
+    if (m_toggleLayersDockAction) {
+        m_toggleLayersDockAction->setText(m_i18n->t("common", "panel.layers"));
+        m_toggleLayersDockAction->setToolTip(m_toggleLayersDockAction->text());
+    }
+    if (m_toggleTextDockAction) {
+        m_toggleTextDockAction->setText(m_i18n->t("editor", "text.title"));
+        m_toggleTextDockAction->setToolTip(m_toggleTextDockAction->text());
+    }
+    if (m_toggleShapeDockAction) {
+        m_toggleShapeDockAction->setText(m_i18n->t("editor", "shape.title"));
+        m_toggleShapeDockAction->setToolTip(m_toggleShapeDockAction->text());
+    }
+    if (m_toggleImageDockAction) {
+        m_toggleImageDockAction->setText(m_i18n->t("common", "panel.image"));
+        m_toggleImageDockAction->setToolTip(m_toggleImageDockAction->text());
     }
     if (m_safeZoneMenu)
         m_safeZoneMenu->setTitle(m_i18n->t("common", "menu.view.safeZones"));

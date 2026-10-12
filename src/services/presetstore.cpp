@@ -44,6 +44,7 @@ QVector<DocumentPreset> parsePresets(const QByteArray& bytes, QString* error)
         const QJsonObject o = value.toObject();
         DocumentPreset preset;
         preset.name = o.value(QStringLiteral("name")).toString();
+        preset.category = o.value(QStringLiteral("category")).toString();
         preset.spec.width = o.value(QStringLiteral("width")).toInt(0);
         preset.spec.height = o.value(QStringLiteral("height")).toInt(0);
         preset.spec.dpi = o.value(QStringLiteral("dpi")).toInt(96);
@@ -67,6 +68,8 @@ QByteArray serializePresets(const QVector<DocumentPreset>& presets)
     for (const DocumentPreset& preset : presets) {
         QJsonObject o;
         o.insert(QStringLiteral("name"), preset.name);
+        if (!preset.category.isEmpty())
+            o.insert(QStringLiteral("category"), preset.category);
         o.insert(QStringLiteral("width"), preset.spec.width);
         o.insert(QStringLiteral("height"), preset.spec.height);
         o.insert(QStringLiteral("dpi"), preset.spec.dpi);

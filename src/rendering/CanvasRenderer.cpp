@@ -21,13 +21,19 @@ namespace {
 QPainter::CompositionMode compositionMode(BlendMode mode)
 {
     switch (mode) {
-    case BlendMode::Normal:   return QPainter::CompositionMode_SourceOver;
-    case BlendMode::Multiply: return QPainter::CompositionMode_Multiply;
-    case BlendMode::Screen:   return QPainter::CompositionMode_Screen;
-    case BlendMode::Overlay:  return QPainter::CompositionMode_Overlay;
-    case BlendMode::Darken:   return QPainter::CompositionMode_Darken;
-    case BlendMode::Lighten:  return QPainter::CompositionMode_Lighten;
-    case BlendMode::Add:      return QPainter::CompositionMode_Plus;
+    case BlendMode::Normal:     return QPainter::CompositionMode_SourceOver;
+    case BlendMode::Multiply:   return QPainter::CompositionMode_Multiply;
+    case BlendMode::Screen:     return QPainter::CompositionMode_Screen;
+    case BlendMode::Overlay:    return QPainter::CompositionMode_Overlay;
+    case BlendMode::Darken:     return QPainter::CompositionMode_Darken;
+    case BlendMode::Lighten:    return QPainter::CompositionMode_Lighten;
+    case BlendMode::Add:        return QPainter::CompositionMode_Plus;
+    case BlendMode::ColorDodge: return QPainter::CompositionMode_ColorDodge;
+    case BlendMode::ColorBurn:  return QPainter::CompositionMode_ColorBurn;
+    case BlendMode::HardLight:  return QPainter::CompositionMode_HardLight;
+    case BlendMode::SoftLight:  return QPainter::CompositionMode_SoftLight;
+    case BlendMode::Difference: return QPainter::CompositionMode_Difference;
+    case BlendMode::Exclusion:  return QPainter::CompositionMode_Exclusion;
     }
     return QPainter::CompositionMode_SourceOver;
 }
@@ -428,6 +434,106 @@ void renderImageOutline(QPainter* painter, const ImageLayer& image, const Docume
                        silhouette);
 }
 
+void renderImageDropShadow(QPainter* painter, const ImageLayer& image, const Document& doc)
+{
+    const auto& shadow = image.effects.dropShadow;
+    const QImage fullImg = doc.assets().decodedImage(image.assetId);
+    if (fullImg.isNull()) return;
+
+    const double rad = qDegreesToRadians(shadow.angleDeg);
+    const double offsetX = shadow.distance * std::cos(rad);
+    const double offsetY = shadow.distance * std::sin(rad);
+
+    const int maxDim = 1000;
+    double scaleDown = 1.0;
+    QImage baseImg = fullImg;
+    if (fullImg.width() > maxDim || fullImg.height() > maxDim) {
+        baseImg = fullImg.scaled(maxDim, maxDim, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        scaleDown = static_cast<double>(baseImg.width()) / static_cast<double>(fullImg.width());
+    }
+
+    const double blurScaled = shadow.blur * scaleDown;
+    const int margin = static_cast<int>(std::ceil(blurScaled * 2.0 + 4.0));
+    QImage silhouette(baseImg.width() + margin * 2, baseImg.height() + margin * 2,
+                      QImage::Format_ARGB32_Premultiplied);
+    silhouette.fill(Qt::transparent);
+
+    {
+        QPainter sp(&silhouette);
+        sp.drawImage(QPoint(margin, margin), baseImg);
+        sp.setCompositionMode(QPainter::CompositionMode_SourceIn);
+        QColor shadowColor = shadow.color;
+        shadowColor.setAlphaF(std::clamp(shadow.opacity, 0.0, 1.0) * shadowColor.alphaF());
+        sp.fillRect(silhouette.rect(), shadowColor);
+    }
+
+    if (blurScaled > 0.5) {
+        silhouette = ImageProcessing::applyBlur(silhouette, blurScaled);
+    }
+
+    const double unscaledMargin = margin / scaleDown;
+    const QRectF destRect(-unscaledMargin + offsetX,
+                          -unscaledMargin + offsetY,
+                          image.naturalWidth + unscaledMargin * 2.0,
+                          image.naturalHeight + unscaledMargin * 2.0);
+    painter->drawImage(destRect, silhouette);
+}
+
+void applyImageInnerShadow(QImage& target, const ImageInnerShadow& shadow)
+{
+    if (target.isNull() || !shadow.enabled || shadow.opacity <= 0.0)
+        return;
+
+    const double rad = qDegreesToRadians(shadow.angleDeg);
+    const double offsetX = shadow.distance * std::cos(rad);
+    const double offsetY = shadow.distance * std::sin(rad);
+
+    // Passo 1: Obter a máscara alfa invertida (tudo que está FORA da forma é opaco)
+    // Conforme PhotoCraft `crates/compose/src/effects.rs` shadow_map (inner: shape.map(|a| 1.0 - a)):
+    const int w = target.width();
+    const int h = target.height();
+
+    const double blurRadius = shadow.blur;
+    const int margin = static_cast<int>(std::ceil(blurRadius * 2.0 + 8.0));
+
+    // Canvas estendido com a silhueta externa invertida deslocada
+    QImage outsideMask(w + margin * 2, h + margin * 2, QImage::Format_ARGB32_Premultiplied);
+    outsideMask.fill(QColor(0, 0, 0, 255)); // Tudo fora é 255
+
+    {
+        QPainter mp(&outsideMask);
+        mp.setCompositionMode(QPainter::CompositionMode_Clear);
+        mp.drawImage(QPoint(margin, margin), target);
+    }
+
+    // Deslocar a máscara conforme o ângulo/distância da luz
+    QImage shifted(outsideMask.size(), outsideMask.format());
+    shifted.fill(Qt::transparent);
+    {
+        QPainter sp(&shifted);
+        sp.drawImage(QPointF(offsetX, offsetY), outsideMask);
+    }
+
+    if (blurRadius > 0.5) {
+        shifted = ImageProcessing::applyBlur(shifted, blurRadius);
+    }
+
+    // Colorir a sombra com a cor e opacidade do efeito
+    {
+        QPainter cp(&shifted);
+        cp.setCompositionMode(QPainter::CompositionMode_SourceIn);
+        QColor shadowColor = shadow.color;
+        shadowColor.setAlphaF(std::clamp(shadow.opacity, 0.0, 1.0) * shadowColor.alphaF());
+        cp.fillRect(shifted.rect(), shadowColor);
+    }
+
+    // Recortar a sombra interna para dentro da forma da imagem e pintar por cima (Multiply / Normal)
+    QPainter p(&target);
+    p.setCompositionMode(QPainter::CompositionMode_SourceAtop);
+    p.drawImage(QPoint(-margin, -margin), shifted);
+}
+
+
 void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
                const QRectF& canvasRect, float parentOpacity,
                const RenderOptions& options)
@@ -651,9 +757,33 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
 
             const QRectF targetRect(0, 0, image.naturalWidth, image.naturalHeight);
 
+            // Efeito Sombra Projetada (Drop Shadow)
+            if (image.effects.dropShadow.enabled) {
+                renderImageDropShadow(painter, image, doc);
+            }
+
             // Efeito Contorno / Glow ("Sticker Effect")
             if (image.effects.outline.enabled && image.effects.outline.width > 0.0) {
                 renderImageOutline(painter, image, doc);
+            }
+
+            // Efeito Sobreposição de Cor (Color Overlay - Photoshop Style)
+            if (image.effects.colorOverlay.enabled && image.effects.colorOverlay.opacity > 0.0) {
+                QImage tinted = maskedPixels.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+                QPainter tip(&tinted);
+                tip.setCompositionMode(QPainter::CompositionMode_SourceIn);
+                QColor overlayCol = image.effects.colorOverlay.color;
+                overlayCol.setAlphaF(std::clamp(image.effects.colorOverlay.opacity, 0.0, 1.0) * overlayCol.alphaF());
+                tip.fillRect(tinted.rect(), overlayCol);
+                tip.end();
+
+                QPainter blendP(&maskedPixels);
+                blendP.drawImage(0, 0, tinted);
+            }
+
+            // Efeito Sombra Interna (Inner Shadow - Photoshop / PhotoCraft Style)
+            if (image.effects.innerShadow.enabled && image.effects.innerShadow.opacity > 0.0) {
+                applyImageInnerShadow(maskedPixels, image.effects.innerShadow);
             }
 
             painter->drawImage(targetRect, maskedPixels);

@@ -27,7 +27,7 @@ public:
     void closeRead();
 
 private:
-    mz_zip_archive* m_zip;
+    std::unique_ptr<mz_zip_archive> m_zip;
     bool m_writing;
     bool m_reading;
     QStringList m_fileNames;

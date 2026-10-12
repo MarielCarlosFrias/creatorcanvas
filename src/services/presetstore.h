@@ -11,6 +11,7 @@ namespace cc {
 struct DocumentPreset
 {
     QString name;
+    QString category;
     NewDocumentSpec spec;
 };
 

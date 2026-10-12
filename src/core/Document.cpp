@@ -568,6 +568,38 @@ bool Document::setLayerAlphaMask(const LayerId& id, QImage mask)
     return true;
 }
 
+bool Document::invertLayerAlphaMask(const LayerId& id)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Image)
+        return false;
+    auto* img = static_cast<ImageLayer*>(layer);
+    if (img->alphaMask.isNull())
+        return false;
+
+    QImage inverted = img->alphaMask.convertToFormat(QImage::Format_Alpha8);
+    inverted.invertPixels();
+    img->alphaMask = std::move(inverted);
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
+bool Document::removeLayerAlphaMask(const LayerId& id)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Image)
+        return false;
+    auto* img = static_cast<ImageLayer*>(layer);
+    if (img->alphaMask.isNull())
+        return false;
+
+    img->alphaMask = QImage();
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
 void Document::setPixelSelection(QImage selection)
 {
     if (!selection.isNull())
@@ -582,6 +614,87 @@ void Document::clearPixelSelection()
     if (m_pixelSelection.isNull())
         return;
     m_pixelSelection = QImage();
+    bumpRevision();
+    emit structureChanged();
+}
+
+void Document::addLayerComp(LayerComp comp)
+{
+    m_layerComps.push_back(std::move(comp));
+    bumpRevision();
+}
+
+bool Document::applyLayerComp(const QString& compId)
+{
+    auto it = std::find_if(m_layerComps.begin(), m_layerComps.end(),
+                           [&](const LayerComp& c) { return c.id == compId; });
+    if (it == m_layerComps.end())
+        return false;
+
+    const LayerComp& comp = *it;
+    for (const auto& state : comp.states) {
+        Layer* layer = findLayer(state.layerId);
+        if (!layer)
+            continue;
+
+        if (comp.applyVisibility && state.visible.has_value())
+            layer->visible = *state.visible;
+
+        if (comp.applyPosition && state.position.has_value())
+            layer->transform.position = *state.position;
+
+        if (comp.applyAppearance) {
+            if (state.opacity.has_value())
+                layer->setOpacity(*state.opacity);
+            if (state.blendMode.has_value())
+                layer->blendMode = *state.blendMode;
+        }
+
+        emit layerPropertyChanged(state.layerId);
+    }
+
+    bumpRevision();
+    emit structureChanged();
+    return true;
+}
+
+bool Document::removeLayerComp(const QString& compId)
+{
+    auto it = std::find_if(m_layerComps.begin(), m_layerComps.end(),
+                           [&](const LayerComp& c) { return c.id == compId; });
+    if (it == m_layerComps.end())
+        return false;
+
+    m_layerComps.erase(it);
+    bumpRevision();
+    return true;
+}
+
+void Document::addWebSlice(WebSlice slice)
+{
+    m_webSlices.push_back(std::move(slice));
+    bumpRevision();
+    emit structureChanged();
+}
+
+bool Document::removeWebSlice(const QString& sliceId)
+{
+    auto it = std::find_if(m_webSlices.begin(), m_webSlices.end(),
+                           [&](const WebSlice& s) { return s.id == sliceId; });
+    if (it == m_webSlices.end())
+        return false;
+
+    m_webSlices.erase(it);
+    bumpRevision();
+    emit structureChanged();
+    return true;
+}
+
+void Document::clearWebSlices()
+{
+    if (m_webSlices.empty())
+        return;
+    m_webSlices.clear();
     bumpRevision();
     emit structureChanged();
 }

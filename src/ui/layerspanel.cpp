@@ -1175,6 +1175,12 @@ void LayersPanel::retranslateUi()
     m_blendCombo->addItem(m_i18n->t("common", "blend.darken"));
     m_blendCombo->addItem(m_i18n->t("common", "blend.lighten"));
     m_blendCombo->addItem(m_i18n->t("common", "blend.add"));
+    m_blendCombo->addItem(QStringLiteral("Color Dodge"));
+    m_blendCombo->addItem(QStringLiteral("Color Burn"));
+    m_blendCombo->addItem(QStringLiteral("Hard Light"));
+    m_blendCombo->addItem(QStringLiteral("Soft Light"));
+    m_blendCombo->addItem(QStringLiteral("Difference"));
+    m_blendCombo->addItem(QStringLiteral("Exclusion"));
     if (currentIdx >= 0 && currentIdx < m_blendCombo->count())
         m_blendCombo->setCurrentIndex(currentIdx);
     m_updating = prevUpdating;

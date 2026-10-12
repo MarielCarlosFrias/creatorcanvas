@@ -97,4 +97,46 @@ bool exportLayerToImage(const Document& doc, const QUuid& layerId,
     return true;
 }
 
+bool exportSliceToImage(const Document& doc, const QRectF& sliceRect,
+                        const QString& filePath, const QString& format,
+                        int quality, double scale,
+                        QString* errorMessage)
+{
+    const int w = qMax(1, static_cast<int>(sliceRect.width() * scale));
+    const int h = qMax(1, static_cast<int>(sliceRect.height() * scale));
+
+    QImage image(w, h, QImage::Format_ARGB32);
+    image.fill(Qt::transparent);
+
+    {
+        QPainter painter(&image);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        painter.setRenderHint(QPainter::TextAntialiasing, true);
+        QTransform transform;
+        transform.scale(scale, scale);
+        transform.translate(-sliceRect.x(), -sliceRect.y());
+        RenderOptions options;
+        options.drawCheckerboard = false;
+        options.canvasBorder = Qt::transparent;
+        renderDocument(doc, &painter, transform, options);
+    }
+
+    QImage toSave = image;
+    if (format == QLatin1String("jpeg")) {
+        QImage flat(toSave.size(), QImage::Format_RGB32);
+        flat.fill(Qt::white);
+        QPainter p(&flat);
+        p.drawImage(0, 0, toSave);
+        p.end();
+        toSave = flat;
+    }
+
+    if (!toSave.save(filePath, format.toLatin1().constData(), quality)) {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Could not write the slice image file.");
+        return false;
+    }
+    return true;
+}
+
 } // namespace cc

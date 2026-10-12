@@ -576,6 +576,90 @@ QImage ImageProcessing::applySharpen(const QImage& source, double amount)
     return result;
 }
 
+QImage ImageProcessing::applyLevels(const QImage& source, const LevelsChannel& master,
+                                   const LevelsChannel& red, const LevelsChannel& green,
+                                   const LevelsChannel& blue)
+{
+    if (source.isNull())
+        return source;
+
+    quint8 lutR[256];
+    quint8 lutG[256];
+    quint8 lutB[256];
+
+    for (int i = 0; i < 256; ++i) {
+        const float v = static_cast<float>(i) / 255.0f;
+        // Channel level first, then master level (Photoshop convention)
+        const float vr = red.isIdentity() ? v : ToneCurve::evaluateLevels(red, v);
+        const float vg = green.isIdentity() ? v : ToneCurve::evaluateLevels(green, v);
+        const float vb = blue.isIdentity() ? v : ToneCurve::evaluateLevels(blue, v);
+
+        const float mr = master.isIdentity() ? vr : ToneCurve::evaluateLevels(master, vr);
+        const float mg = master.isIdentity() ? vg : ToneCurve::evaluateLevels(master, vg);
+        const float mb = master.isIdentity() ? vb : ToneCurve::evaluateLevels(master, vb);
+
+        lutR[i] = static_cast<quint8>(std::round(mr * 255.0f));
+        lutG[i] = static_cast<quint8>(std::round(mg * 255.0f));
+        lutB[i] = static_cast<quint8>(std::round(mb * 255.0f));
+    }
+
+    QImage result = source.convertToFormat(QImage::Format_ARGB32);
+    const int w = result.width();
+    const int h = result.height();
+
+    for (int y = 0; y < h; ++y) {
+        QRgb* line = reinterpret_cast<QRgb*>(result.scanLine(y));
+        for (int x = 0; x < w; ++x) {
+            const QRgb px = line[x];
+            const int a = qAlpha(px);
+            if (a == 0) continue;
+            line[x] = qRgba(lutR[qRed(px)], lutG[qGreen(px)], lutB[qBlue(px)], a);
+        }
+    }
+
+    return result;
+}
+
+QImage ImageProcessing::applyCurves(const QImage& source, const std::vector<CurvePoint>& master,
+                                   const std::vector<CurvePoint>& red,
+                                   const std::vector<CurvePoint>& green,
+                                   const std::vector<CurvePoint>& blue)
+{
+    if (source.isNull())
+        return source;
+
+    const std::vector<quint8> masterLut = ToneCurve::buildCurveLut(master);
+    const std::vector<quint8> redLut = ToneCurve::buildCurveLut(red);
+    const std::vector<quint8> greenLut = ToneCurve::buildCurveLut(green);
+    const std::vector<quint8> blueLut = ToneCurve::buildCurveLut(blue);
+
+    quint8 lutR[256];
+    quint8 lutG[256];
+    quint8 lutB[256];
+
+    for (int i = 0; i < 256; ++i) {
+        lutR[i] = masterLut[redLut[i]];
+        lutG[i] = masterLut[greenLut[i]];
+        lutB[i] = masterLut[blueLut[i]];
+    }
+
+    QImage result = source.convertToFormat(QImage::Format_ARGB32);
+    const int w = result.width();
+    const int h = result.height();
+
+    for (int y = 0; y < h; ++y) {
+        QRgb* line = reinterpret_cast<QRgb*>(result.scanLine(y));
+        for (int x = 0; x < w; ++x) {
+            const QRgb px = line[x];
+            const int a = qAlpha(px);
+            if (a == 0) continue;
+            line[x] = qRgba(lutR[qRed(px)], lutG[qGreen(px)], lutB[qBlue(px)], a);
+        }
+    }
+
+    return result;
+}
+
 QImage ImageProcessing::applyPresetFilter(const QImage& source, PresetFilter preset)
 {
     if (source.isNull())
@@ -625,7 +709,62 @@ QImage ImageProcessing::applyPresetFilter(const QImage& source, PresetFilter pre
                 line[x] = qRgba(hc(r), hc(g), hc(b), a);
                 break;
             }
+            case PresetFilter::Invert: {
+                line[x] = qRgba(255 - r, 255 - g, 255 - b, a);
+                break;
             }
+            case PresetFilter::Posterize: {
+                auto post = [](int val) -> int {
+                    return std::clamp((val / 64) * 85, 0, 255);
+                };
+                line[x] = qRgba(post(r), post(g), post(b), a);
+                break;
+            }
+            case PresetFilter::Threshold: {
+                const int gray = qRound(0.299 * r + 0.587 * g + 0.114 * b);
+                const int th = (gray >= 128) ? 255 : 0;
+                line[x] = qRgba(th, th, th, a);
+                break;
+            }
+            }
+        }
+    }
+
+    return result;
+}
+
+QImage ImageProcessing::applyGradientMap(const QImage& source, const QColor& color1,
+                                         const QColor& color2, bool reverse)
+{
+    if (source.isNull())
+        return source;
+
+    QImage result = source.convertToFormat(QImage::Format_ARGB32);
+    const int w = result.width();
+    const int h = result.height();
+
+    const QColor cStart = reverse ? color2 : color1;
+    const QColor cEnd = reverse ? color1 : color2;
+
+    quint8 lutR[256];
+    quint8 lutG[256];
+    quint8 lutB[256];
+
+    for (int i = 0; i < 256; ++i) {
+        const float t = i / 255.0f;
+        lutR[i] = static_cast<quint8>(std::round(cStart.redF() * (1.0f - t) * 255.0f + cEnd.redF() * t * 255.0f));
+        lutG[i] = static_cast<quint8>(std::round(cStart.greenF() * (1.0f - t) * 255.0f + cEnd.greenF() * t * 255.0f));
+        lutB[i] = static_cast<quint8>(std::round(cStart.blueF() * (1.0f - t) * 255.0f + cEnd.blueF() * t * 255.0f));
+    }
+
+    for (int y = 0; y < h; ++y) {
+        QRgb* line = reinterpret_cast<QRgb*>(result.scanLine(y));
+        for (int x = 0; x < w; ++x) {
+            const QRgb px = line[x];
+            const int a = qAlpha(px);
+            if (a == 0) continue;
+            const int lum = std::clamp(qRound(0.299 * qRed(px) + 0.587 * qGreen(px) + 0.114 * qBlue(px)), 0, 255);
+            line[x] = qRgba(lutR[lum], lutG[lum], lutB[lum], a);
         }
     }
 

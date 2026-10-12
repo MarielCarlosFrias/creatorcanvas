@@ -21,6 +21,8 @@
 #include <QSpinBox>
 #include <QSlider>
 #include <QVBoxLayout>
+#include <QTabWidget>
+#include <QScrollArea>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPolygonF>
@@ -126,6 +128,63 @@ void ImageInspector::refresh()
             .arg(hex, layer->effects.outline.color.lightness() > 128 ? QStringLiteral("#000000") : QStringLiteral("#ffffff")));
     }
 
+    if (m_shadowOn)
+        m_shadowOn->setChecked(layer->effects.dropShadow.enabled);
+    if (m_shadowDistance)
+        m_shadowDistance->setValue(layer->effects.dropShadow.distance);
+    if (m_shadowAngle)
+        m_shadowAngle->setValue(layer->effects.dropShadow.angleDeg);
+    if (m_shadowBlur)
+        m_shadowBlur->setValue(layer->effects.dropShadow.blur);
+    if (m_shadowOpacitySlider) {
+        const int op = static_cast<int>(std::round(layer->effects.dropShadow.opacity * 100.0));
+        m_shadowOpacitySlider->setValue(op);
+        if (m_shadowOpacityValue)
+            m_shadowOpacityValue->setText(QStringLiteral("%1%").arg(op));
+    }
+    if (m_shadowColor) {
+        const QString hex = layer->effects.dropShadow.color.name(QColor::HexRgb);
+        m_shadowColor->setText(hex);
+        m_shadowColor->setStyleSheet(QStringLiteral("background: %1; color: %2; font-weight: bold; border-radius: 4px; padding: 2px 6px;")
+            .arg(hex, layer->effects.dropShadow.color.lightness() > 128 ? QStringLiteral("#000000") : QStringLiteral("#ffffff")));
+    }
+
+    if (m_innerShadowOn)
+        m_innerShadowOn->setChecked(layer->effects.innerShadow.enabled);
+    if (m_innerShadowDistance)
+        m_innerShadowDistance->setValue(layer->effects.innerShadow.distance);
+    if (m_innerShadowAngle)
+        m_innerShadowAngle->setValue(layer->effects.innerShadow.angleDeg);
+    if (m_innerShadowBlur)
+        m_innerShadowBlur->setValue(layer->effects.innerShadow.blur);
+    if (m_innerShadowOpacitySlider) {
+        const int op = static_cast<int>(std::round(layer->effects.innerShadow.opacity * 100.0));
+        m_innerShadowOpacitySlider->setValue(op);
+        if (m_innerShadowOpacityValue)
+            m_innerShadowOpacityValue->setText(QStringLiteral("%1%").arg(op));
+    }
+    if (m_innerShadowColor) {
+        const QString hex = layer->effects.innerShadow.color.name(QColor::HexRgb);
+        m_innerShadowColor->setText(hex);
+        m_innerShadowColor->setStyleSheet(QStringLiteral("background: %1; color: %2; font-weight: bold; border-radius: 4px; padding: 2px 6px;")
+            .arg(hex, layer->effects.innerShadow.color.lightness() > 128 ? QStringLiteral("#000000") : QStringLiteral("#ffffff")));
+    }
+
+    if (m_colorOverlayOn)
+        m_colorOverlayOn->setChecked(layer->effects.colorOverlay.enabled);
+    if (m_colorOverlayOpacitySlider) {
+        const int op = static_cast<int>(std::round(layer->effects.colorOverlay.opacity * 100.0));
+        m_colorOverlayOpacitySlider->setValue(op);
+        if (m_colorOverlayOpacityValue)
+            m_colorOverlayOpacityValue->setText(QStringLiteral("%1%").arg(op));
+    }
+    if (m_colorOverlayColor) {
+        const QString hex = layer->effects.colorOverlay.color.name(QColor::HexRgb);
+        m_colorOverlayColor->setText(hex);
+        m_colorOverlayColor->setStyleSheet(QStringLiteral("background: %1; color: %2; font-weight: bold; border-radius: 4px; padding: 2px 6px;")
+            .arg(hex, layer->effects.colorOverlay.color.lightness() > 128 ? QStringLiteral("#000000") : QStringLiteral("#ffffff")));
+    }
+
     if (m_blendThisBlackSlider && m_blendThisWhiteSlider) {
         const BlendRange r = layer->blendIf.get(0)[0];
         m_blendThisBlackSlider->setValue(r.black[0]);
@@ -181,8 +240,43 @@ void ImageInspector::resetAdjustments()
 void ImageInspector::buildUi()
 {
     auto* mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(2, 2, 2, 2);
-    mainLayout->setSpacing(4);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
+    mainLayout->setSpacing(0);
+
+    m_subTabs = new QTabWidget(this);
+    m_subTabs->setStyleSheet(QStringLiteral(
+        "QTabWidget::pane { border-top: 1px solid #3c4048; background: #22252a; }"
+        "QTabBar::tab { background: #2a2e35; color: #a0a6b2; font-weight: bold; font-size: 11px; padding: 6px 12px; margin-right: 2px; border-top-left-radius: 4px; border-top-right-radius: 4px; }"
+        "QTabBar::tab:selected { background: #323740; color: #ffffff; border-bottom: 2px solid #2b78e4; }"
+        "QTabBar::tab:hover { background: #2f343d; color: #e0e0e0; }"
+    ));
+
+    // --- ABA 1: Ajustes & Cor (Ajustes de Luz, Cores e Filtros Rápidos) ---
+    auto* adjustScroll = new QScrollArea(this);
+    adjustScroll->setWidgetResizable(true);
+    adjustScroll->setFrameShape(QFrame::NoFrame);
+    auto* adjustContainer = new QWidget(adjustScroll);
+    auto* adjustLayout = new QVBoxLayout(adjustContainer);
+    adjustLayout->setContentsMargins(4, 4, 4, 4);
+    adjustLayout->setSpacing(6);
+
+    // --- ABA 2: Estilos & Efeitos (fx) (Contorno, Sombra Projetada, Sombra Interna, Sobreposição) ---
+    auto* fxScroll = new QScrollArea(this);
+    fxScroll->setWidgetResizable(true);
+    fxScroll->setFrameShape(QFrame::NoFrame);
+    auto* fxContainer = new QWidget(fxScroll);
+    auto* fxTabContentLayout = new QVBoxLayout(fxContainer);
+    fxTabContentLayout->setContentsMargins(4, 4, 4, 4);
+    fxTabContentLayout->setSpacing(6);
+
+    // --- ABA 3: Avançado (Chroma Key, 3D Tilt, Mockup, Blend If) ---
+    auto* advScroll = new QScrollArea(this);
+    advScroll->setWidgetResizable(true);
+    advScroll->setFrameShape(QFrame::NoFrame);
+    auto* advContainer = new QWidget(advScroll);
+    auto* advLayout = new QVBoxLayout(advContainer);
+    advLayout->setContentsMargins(4, 4, 4, 4);
+    advLayout->setSpacing(6);
 
     // --- 1. Filtros Rápidos (Aberto por padrão) ---
     m_quickFiltersSection = new CollapsibleSection(QStringLiteral("Quick 1-Click Filters"), true, this);
@@ -216,8 +310,17 @@ void ImageInspector::buildUi()
     presetGrid2->addWidget(m_presetNoirBtn);
     quickLayout->addLayout(presetGrid2);
 
+    auto* presetGrid3 = new QHBoxLayout;
+    m_presetInvertBtn = new QPushButton(QStringLiteral("Inverter"), this);
+    m_presetPosterizeBtn = new QPushButton(QStringLiteral("Posterizar"), this);
+    m_presetThresholdBtn = new QPushButton(QStringLiteral("Limiar P&B"), this);
+    presetGrid3->addWidget(m_presetInvertBtn);
+    presetGrid3->addWidget(m_presetPosterizeBtn);
+    presetGrid3->addWidget(m_presetThresholdBtn);
+    quickLayout->addLayout(presetGrid3);
+
     m_quickFiltersSection->setContentLayout(quickLayout);
-    mainLayout->addWidget(m_quickFiltersSection);
+    adjustLayout->addWidget(m_quickFiltersSection);
 
     // --- 2. Contorno & Glow / Sticker Effect (Aberto por padrão para thumbnails) ---
     m_outlineSection = new CollapsibleSection(QStringLiteral("Contorno & Glow (Sticker)"), true, this);
@@ -282,7 +385,148 @@ void ImageInspector::buildUi()
 
     fxLayout->addLayout(fxForm);
     m_outlineSection->setContentLayout(fxLayout);
-    mainLayout->addWidget(m_outlineSection);
+    fxTabContentLayout->addWidget(m_outlineSection);
+
+    // --- Efeito Sombra Projetada (Drop Shadow) ---
+    m_shadowSection = new CollapsibleSection(QStringLiteral("Sombra Projetada (Drop Shadow)"), false, this);
+    auto* shadowLayout = new QVBoxLayout;
+    shadowLayout->setContentsMargins(4, 4, 4, 4);
+
+    auto* shadowTopRow = new QHBoxLayout;
+    m_shadowOn = new QCheckBox(QStringLiteral("Ativar Sombra"), this);
+    m_shadowColor = new QPushButton(QStringLiteral("#000000"), this);
+    m_shadowColor->setFixedSize(70, 26);
+    m_shadowColor->setStyleSheet(QStringLiteral("background: #000000; color: #ffffff; font-weight: bold; border-radius: 4px;"));
+    shadowTopRow->addWidget(m_shadowOn);
+    shadowTopRow->addStretch();
+    shadowTopRow->addWidget(m_shadowColor);
+    shadowLayout->addLayout(shadowTopRow);
+
+    auto* shadowForm = new QFormLayout;
+    shadowForm->setContentsMargins(0, 0, 0, 0);
+
+    m_shadowDistanceLabel = new QLabel(QStringLiteral("Distância:"), this);
+    m_shadowDistance = new QDoubleSpinBox(this);
+    m_shadowDistance->setRange(0.0, 100.0);
+    m_shadowDistance->setValue(10.0);
+    m_shadowDistance->setSuffix(QStringLiteral(" px"));
+    shadowForm->addRow(m_shadowDistanceLabel, m_shadowDistance);
+
+    m_shadowAngleLabel = new QLabel(QStringLiteral("Ângulo:"), this);
+    m_shadowAngle = new QDoubleSpinBox(this);
+    m_shadowAngle->setRange(0.0, 360.0);
+    m_shadowAngle->setValue(120.0);
+    m_shadowAngle->setSuffix(QStringLiteral("°"));
+    shadowForm->addRow(m_shadowAngleLabel, m_shadowAngle);
+
+    m_shadowBlurLabel = new QLabel(QStringLiteral("Desfoque:"), this);
+    m_shadowBlur = new QDoubleSpinBox(this);
+    m_shadowBlur->setRange(0.0, 60.0);
+    m_shadowBlur->setValue(15.0);
+    m_shadowBlur->setSuffix(QStringLiteral(" px"));
+    shadowForm->addRow(m_shadowBlurLabel, m_shadowBlur);
+
+    m_shadowOpacityLabel = new QLabel(QStringLiteral("Opacidade:"), this);
+    auto* shadowOpRow = new QHBoxLayout;
+    m_shadowOpacitySlider = new QSlider(Qt::Horizontal, this);
+    m_shadowOpacitySlider->setRange(0, 100);
+    m_shadowOpacitySlider->setValue(75);
+    m_shadowOpacityValue = new QLabel(QStringLiteral("75%"), this);
+    m_shadowOpacityValue->setFixedWidth(36);
+    shadowOpRow->addWidget(m_shadowOpacitySlider);
+    shadowOpRow->addWidget(m_shadowOpacityValue);
+    shadowForm->addRow(m_shadowOpacityLabel, shadowOpRow);
+
+    shadowLayout->addLayout(shadowForm);
+    m_shadowSection->setContentLayout(shadowLayout);
+    fxTabContentLayout->addWidget(m_shadowSection);
+
+    // --- Efeito Sombra Interna (Inner Shadow) ---
+    m_innerShadowSection = new CollapsibleSection(QStringLiteral("Sombra Interna (Inner Shadow)"), false, this);
+    auto* innerShadowLayout = new QVBoxLayout;
+    innerShadowLayout->setContentsMargins(4, 4, 4, 4);
+
+    auto* innerShadowTopRow = new QHBoxLayout;
+    m_innerShadowOn = new QCheckBox(QStringLiteral("Ativar Sombra Interna"), this);
+    m_innerShadowColor = new QPushButton(QStringLiteral("#000000"), this);
+    m_innerShadowColor->setFixedSize(70, 26);
+    m_innerShadowColor->setStyleSheet(QStringLiteral("background: #000000; color: #ffffff; font-weight: bold; border-radius: 4px;"));
+    innerShadowTopRow->addWidget(m_innerShadowOn);
+    innerShadowTopRow->addStretch();
+    innerShadowTopRow->addWidget(m_innerShadowColor);
+    innerShadowLayout->addLayout(innerShadowTopRow);
+
+    auto* innerShadowForm = new QFormLayout;
+    innerShadowForm->setContentsMargins(0, 0, 0, 0);
+
+    m_innerShadowDistanceLabel = new QLabel(QStringLiteral("Distância:"), this);
+    m_innerShadowDistance = new QDoubleSpinBox(this);
+    m_innerShadowDistance->setRange(0.0, 100.0);
+    m_innerShadowDistance->setValue(5.0);
+    m_innerShadowDistance->setSuffix(QStringLiteral(" px"));
+    innerShadowForm->addRow(m_innerShadowDistanceLabel, m_innerShadowDistance);
+
+    m_innerShadowAngleLabel = new QLabel(QStringLiteral("Ângulo:"), this);
+    m_innerShadowAngle = new QDoubleSpinBox(this);
+    m_innerShadowAngle->setRange(0.0, 360.0);
+    m_innerShadowAngle->setValue(120.0);
+    m_innerShadowAngle->setSuffix(QStringLiteral("°"));
+    innerShadowForm->addRow(m_innerShadowAngleLabel, m_innerShadowAngle);
+
+    m_innerShadowBlurLabel = new QLabel(QStringLiteral("Desfoque:"), this);
+    m_innerShadowBlur = new QDoubleSpinBox(this);
+    m_innerShadowBlur->setRange(0.0, 60.0);
+    m_innerShadowBlur->setValue(10.0);
+    m_innerShadowBlur->setSuffix(QStringLiteral(" px"));
+    innerShadowForm->addRow(m_innerShadowBlurLabel, m_innerShadowBlur);
+
+    m_innerShadowOpacityLabel = new QLabel(QStringLiteral("Opacidade:"), this);
+    auto* innerShadowOpRow = new QHBoxLayout;
+    m_innerShadowOpacitySlider = new QSlider(Qt::Horizontal, this);
+    m_innerShadowOpacitySlider->setRange(0, 100);
+    m_innerShadowOpacitySlider->setValue(60);
+    m_innerShadowOpacityValue = new QLabel(QStringLiteral("60%"), this);
+    m_innerShadowOpacityValue->setFixedWidth(36);
+    innerShadowOpRow->addWidget(m_innerShadowOpacitySlider);
+    innerShadowOpRow->addWidget(m_innerShadowOpacityValue);
+    innerShadowForm->addRow(m_innerShadowOpacityLabel, innerShadowOpRow);
+
+    innerShadowLayout->addLayout(innerShadowForm);
+    m_innerShadowSection->setContentLayout(innerShadowLayout);
+    fxTabContentLayout->addWidget(m_innerShadowSection);
+
+    // --- Efeito Sobreposição de Cor (Color Overlay) ---
+    m_colorOverlaySection = new CollapsibleSection(QStringLiteral("Sobreposição de Cor (Color Overlay)"), false, this);
+    auto* colorOverlayLayout = new QVBoxLayout;
+    colorOverlayLayout->setContentsMargins(4, 4, 4, 4);
+
+    auto* colorOverlayTopRow = new QHBoxLayout;
+    m_colorOverlayOn = new QCheckBox(QStringLiteral("Ativar Sobreposição"), this);
+    m_colorOverlayColor = new QPushButton(QStringLiteral("#ff0000"), this);
+    m_colorOverlayColor->setFixedSize(70, 26);
+    m_colorOverlayColor->setStyleSheet(QStringLiteral("background: #ff0000; color: #ffffff; font-weight: bold; border-radius: 4px;"));
+    colorOverlayTopRow->addWidget(m_colorOverlayOn);
+    colorOverlayTopRow->addStretch();
+    colorOverlayTopRow->addWidget(m_colorOverlayColor);
+    colorOverlayLayout->addLayout(colorOverlayTopRow);
+
+    auto* colorOverlayForm = new QFormLayout;
+    colorOverlayForm->setContentsMargins(0, 0, 0, 0);
+
+    m_colorOverlayOpacityLabel = new QLabel(QStringLiteral("Opacidade:"), this);
+    auto* colorOverlayOpRow = new QHBoxLayout;
+    m_colorOverlayOpacitySlider = new QSlider(Qt::Horizontal, this);
+    m_colorOverlayOpacitySlider->setRange(0, 100);
+    m_colorOverlayOpacitySlider->setValue(50);
+    m_colorOverlayOpacityValue = new QLabel(QStringLiteral("50%"), this);
+    m_colorOverlayOpacityValue->setFixedWidth(36);
+    colorOverlayOpRow->addWidget(m_colorOverlayOpacitySlider);
+    colorOverlayOpRow->addWidget(m_colorOverlayOpacityValue);
+    colorOverlayForm->addRow(m_colorOverlayOpacityLabel, colorOverlayOpRow);
+
+    colorOverlayLayout->addLayout(colorOverlayForm);
+    m_colorOverlaySection->setContentLayout(colorOverlayLayout);
+    fxTabContentLayout->addWidget(m_colorOverlaySection);
 
     // --- Chroma Key / Color to Alpha (Recolhido por padrão) ---
     m_chromaKeySection = new CollapsibleSection(QStringLiteral("Chroma Key (Color to Alpha)"), false, this);
@@ -346,7 +590,7 @@ void ImageInspector::buildUi()
     chromaLayout->addRow(chromaBtnRow);
 
     m_chromaKeySection->setContentLayout(chromaLayout);
-    mainLayout->addWidget(m_chromaKeySection);
+    advLayout->addWidget(m_chromaKeySection);
 
     // --- 3. Ajustes Manuais de Cor e Filtros (Recolhido por padrão) ---
     m_adjustmentsSection = new CollapsibleSection(QStringLiteral("Color Adjustments & Filters"), false, this);
@@ -413,7 +657,7 @@ void ImageInspector::buildUi()
     adjLayout->addRow(btnRow);
 
     m_adjustmentsSection->setContentLayout(adjLayout);
-    mainLayout->addWidget(m_adjustmentsSection);
+    adjustLayout->addWidget(m_adjustmentsSection);
 
     // --- 3. Perspectiva 3D & Inclinação (Recolhido por padrão) ---
     m_perspectiveSection = new CollapsibleSection(QStringLiteral("3D Tilt & Perspective"), false, this);
@@ -443,7 +687,7 @@ void ImageInspector::buildUi()
     persLayout->addRow(tiltRow);
 
     m_perspectiveSection->setContentLayout(persLayout);
-    mainLayout->addWidget(m_perspectiveSection);
+    advLayout->addWidget(m_perspectiveSection);
 
     // --- Mockup / Logo (warped, não destrutivo e com undo) ---
     m_mockupSection = new CollapsibleSection(QStringLiteral("Mockup / Substituir Logo"), false, this);
@@ -457,7 +701,7 @@ void ImageInspector::buildUi()
     m_mockupButton->setStyleSheet(QStringLiteral("background:#2b78e4;color:white;font-weight:bold;padding:6px;border-radius:4px;"));
     mockupLayout->addWidget(m_mockupButton);
     m_mockupSection->setContentLayout(mockupLayout);
-    mainLayout->addWidget(m_mockupSection);
+    advLayout->addWidget(m_mockupSection);
 
     // --- Blend If: Faixas de Mesclagem de Luminância ---
     m_blendIfSection = new CollapsibleSection(QStringLiteral("Blend If (Mesclagem Avançada)"), false, this);
@@ -486,9 +730,24 @@ void ImageInspector::buildUi()
     blendIfLayout->addRow(m_blendIfResetBtn);
 
     m_blendIfSection->setContentLayout(blendIfLayout);
-    mainLayout->addWidget(m_blendIfSection);
+    advLayout->addWidget(m_blendIfSection);
 
-    mainLayout->addStretch();
+    // Adiciona stretch ao final de cada aba
+    adjustLayout->addStretch();
+    fxTabContentLayout->addStretch();
+    advLayout->addStretch();
+
+    // Configura os scroll areas com seus containers
+    adjustScroll->setWidget(adjustContainer);
+    fxScroll->setWidget(fxContainer);
+    advScroll->setWidget(advContainer);
+
+    // Adiciona as abas organizadas ao QTabWidget
+    m_subTabs->addTab(adjustScroll, QStringLiteral("Ajustes"));
+    m_subTabs->addTab(fxScroll, QStringLiteral("Efeitos fx"));
+    m_subTabs->addTab(advScroll, QStringLiteral("Avançado"));
+
+    mainLayout->addWidget(m_subTabs);
 
     // Signal connections
     connect(m_tiltX, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double val) {
@@ -521,6 +780,9 @@ void ImageInspector::buildUi()
     connect(m_presetCyberpunkBtn, &QPushButton::clicked, this, [this] { applyPreset(5); });
     connect(m_presetGoldenHourBtn, &QPushButton::clicked, this, [this] { applyPreset(6); });
     connect(m_presetNoirBtn, &QPushButton::clicked, this, [this] { applyPreset(7); });
+    connect(m_presetInvertBtn, &QPushButton::clicked, this, [this] { applyPreset(8); });
+    connect(m_presetPosterizeBtn, &QPushButton::clicked, this, [this] { applyPreset(9); });
+    connect(m_presetThresholdBtn, &QPushButton::clicked, this, [this] { applyPreset(10); });
 
     // Conexões de Contorno / Glow (Sticker)
     connect(m_outlineOn, &QCheckBox::toggled, this, [this](bool on) {
@@ -554,6 +816,135 @@ void ImageInspector::buildUi()
         ImageLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
         layer->effects.outline.blur = val;
+        if (m_document) m_document->touchLayer(m_id);
+    });
+
+    // Conexões de Sombra Projetada (Drop Shadow)
+    connect(m_shadowOn, &QCheckBox::toggled, this, [this](bool on) {
+        ImageLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->effects.dropShadow.enabled = on;
+        if (m_document) m_document->touchLayer(m_id);
+    });
+
+    connect(m_shadowColor, &QPushButton::clicked, this, [this] {
+        ImageLayer* layer = nullptr;
+        if (!editingLayer(&layer)) return;
+        const QColor chosen = QColorDialog::getColor(layer->effects.dropShadow.color, this);
+        if (!chosen.isValid()) return;
+        layer->effects.dropShadow.color = chosen;
+        const QString hex = chosen.name(QColor::HexRgb);
+        m_shadowColor->setText(hex);
+        m_shadowColor->setStyleSheet(QStringLiteral("background: %1; color: %2; font-weight: bold; border-radius: 4px;")
+            .arg(hex, chosen.lightness() > 128 ? QStringLiteral("#000000") : QStringLiteral("#ffffff")));
+        if (m_document) m_document->touchLayer(m_id);
+    });
+
+    connect(m_shadowDistance, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double val) {
+        ImageLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->effects.dropShadow.distance = val;
+        if (m_document) m_document->touchLayer(m_id);
+    });
+
+    connect(m_shadowAngle, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double val) {
+        ImageLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->effects.dropShadow.angleDeg = val;
+        if (m_document) m_document->touchLayer(m_id);
+    });
+
+    connect(m_shadowBlur, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double val) {
+        ImageLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->effects.dropShadow.blur = val;
+        if (m_document) m_document->touchLayer(m_id);
+    });
+
+    connect(m_shadowOpacitySlider, &QSlider::valueChanged, this, [this](int val) {
+        m_shadowOpacityValue->setText(QStringLiteral("%1%").arg(val));
+        ImageLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->effects.dropShadow.opacity = val / 100.0;
+        if (m_document) m_document->touchLayer(m_id);
+    });
+
+    // Conexões de Sombra Interna (Inner Shadow)
+    connect(m_innerShadowOn, &QCheckBox::toggled, this, [this](bool on) {
+        ImageLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->effects.innerShadow.enabled = on;
+        if (m_document) m_document->touchLayer(m_id);
+    });
+
+    connect(m_innerShadowColor, &QPushButton::clicked, this, [this] {
+        ImageLayer* layer = nullptr;
+        if (!editingLayer(&layer)) return;
+        const QColor chosen = QColorDialog::getColor(layer->effects.innerShadow.color, this);
+        if (!chosen.isValid()) return;
+        layer->effects.innerShadow.color = chosen;
+        const QString hex = chosen.name(QColor::HexRgb);
+        m_innerShadowColor->setText(hex);
+        m_innerShadowColor->setStyleSheet(QStringLiteral("background: %1; color: %2; font-weight: bold; border-radius: 4px;")
+            .arg(hex, chosen.lightness() > 128 ? QStringLiteral("#000000") : QStringLiteral("#ffffff")));
+        if (m_document) m_document->touchLayer(m_id);
+    });
+
+    connect(m_innerShadowDistance, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double val) {
+        ImageLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->effects.innerShadow.distance = val;
+        if (m_document) m_document->touchLayer(m_id);
+    });
+
+    connect(m_innerShadowAngle, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double val) {
+        ImageLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->effects.innerShadow.angleDeg = val;
+        if (m_document) m_document->touchLayer(m_id);
+    });
+
+    connect(m_innerShadowBlur, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double val) {
+        ImageLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->effects.innerShadow.blur = val;
+        if (m_document) m_document->touchLayer(m_id);
+    });
+
+    connect(m_innerShadowOpacitySlider, &QSlider::valueChanged, this, [this](int val) {
+        m_innerShadowOpacityValue->setText(QStringLiteral("%1%").arg(val));
+        ImageLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->effects.innerShadow.opacity = val / 100.0;
+        if (m_document) m_document->touchLayer(m_id);
+    });
+
+    // Conexões de Sobreposição de Cor (Color Overlay)
+    connect(m_colorOverlayOn, &QCheckBox::toggled, this, [this](bool on) {
+        ImageLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->effects.colorOverlay.enabled = on;
+        if (m_document) m_document->touchLayer(m_id);
+    });
+
+    connect(m_colorOverlayColor, &QPushButton::clicked, this, [this] {
+        ImageLayer* layer = nullptr;
+        if (!editingLayer(&layer)) return;
+        const QColor chosen = QColorDialog::getColor(layer->effects.colorOverlay.color, this);
+        if (!chosen.isValid()) return;
+        layer->effects.colorOverlay.color = chosen;
+        const QString hex = chosen.name(QColor::HexRgb);
+        m_colorOverlayColor->setText(hex);
+        m_colorOverlayColor->setStyleSheet(QStringLiteral("background: %1; color: %2; font-weight: bold; border-radius: 4px;")
+            .arg(hex, chosen.lightness() > 128 ? QStringLiteral("#000000") : QStringLiteral("#ffffff")));
+        if (m_document) m_document->touchLayer(m_id);
+    });
+
+    connect(m_colorOverlayOpacitySlider, &QSlider::valueChanged, this, [this](int val) {
+        m_colorOverlayOpacityValue->setText(QStringLiteral("%1%").arg(val));
+        ImageLayer* layer = nullptr;
+        if (m_loading || !editingLayer(&layer)) return;
+        layer->effects.colorOverlay.opacity = val / 100.0;
         if (m_document) m_document->touchLayer(m_id);
     });
 
@@ -1006,6 +1397,25 @@ void ImageInspector::applyPreset(int presetIndex)
         m_brightnessSlider->setValue(-10);
         m_sharpenSlider->setValue(25);
         break;
+    case 8: // Invert
+    case 9: // Posterize
+    case 10: { // Threshold
+        ImageLayer* layer = nullptr;
+        if (editingLayer(&layer) && m_document) {
+            const QImage base = m_document->assets().decodedImage(layer->assetId);
+            if (!base.isNull()) {
+                ImageProcessing::PresetFilter filter = ImageProcessing::PresetFilter::Invert;
+                if (presetIndex == 9) filter = ImageProcessing::PresetFilter::Posterize;
+                else if (presetIndex == 10) filter = ImageProcessing::PresetFilter::Threshold;
+                const QImage filtered = ImageProcessing::applyPresetFilter(base, filter);
+                const LayerId newAsset = m_document->assets().addImage(filtered, QStringLiteral("png"));
+                m_document->setImageLayerAsset(m_id, newAsset, filtered.width(), filtered.height());
+                m_document->touchLayer(m_id);
+            }
+        }
+        m_loading = false;
+        return;
+    }
     }
 
     auto formatVal = [](int val, const QString& unit) {

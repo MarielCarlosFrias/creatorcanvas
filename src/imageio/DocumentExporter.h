@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QRectF>
 #include <QString>
 #include <QUuid>
 
@@ -17,6 +18,12 @@ bool exportDocumentToImage(const Document& doc, const QString& filePath,
 
 /// Renders a single layer to an image file with transparency.
 bool exportLayerToImage(const Document& doc, const QUuid& layerId,
+                        const QString& filePath, const QString& format,
+                        int quality, double scale,
+                        QString* errorMessage = nullptr);
+
+/// Renders a rectangular region/slice of the document (Web Slice export)
+bool exportSliceToImage(const Document& doc, const QRectF& sliceRect,
                         const QString& filePath, const QString& format,
                         int quality, double scale,
                         QString* errorMessage = nullptr);

@@ -25,7 +25,21 @@ using LayerId = QUuid;
 inline LayerId newLayerId() { return QUuid::createUuid(); }
 
 enum class LayerType { Group, Image, Text, Shape, Background };
-enum class BlendMode { Normal, Multiply, Screen, Overlay, Darken, Lighten, Add };
+enum class BlendMode {
+    Normal,
+    Multiply,
+    Screen,
+    Overlay,
+    Darken,
+    Lighten,
+    Add,
+    ColorDodge,
+    ColorBurn,
+    HardLight,
+    SoftLight,
+    Difference,
+    Exclusion
+};
 enum class TextAlignment { Left, Center, Right };
 enum class ShapeKind { Rectangle, RoundedRect, Ellipse, Line, Polygon, ArrowRight, ArrowCurved, Star, Badge, SpeechBubble, Heart };
 enum class LayerColorTag { None, Red, Orange, Yellow, Green, Blue, Purple, Gray };

@@ -16,6 +16,8 @@ class QLabel;
 class QPushButton;
 class QGroupBox;
 class QCheckBox;
+class QTabWidget;
+class QScrollArea;
 
 namespace cc {
 
@@ -41,6 +43,7 @@ public:
     void refresh();
     void setMockupArea(const QPolygonF& corners);
     void openMockupDialog();
+    void applyPreset(int presetIndex);
 
 public slots:
     void setChromaKeyColor(const QColor& color);
@@ -56,7 +59,6 @@ private:
     void retranslateUi();
     bool editingLayer(ImageLayer** out) const;
     void applyAdjustments();
-    void applyPreset(int presetIndex);
     void resetAdjustments();
     void schedulePreview();
     void onPreviewTimeout();
@@ -133,6 +135,9 @@ private:
     QPushButton* m_presetCyberpunkBtn = nullptr;
     QPushButton* m_presetGoldenHourBtn = nullptr;
     QPushButton* m_presetNoirBtn = nullptr;
+    QPushButton* m_presetInvertBtn = nullptr;
+    QPushButton* m_presetPosterizeBtn = nullptr;
+    QPushButton* m_presetThresholdBtn = nullptr;
 
     QPushButton* m_applyAdjustBtn = nullptr;
     QPushButton* m_resetAdjustBtn = nullptr;
@@ -145,6 +150,42 @@ private:
     QDoubleSpinBox* m_outlineBlur = nullptr;
     QLabel* m_outlineWidthLabel = nullptr;
     QLabel* m_outlineBlurLabel = nullptr;
+
+    // Efeito Sombra Projetada (Drop Shadow)
+    class CollapsibleSection* m_shadowSection = nullptr;
+    QCheckBox* m_shadowOn = nullptr;
+    QPushButton* m_shadowColor = nullptr;
+    QDoubleSpinBox* m_shadowDistance = nullptr;
+    QDoubleSpinBox* m_shadowAngle = nullptr;
+    QDoubleSpinBox* m_shadowBlur = nullptr;
+    QSlider* m_shadowOpacitySlider = nullptr;
+    QLabel* m_shadowOpacityValue = nullptr;
+    QLabel* m_shadowDistanceLabel = nullptr;
+    QLabel* m_shadowAngleLabel = nullptr;
+    QLabel* m_shadowBlurLabel = nullptr;
+    QLabel* m_shadowOpacityLabel = nullptr;
+
+    // Efeito Sombra Interna (Inner Shadow)
+    class CollapsibleSection* m_innerShadowSection = nullptr;
+    QCheckBox* m_innerShadowOn = nullptr;
+    QPushButton* m_innerShadowColor = nullptr;
+    QDoubleSpinBox* m_innerShadowDistance = nullptr;
+    QDoubleSpinBox* m_innerShadowAngle = nullptr;
+    QDoubleSpinBox* m_innerShadowBlur = nullptr;
+    QSlider* m_innerShadowOpacitySlider = nullptr;
+    QLabel* m_innerShadowOpacityValue = nullptr;
+    QLabel* m_innerShadowDistanceLabel = nullptr;
+    QLabel* m_innerShadowAngleLabel = nullptr;
+    QLabel* m_innerShadowBlurLabel = nullptr;
+    QLabel* m_innerShadowOpacityLabel = nullptr;
+
+    // Efeito Sobreposição de Cor (Color Overlay)
+    class CollapsibleSection* m_colorOverlaySection = nullptr;
+    QCheckBox* m_colorOverlayOn = nullptr;
+    QPushButton* m_colorOverlayColor = nullptr;
+    QSlider* m_colorOverlayOpacitySlider = nullptr;
+    QLabel* m_colorOverlayOpacityValue = nullptr;
+    QLabel* m_colorOverlayOpacityLabel = nullptr;
 
     // Chroma Key / Color to Alpha
     class CollapsibleSection* m_chromaKeySection = nullptr;
@@ -177,6 +218,9 @@ private:
     QSlider* m_blendThisWhiteSlider = nullptr;
     QLabel* m_blendThisWhiteValue = nullptr;
     QPushButton* m_blendIfResetBtn = nullptr;
+
+    // Sub-abas organizadas estilo PhotoCraft
+    QTabWidget* m_subTabs = nullptr;
 };
 
 } // namespace cc

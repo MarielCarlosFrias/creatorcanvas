@@ -1,16 +1,38 @@
 {
     "presets": [
-        { "name": "YouTube Thumbnail", "width": 1280, "height": 720, "dpi": 96, "background": "#ffffff" },
-        { "name": "YouTube Banner", "width": 2560, "height": 1440, "dpi": 96, "background": "#ffffff" },
-        { "name": "YouTube Shorts", "width": 1080, "height": 1920, "dpi": 96, "background": "#ffffff" },
-        { "name": "Instagram Square Post", "width": 1080, "height": 1080, "dpi": 96, "background": "#ffffff" },
-        { "name": "Instagram Portrait Post", "width": 1080, "height": 1350, "dpi": 96, "background": "#ffffff" },
-        { "name": "Instagram Story", "width": 1080, "height": 1920, "dpi": 96, "background": "#ffffff" },
-        { "name": "TikTok Video", "width": 1080, "height": 1920, "dpi": 96, "background": "#ffffff" },
-        { "name": "Facebook Post", "width": 1200, "height": 630, "dpi": 96, "background": "#ffffff" },
-        { "name": "Facebook Story", "width": 1080, "height": 1920, "dpi": 96, "background": "#ffffff" },
-        { "name": "X Post", "width": 1600, "height": 900, "dpi": 96, "background": "#ffffff" },
-        { "name": "X Header", "width": 1500, "height": 500, "dpi": 96, "background": "#ffffff" },
-        { "name": "Transparent 1280x720", "width": 1280, "height": 720, "dpi": 96, "transparent": true }
+        { "name": "YouTube Thumbnail",       "category": "Social Media", "width": 1280, "height": 720,  "dpi": 96,  "background": "#ffffff" },
+        { "name": "YouTube Banner",           "category": "Social Media", "width": 2560, "height": 1440, "dpi": 96,  "background": "#ffffff" },
+        { "name": "YouTube Shorts",           "category": "Social Media", "width": 1080, "height": 1920, "dpi": 96,  "background": "#ffffff" },
+        { "name": "Instagram Square Post",    "category": "Social Media", "width": 1080, "height": 1080, "dpi": 96,  "background": "#ffffff" },
+        { "name": "Instagram Portrait Post",  "category": "Social Media", "width": 1080, "height": 1350, "dpi": 96,  "background": "#ffffff" },
+        { "name": "Instagram Story",          "category": "Social Media", "width": 1080, "height": 1920, "dpi": 96,  "background": "#ffffff" },
+        { "name": "TikTok Video",             "category": "Social Media", "width": 1080, "height": 1920, "dpi": 96,  "background": "#ffffff" },
+        { "name": "Facebook Post",            "category": "Social Media", "width": 1200, "height": 630,  "dpi": 96,  "background": "#ffffff" },
+        { "name": "Facebook Story",           "category": "Social Media", "width": 1080, "height": 1920, "dpi": 96,  "background": "#ffffff" },
+        { "name": "X Post",                   "category": "Social Media", "width": 1600, "height": 900,  "dpi": 96,  "background": "#ffffff" },
+        { "name": "X Header",                 "category": "Social Media", "width": 1500, "height": 500,  "dpi": 96,  "background": "#ffffff" },
+
+        { "name": "Paisagem, 6 x 4",         "category": "Foto",         "width": 1800, "height": 1200, "dpi": 300, "background": "#ffffff" },
+        { "name": "Paisagem, 7 x 5",         "category": "Foto",         "width": 2100, "height": 1500, "dpi": 300, "background": "#ffffff" },
+        { "name": "Paisagem, 10 x 8",        "category": "Foto",         "width": 3000, "height": 2400, "dpi": 300, "background": "#ffffff" },
+        { "name": "Retrato, 4 x 6",          "category": "Foto",         "width": 1200, "height": 1800, "dpi": 300, "background": "#ffffff" },
+        { "name": "Retrato, 5 x 7",          "category": "Foto",         "width": 1500, "height": 2100, "dpi": 300, "background": "#ffffff" },
+        { "name": "Quadrado, 5 x 5",         "category": "Foto",         "width": 1500, "height": 1500, "dpi": 300, "background": "#ffffff" },
+
+        { "name": "Web Banner",              "category": "Web",          "width": 1920, "height": 600,  "dpi": 72,  "background": "#ffffff" },
+        { "name": "Web Page (Full HD)",       "category": "Web",         "width": 1920, "height": 1080, "dpi": 72,  "background": "#ffffff" },
+        { "name": "Favicon",                 "category": "Web",          "width": 512,  "height": 512,  "dpi": 72,  "background": "#ffffff" },
+        { "name": "Open Graph Image",        "category": "Web",          "width": 1200, "height": 630,  "dpi": 72,  "background": "#ffffff" },
+
+        { "name": "HDTV 1080p",              "category": "Filme e vídeo","width": 1920, "height": 1080, "dpi": 72,  "background": "#000000" },
+        { "name": "4K UHD",                  "category": "Filme e vídeo","width": 3840, "height": 2160, "dpi": 72,  "background": "#000000" },
+        { "name": "Vídeo Vertical (9:16)",   "category": "Filme e vídeo","width": 1080, "height": 1920, "dpi": 72,  "background": "#000000" },
+
+        { "name": "A4 (210 x 297 mm)",       "category": "Impressão",   "width": 2480, "height": 3508, "dpi": 300, "background": "#ffffff" },
+        { "name": "A3 (297 x 420 mm)",       "category": "Impressão",   "width": 3508, "height": 4961, "dpi": 300, "background": "#ffffff" },
+        { "name": "Carta (8.5 x 11 in)",     "category": "Impressão",   "width": 2550, "height": 3300, "dpi": 300, "background": "#ffffff" },
+        { "name": "Cartão de visita",        "category": "Impressão",   "width": 1050, "height": 600,  "dpi": 300, "background": "#ffffff" },
+
+        { "name": "Transparent 1280x720",     "category": "Web",         "width": 1280, "height": 720,  "dpi": 96,  "transparent": true }
     ]
 }

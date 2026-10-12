@@ -6,6 +6,7 @@
 #include <QPolygonF>
 #include <QRect>
 #include <QSize>
+#include "../layers/ToneAdjustments.h"
 
 namespace cc {
 
@@ -82,15 +83,34 @@ public:
     /// Aplica nitidez (Sharpen).
     static QImage applySharpen(const QImage& source, double amount);
 
+    /// Aplica ajuste de Níveis (Levels) por canal ou master.
+    static QImage applyLevels(const QImage& source, const LevelsChannel& master,
+                             const LevelsChannel& red = {}, const LevelsChannel& green = {},
+                             const LevelsChannel& blue = {});
+
+    /// Aplica ajuste de Curvas (Curves) por canal ou master.
+    static QImage applyCurves(const QImage& source, const std::vector<CurvePoint>& master,
+                             const std::vector<CurvePoint>& red = {},
+                             const std::vector<CurvePoint>& green = {},
+                             const std::vector<CurvePoint>& blue = {});
+
     enum class PresetFilter {
         Grayscale,    // P&B / Preto e Branco
         Sepia,        // Sépia clássico
         Vintage,      // Retrô / Vintage quente
-        HighContrast  // Alto contraste dinâmico
+        HighContrast, // Alto contraste dinâmico
+        Invert,       // Inverter Cores
+        Posterize,    // Posterizar (níveis reduzidos de cor)
+        Threshold     // Preto e branco puro por limiar
     };
 
     /// Aplica filtros rápidos em 1 clique.
     static QImage applyPresetFilter(const QImage& source, PresetFilter preset);
+
+    /// Aplica mapa de gradiente (Gradient Map) mapeando a luminância de cada pixel
+    /// para uma transição suave entre color1 e color2.
+    static QImage applyGradientMap(const QImage& source, const QColor& color1,
+                                   const QColor& color2, bool reverse = false);
 
     /// Remove uma cor da imagem (Chroma Key / Color to Alpha), tornando-a transparente
     /// e desmisturando as bordas perfeitamente sem halos residuais.
