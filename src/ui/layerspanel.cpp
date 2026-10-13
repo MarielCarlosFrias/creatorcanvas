@@ -250,6 +250,14 @@ void LayersPanel::resizeEvent(QResizeEvent* event)
     const QSize iconSize = narrow ? QSize(18, 18) : QSize(22, 22);
     const QSize buttonSize = narrow ? QSize(26, 26) : QSize(30, 30);
     for (QToolButton* button : findChildren<QToolButton*>()) {
+        // Botões TEXTUAIS (ex.: "Mask ▾") não podem ser fixados em 30x30 —
+        // o texto virava "…". Eles ocupam a linha inteira da coluna.
+        if (button->toolButtonStyle() != Qt::ToolButtonIconOnly
+            && !button->text().isEmpty()) {
+            button->setFixedHeight(narrow ? 24 : 28);
+            button->setIconSize(iconSize);
+            continue;
+        }
         button->setIconSize(iconSize);
         button->setFixedSize(buttonSize);
     }
@@ -424,6 +432,7 @@ void LayersPanel::buildUi()
     m_applyMaskBtn = new QToolButton(this);
     m_applyMaskBtn->setText(QStringLiteral("Mask ▾"));
     m_applyMaskBtn->setMinimumWidth(86);
+    m_applyMaskBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     m_applyMaskBtn->setToolButtonStyle(Qt::ToolButtonTextOnly);
     m_applyMaskBtn->setToolTip(QStringLiteral("Apply the current selection as a layer mask"));
     m_applyMaskBtn->setPopupMode(QToolButton::MenuButtonPopup);

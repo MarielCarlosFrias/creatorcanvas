@@ -229,6 +229,15 @@ void MainWindow::resizeEvent(QResizeEvent* event)
         m_quickToolBar->setIconSize(QSize(quickIcon, quickIcon));
     }
 
+    // Dicas das barras de opcao somem primeiro — sem isso os botoes da
+    // tesoura/varinha ficavam cortados em janelas <= 1380px.
+    const bool wideEnoughForHints = width() >= 1380;
+    for (QLabel* hint : {m_selectHintLabel, m_scissorsHintLabel,
+                         m_wandHintLabel, m_cloneHintLabel}) {
+        if (hint)
+            hint->setVisible(wideEnoughForHints);
+    }
+
     if (m_toolOptionsBar)
         m_toolOptionsBar->setVisible(width() >= 800
                                      && m_toolOptionsStack
@@ -1316,7 +1325,7 @@ void MainWindow::buildToolBars()
     });
 
     m_scissorsHintLabel = new QLabel(this);
-    m_scissorsHintLabel->setStyleSheet(QStringLiteral("color: #888888; font-size: 11px;"));
+    m_scissorsHintLabel->setObjectName(QStringLiteral("HintLabel"));
 
     scissorsLayout->addWidget(m_scissorsModeLabel);
     scissorsLayout->addWidget(m_scissorsModeCombo);
@@ -1353,7 +1362,7 @@ void MainWindow::buildToolBars()
     });
 
     m_wandHintLabel = new QLabel(this);
-    m_wandHintLabel->setStyleSheet(QStringLiteral("color: #888888; font-size: 11px;"));
+    m_wandHintLabel->setObjectName(QStringLiteral("HintLabel"));
 
     wandLayout->addWidget(m_wandTolLabel);
     wandLayout->addWidget(m_wandTolSlider);
@@ -1409,7 +1418,7 @@ void MainWindow::buildToolBars()
     });
 
     m_cloneHintLabel = new QLabel(this);
-    m_cloneHintLabel->setStyleSheet(QStringLiteral("color: #888888; font-size: 11px;"));
+    m_cloneHintLabel->setObjectName(QStringLiteral("HintLabel"));
     m_cloneRadiusLabel->setFixedWidth(48);
     m_cloneHardnessLabel->setFixedWidth(58);
     m_cloneOpacityLabel->setFixedWidth(52);
