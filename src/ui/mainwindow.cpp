@@ -29,6 +29,7 @@
 
 #include <QActionGroup>
 #include <QApplication>
+#include <QGuiApplication>
 #include <QCheckBox>
 #include <QCloseEvent>
 #include <QColorDialog>
@@ -642,6 +643,8 @@ void MainWindow::buildLayersDock()
     tabifyDockWidget(m_layersDock, m_imageDock);
     tabifyDockWidget(m_layersDock, m_historyDock);
     setTabPosition(Qt::RightDockWidgetArea, QTabWidget::North);
+
+    // Tabs de dock: scroll buttons + elide (tooltips nativos do Qt cobrem titulo truncado)
     for (QTabBar* tabs : findChildren<QTabBar*>()) {
         tabs->setUsesScrollButtons(true);
         tabs->setElideMode(Qt::ElideRight);
@@ -1569,6 +1572,9 @@ void MainWindow::buildMenus()
     m_fileMenu = menuBar()->addMenu(QString());
     m_fileMenu->addAction(m_newAction);
     m_fileMenu->addAction(m_openAction);
+    m_openRecentMenu = m_fileMenu->addMenu(QString());
+    // Lista reconstruida a cada abertura — sempre atualizada
+    connect(m_openRecentMenu, &QMenu::aboutToShow, this, [this] { refreshRecentMenu(); });
     m_fileMenu->addAction(m_saveAction);
     m_fileMenu->addAction(m_saveAsAction);
     m_fileMenu->addSeparator();
@@ -1890,6 +1896,36 @@ void MainWindow::openFromPath(const QString& path)
     updateWindowTitle();
 }
 
+void MainWindow::refreshRecentMenu()
+{
+    if (!m_openRecentMenu || !m_recentFiles)
+        return;
+    m_openRecentMenu->clear();
+    const QStringList paths = m_recentFiles->paths();
+    if (paths.isEmpty()) {
+        QAction* empty = m_openRecentMenu->addAction(QStringLiteral("—"));
+        empty->setEnabled(false);
+        return;
+    }
+    for (const QString& path : paths) {
+        QAction* act = m_openRecentMenu->addAction(QFileInfo(path).fileName());
+        act->setToolTip(path);
+        act->setStatusTip(path);
+        connect(act, &QAction::triggered, this, [this, path] {
+            openFromPath(path);
+        });
+    }
+    m_openRecentMenu->addSeparator();
+    QAction* clearAct = m_openRecentMenu->addAction(
+        m_i18n ? m_i18n->t("common", "menu.file.clearRecents")
+               : QStringLiteral("Clear Recent List"));
+    connect(clearAct, &QAction::triggered, this, [this] {
+        m_recentFiles->clear();
+        if (m_startScreen)
+            m_startScreen->refreshRecents();
+    });
+}
+
 void MainWindow::newDocument()
 {
     if (!confirmDiscardUnsavedChanges())
@@ -1923,7 +1959,9 @@ void MainWindow::importImageViaDialog()
 
 void MainWindow::importImage(const QString& filePath)
 {
+    QGuiApplication::setOverrideCursor(Qt::WaitCursor);
     const auto result = importImageFromFile(filePath);
+    QGuiApplication::restoreOverrideCursor();
     if (result.status != ImportStatus::Ok) {
         if (!m_i18n)
             return;
@@ -2718,13 +2756,17 @@ void MainWindow::exportImage()
 
     QString error;
     bool success = false;
-    if (settings.exportSelectedLayerOnly && !settings.selectedLayerId.isNull()) {
-        success = exportLayerToImage(*m_document, settings.selectedLayerId, path,
-                                     settings.format, settings.quality,
-                                     settings.scale, &error);
-    } else {
-        success = exportDocumentToImage(*m_document, path, settings.format,
-                                        settings.quality, settings.scale, &error);
+    {
+        QGuiApplication::setOverrideCursor(Qt::WaitCursor);
+        if (settings.exportSelectedLayerOnly && !settings.selectedLayerId.isNull()) {
+            success = exportLayerToImage(*m_document, settings.selectedLayerId, path,
+                                         settings.format, settings.quality,
+                                         settings.scale, &error);
+        } else {
+            success = exportDocumentToImage(*m_document, path, settings.format,
+                                            settings.quality, settings.scale, &error);
+        }
+        QGuiApplication::restoreOverrideCursor();
     }
 
     if (!success) {
@@ -2769,8 +2811,10 @@ void MainWindow::quickExportLayerPng(const LayerId& id)
         return;
 
     QString error;
+    QGuiApplication::setOverrideCursor(Qt::WaitCursor);
     const bool success = exportLayerToImage(*m_document, id, path,
                                             QStringLiteral("png"), 95, 1.0, &error);
+    QGuiApplication::restoreOverrideCursor();
     if (!success) {
         QMessageBox::warning(this,
                              m_i18n ? m_i18n->t("editor", "export.error.title") : QStringLiteral("Export failed"),
@@ -3185,6 +3229,8 @@ void MainWindow::retranslateUi()
     }
 
     m_fileMenu->setTitle(m_i18n->t("common", "menu.file"));
+    if (m_openRecentMenu)
+        m_openRecentMenu->setTitle(m_i18n->t("common", "menu.file.openRecent"));
     m_editMenu->setTitle(m_i18n->t("common", "menu.edit"));
     const bool pt = m_i18n->currentLanguage() == QStringLiteral("pt-BR");
     if (m_imageMenu) m_imageMenu->setTitle(pt ? QStringLiteral("Imagem") : QStringLiteral("Image"));

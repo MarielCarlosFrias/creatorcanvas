@@ -97,6 +97,7 @@ private:
     bool saveDocument();
     bool saveDocumentAs();
     void openDocument();
+    void refreshRecentMenu();
     bool confirmDiscardUnsavedChanges();
     void openSettings();
     void checkForRecoveryFile();
@@ -196,6 +197,7 @@ private:
     QAction* m_mockupAction = nullptr;
 
     QMenu* m_fileMenu = nullptr;
+    QMenu* m_openRecentMenu = nullptr;
     QMenu* m_editMenu = nullptr;
     QMenu* m_layerMenu = nullptr;
     QMenu* m_viewMenu = nullptr;
