@@ -5,6 +5,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
+#include <QCheckBox>
 #include <QSlider>
 #include <QComboBox>
 #include <QProgressBar>
@@ -209,6 +210,39 @@ void AiBackgroundDialog::setupUi()
     toolsLayout->addStretch();
     mainLayout->addWidget(toolsCard);
 
+    // --- Refinamento do recorte: re-aplica o matte SEM nova inferencia ---
+    auto* refineCard = new QFrame(this);
+    refineCard->setObjectName(QStringLiteral("ToolOptionsBar"));
+    auto* refineLayout = new QHBoxLayout(refineCard);
+    refineLayout->setContentsMargins(10, 6, 10, 6);
+    refineLayout->setSpacing(10);
+
+    auto* refineTitle = new QLabel(m_i18n ? m_i18n->t("editor", "aiBackground.refineTitle") : QStringLiteral("Refinamento do Recorte:"), this);
+    refineTitle->setStyleSheet(QStringLiteral("color: #888; font-size: 11px; font-weight: bold;"));
+    refineLayout->addWidget(refineTitle);
+
+    auto* cutLabel = new QLabel(m_i18n ? m_i18n->t("editor", "aiBackground.cutLevel") : QStringLiteral("Nível do corte:"), this);
+    cutLabel->setStyleSheet(QStringLiteral("color: #BBB; font-size: 11px;"));
+    refineLayout->addWidget(cutLabel);
+
+    m_cutSlider = new QSlider(Qt::Horizontal, this);
+    m_cutSlider->setRange(20, 80);
+    m_cutSlider->setValue(50);
+    m_cutSlider->setFixedWidth(140);
+    refineLayout->addWidget(m_cutSlider);
+
+    m_specksCheck = new QCheckBox(m_i18n ? m_i18n->t("editor", "aiBackground.removeSpecks") : QStringLiteral("Limpar manchas"), this);
+    m_specksCheck->setChecked(true);
+    refineLayout->addWidget(m_specksCheck);
+    refineLayout->addStretch();
+
+    m_cutSlider->setEnabled(false);
+    m_specksCheck->setEnabled(false);
+    connect(m_cutSlider, &QSlider::sliderReleased, this, &AiBackgroundDialog::reapplyMatte);
+    connect(m_specksCheck, &QCheckBox::toggled, this, &AiBackgroundDialog::reapplyMatte);
+
+    mainLayout->addWidget(refineCard);
+
     // --- Canvas de Edição e Visualização ---
     m_editCanvas = new MaskEditCanvas(this);
     m_editCanvas->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -324,14 +358,20 @@ void AiBackgroundDialog::runAiInference()
     m_statusLabel->setText(m_i18n ? m_i18n->t("editor", "aiBackground.processing") : QStringLiteral("⏳ Processando imagem com a rede neural..."));
 
     const QImage input = m_originalImage;
+    const float cutLevel = m_cutSlider ? m_cutSlider->value() / 100.0f : 0.5f;
+    const bool removeSpecks = m_specksCheck ? m_specksCheck->isChecked() : true;
     QPointer<AiBackgroundDialog> self(this);
 
-    m_workerThread = QThread::create([self, input, modelPath]() {
+    m_workerThread = QThread::create([self, input, modelPath, cutLevel, removeSpecks]() {
         BackgroundRemover remover(modelPath);
         const std::atomic<bool>* cancelPtr = self ? &self->m_cancelRequested : nullptr;
-        QImage result = remover.removeBackground(input, cancelPtr);
+        MatteOptions options;
+        options.cutLevel = cutLevel;
+        options.removeSpecks = removeSpecks;
+        QImage rawAlpha;
+        QImage result = remover.removeBackground(input, cancelPtr, options, &rawAlpha);
 
-        QMetaObject::invokeMethod(qApp, [self, result]() {
+        QMetaObject::invokeMethod(qApp, [self, result, rawAlpha]() {
             if (!self)
                 return;
             self->m_progressBar->setVisible(false);
@@ -346,6 +386,9 @@ void AiBackgroundDialog::runAiInference()
             }
 
             self->m_processedImage = result;
+            self->m_rawAlpha = rawAlpha;
+            if (self->m_cutSlider) self->m_cutSlider->setEnabled(true);
+            if (self->m_specksCheck) self->m_specksCheck->setEnabled(true);
             self->m_editCanvas->setImage(self->m_originalImage, self->m_processedImage);
             self->m_statusLabel->setText(self->m_i18n ? self->m_i18n->t("editor", "aiBackground.done") : QStringLiteral("✓ Recorte concluído! Se desejar, faça ajustes com o pincel e clique em Aplicar."));
         });
@@ -353,6 +396,22 @@ void AiBackgroundDialog::runAiInference()
 
     connect(m_workerThread, &QThread::finished, m_workerThread, &QObject::deleteLater);
     m_workerThread->start();
+}
+
+void AiBackgroundDialog::reapplyMatte()
+{
+    if (m_rawAlpha.isNull())
+        return;
+    MatteOptions options;
+    if (m_cutSlider)
+        options.cutLevel = m_cutSlider->value() / 100.0f;
+    if (m_specksCheck)
+        options.removeSpecks = m_specksCheck->isChecked();
+    m_processedImage = BackgroundRemover::applyMatte(m_originalImage, m_rawAlpha, options);
+    m_editCanvas->setImage(m_originalImage, m_processedImage);
+    if (m_statusLabel)
+        m_statusLabel->setText(m_i18n ? m_i18n->t("editor", "aiBackground.refineNote")
+                                      : QStringLiteral("Ajustes aplicados ao vivo sobre o recorte da IA (edições do pincel são refeitas)."));
 }
 
 QImage AiBackgroundDialog::finalImage() const

@@ -194,7 +194,11 @@
         "browseModel": "Browse...",
         "selectModelTitle": "Select ONNX Model File",
         "processing": "⏳ Processing image with neural network...",
-        "done": "✓ Cutout completed! Adjust with the brush if needed and click Apply."
+        "done": "✓ Cutout completed! Adjust with the brush if needed and click Apply.",
+        "cutLevel": "Cut level:",
+        "removeSpecks": "Clean specks",
+        "refineTitle": "Cutout Refinement:",
+        "refineNote": "Applied live over the AI cutout (brush edits are redone)."
     },
     "canvas": {
         "context.aiDialog": "✨ Remove Background with AI...",

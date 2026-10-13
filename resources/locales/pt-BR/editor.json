@@ -194,7 +194,11 @@
         "browseModel": "Procurar...",
         "selectModelTitle": "Selecionar Arquivo de Modelo ONNX",
         "processing": "⏳ Processando imagem com a rede neural...",
-        "done": "✓ Recorte concluído! Se desejar, faça ajustes com o pincel e clique em Aplicar."
+        "done": "✓ Recorte concluído! Se desejar, faça ajustes com o pincel e clique em Aplicar.",
+        "cutLevel": "Nível do corte:",
+        "removeSpecks": "Limpar manchas",
+        "refineTitle": "Refinamento do Recorte:",
+        "refineNote": "Aplicado ao vivo sobre o recorte da IA (edições do pincel são refeitas)."
     },
     "canvas": {
         "context.aiDialog": "✨ Remover Fundo com IA...",

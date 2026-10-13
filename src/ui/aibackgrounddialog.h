@@ -6,6 +6,7 @@
 #include "maskeditcanvas.h"
 
 class QComboBox;
+class QCheckBox;
 class QSlider;
 class QLabel;
 class QPushButton;
@@ -35,6 +36,7 @@ protected:
 
 private slots:
     void runAiInference();
+    void reapplyMatte();
     void onModelChanged(int index);
     void onBrowseModel();
     void onBgColorChanged(int index);
@@ -46,6 +48,7 @@ private:
 
     QImage m_originalImage;
     QImage m_processedImage;
+    QImage m_rawAlpha;   // mascara bruta da IA p/ re-aplicar ao vivo
 
     MaskEditCanvas* m_editCanvas = nullptr;
     QComboBox* m_modelCombo = nullptr;
@@ -55,6 +58,8 @@ private:
     QPushButton* m_restoreBtn = nullptr;
     QPushButton* m_eraseBtn = nullptr;
     QSlider* m_brushSlider = nullptr;
+    QSlider* m_cutSlider = nullptr;
+    QCheckBox* m_specksCheck = nullptr;
     QLabel* m_brushValLabel = nullptr;
     QComboBox* m_bgColorCombo = nullptr;
     QPushButton* m_undoBtn = nullptr;
