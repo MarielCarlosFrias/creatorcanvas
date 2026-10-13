@@ -1,12 +1,19 @@
 #pragma once
 #include <QColor>
 #include <QFont>
+#include <QString>
 #include <QtGlobal>
 
 namespace cc::Design {
 
-// 8pt grid
-constexpr int S4 = 4, S8 = 8, S12 = 12, S16 = 16, S24 = 24, S32 = 32, S60 = 60;
+// ===== Espacamento (grid 4/8pt) =====
+constexpr int S2 = 2, S4 = 4, S6 = 6, S8 = 8, S12 = 12, S16 = 16;
+constexpr int S24 = 24, S32 = 32, S48 = 48, S60 = 60;
+
+// ===== Radius (maximo 6px — apps pro usam radius pequeno) =====
+constexpr int R2 = 2, R4 = 4, R6 = 6;
+
+// ===== Layout =====
 constexpr int DockMin = 240, DockMax = 360, DockIdeal = 280;
 constexpr int ToolbarH = 40, ToolOptionsH = 38, StatusH = 26;
 constexpr int CanvasPadding = 32;
@@ -17,31 +24,56 @@ inline int dockWidth(int width) { return qBound(DockMin, width / 5, DockMax); }
 inline int iconSize(int width) { return width < BreakXS ? 20 : width < BreakMD ? 24 : 28; }
 inline int fontSizeTitle(int width) { return width < BreakXS ? 18 : width < BreakSM ? 20 : 24; }
 inline int fontSizeBody(int width) { return width < BreakXS ? 10 : 11; }
-// Radius
-constexpr int R4 = 4, R6 = 6, R8 = 8, R12 = 12;
 
-// ── Dark palette (single source) ──
-inline QColor DWindow()      { return {0x10,0x12,0x16}; } // #101216
-inline QColor DSurface()     { return {0x17,0x1A,0x20}; } // #171a20
-inline QColor DElevated()    { return {0x21,0x22,0x26}; } // #212226
-inline QColor DCard()        { return {0x23,0x27,0x30}; } // #232730 unified
-inline QColor DBorder()      { return {0x2B,0x30,0x3C}; } // #2b303c
-inline QColor DBorderLight() { return {0x30,0x37,0x44}; } // #303744
-inline QColor DText()        { return {0xE7,0xE8,0xEA}; }
-inline QColor DTextMuted()   { return {0x8C,0x97,0xA8}; }
-inline QColor DTextDim()     { return {0x70,0x73,0x79}; }
-inline QColor Accent()       { return {0x2B,0x78,0xE4}; } // #2b78e4
-inline QColor AccentHover()  { return {0x3B,0x88,0xF4}; }
-inline QColor AccentPress()  { return {0x1A,0x64,0xCA}; }
+// ===== ELEVACAO DARK — 5 superficies + 1 hover + 1 UNICA borda =====
+inline QColor Base0()  { return {0x0e,0x10,0x13}; }  // 0: fundo da janela
+inline QColor Base1()  { return {0x14,0x16,0x1a}; }  // 1: chrome (toolbars)
+inline QColor Base2()  { return {0x1a,0x1d,0x21}; }  // 2: paineis, listas
+inline QColor Base3()  { return {0x22,0x25,0x2b}; }  // 3: cartoes, inputs
+inline QColor Hover()  { return {0x2a,0x2e,0x36}; }  // UNICO hover do app
+inline QColor Press()  { return {0x22,0x25,0x2b}; }
+inline QColor Line()   { return {0x2e,0x32,0x3b}; }  // UNICA borda do app
+inline QColor TextHi() { return {0xe8,0xea,0xee}; }
+inline QColor TextMd() { return {0x9a,0xa2,0xae}; }
+inline QColor TextLo() { return {0x64,0x6b,0x76}; }
 
-// ── Light palette ──
-inline QColor LWindow()   { return {0xF1,0xF3,0xF6}; }
-inline QColor LSurface()  { return {0xFF,0xFF,0xFF}; }
-inline QColor LBorder()   { return {0xD1,0xD5,0xDB}; }
-inline QColor LText()     { return {0x1E,0x22,0x2B}; }
-inline QColor LTextMuted(){ return {0x6B,0x72,0x80}; }
+// ===== ELEVACAO LIGHT =====
+inline QColor LBase0() { return {0xe9,0xec,0xf1}; }  // 0: fundo da janela
+inline QColor LBase1() { return {0xf3,0xf5,0xf8}; }  // 1: chrome
+inline QColor LBase2() { return {0xff,0xff,0xff}; }  // 2: paineis, listas
+inline QColor LBase3() { return {0xff,0xff,0xff}; }  // 3: cartoes, inputs
+inline QColor LHover() { return {0xe9,0xee,0xf6}; }
+inline QColor LPress() { return {0xdf,0xe4,0xec}; }
+inline QColor LLine()  { return {0xd4,0xd9,0xe0}; }
+inline QColor LTextHi(){ return {0x1a,0x1e,0x24}; }
+inline QColor LTextMd(){ return {0x4f,0x57,0x63}; }
+inline QColor LTextLo(){ return {0x98,0xa0,0xab}; }
 
-inline QFont fontTitle(int pt=14,bool bold=true){ QFont f; f.setPointSize(pt); f.setBold(bold); return f; }
-inline QFont fontBody(int pt=11){ QFont f; f.setPointSize(pt); return f; }
+// ===== ACCENT (compartilhado dark/light) =====
+inline QColor Accent()      { return {0x3d,0x7e,0xff}; }
+inline QColor AccentHover() { return {0x55,0x8e,0xff}; }
+inline QColor AccentPress() { return {0x2f,0x66,0xd4}; }
+
+// ===== ALIASES de compatibilidade (codigo existente continua compilando) =====
+inline QColor DWindow()      { return Base0(); }
+inline QColor DSurface()     { return Base1(); }
+inline QColor DElevated()    { return Base2(); }
+inline QColor DCard()        { return Base3(); }
+inline QColor DBorder()      { return Line(); }
+inline QColor DBorderLight() { return Line(); }
+inline QColor DText()        { return TextHi(); }
+inline QColor DTextMuted()   { return TextMd(); }
+inline QColor DTextDim()     { return TextLo(); }
+inline QColor LWindow()      { return LBase0(); }
+inline QColor LSurface()     { return LBase2(); }
+inline QColor LBorder()      { return LLine(); }
+inline QColor LText()        { return LTextHi(); }
+inline QColor LTextMuted()   { return LTextMd(); }
+
+// ===== Tipografia =====
+inline QFont fontCaption() { QFont f; f.setPointSize(10); return f; }
+inline QFont fontBody(int pt = 11) { QFont f; f.setPointSize(pt); return f; }
+inline QFont fontTitle(int pt = 14, bool bold = true)
+{ QFont f; f.setPointSize(pt); f.setBold(bold); return f; }
 
 } // namespace cc::Design
