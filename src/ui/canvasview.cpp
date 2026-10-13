@@ -12,6 +12,7 @@
 #include "tools/ScissorsTool.h"
 #include "tools/PaintTool.h"
 #include "tools/RasterTools.h"
+#include "designtokens.h"
 #include <QThread>
 
 #include <QContextMenuEvent>
@@ -510,7 +511,7 @@ void CanvasView::drawSelectionOverlay(QPainter* painter)
 
     painter->save();
     painter->resetTransform();
-    const QColor accent(0x2f, 0x6f, 0xed);
+    const QColor accent = Design::Accent();
 
     painter->setPen(QPen(accent, 1.0));
     painter->setBrush(Qt::NoBrush);
@@ -518,10 +519,11 @@ void CanvasView::drawSelectionOverlay(QPainter* painter)
     box << set.points[0] << set.points[1] << set.points[2] << set.points[3];
     painter->drawPolygon(box);
 
+    painter->setPen(QPen(accent, 1.0));
     for (int i = 0; i < 8; ++i) {
-        const QRectF rect(set.points[i] - QPointF(4, 4), QSizeF(8, 8));
-        painter->fillRect(rect, Qt::white);
-        painter->drawRect(rect);
+        const QRectF rect(set.points[i] - QPointF(3, 3), QSizeF(6, 6));
+        painter->setBrush(Qt::white);
+        painter->drawRoundedRect(rect, 2.0, 2.0);
     }
     painter->setBrush(accent);
     painter->drawEllipse(set.points[8], 4, 4);
@@ -557,18 +559,31 @@ void CanvasView::paintEvent(QPaintEvent*)
 
     QPainter painter(this);
     const bool dark = palette().color(QPalette::Window).value() < 128;
-    painter.fillRect(rect(), dark ? QColor(0x17, 0x18, 0x1b) : QColor(0xd1, 0xd5, 0xdb));
+    painter.fillRect(rect(), dark ? Design::DWindow() : Design::LWindow());
 
     if (!m_document)
         return;
+
+    painter.save();
+    painter.resetTransform();
+    const QRectF canvasOnDevice = docToDevice().mapRect(
+        QRectF(0, 0, m_document->width(), m_document->height()));
+    for (int spread = 8; spread >= 2; spread -= 2) {
+        const int alpha = 10 + (8 - spread) * 3;
+        painter.fillRect(canvasOnDevice.adjusted(-spread, -spread, spread, spread),
+                         QColor(0, 0, 0, alpha));
+    }
+    painter.restore();
 
     RenderOptions options;
     options.previewLayerId = m_previewLayerId;
     options.previewImage = m_previewImage;
     options.interactive = (m_gesture != Gesture::None) || m_panning;
-    if (!dark) {
-        options.canvasBorder = QColor(0x94, 0xa3, 0xb8);
-    }
+    options.checkerLight = dark ? QColor(0x2a, 0x2e, 0x39)
+                                : QColor(0xe5, 0xe9, 0xef);
+    options.checkerDark = dark ? QColor(0x1e, 0x22, 0x2a)
+                               : QColor(0xff, 0xff, 0xff);
+    options.canvasBorder = dark ? Design::DBorder() : Design::LBorder();
     renderDocument(*m_document, &painter, docToDevice(), options);
 
     // Mostra a seleção de pixels criada pela Varinha/Tesoura sem alterar a

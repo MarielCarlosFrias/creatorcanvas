@@ -95,9 +95,9 @@ void StartScreen::buildUi()
     mainLayout->addWidget(headerWidget);
 
     // --- 2. Action Buttons (Hero Row) ---
-    auto* actionRow = new QHBoxLayout;
-    actionRow->setSpacing(12);
-    actionRow->setAlignment(Qt::AlignCenter);
+    m_actionRow = new QHBoxLayout;
+    m_actionRow->setSpacing(12);
+    m_actionRow->setAlignment(Qt::AlignCenter);
 
     m_createDesignBtn = new QPushButton(this);
     m_createDesignBtn->setIcon(ThemeIcons::actionNewDocument());
@@ -177,10 +177,10 @@ void StartScreen::buildUi()
     connect(m_customSizeBtn, &QPushButton::clicked,
             this, &StartScreen::customCreateRequested);
 
-    actionRow->addWidget(m_createDesignBtn);
-    actionRow->addWidget(m_openProjectBtn);
-    actionRow->addWidget(m_customSizeBtn);
-    mainLayout->addLayout(actionRow);
+    m_actionRow->addWidget(m_createDesignBtn);
+    m_actionRow->addWidget(m_openProjectBtn);
+    m_actionRow->addWidget(m_customSizeBtn);
+    mainLayout->addLayout(m_actionRow);
 
     mainLayout->addSpacing(8);
 
@@ -383,7 +383,7 @@ void StartScreen::buildUi()
 
     // Page 0: List of recent files
     m_recentList = new QListWidget(this);
-    m_recentList->setIconSize(QSize(54, 40));
+    m_recentList->setIconSize(QSize(48, 36));
     m_recentList->setStyleSheet(QStringLiteral(
         "QListWidget {"
         "  background-color: %1;"
@@ -597,6 +597,29 @@ void StartScreen::relayoutCards()
     // windows.  Widgets are reused, so resizing does not rebuild the screen
     // or lose signal connections.
     const int columns = width() < 620 ? 1 : (width() < 980 ? 2 : 4);
+    const bool compact = width() < Design::BreakXS;
+
+    if (m_actionRow)
+        m_actionRow->setDirection(compact ? QBoxLayout::TopToBottom
+                                          : QBoxLayout::LeftToRight);
+    if (m_createDesignBtn && m_openProjectBtn && m_customSizeBtn) {
+        const int buttonHeight = compact ? 40 : 44;
+        m_createDesignBtn->setMinimumHeight(buttonHeight);
+        m_openProjectBtn->setMinimumHeight(buttonHeight);
+        m_customSizeBtn->setMinimumHeight(buttonHeight);
+        m_createDesignBtn->setMinimumWidth(compact ? 140 : 170);
+        m_openProjectBtn->setMinimumWidth(compact ? 140 : 160);
+    }
+    if (m_recentList)
+        m_recentList->setIconSize(compact ? QSize(40, 30) : QSize(48, 36));
+    if (m_cardsHost) {
+        for (QPushButton* card : m_cardsHost->findChildren<QPushButton*>())
+            card->setMinimumSize(compact ? QSize(140, 72) : QSize(180, 84));
+    }
+    if (m_templatesHost) {
+        for (QPushButton* card : m_templatesHost->findChildren<QPushButton*>())
+            card->setMinimumHeight(compact ? 140 : 178);
+    }
 
     auto relayout = [columns](QGridLayout* grid) {
         QVector<QWidget*> widgets;

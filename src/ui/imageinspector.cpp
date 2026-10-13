@@ -22,6 +22,7 @@
 #include <QSlider>
 #include <QVBoxLayout>
 #include <QTabWidget>
+#include <QTabBar>
 #include <QScrollArea>
 #include <QPainter>
 #include <QPainterPath>
@@ -244,6 +245,8 @@ void ImageInspector::buildUi()
     mainLayout->setSpacing(0);
 
     m_subTabs = new QTabWidget(this);
+    m_subTabs->tabBar()->setUsesScrollButtons(true);
+    m_subTabs->tabBar()->setElideMode(Qt::ElideRight);
     m_subTabs->setStyleSheet(QStringLiteral(
         "QTabWidget::pane { border-top: 1px solid #3c4048; background: #22252a; }"
         "QTabBar::tab { background: #2a2e35; color: #a0a6b2; font-weight: bold; font-size: 11px; padding: 6px 12px; margin-right: 2px; border-top-left-radius: 4px; border-top-right-radius: 4px; }"
@@ -254,6 +257,8 @@ void ImageInspector::buildUi()
     // --- ABA 1: Ajustes & Cor (Ajustes de Luz, Cores e Filtros Rápidos) ---
     auto* adjustScroll = new QScrollArea(this);
     adjustScroll->setWidgetResizable(true);
+    adjustScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    adjustScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     adjustScroll->setFrameShape(QFrame::NoFrame);
     auto* adjustContainer = new QWidget(adjustScroll);
     auto* adjustLayout = new QVBoxLayout(adjustContainer);
@@ -263,6 +268,8 @@ void ImageInspector::buildUi()
     // --- ABA 2: Estilos & Efeitos (fx) (Contorno, Sombra Projetada, Sombra Interna, Sobreposição) ---
     auto* fxScroll = new QScrollArea(this);
     fxScroll->setWidgetResizable(true);
+    fxScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    fxScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     fxScroll->setFrameShape(QFrame::NoFrame);
     auto* fxContainer = new QWidget(fxScroll);
     auto* fxTabContentLayout = new QVBoxLayout(fxContainer);
@@ -272,6 +279,8 @@ void ImageInspector::buildUi()
     // --- ABA 3: Avançado (Chroma Key, 3D Tilt, Mockup, Blend If) ---
     auto* advScroll = new QScrollArea(this);
     advScroll->setWidgetResizable(true);
+    advScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    advScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     advScroll->setFrameShape(QFrame::NoFrame);
     auto* advContainer = new QWidget(advScroll);
     auto* advLayout = new QVBoxLayout(advContainer);

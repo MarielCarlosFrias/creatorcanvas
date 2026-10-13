@@ -9,6 +9,7 @@
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QInputDialog>
+#include <QLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -16,6 +17,8 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSpinBox>
+#include <QTabBar>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 namespace cc {
@@ -38,10 +41,32 @@ NewDocumentDialog::NewDocumentDialog(I18nService* i18n, PresetStore* presets,
 
 void NewDocumentDialog::buildUi()
 {
+    setMinimumSize(480, 360);
+    setMaximumSize(800, 600);
+    resize(640, 480);
+    setSizeGripEnabled(true);
+
     auto* layout = new QVBoxLayout(this);
+    layout->setSizeConstraint(QLayout::SetMinimumSize);
+
+    m_categoryTabs = new QTabBar(this);
+    m_categoryTabs->setExpanding(false);
+    m_categoryTabs->setUsesScrollButtons(true);
+    m_categoryTabs->setElideMode(Qt::ElideRight);
+    m_categories = {QStringLiteral("Todos"), QStringLiteral("YouTube"),
+                    QStringLiteral("Instagram"), QStringLiteral("TikTok"),
+                    QStringLiteral("Custom")};
+    for (const QString& category : m_categories)
+        m_categoryTabs->addTab(category);
+    connect(m_categoryTabs, &QTabBar::currentChanged,
+            this, &NewDocumentDialog::onCategoryChanged);
+    layout->addWidget(m_categoryTabs);
 
     m_presetsTitle = new QLabel(this);
     m_presetList = new QListWidget(this);
+    m_presetList->setMaximumHeight(120);
+    m_presetList->setSizePolicy(QSizePolicy::Expanding,
+                                QSizePolicy::Preferred);
     connect(m_presetList, &QListWidget::currentItemChanged,
             this, [this](QListWidgetItem* current) { applyPreset(current); });
     layout->addWidget(m_presetsTitle);
@@ -61,8 +86,28 @@ void NewDocumentDialog::buildUi()
     m_heightLabel = new QLabel(this);
     m_dpiLabel = new QLabel(this);
     auto* form = new QFormLayout;
+    form->setRowWrapPolicy(QFormLayout::WrapLongRows);
     form->addRow(m_widthLabel, m_width);
     form->addRow(m_heightLabel, m_height);
+
+    auto* orientationRow = new QHBoxLayout;
+    m_orientPortrait = new QToolButton(this);
+    m_orientLandscape = new QToolButton(this);
+    m_orientPortrait->setText(QStringLiteral("Portrait"));
+    m_orientLandscape->setText(QStringLiteral("Landscape"));
+    m_orientPortrait->setCheckable(true);
+    m_orientLandscape->setCheckable(true);
+    m_orientPortrait->setAutoExclusive(true);
+    m_orientLandscape->setAutoExclusive(true);
+    m_orientLandscape->setChecked(true);
+    connect(m_orientPortrait, &QToolButton::clicked,
+            this, &NewDocumentDialog::swapOrientation);
+    connect(m_orientLandscape, &QToolButton::clicked,
+            this, &NewDocumentDialog::swapOrientation);
+    orientationRow->addWidget(m_orientPortrait);
+    orientationRow->addWidget(m_orientLandscape);
+    orientationRow->addStretch();
+    form->addRow(QStringLiteral("Orientation"), orientationRow);
     form->addRow(m_dpiLabel, m_dpi);
     layout->addLayout(form);
 
@@ -103,7 +148,21 @@ void NewDocumentDialog::populatePresetList()
     m_presetList->clear();
     if (!m_presets)
         return;
+    const QString category = m_categoryTabs && m_categoryTabs->currentIndex() >= 0
+        ? m_categoryTabs->tabText(m_categoryTabs->currentIndex()) : QStringLiteral("Todos");
     for (const DocumentPreset& preset : m_presets->all()) {
+        const QString name = preset.name;
+        bool visible = category == QStringLiteral("Todos");
+        if (category == QStringLiteral("YouTube"))
+            visible = name.contains(QStringLiteral("youtube"), Qt::CaseInsensitive);
+        else if (category == QStringLiteral("Instagram"))
+            visible = name.contains(QStringLiteral("instagram"), Qt::CaseInsensitive);
+        else if (category == QStringLiteral("TikTok"))
+            visible = name.contains(QStringLiteral("tiktok"), Qt::CaseInsensitive);
+        else if (category == QStringLiteral("Custom"))
+            visible = preset.category.compare(QStringLiteral("Custom"), Qt::CaseInsensitive) == 0;
+        if (!visible)
+            continue;
         auto* item = new QListWidgetItem(
             QStringLiteral("%1  (%2 × %3)")
                 .arg(preset.name,
@@ -112,6 +171,21 @@ void NewDocumentDialog::populatePresetList()
             m_presetList);
         item->setData(Qt::UserRole, QVariant::fromValue(preset));
     }
+}
+
+void NewDocumentDialog::onCategoryChanged(int)
+{
+    populatePresetList();
+}
+
+void NewDocumentDialog::swapOrientation()
+{
+    const bool portrait = m_orientPortrait && m_orientPortrait->isChecked();
+    if (portrait == (m_height->value() > m_width->value()))
+        return;
+    const int width = m_width->value();
+    m_width->setValue(m_height->value());
+    m_height->setValue(width);
 }
 
 void NewDocumentDialog::applyPreset(QListWidgetItem* current)

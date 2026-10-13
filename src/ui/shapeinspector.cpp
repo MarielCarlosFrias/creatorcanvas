@@ -14,6 +14,8 @@
 #include <QPushButton>
 #include <QComboBox>
 #include <QVBoxLayout>
+#include <QScrollArea>
+#include <QFrame>
 
 namespace cc {
 
@@ -142,11 +144,15 @@ void ShapeInspector::refresh()
 // Constrói os componentes da interface gráfica do inspetor
 void ShapeInspector::buildUi()
 {
-    auto* mainLayout = new QVBoxLayout(this);
+    auto* outerLayout = new QVBoxLayout(this);
+    outerLayout->setContentsMargins(0, 0, 0, 0);
+    auto* content = new QWidget(this);
+    auto* mainLayout = new QVBoxLayout(content);
     mainLayout->setContentsMargins(4, 4, 4, 4);
 
-    m_groupBox = new QGroupBox(this);
+    m_groupBox = new QGroupBox(content);
     m_formLayout = new QFormLayout(m_groupBox);
+    m_formLayout->setRowWrapPolicy(QFormLayout::WrapLongRows);
 
     // 0. Seletor de Tipo de Forma (Shape Kind)
     m_kindLabel = new QLabel(m_groupBox);
@@ -275,6 +281,14 @@ void ShapeInspector::buildUi()
 
     mainLayout->addWidget(m_groupBox);
     mainLayout->addStretch();
+    auto* scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setWidget(content);
+    outerLayout->addWidget(scroll);
 }
 
 // Atualiza todos os textos com base no serviço de internacionalização

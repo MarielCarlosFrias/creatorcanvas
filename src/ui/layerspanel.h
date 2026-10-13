@@ -13,6 +13,7 @@ class QSpinBox;
 class QLabel;
 class QToolButton;
 class QLineEdit;
+class QResizeEvent;
 
 namespace cc {
 
@@ -58,6 +59,7 @@ private:
     void retranslateUi();
     void rebuild();
     void changeEvent(QEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
     void updateControlsForSelection();
     void onCurrentRowChanged(int row);
     void onItemDoubleClicked(QListWidgetItem* item);

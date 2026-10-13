@@ -10,6 +10,9 @@
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QLabel>
+#include <QLayout>
+#include <QScrollArea>
+#include <QFrame>
 #include <QVBoxLayout>
 
 namespace cc {
@@ -20,8 +23,15 @@ SettingsDialog::SettingsDialog(I18nService* i18n, SettingsService* settings,
     , m_i18n(i18n)
     , m_settings(settings)
 {
+    setMinimumSize(480, 360);
+    setMaximumSize(900, 700);
+    resize(620, 500);
+    setSizeGripEnabled(true);
     auto* layout = new QVBoxLayout(this);
-    auto* form = new QFormLayout;
+    layout->setSizeConstraint(QLayout::SetMinimumSize);
+    auto* formContainer = new QWidget(this);
+    auto* form = new QFormLayout(formContainer);
+    form->setRowWrapPolicy(QFormLayout::WrapLongRows);
 
     m_language = new QComboBox(this);
     if (m_i18n) {
@@ -87,7 +97,13 @@ SettingsDialog::SettingsDialog(I18nService* i18n, SettingsService* settings,
     m_snapToGrid->setChecked(m_settings && m_settings->snapToGridByDefault());
     form->addRow(QString(), m_snapToGrid);
 
-    layout->addLayout(form);
+    auto* formScroll = new QScrollArea(this);
+    formScroll->setWidgetResizable(true);
+    formScroll->setFrameShape(QFrame::NoFrame);
+    formScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    formScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    formScroll->setWidget(formContainer);
+    layout->addWidget(formScroll, 1);
 
     auto* buttons = new QDialogButtonBox(
         QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);

@@ -417,6 +417,12 @@ QJsonObject buildProjectJson(const Document& doc)
         layers.append(writeLayer(*child));
     root.insert(QLatin1String(kLayersKey), layers);
 
+    // Keep the active pixel selection in the native project as well. This is
+    // intentionally separate from layer alpha masks: a selection is editor
+    // state and must be restored without changing the image pixels.
+    if (!doc.pixelSelection().isNull())
+        root.insert(QStringLiteral("pixelSelection"), QStringLiteral("selection.png"));
+
     if (!doc.layerComps().empty()) {
         QJsonArray compsArr;
         for (const auto& comp : doc.layerComps()) {
@@ -521,6 +527,31 @@ bool writeArchive(const QString& filePath, const QByteArray& jsonBytes,
                 assetsOk = false;
                 break;
             }
+        }
+    }
+
+    if (assetsOk && !doc.pixelSelection().isNull()) {
+        QByteArray selectionBytes;
+        QBuffer buffer(&selectionBytes);
+        buffer.open(QIODevice::WriteOnly);
+        // Encode the alpha values in a regular RGBA PNG. Some PNG plugins
+        // treat Qt's Alpha8 format as an indexed image and lose its values.
+        const QImage source = doc.pixelSelection().convertToFormat(QImage::Format_Alpha8);
+        QImage encodedSelection(source.size(), QImage::Format_ARGB32);
+        for (int y = 0; y < source.height(); ++y) {
+            const uchar* src = source.constScanLine(y);
+            QRgb* dst = reinterpret_cast<QRgb*>(encodedSelection.scanLine(y));
+            for (int x = 0; x < source.width(); ++x)
+                dst[x] = qRgba(255, 255, 255, src[x]);
+        }
+        const bool encoded = encodedSelection.save(&buffer, "PNG");
+        buffer.close();
+        if (!encoded || selectionBytes.isEmpty()
+            || !mz_zip_writer_add_mem(&zip, "selection.png",
+                                      selectionBytes.constData(),
+                                      static_cast<size_t>(selectionBytes.size()),
+                                      MZ_DEFAULT_LEVEL)) {
+            assetsOk = false;
         }
     }
 
@@ -666,6 +697,27 @@ public:
             if (!readLayer(value.toObject(), error, &layer))
                 return nullptr;
             doc->addLayer(std::move(layer));
+        }
+
+        const QString selectionFile = m_root.value(QStringLiteral("pixelSelection")).toString();
+        if (!selectionFile.isEmpty()) {
+            QImage selection;
+            const QByteArray selectionBytes = m_media.value(selectionFile);
+            if (selectionBytes.isEmpty() || !selection.loadFromData(selectionBytes, "PNG")) {
+                *error = QStringLiteral("The project contains an unreadable pixel selection.");
+                return nullptr;
+            }
+            if (selection.size() != QSize(width, height)) {
+                *error = QStringLiteral("The project contains a pixel selection with invalid dimensions.");
+                return nullptr;
+            }
+            QImage restored(selection.size(), QImage::Format_Alpha8);
+            for (int y = 0; y < selection.height(); ++y) {
+                uchar* dst = restored.scanLine(y);
+                for (int x = 0; x < selection.width(); ++x)
+                    dst[x] = qAlpha(selection.pixel(x, y));
+            }
+            doc->setPixelSelection(std::move(restored));
         }
 
         if (m_root.contains(QStringLiteral("layerComps"))) {
@@ -1060,7 +1112,8 @@ std::unique_ptr<Document> loadDocument(const QString& filePath,
                 if (entryName == QLatin1String(kEntryName))
                     bytes = entryBytes;
                 else if (entryName.startsWith(QLatin1String("media/"))
-                         || entryName.startsWith(QLatin1String("masks/")))
+                         || entryName.startsWith(QLatin1String("masks/"))
+                         || entryName == QLatin1String("selection.png"))
                     media.insert(entryName, entryBytes);
                 mz_free(data);
             }

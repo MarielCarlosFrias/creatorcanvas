@@ -13,6 +13,7 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLayout>
 #include <QPainter>
 #include <QRadioButton>
 #include <QSpinBox>
@@ -39,8 +40,12 @@ ExportDialog::ExportDialog(const Document* doc, I18nService* i18n,
 
 void ExportDialog::buildUi()
 {
+    setMinimumSize(520, 360);
+    setMaximumSize(1200, 900);
     resize(700, 440);
+    setSizeGripEnabled(true);
     auto* mainLayout = new QHBoxLayout(this);
+    mainLayout->setSizeConstraint(QLayout::SetMinimumSize);
     mainLayout->setSpacing(16);
 
     // Left Column: Configuration Controls
@@ -68,6 +73,7 @@ void ExportDialog::buildUi()
 
     auto* form = new QFormLayout;
     form->setSpacing(10);
+    form->setRowWrapPolicy(QFormLayout::WrapLongRows);
 
     // Presets dropdown
     m_presetCombo = new QComboBox(this);
@@ -130,7 +136,9 @@ void ExportDialog::buildUi()
     frameLayout->setAlignment(Qt::AlignCenter);
 
     m_previewImageLabel = new QLabel(previewFrame);
-    m_previewImageLabel->setFixedSize(300, 240);
+    m_previewImageLabel->setMinimumSize(160, 120);
+    m_previewImageLabel->setSizePolicy(QSizePolicy::Expanding,
+                                       QSizePolicy::Expanding);
     m_previewImageLabel->setAlignment(Qt::AlignCenter);
     frameLayout->addWidget(m_previewImageLabel);
 

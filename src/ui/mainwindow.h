@@ -14,6 +14,7 @@
 #include "services/recentfiles.h"
 
 class QCloseEvent;
+class QResizeEvent;
 class QDockWidget;
 class QLabel;
 class QMenu;
@@ -52,6 +53,7 @@ public:
 
 protected:
     void closeEvent(QCloseEvent*) override;
+    void resizeEvent(QResizeEvent*) override;
 
 private:
     void createDefaultDocument();

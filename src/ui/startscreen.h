@@ -6,6 +6,7 @@
 #include "core/document/NewDocumentSpec.h"
 
 class QLabel;
+class QBoxLayout;
 class QListWidget;
 class QListWidgetItem;
 class QPushButton;
@@ -68,6 +69,7 @@ private:
     QPushButton* m_createDesignBtn = nullptr;
     QPushButton* m_openProjectBtn = nullptr;
     QPushButton* m_customSizeBtn = nullptr;
+    QBoxLayout* m_actionRow = nullptr;
 
     // Visual Cards Section
     QLabel* m_popularLabel = nullptr;

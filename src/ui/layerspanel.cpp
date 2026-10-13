@@ -18,6 +18,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
+#include <QResizeEvent>
 #include <QMenu>
 #include <QMimeData>
 #include <QMouseEvent>
@@ -242,6 +243,18 @@ LayersPanel::LayersPanel(I18nService* i18n, CommandStack* history, QWidget* pare
     retranslateUi();
 }
 
+void LayersPanel::resizeEvent(QResizeEvent* event)
+{
+    QWidget::resizeEvent(event);
+    const bool narrow = width() <= 220;
+    const QSize iconSize = narrow ? QSize(18, 18) : QSize(22, 22);
+    const QSize buttonSize = narrow ? QSize(26, 26) : QSize(30, 30);
+    for (QToolButton* button : findChildren<QToolButton*>()) {
+        button->setIconSize(iconSize);
+        button->setFixedSize(buttonSize);
+    }
+}
+
 void LayersPanel::setHistory(CommandStack* history)
 {
     m_history = history;
@@ -315,6 +328,7 @@ void LayersPanel::buildUi()
     // --- 2. Lista interativa de camadas com miniaturas ---
     m_list = new LayerListWidget(this);
     m_list->setObjectName(QStringLiteral("LayerListWidget"));
+    m_list->setUniformItemSizes(true);
     m_list->setDragDropMode(QAbstractItemView::DropOnly);
     m_list->setAcceptDrops(true);
     m_list->setDropIndicatorShown(true);

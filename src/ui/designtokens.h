@@ -1,11 +1,22 @@
 #pragma once
 #include <QColor>
 #include <QFont>
+#include <QtGlobal>
 
 namespace cc::Design {
 
 // 8pt grid
 constexpr int S4 = 4, S8 = 8, S12 = 12, S16 = 16, S24 = 24, S32 = 32, S60 = 60;
+constexpr int DockMin = 240, DockMax = 360, DockIdeal = 280;
+constexpr int ToolbarH = 40, ToolOptionsH = 38, StatusH = 26;
+constexpr int CanvasPadding = 32;
+constexpr int BreakXS = 620, BreakSM = 980, BreakMD = 1440;
+
+inline int responsiveMargin(int width) { return qBound(16, width / 20, 60); }
+inline int dockWidth(int width) { return qBound(DockMin, width / 5, DockMax); }
+inline int iconSize(int width) { return width < BreakXS ? 20 : width < BreakMD ? 24 : 28; }
+inline int fontSizeTitle(int width) { return width < BreakXS ? 18 : width < BreakSM ? 20 : 24; }
+inline int fontSizeBody(int width) { return width < BreakXS ? 10 : 11; }
 // Radius
 constexpr int R4 = 4, R6 = 6, R8 = 8, R12 = 12;
 

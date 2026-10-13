@@ -20,6 +20,8 @@
 #include <QSpinBox>
 #include <QToolButton>
 #include <QVBoxLayout>
+#include <QScrollArea>
+#include <QFrame>
 #include <QTimer>
 #include <QEvent>
 
@@ -193,7 +195,10 @@ void TextInspector::touch()
 
 void TextInspector::buildUi()
 {
-    auto* layout = new QVBoxLayout(this);
+    auto* outerLayout = new QVBoxLayout(this);
+    outerLayout->setContentsMargins(0, 0, 0, 0);
+    auto* content = new QWidget(this);
+    auto* layout = new QVBoxLayout(content);
     layout->setContentsMargins(2, 2, 2, 2);
     layout->setSpacing(4);
 
@@ -201,6 +206,7 @@ void TextInspector::buildUi()
     m_typographySection = new CollapsibleSection(QStringLiteral("Typography"), true, this);
     auto* typoForm = new QFormLayout;
     typoForm->setContentsMargins(4, 4, 4, 4);
+    typoForm->setRowWrapPolicy(QFormLayout::WrapLongRows);
 
     m_content = new QPlainTextEdit(this);
     m_content->setMaximumHeight(70);
@@ -405,6 +411,14 @@ void TextInspector::buildUi()
     layout->addWidget(m_perspectiveSection);
 
     layout->addStretch();
+    auto* scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setWidget(content);
+    outerLayout->addWidget(scroll);
 
     // Helper lambda to apply text effects with undo/redo
     auto applyEffects = [this](auto mutator) {

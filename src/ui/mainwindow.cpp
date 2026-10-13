@@ -23,6 +23,7 @@
 #include "ui/shapeinspector.h"
 #include "ui/imageinspector.h"
 #include "ui/historypanel.h"
+#include "ui/designtokens.h"
 #include "ui/recoverydialog.h"
 #include "ui/themeicons.h"
 
@@ -52,6 +53,7 @@
 #include <QStyle>
 #include <QScrollArea>
 #include <QTabWidget>
+#include <QTabBar>
 
 namespace cc {
 namespace {
@@ -167,6 +169,73 @@ void MainWindow::closeEvent(QCloseEvent* event)
         return;
     }
     event->accept();
+}
+
+void MainWindow::resizeEvent(QResizeEvent* event)
+{
+    QMainWindow::resizeEvent(event);
+
+    // At laptop widths keep the inspector usable, but give the canvas more
+    // room than the desktop minimum dock width allows.
+    const bool compact = width() < Design::BreakSM;
+    // The application minimum window width is 800 px, so the XS breakpoint
+    // is not reachable in practice. Treat the 800 px layout as compact too.
+    const bool ultraCompact = width() <= 840;
+    const int dock = Design::dockWidth(width());
+    for (QDockWidget* panel : {m_layersDock, m_textDock, m_shapeDock,
+                               m_imageDock, m_historyDock}) {
+        if (panel)
+            panel->setMinimumWidth(ultraCompact ? 180 : (compact ? 200 : dock));
+    }
+
+    // In the narrowest layout a tabified stack of five inspectors consumes
+    // the canvas. Keep Layers as the single compact panel; the other panels
+    // remain available from Window > Panels when the window is enlarged.
+    if (ultraCompact) {
+        if (m_layersDock)
+            m_layersDock->setVisible(true);
+        for (QDockWidget* panel : {m_textDock, m_shapeDock, m_imageDock,
+                                   m_historyDock}) {
+            if (panel)
+                panel->hide();
+        }
+    }
+
+    if (m_languageLabel)
+        m_languageLabel->setVisible(!compact);
+    if (m_versionLabel)
+        m_versionLabel->setVisible(!compact);
+
+    if (m_toolsBar) {
+        // Em janelas pequenas a lista vertical não cabe inteira. Colocamos
+        // as ferramentas numa segunda linha superior, separada por uma
+        // quebra explícita, para não sobrepor QuickAccess ou ToolOptions.
+        const Qt::Orientation desired = width() < Design::BreakSM
+            ? Qt::Horizontal : Qt::Vertical;
+        if (m_toolsBar->orientation() != desired) {
+            if (desired == Qt::Horizontal)
+                addToolBarBreak(Qt::TopToolBarArea);
+            m_toolsBar->setOrientation(desired);
+            addToolBar(desired == Qt::Horizontal ? Qt::TopToolBarArea
+                                                 : Qt::LeftToolBarArea,
+                       m_toolsBar);
+        }
+        m_toolsBar->setIconSize(QSize(Design::iconSize(width()),
+                                      Design::iconSize(width())));
+    }
+    if (m_quickToolBar) {
+        const int quickIcon = qBound(18, Design::iconSize(width()), 24);
+        m_quickToolBar->setIconSize(QSize(quickIcon, quickIcon));
+    }
+
+    if (m_toolOptionsBar)
+        m_toolOptionsBar->setVisible(width() >= 800
+                                     && m_toolOptionsStack
+                                     && m_toolOptionsStack->currentIndex() != 0);
+
+    QTimer::singleShot(0, this, [this] {
+        if (m_canvas) m_canvas->fitToViewport();
+    });
 }
 
 void MainWindow::attachDocument(std::unique_ptr<Document> doc, const QString& filePath)
@@ -386,6 +455,9 @@ void MainWindow::buildCentralWidget()
                     m_toolOptionsStack->setCurrentIndex(static_cast<int>(tool));
                 if (m_toolOptionsBar)
                     m_toolOptionsBar->setVisible(tool != CanvasTool::Select);
+                QTimer::singleShot(150, this, [this] {
+                    if (m_canvas) m_canvas->fitToViewport();
+                });
                 if (m_toolGroup) {
                     switch (tool) {
                     case CanvasTool::Select:
@@ -470,7 +542,7 @@ void MainWindow::buildLayersDock()
 {
     m_layersPanel = new LayersPanel(m_i18n, m_history.get(), this);
     m_layersDock = new QDockWidget(QString(), this);
-    m_layersDock->setMinimumWidth(240);
+    m_layersDock->setMinimumWidth(Design::dockWidth(width()));
     m_layersDock->setWidget(m_layersPanel);
     m_layersDock->setFeatures(QDockWidget::DockWidgetMovable
                               | QDockWidget::DockWidgetFloatable);
@@ -509,7 +581,7 @@ void MainWindow::buildLayersDock()
 
     m_textInspector = new TextInspector(m_i18n, m_document, m_history.get(), this);
     m_textDock = new QDockWidget(QString(), this);
-    m_textDock->setMinimumWidth(240);
+    m_textDock->setMinimumWidth(Design::dockWidth(width()));
     m_textDock->setWidget(m_textInspector);
     m_textDock->setFeatures(QDockWidget::DockWidgetMovable
                             | QDockWidget::DockWidgetFloatable);
@@ -519,7 +591,7 @@ void MainWindow::buildLayersDock()
     // Cria o inspetor de formas e tabifica junto ao inspetor de texto na barra lateral direita
     m_shapeInspector = new ShapeInspector(m_i18n, m_document, m_history.get(), this);
     m_shapeDock = new QDockWidget(QString(), this);
-    m_shapeDock->setMinimumWidth(240);
+    m_shapeDock->setMinimumWidth(Design::dockWidth(width()));
     m_shapeDock->setWidget(m_shapeInspector);
     m_shapeDock->setFeatures(QDockWidget::DockWidgetMovable
                              | QDockWidget::DockWidgetFloatable);
@@ -529,7 +601,7 @@ void MainWindow::buildLayersDock()
     // Cria o inspetor de imagens e tabifica junto aos outros inspetores na barra lateral direita
     m_imageInspector = new ImageInspector(m_i18n, m_document, m_history.get(), this);
     m_imageDock = new QDockWidget(QString(), this);
-    m_imageDock->setMinimumWidth(240);
+    m_imageDock->setMinimumWidth(Design::dockWidth(width()));
     m_imageDock->setWidget(m_imageInspector);
     m_imageDock->setFeatures(QDockWidget::DockWidgetMovable
                              | QDockWidget::DockWidgetFloatable);
@@ -555,7 +627,7 @@ void MainWindow::buildLayersDock()
     // Cria o painel de Histórico (Undo/Redo visual estilo Photoshop)
     m_historyPanel = new HistoryPanel(m_i18n, m_history.get(), this);
     m_historyDock = new QDockWidget(QString(), this);
-    m_historyDock->setMinimumWidth(240);
+    m_historyDock->setMinimumWidth(Design::dockWidth(width()));
     m_historyDock->setWidget(m_historyPanel);
     m_historyDock->setFeatures(QDockWidget::DockWidgetMovable
                               | QDockWidget::DockWidgetFloatable);
@@ -570,6 +642,10 @@ void MainWindow::buildLayersDock()
     tabifyDockWidget(m_layersDock, m_imageDock);
     tabifyDockWidget(m_layersDock, m_historyDock);
     setTabPosition(Qt::RightDockWidgetArea, QTabWidget::North);
+    for (QTabBar* tabs : findChildren<QTabBar*>()) {
+        tabs->setUsesScrollButtons(true);
+        tabs->setElideMode(Qt::ElideRight);
+    }
 
     // Recalculate the canvas zoom after a dock changes visibility.  Without
     // this, opening an inspector can leave the document partly underneath
@@ -1078,7 +1154,7 @@ void MainWindow::buildToolBars()
     m_toolsBar->setFloatable(false);
     m_toolsBar->setOrientation(Qt::Vertical);
     m_toolsBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
-    m_toolsBar->setIconSize(QSize(24, 24));
+    m_toolsBar->setIconSize(QSize(22, 22));
     addToolBar(Qt::LeftToolBarArea, m_toolsBar);
 
     m_toolSelectAction->setIcon(ThemeIcons::toolSelect());
