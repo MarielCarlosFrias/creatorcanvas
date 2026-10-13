@@ -41,6 +41,16 @@
         "twitch_offline.title": "Tela Offline / Intervalo (Twitch Stream)",
         "twitch_offline.desc": "Tela 16:9 estilizada com gradiente escuro, redes sociais e aviso de transmissão encerrada.",
         "yt_true_crime.title": "Documentário & Mistério / True Crime (YouTube)",
-        "yt_true_crime.desc": "Thumbnail 16:9 de alto impacto dramático com tipografia gigante, contraste sombrio e badge de tempo."
+        "yt_true_crime.desc": "Thumbnail 16:9 de alto impacto dramático com tipografia gigante, contraste sombrio e badge de tempo.",
+        "showcase_vs.title": "Personagem em Duelo (VS) — Showcase",
+        "showcase_vs.desc": "Recorte IA + fundo radial com glow + faixa em gradiente — o combo clássico das thumbnails de gaming.",
+        "showcase_kinetic.title": "Tipografia Cinética — Showcase",
+        "showcase_kinetic.desc": "Texto com gradiente, letras vazadas e tilt 3D — demonstra os efeitos de tipografia do CreatorCanvas.",
+        "showcase_before_after.title": "Antes / Depois — Showcase",
+        "showcase_before_after.desc": "Comparação lado a lado com seta em gradiente e badges — ideal para transformações e filtros.",
+        "showcase_tutorial.title": "Tutorial com Setas — Showcase",
+        "showcase_tutorial.desc": "Moldura de screenshot, seta curva, anel de destaque e balão de fala para vídeos de tutorial.",
+        "showcase_chroma.title": "Chroma Cut — Showcase",
+        "showcase_chroma.desc": "Fundo verde para chroma key, texto atrás do sujeito e slots de recorte com a IA."
     }
 }

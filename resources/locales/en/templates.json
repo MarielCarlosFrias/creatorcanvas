@@ -41,6 +41,16 @@
         "twitch_offline.title": "Stream Offline / Intermission (Twitch)",
         "twitch_offline.desc": "Stylized 16:9 dark gradient screen with social handles and offline notification.",
         "yt_true_crime.title": "Documentary & Mystery / True Crime (YouTube)",
-        "yt_true_crime.desc": "High-impact dramatic 16:9 thumbnail with massive typography, dark contrast and duration badge."
+        "yt_true_crime.desc": "High-impact dramatic 16:9 thumbnail with massive typography, dark contrast and duration badge.",
+        "showcase_vs.title": "Character Duel (VS) — Showcase",
+        "showcase_vs.desc": "AI cutout + radial glow background + gradient strip — the classic gaming thumbnail combo.",
+        "showcase_kinetic.title": "Kinetic Typography — Showcase",
+        "showcase_kinetic.desc": "Gradient text, hollow letters and 3D tilt — demonstrates CreatorCanvas text effects.",
+        "showcase_before_after.title": "Before / After — Showcase",
+        "showcase_before_after.desc": "Side-by-side comparison with gradient arrow and badges — great for transformations.",
+        "showcase_tutorial.title": "Tutorial with Arrows — Showcase",
+        "showcase_tutorial.desc": "Screenshot frame, curved arrow, highlight ring and speech bubble for tutorial videos.",
+        "showcase_chroma.title": "Chroma Cut — Showcase",
+        "showcase_chroma.desc": "Green screen for chroma key, text behind the subject and AI cutout slots."
     }
 }

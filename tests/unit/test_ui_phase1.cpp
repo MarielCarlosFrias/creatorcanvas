@@ -159,7 +159,7 @@ private slots:
         i18n.loadAvailableLanguages();
 
         const auto templates = TemplateFactory::availableTemplates();
-        QCOMPARE(templates.size(), 11);
+        QCOMPARE(templates.size(), 16);
 
         for (const auto& tmpl : templates) {
             auto doc = TemplateFactory::createTemplate(tmpl.kind, &i18n);

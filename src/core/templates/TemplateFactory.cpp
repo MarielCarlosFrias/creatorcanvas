@@ -128,6 +128,56 @@ QVector<TemplateMeta> TemplateFactory::availableTemplates()
             QStringLiteral("Thumbnail 16:9 de alto impacto dramático com tipografia gigante, contraste sombrio e badge de tempo."),
             1280, 720,
             QStringLiteral("YouTube")
+        },
+        {
+            TemplateKind::ShowcaseCharacterVS,
+            QStringLiteral("showcase_character_vs"),
+            QStringLiteral("builtIn.showcase_vs.title"),
+            QStringLiteral("Personagem em Duelo (VS) — Showcase"),
+            QStringLiteral("builtIn.showcase_vs.desc"),
+            QStringLiteral("Recorte IA + fundo radial com glow + faixa em gradiente — o combo clássico das thumbnails de gaming."),
+            1280, 720,
+            QStringLiteral("YouTube")
+        },
+        {
+            TemplateKind::ShowcaseKineticType,
+            QStringLiteral("showcase_kinetic_type"),
+            QStringLiteral("builtIn.showcase_kinetic.title"),
+            QStringLiteral("Tipografia Cinética — Showcase"),
+            QStringLiteral("builtIn.showcase_kinetic.desc"),
+            QStringLiteral("Texto com gradiente, letras vazadas e tilt 3D — demonstra os efeitos de tipografia do CreatorCanvas."),
+            1280, 720,
+            QStringLiteral("YouTube")
+        },
+        {
+            TemplateKind::ShowcaseBeforeAfter,
+            QStringLiteral("showcase_before_after"),
+            QStringLiteral("builtIn.showcase_before_after.title"),
+            QStringLiteral("Antes / Depois — Showcase"),
+            QStringLiteral("builtIn.showcase_before_after.desc"),
+            QStringLiteral("Comparação lado a lado com seta em gradiente e badges — ideal para transformações e filtros."),
+            1280, 720,
+            QStringLiteral("YouTube")
+        },
+        {
+            TemplateKind::ShowcaseTutorialArrows,
+            QStringLiteral("showcase_tutorial_arrows"),
+            QStringLiteral("builtIn.showcase_tutorial.title"),
+            QStringLiteral("Tutorial com Setas — Showcase"),
+            QStringLiteral("builtIn.showcase_tutorial.desc"),
+            QStringLiteral("Moldura de screenshot, seta curva, anel de destaque e balão de fala para vídeos de tutorial."),
+            1280, 720,
+            QStringLiteral("YouTube")
+        },
+        {
+            TemplateKind::ShowcaseChromaCut,
+            QStringLiteral("showcase_chroma_cut"),
+            QStringLiteral("builtIn.showcase_chroma.title"),
+            QStringLiteral("Chroma Cut — Showcase"),
+            QStringLiteral("builtIn.showcase_chroma.desc"),
+            QStringLiteral("Fundo verde para chroma key, texto atrás do sujeito e slots de recorte com a IA."),
+            1280, 720,
+            QStringLiteral("YouTube")
         }
     };
 }
@@ -1054,6 +1104,510 @@ std::unique_ptr<Document> TemplateFactory::createTemplate(TemplateKind kind, I18
         timeText->align = TextAlignment::Center;
         timeText->transform.position = QPointF(1200, 675);
         doc->addLayer(std::move(timeText));
+
+        return doc;
+    }
+
+    case TemplateKind::ShowcaseCharacterVS: {
+        auto doc = std::make_unique<Document>(1280, 720, 96);
+
+        // Fundo radial com glow central (agora de verdade!)
+        auto bg = std::make_unique<BackgroundLayer>();
+        bg->name = QStringLiteral("Fundo Glow Radial");
+        bg->gradient.enabled = true;
+        bg->gradient.kind = GradientKind::Radial;
+        bg->gradient.center = QPointF(0.5, 0.42);
+        bg->gradient.radius = 0.95;
+        bg->gradient.stops = {{0.0f, QColor(0x1c, 0x2f, 0x5e)},
+                              {1.0f, QColor(0x04, 0x06, 0x0d)}};
+        doc->addLayer(std::move(bg));
+
+        // Slots dos personagens (recorte IA)
+        auto slotA = std::make_unique<ShapeLayer>();
+        slotA->name = QStringLiteral("Slot Personagem A");
+        slotA->kind = ShapeKind::RoundedRect;
+        slotA->points = makeRectPolygon(380, 420);
+        slotA->cornerRadius = 18.0;
+        slotA->fill = QColor(0x10, 0x13, 0x1c);
+        slotA->stroke = QColor(0x3a, 0x4a, 0x6b);
+        slotA->strokeWidth = 3.0;
+        slotA->transform.position = QPointF(300, 360);
+        doc->addLayer(std::move(slotA));
+
+        auto slotB = std::make_unique<ShapeLayer>();
+        slotB->name = QStringLiteral("Slot Personagem B");
+        slotB->kind = ShapeKind::RoundedRect;
+        slotB->points = makeRectPolygon(380, 420);
+        slotB->cornerRadius = 18.0;
+        slotB->fill = QColor(0x10, 0x13, 0x1c);
+        slotB->stroke = QColor(0xf1, 0x07, 0xa3);
+        slotB->strokeWidth = 3.0;
+        slotB->transform.position = QPointF(980, 360);
+        doc->addLayer(std::move(slotB));
+
+        // VS gigante com outline + glow
+        auto vs = std::make_unique<TextLayer>();
+        vs->name = QStringLiteral("VS");
+        vs->content = QStringLiteral("VS");
+        vs->sizePt = 140;
+        vs->bold = true;
+        vs->color = Qt::white;
+        vs->effects.outline.enabled = true;
+        vs->effects.outline.color = QColor(0xf1, 0x07, 0xa3);
+        vs->effects.outline.width = 10.0;
+        vs->effects.shadow.enabled = true;
+        vs->effects.shadow.color = QColor(0, 0, 0, 220);
+        vs->effects.shadow.blur = 12.0;
+        vs->effects.shadow.offsetX = 6.0;
+        vs->effects.shadow.offsetY = 6.0;
+        vs->transform.position = QPointF(640, 340);
+        doc->addLayer(std::move(vs));
+
+        // Faixa inferior em gradiente
+        auto strip = std::make_unique<ShapeLayer>();
+        strip->name = QStringLiteral("Faixa Gradiente");
+        strip->kind = ShapeKind::RoundedRect;
+        strip->points = makeRectPolygon(1280, 100);
+        strip->cornerRadius = 0.0;
+        strip->gradient.enabled = true;
+        strip->gradient.kind = GradientKind::Linear;
+        strip->gradient.angleDeg = 0.0;
+        strip->gradient.stops = {{0.0f, QColor(0x7b, 0x2f, 0xf7)},
+                                 {1.0f, QColor(0xf1, 0x07, 0xa3)}};
+        strip->transform.position = QPointF(640, 690);
+        doc->addLayer(std::move(strip));
+
+        auto hint = std::make_unique<TextLayer>();
+        hint->name = QStringLiteral("Dica Faixa");
+        hint->content = QStringLiteral("Recorte seus personagens com a IA e solte nos slots");
+        hint->sizePt = 22;
+        hint->bold = true;
+        hint->color = Qt::white;
+        hint->transform.position = QPointF(640, 690);
+        doc->addLayer(std::move(hint));
+
+        auto placeA = std::make_unique<TextLayer>();
+        placeA->name = QStringLiteral("Placeholder A");
+        placeA->content = QStringLiteral("Personagem A");
+        placeA->sizePt = 24;
+        placeA->color = QColor(0x8e, 0x9a, 0xb5);
+        placeA->transform.position = QPointF(300, 600);
+        doc->addLayer(std::move(placeA));
+
+        auto placeB = std::make_unique<TextLayer>();
+        placeB->name = QStringLiteral("Placeholder B");
+        placeB->content = QStringLiteral("Personagem B");
+        placeB->sizePt = 24;
+        placeB->color = QColor(0xc5, 0x86, 0xd8);
+        placeB->transform.position = QPointF(980, 600);
+        doc->addLayer(std::move(placeB));
+
+        auto badge = std::make_unique<ShapeLayer>();
+        badge->name = QStringLiteral("Badge EP");
+        badge->kind = ShapeKind::Badge;
+        badge->points = makeRectPolygon(170, 60);
+        badge->fill = QColor(0xff, 0x2d, 0x55);
+        badge->transform.position = QPointF(150, 120);
+        doc->addLayer(std::move(badge));
+
+        auto badgeText = std::make_unique<TextLayer>();
+        badgeText->name = QStringLiteral("Texto EP");
+        badgeText->content = QStringLiteral("EP. 5");
+        badgeText->sizePt = 30;
+        badgeText->bold = true;
+        badgeText->color = Qt::white;
+        badgeText->transform.position = QPointF(150, 120);
+        doc->addLayer(std::move(badgeText));
+
+        return doc;
+    }
+
+    case TemplateKind::ShowcaseKineticType: {
+        auto doc = std::make_unique<Document>(1280, 720, 96);
+
+        auto bg = std::make_unique<BackgroundLayer>();
+        bg->name = QStringLiteral("Fundo Gradiente Noturno");
+        bg->gradient.enabled = true;
+        bg->gradient.kind = GradientKind::Linear;
+        bg->gradient.angleDeg = 90.0;
+        bg->gradient.stops = {{0.0f, QColor(0x0f, 0x0c, 0x29)},
+                              {0.5f, QColor(0x24, 0x24, 0x3e)},
+                              {1.0f, QColor(0x30, 0x2b, 0x63)}};
+        doc->addLayer(std::move(bg));
+
+        auto kinetic = std::make_unique<TextLayer>();
+        kinetic->name = QStringLiteral("Texto Gradiente");
+        kinetic->content = QStringLiteral("KINETIC");
+        kinetic->sizePt = 96;
+        kinetic->bold = true;
+        kinetic->color = Qt::white;
+        kinetic->effects.gradient.enabled = true;
+        kinetic->effects.gradient.startColor = QColor(0xff, 0xd2, 0x00);
+        kinetic->effects.gradient.endColor = QColor(0xff, 0x2d, 0x00);
+        kinetic->effects.gradient.angleDeg = 0.0;
+        kinetic->effects.outline.enabled = true;
+        kinetic->effects.outline.color = Qt::black;
+        kinetic->effects.outline.width = 6.0;
+        kinetic->transform.position = QPointF(420, 130);
+        doc->addLayer(std::move(kinetic));
+
+        auto hollow = std::make_unique<TextLayer>();
+        hollow->name = QStringLiteral("Texto Vazado");
+        hollow->content = QStringLiteral("HOLLOW");
+        hollow->sizePt = 96;
+        hollow->bold = true;
+        hollow->color = QColor(0xf8, 0xfa, 0xfc);
+        hollow->effects.hollow = true;
+        hollow->effects.outline.enabled = true;
+        hollow->effects.outline.color = QColor(0xf8, 0xfa, 0xfc);
+        hollow->effects.outline.width = 3.0;
+        hollow->transform.position = QPointF(420, 280);
+        doc->addLayer(std::move(hollow));
+
+        auto tilt = std::make_unique<TextLayer>();
+        tilt->name = QStringLiteral("Texto Tilt 3D");
+        tilt->content = QStringLiteral("TILT 3D");
+        tilt->sizePt = 96;
+        tilt->bold = true;
+        tilt->color = Qt::white;
+        tilt->effects.gradient.enabled = true;
+        tilt->effects.gradient.startColor = QColor(0x22, 0xd3, 0xee);
+        tilt->effects.gradient.endColor = QColor(0xa8, 0x55, 0xf7);
+        tilt->effects.outline.enabled = true;
+        tilt->effects.outline.color = Qt::black;
+        tilt->effects.outline.width = 4.0;
+        tilt->transform.shearX = 0.22;
+        tilt->transform.shearY = -0.08;
+        tilt->transform.position = QPointF(420, 450);
+        doc->addLayer(std::move(tilt));
+
+        auto star1 = std::make_unique<ShapeLayer>();
+        star1->name = QStringLiteral("Estrela 1");
+        star1->kind = ShapeKind::Star;
+        star1->points = makeRectPolygon(90, 90);
+        star1->fill = QColor(0xff, 0xd2, 0x00);
+        star1->transform.rotationDeg = 12.0;
+        star1->transform.position = QPointF(1120, 140);
+        doc->addLayer(std::move(star1));
+
+        auto star2 = std::make_unique<ShapeLayer>();
+        star2->name = QStringLiteral("Estrela 2");
+        star2->kind = ShapeKind::Star;
+        star2->points = makeRectPolygon(90, 90);
+        star2->fill = QColor(0xff, 0xd2, 0x00);
+        star2->transform.rotationDeg = -18.0;
+        star2->transform.scaleX = 0.6;
+        star2->transform.scaleY = 0.6;
+        star2->transform.position = QPointF(1190, 250);
+        doc->addLayer(std::move(star2));
+
+        auto caption = std::make_unique<TextLayer>();
+        caption->name = QStringLiteral("Legenda");
+        caption->content = QStringLiteral("Gradiente • Vazado • Perspectiva 3D — tudo em camadas de texto");
+        caption->sizePt = 20;
+        caption->color = QColor(0xcb, 0xd5, 0xe1);
+        caption->transform.position = QPointF(640, 660);
+        doc->addLayer(std::move(caption));
+
+        return doc;
+    }
+
+    case TemplateKind::ShowcaseBeforeAfter: {
+        auto doc = std::make_unique<Document>(1280, 720, 96);
+
+        auto bg = std::make_unique<BackgroundLayer>();
+        bg->name = QStringLiteral("Fundo Escuro");
+        bg->fill = QColor(0x0b, 0x0e, 0x14);
+        doc->addLayer(std::move(bg));
+
+        auto title = std::make_unique<TextLayer>();
+        title->name = QStringLiteral("Título");
+        title->content = QStringLiteral("TRANSFORMAÇÃO");
+        title->sizePt = 64;
+        title->bold = true;
+        title->color = Qt::white;
+        title->effects.outline.enabled = true;
+        title->effects.outline.color = QColor(0x22, 0xd3, 0xee);
+        title->effects.outline.width = 5.0;
+        title->transform.position = QPointF(640, 90);
+        doc->addLayer(std::move(title));
+
+        auto slotBefore = std::make_unique<ShapeLayer>();
+        slotBefore->name = QStringLiteral("Slot Antes");
+        slotBefore->kind = ShapeKind::RoundedRect;
+        slotBefore->points = makeRectPolygon(480, 340);
+        slotBefore->cornerRadius = 16.0;
+        slotBefore->fill = QColor(0x1a, 0x1f, 0x29);
+        slotBefore->stroke = QColor(0x47, 0x55, 0x69);
+        slotBefore->strokeWidth = 3.0;
+        slotBefore->transform.position = QPointF(330, 380);
+        doc->addLayer(std::move(slotBefore));
+
+        auto slotAfter = std::make_unique<ShapeLayer>();
+        slotAfter->name = QStringLiteral("Slot Depois");
+        slotAfter->kind = ShapeKind::RoundedRect;
+        slotAfter->points = makeRectPolygon(480, 340);
+        slotAfter->cornerRadius = 16.0;
+        slotAfter->fill = QColor(0x14, 0x26, 0x1b);
+        slotAfter->stroke = QColor(0x22, 0xc5, 0x5e);
+        slotAfter->strokeWidth = 3.0;
+        slotAfter->transform.position = QPointF(950, 380);
+        doc->addLayer(std::move(slotAfter));
+
+        auto before = std::make_unique<TextLayer>();
+        before->name = QStringLiteral("Antes");
+        before->content = QStringLiteral("ANTES");
+        before->sizePt = 44;
+        before->bold = true;
+        before->color = QColor(0x94, 0xa3, 0xb8);
+        before->transform.position = QPointF(330, 380);
+        doc->addLayer(std::move(before));
+
+        auto after = std::make_unique<TextLayer>();
+        after->name = QStringLiteral("Depois");
+        after->content = QStringLiteral("DEPOIS");
+        after->sizePt = 44;
+        after->bold = true;
+        after->color = QColor(0x22, 0xc5, 0x5e);
+        after->effects.outline.enabled = true;
+        after->effects.outline.color = Qt::white;
+        after->effects.outline.width = 3.0;
+        after->transform.position = QPointF(950, 380);
+        doc->addLayer(std::move(after));
+
+        auto arrow = std::make_unique<ShapeLayer>();
+        arrow->name = QStringLiteral("Seta Gradiente");
+        arrow->kind = ShapeKind::ArrowRight;
+        arrow->points = makeRectPolygon(170, 90);
+        arrow->gradient.enabled = true;
+        arrow->gradient.kind = GradientKind::Linear;
+        arrow->gradient.angleDeg = 0.0;
+        arrow->gradient.stops = {{0.0f, QColor(0xff, 0xd2, 0x00)},
+                                 {1.0f, QColor(0xff, 0x6a, 0x00)}};
+        arrow->transform.position = QPointF(640, 380);
+        doc->addLayer(std::move(arrow));
+
+        auto badge = std::make_unique<ShapeLayer>();
+        badge->name = QStringLiteral("Badge Filtros");
+        badge->kind = ShapeKind::Badge;
+        badge->points = makeRectPolygon(300, 58);
+        badge->fill = QColor(0x16, 0xa3, 0x4a);
+        badge->transform.position = QPointF(640, 600);
+        doc->addLayer(std::move(badge));
+
+        auto badgeText = std::make_unique<TextLayer>();
+        badgeText->name = QStringLiteral("Texto Filtros");
+        badgeText->content = QStringLiteral("FILTROS 1-CLIQUE");
+        badgeText->sizePt = 24;
+        badgeText->bold = true;
+        badgeText->color = Qt::white;
+        badgeText->transform.position = QPointF(640, 600);
+        doc->addLayer(std::move(badgeText));
+
+        auto hint = std::make_unique<TextLayer>();
+        hint->name = QStringLiteral("Dica");
+        hint->content = QStringLiteral("P&B, Vivid Pop, Cyberpunk e mais no inspetor de Imagem");
+        hint->sizePt = 18;
+        hint->color = QColor(0x94, 0xa3, 0xb8);
+        hint->transform.position = QPointF(640, 690);
+        doc->addLayer(std::move(hint));
+
+        return doc;
+    }
+
+    case TemplateKind::ShowcaseTutorialArrows: {
+        auto doc = std::make_unique<Document>(1280, 720, 96);
+
+        auto bg = std::make_unique<BackgroundLayer>();
+        bg->name = QStringLiteral("Fundo Azulado");
+        bg->gradient.enabled = true;
+        bg->gradient.kind = GradientKind::Linear;
+        bg->gradient.angleDeg = 90.0;
+        bg->gradient.stops = {{0.0f, QColor(0x0a, 0x0f, 0x1e)},
+                              {1.0f, QColor(0x16, 0x23, 0x3f)}};
+        doc->addLayer(std::move(bg));
+
+        auto frame = std::make_unique<ShapeLayer>();
+        frame->name = QStringLiteral("Moldura Screenshot");
+        frame->kind = ShapeKind::RoundedRect;
+        frame->points = makeRectPolygon(760, 430);
+        frame->cornerRadius = 16.0;
+        frame->fill = QColor(0x0d, 0x14, 0x20);
+        frame->stroke = QColor(0x3b, 0x82, 0xf6);
+        frame->strokeWidth = 2.0;
+        frame->transform.position = QPointF(560, 330);
+        doc->addLayer(std::move(frame));
+
+        auto topBar = std::make_unique<ShapeLayer>();
+        topBar->name = QStringLiteral("Barra do App");
+        topBar->kind = ShapeKind::RoundedRect;
+        topBar->points = makeRectPolygon(720, 44);
+        topBar->cornerRadius = 8.0;
+        topBar->fill = QColor(0x1d, 0x29, 0x3b);
+        topBar->transform.position = QPointF(560, 140);
+        doc->addLayer(std::move(topBar));
+
+        auto sidebar = std::make_unique<ShapeLayer>();
+        sidebar->name = QStringLiteral("Painel Lateral");
+        sidebar->kind = ShapeKind::Rectangle;
+        sidebar->points = makeRectPolygon(150, 300);
+        sidebar->fill = QColor(0x16, 0x23, 0x3f);
+        sidebar->transform.position = QPointF(255, 345);
+        doc->addLayer(std::move(sidebar));
+
+        auto content = std::make_unique<ShapeLayer>();
+        content->name = QStringLiteral("Area Conteudo");
+        content->kind = ShapeKind::Rectangle;
+        content->points = makeRectPolygon(500, 280);
+        content->fill = QColor(0x11, 0x1a, 0x2c);
+        content->transform.position = QPointF(625, 355);
+        doc->addLayer(std::move(content));
+
+        auto ring = std::make_unique<ShapeLayer>();
+        ring->name = QStringLiteral("Destaque");
+        ring->kind = ShapeKind::Ellipse;
+        ring->points = makeRectPolygon(170, 170);
+        ring->stroke = QColor(0xef, 0x44, 0x44);
+        ring->strokeWidth = 6.0;
+        ring->transform.position = QPointF(800, 430);
+        doc->addLayer(std::move(ring));
+
+        auto arrow = std::make_unique<ShapeLayer>();
+        arrow->name = QStringLiteral("Seta Curva");
+        arrow->kind = ShapeKind::ArrowCurved;
+        arrow->points = makeRectPolygon(230, 230);
+        arrow->fill = QColor(0xf5, 0x9e, 0x0b);
+        arrow->transform.rotationDeg = 190.0;
+        arrow->transform.position = QPointF(950, 590);
+        doc->addLayer(std::move(arrow));
+
+        auto bubble = std::make_unique<ShapeLayer>();
+        bubble->name = QStringLiteral("Balao de Fala");
+        bubble->kind = ShapeKind::SpeechBubble;
+        bubble->points = makeRectPolygon(280, 100);
+        bubble->fill = QColor(0xf8, 0xfa, 0xfc);
+        bubble->transform.position = QPointF(220, 560);
+        doc->addLayer(std::move(bubble));
+
+        auto bubbleText = std::make_unique<TextLayer>();
+        bubbleText->name = QStringLiteral("Texto Balao");
+        bubbleText->content = QStringLiteral("Clique aqui!");
+        bubbleText->sizePt = 24;
+        bubbleText->bold = true;
+        bubbleText->color = QColor(0x0f, 0x17, 0x2a);
+        bubbleText->transform.position = QPointF(220, 555);
+        doc->addLayer(std::move(bubbleText));
+
+        const QColor stepColor(0xf5, 0x9e, 0x0b);
+        const QPointF stepPos[3] = {QPointF(120, 190), QPointF(120, 380), QPointF(120, 560)};
+        for (int i = 0; i < 3; ++i) {
+            auto step = std::make_unique<ShapeLayer>();
+            step->name = QStringLiteral("Passo %1").arg(i + 1);
+            step->kind = ShapeKind::Badge;
+            step->points = makeRectPolygon(58, 58);
+            step->fill = stepColor;
+            step->transform.position = stepPos[i];
+            doc->addLayer(std::move(step));
+
+            auto stepText = std::make_unique<TextLayer>();
+            stepText->name = QStringLiteral("Texto Passo %1").arg(i + 1);
+            stepText->content = QString::number(i + 1);
+            stepText->sizePt = 28;
+            stepText->bold = true;
+            stepText->color = QColor(0x0f, 0x17, 0x2a);
+            stepText->transform.position = stepPos[i];
+            doc->addLayer(std::move(stepText));
+        }
+
+        auto caption = std::make_unique<TextLayer>();
+        caption->name = QStringLiteral("Legenda");
+        caption->content = QStringLiteral("Setas, balões e anéis de destaque para tutoriais");
+        caption->sizePt = 20;
+        caption->color = QColor(0x94, 0xa3, 0xb8);
+        caption->transform.position = QPointF(640, 690);
+        doc->addLayer(std::move(caption));
+
+        return doc;
+    }
+
+    case TemplateKind::ShowcaseChromaCut: {
+        auto doc = std::make_unique<Document>(1280, 720, 96);
+
+        auto bg = std::make_unique<BackgroundLayer>();
+        bg->name = QStringLiteral("Fundo Neutro");
+        bg->fill = QColor(0x0f, 0x11, 0x17);
+        doc->addLayer(std::move(bg));
+
+        // Zona de fundo verde (chroma)
+        auto greenZone = std::make_unique<ShapeLayer>();
+        greenZone->name = QStringLiteral("Zona Verde (Chroma)");
+        greenZone->kind = ShapeKind::Rectangle;
+        greenZone->points = makeRectPolygon(620, 400);
+        greenZone->fill = QColor(0x00, 0xb1, 0x40);
+        greenZone->transform.position = QPointF(330, 330);
+        doc->addLayer(std::move(greenZone));
+
+        // Texto ATRAS do sujeito (adicionado antes do slot = fica atras)
+        auto behind = std::make_unique<TextLayer>();
+        behind->name = QStringLiteral("Texto Atras do Sujeito");
+        behind->content = QStringLiteral("SPONSOR");
+        behind->sizePt = 84;
+        behind->bold = true;
+        behind->color = QColor(0xf1, 0xc4, 0x0f);
+        behind->effects.outline.enabled = true;
+        behind->effects.outline.color = Qt::black;
+        behind->effects.outline.width = 6.0;
+        behind->transform.position = QPointF(330, 235);
+        doc->addLayer(std::move(behind));
+
+        // Slot da personagem por cima do texto
+        auto frame = std::make_unique<ShapeLayer>();
+        frame->name = QStringLiteral("Slot Foto");
+        frame->kind = ShapeKind::RoundedRect;
+        frame->points = makeRectPolygon(360, 460);
+        frame->cornerRadius = 16.0;
+        frame->fill = QColor(0x17, 0x1b, 0x26);
+        frame->stroke = QColor(0xe2, 0xe8, 0xf0);
+        frame->strokeWidth = 3.0;
+        frame->transform.position = QPointF(330, 330);
+        doc->addLayer(std::move(frame));
+
+        auto frameText = std::make_unique<TextLayer>();
+        frameText->name = QStringLiteral("Placeholder Foto");
+        frameText->content = QStringLiteral("Sua foto aqui");
+        frameText->sizePt = 20;
+        frameText->color = QColor(0x8e, 0x9a, 0xb5);
+        frameText->transform.position = QPointF(330, 330);
+        doc->addLayer(std::move(frameText));
+
+        auto title = std::make_unique<TextLayer>();
+        title->name = QStringLiteral("Titulo Chroma");
+        title->content = QStringLiteral("CHROMA KEY");
+        title->sizePt = 64;
+        title->bold = true;
+        title->color = Qt::white;
+        title->effects.outline.enabled = true;
+        title->effects.outline.color = QColor(0x00, 0xb1, 0x40);
+        title->effects.outline.width = 6.0;
+        title->transform.position = QPointF(950, 170);
+        doc->addLayer(std::move(title));
+
+        auto steps = std::make_unique<TextLayer>();
+        steps->name = QStringLiteral("Passos");
+        steps->content = QStringLiteral("1. Fundo verde uniforme\n2. Chroma Cut no inspetor\n3. Texto atrás do sujeito");
+        steps->sizePt = 24;
+        steps->color = QColor(0xcb, 0xd5, 0xe1);
+        steps->align = TextAlignment::Left;
+        steps->transform.position = QPointF(900, 420);
+        doc->addLayer(std::move(steps));
+
+        auto hint = std::make_unique<TextLayer>();
+        hint->name = QStringLiteral("Dica");
+        hint->content = QStringLiteral("A Varinha Mágica e o Recorte IA também removem fundos");
+        hint->sizePt = 18;
+        hint->color = QColor(0x8b, 0x93, 0xa5);
+        hint->transform.position = QPointF(950, 650);
+        doc->addLayer(std::move(hint));
 
         return doc;
     }

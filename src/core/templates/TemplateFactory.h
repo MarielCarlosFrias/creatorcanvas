@@ -20,7 +20,12 @@ enum class TemplateKind {
     YouTubeShortsTrending,
     InstagramCarouselSlide,
     TwitchStreamOffline,
-    YouTubeTrueCrimeMystery
+    YouTubeTrueCrimeMystery,
+    ShowcaseCharacterVS,
+    ShowcaseKineticType,
+    ShowcaseBeforeAfter,
+    ShowcaseTutorialArrows,
+    ShowcaseChromaCut
 };
 
 struct TemplateMeta {
