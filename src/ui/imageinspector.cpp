@@ -24,6 +24,7 @@
 #include <QTabWidget>
 #include <QTabBar>
 #include <QScrollArea>
+#include <QStyle>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPolygonF>
@@ -247,12 +248,7 @@ void ImageInspector::buildUi()
     m_subTabs = new QTabWidget(this);
     m_subTabs->tabBar()->setUsesScrollButtons(true);
     m_subTabs->tabBar()->setElideMode(Qt::ElideRight);
-    m_subTabs->setStyleSheet(QStringLiteral(
-        "QTabWidget::pane { border-top: 1px solid #3c4048; background: #22252a; }"
-        "QTabBar::tab { background: #2a2e35; color: #a0a6b2; font-weight: bold; font-size: 11px; padding: 6px 12px; margin-right: 2px; border-top-left-radius: 4px; border-top-right-radius: 4px; }"
-        "QTabBar::tab:selected { background: #323740; color: #ffffff; border-bottom: 2px solid #2b78e4; }"
-        "QTabBar::tab:hover { background: #2f343d; color: #e0e0e0; }"
-    ));
+    // Estilo via QSS global (QTabBar/QTabWidget::pane) — tema reage em runtime
 
     // --- ABA 1: Ajustes & Cor (Ajustes de Luz, Cores e Filtros Rápidos) ---
     auto* adjustScroll = new QScrollArea(this);
@@ -551,7 +547,7 @@ void ImageInspector::buildUi()
     m_chromaPipetteBtn = new QPushButton(QStringLiteral(" Pipeta"), this);
     m_chromaPipetteBtn->setIcon(ThemeIcons::toolEyedropper());
     m_chromaPipetteBtn->setToolTip(QStringLiteral("Clique na pipeta e depois clique diretamente no fundo da imagem na tela para capturar o verde exato!"));
-    m_chromaPipetteBtn->setStyleSheet(QStringLiteral("background: #3a3f4b; color: white; font-weight: bold; font-size: 11px; padding: 3px 6px; border-radius: 3px;"));
+    m_chromaPipetteBtn->setObjectName(QStringLiteral("PresetChip"));
 
     auto* greenBtn = new QPushButton(QStringLiteral("Verde"), this);
     greenBtn->setStyleSheet(QStringLiteral("background: #00ff00; color: black; font-size: 10px; font-weight: bold; border-radius: 3px; padding: 2px 4px;"));
@@ -592,7 +588,7 @@ void ImageInspector::buildUi()
 
     auto* chromaBtnRow = new QHBoxLayout;
     m_chromaApplyBtn = new QPushButton(QStringLiteral("Remover Fundo"), this);
-    m_chromaApplyBtn->setStyleSheet(QStringLiteral("background: #2b78e4; color: white; font-weight: bold; padding: 5px; border-radius: 4px;"));
+    m_chromaApplyBtn->setObjectName(QStringLiteral("PrimaryButton"));
     m_chromaResetBtn = new QPushButton(QStringLiteral("Restaurar"), this);
     chromaBtnRow->addWidget(m_chromaApplyBtn);
     chromaBtnRow->addWidget(m_chromaResetBtn);
@@ -659,7 +655,7 @@ void ImageInspector::buildUi()
 
     auto* btnRow = new QHBoxLayout;
     m_applyAdjustBtn = new QPushButton(this);
-    m_applyAdjustBtn->setStyleSheet(QStringLiteral("background-color: #2b78e4; color: white; font-weight: bold; padding: 5px; border-radius: 4px;"));
+    m_applyAdjustBtn->setObjectName(QStringLiteral("PrimaryButton"));
     m_resetAdjustBtn = new QPushButton(this);
     btnRow->addWidget(m_applyAdjustBtn);
     btnRow->addWidget(m_resetAdjustBtn);
@@ -704,10 +700,10 @@ void ImageInspector::buildUi()
     mockupLayout->setContentsMargins(4, 4, 4, 4);
     m_mockupHint = new QLabel(QStringLiteral("Importe uma logo e marque uma área livre sobre a imagem. Clique duas vezes ou pressione Enter para confirmar."), this);
     m_mockupHint->setWordWrap(true);
-    m_mockupHint->setStyleSheet(QStringLiteral("color: #8f96a3;"));
+    m_mockupHint->setObjectName(QStringLiteral("HintLabel"));
     mockupLayout->addWidget(m_mockupHint);
     m_mockupButton = new QPushButton(QStringLiteral("Importar logo e criar mockup"), this);
-    m_mockupButton->setStyleSheet(QStringLiteral("background:#2b78e4;color:white;font-weight:bold;padding:6px;border-radius:4px;"));
+    m_mockupButton->setObjectName(QStringLiteral("PrimaryButton"));
     mockupLayout->addWidget(m_mockupButton);
     m_mockupSection->setContentLayout(mockupLayout);
     advLayout->addWidget(m_mockupSection);
@@ -970,7 +966,9 @@ void ImageInspector::buildUi()
     });
     connect(m_chromaPipetteBtn, &QPushButton::clicked, this, [this] {
         m_pickingChromaColor = true;
-        m_chromaPipetteBtn->setStyleSheet(QStringLiteral("background: #2b78e4; color: white; font-weight: bold; font-size: 11px; padding: 3px 6px; border-radius: 3px;"));
+        m_chromaPipetteBtn->setProperty("active", true);
+        m_chromaPipetteBtn->style()->unpolish(m_chromaPipetteBtn);
+        m_chromaPipetteBtn->style()->polish(m_chromaPipetteBtn);
         emit eyedropperRequested();
     });
     connect(greenBtn, &QPushButton::clicked, this, [updateChromaColorBtn] { updateChromaColorBtn(QColor(0, 255, 0)); });
@@ -1054,7 +1052,9 @@ void ImageInspector::setChromaKeyColor(const QColor& color)
         m_chromaKeyColorBtn->setStyleSheet(QStringLiteral("background: %1; border: 1px solid #555; border-radius: 3px;").arg(color.name()));
     }
     if (m_chromaPipetteBtn) {
-        m_chromaPipetteBtn->setStyleSheet(QStringLiteral("background: #3a3f4b; color: white; font-weight: bold; font-size: 11px; padding: 3px 6px; border-radius: 3px;"));
+        m_chromaPipetteBtn->setProperty("active", false);
+        m_chromaPipetteBtn->style()->unpolish(m_chromaPipetteBtn);
+        m_chromaPipetteBtn->style()->polish(m_chromaPipetteBtn);
     }
     m_pickingChromaColor = false;
 }

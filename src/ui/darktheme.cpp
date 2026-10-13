@@ -85,6 +85,7 @@ QString buildQss(const Skin& k)
     s += "QTabBar::tab { background: transparent; color: " + k.textMd + "; padding: 7px 12px; margin: 0; border: none; border-bottom: 2px solid transparent; min-width: 48px; }";
     s += "QTabBar::tab:hover { color: " + k.textHi + "; }";
     s += "QTabBar::tab:selected { color: " + k.accent + "; border-bottom: 2px solid " + k.accent + "; font-weight: 600; }";
+    s += "QTabWidget::pane { border-top: 1px solid " + k.line + "; }";
 
     // -- Docks --
     s += "QDockWidget { color: " + k.textHi + "; border: 1px solid " + k.line + "; }";
@@ -131,6 +132,7 @@ QString buildQss(const Skin& k)
     s += "QPushButton#TemplateCard:hover { border-color: " + k.accent + "; }";
     s += "QPushButton#PresetChip { background-color: " + k.base3 + "; border: 1px solid " + k.line + "; border-radius: 4px; padding: 5px 10px; font-size: 11px; color: " + k.textHi + "; }";
     s += "QPushButton#PresetChip:hover { background-color: " + k.hov + "; border-color: " + k.accent + "; }";
+    s += "QPushButton#PresetChip[active=\"true\"] { background-color: " + k.accent + "; color: #ffffff; }";
     s += "QPushButton#ColorSwatch { border: 1px solid " + k.line + "; border-radius: 4px; }";
 
     // -- Labels de secao (des-inline-izacao da Fase C) --
@@ -143,6 +145,7 @@ QString buildQss(const Skin& k)
     s += "QLabel#TemplateTitle { font-size: 11px; font-weight: 600; color: " + k.textHi + "; border: none; background: transparent; }";
     s += "QLabel#TemplateDims { font-size: 9px; color: " + k.textMd + "; border: none; background: transparent; }";
     s += "QLabel#HintLabel { color: " + k.textLo + "; font-size: 11px; border: none; }";
+    s += "QScrollArea#StartScrollArea { background: transparent; border: none; }";
 
     // -- Checkbox / Slider / GroupBox / Tooltip / Progress --
     s += "QCheckBox { color: " + k.textHi + "; spacing: 7px; }";
