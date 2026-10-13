@@ -358,8 +358,11 @@ void MainWindow::buildCentralWidget()
                 if (m_mergeVisibleAction) m_mergeVisibleAction->setEnabled(m_document != nullptr);
                 if (m_flattenAction) m_flattenAction->setEnabled(m_document != nullptr);
 
-                // Auto-ativar a aba do inspetor correspondente ao tipo de camada selecionada
-                if (selected) {
+                // Auto-ativar a aba do inspetor correspondente ao tipo de camada
+                // selecionada — apenas em seleção ÚNICA. Em seleção múltipla
+                // os tipos são mistos: pular de aba só confunde o utilizador.
+                if (selected
+                    && (!m_canvas || m_canvas->selectedLayers().size() <= 1)) {
                     switch (selected->type()) {
                     case LayerType::Text:
                         if (m_textDock && m_textDock->isVisible()) m_textDock->raise();
@@ -2630,11 +2633,13 @@ void MainWindow::mergeVisibleLayers()
         return;
     QList<LayerId> ids;
     for (const auto& child : m_document->rootGroup()->children) {
-        if (child->visible && child->type() != LayerType::Background)
+        // Camadas bloqueadas não participam — ficam intactas por cima
+        if (child->visible && !child->locked
+            && child->type() != LayerType::Background)
             ids.append(child->id());
     }
     if (ids.size() < 2) {
-        statusBar()->showMessage(tr("At least two visible layers are required."), 3500);
+        statusBar()->showMessage(tr("At least two visible unlocked layers are required."), 3500);
         return;
     }
     auto raster = rasterLayerFor(*m_document, ids, tr("Visible merge"));
@@ -2651,12 +2656,23 @@ void MainWindow::flattenDocument()
 {
     if (!m_document || !m_canvas || !m_history)
         return;
-    QList<LayerId> ids;
-    for (const auto& child : m_document->rootGroup()->children)
-        ids.append(child->id());
-    if (ids.isEmpty())
+    QList<LayerId> ids;       // desbloqueadas — serão achatadas na imagem
+    QList<Layer*> kept;       // bloqueadas — preservadas no lugar
+    for (const auto& child : m_document->rootGroup()->children) {
+        if (child->locked)
+            kept.append(child.get());
+        else
+            ids.append(child->id());
+    }
+    if (ids.isEmpty()) {
+        statusBar()->showMessage(tr("All layers are locked — nothing to flatten."), 3500);
         return;
+    }
 
+    // Rasterizar SOMENTE as camadas desbloqueadas: esconde as bloqueadas
+    // durante o render (o renderer lê `visible` direto) e devolve o estado.
+    for (Layer* lockedLayer : kept)
+        lockedLayer->visible = false;
     QImage raster(m_document->width(), m_document->height(), QImage::Format_ARGB32_Premultiplied);
     raster.fill(Qt::transparent);
     {
@@ -2666,6 +2682,8 @@ void MainWindow::flattenDocument()
         options.canvasBorder = Qt::transparent;
         renderDocument(*m_document, &painter, QTransform(), options);
     }
+    for (Layer* lockedLayer : kept)
+        lockedLayer->visible = true;
     const LayerId assetId = m_document->assets().addImage(raster);
     if (assetId.isNull())
         return;

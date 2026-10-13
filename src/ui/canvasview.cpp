@@ -782,7 +782,8 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
         }
 
         if (Layer* layer = hitTestLayer(docPos)) {
-            if (event->modifiers() & Qt::ShiftModifier) {
+            // Shift OU Ctrl adicionam/alternam a seleção (padrão de editores)
+            if (event->modifiers() & (Qt::ShiftModifier | Qt::ControlModifier)) {
                 if (m_multiSelection.contains(layer->id()))
                     removeFromSelection(layer->id());
                 else
