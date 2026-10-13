@@ -6,6 +6,7 @@
 #include "core/DocumentController.h"
 
 // Forward declarations de classes Qt necessárias para a interface gráfica
+class QCheckBox;
 class QDoubleSpinBox;
 class QPushButton;
 class QLabel;
@@ -58,12 +59,27 @@ private:
     LayerId m_id;
     bool m_loading = false;
 
+    void commitGradient(Gradient next);
+
     // Widgets para preenchimento, contorno e cantos
     QGroupBox* m_groupBox = nullptr;
     QFormLayout* m_formLayout = nullptr;
     QComboBox* m_kindCombo = nullptr;
     QPushButton* m_fillColorBtn = nullptr;
     QPushButton* m_strokeColorBtn = nullptr;
+
+    // Gradiente (preenchimento)
+    QGroupBox* m_gradientBox = nullptr;
+    QFormLayout* m_gradientForm = nullptr;
+    QCheckBox* m_gradientOn = nullptr;
+    QComboBox* m_gradientKindCombo = nullptr;
+    QDoubleSpinBox* m_gradientAngleSpin = nullptr;
+    QPushButton* m_gradientStartBtn = nullptr;
+    QPushButton* m_gradientEndBtn = nullptr;
+    QLabel* m_gradientKindLabel = nullptr;
+    QLabel* m_gradientAngleLabel = nullptr;
+    QLabel* m_gradientStartLabel = nullptr;
+    QLabel* m_gradientEndLabel = nullptr;
     QDoubleSpinBox* m_strokeWidthSpin = nullptr;
     QDoubleSpinBox* m_cornerRadiusSpin = nullptr;
 

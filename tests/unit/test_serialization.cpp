@@ -54,6 +54,11 @@ private slots:
         const LayerId bgId = bg->id();
         bg->name = QStringLiteral("Background");
         bg->fill = QColor(16, 16, 20);
+        bg->gradient.enabled = true;
+        bg->gradient.kind = GradientKind::Radial;
+        bg->gradient.center = QPointF(0.5, 0.4);
+        bg->gradient.radius = 0.9;
+        bg->gradient.stops = {{0.0f, QColor(30, 42, 74)}, {1.0f, QColor(5, 7, 15)}};
 
         auto group = std::make_unique<GroupLayer>();
         const LayerId groupId = group->id();
@@ -80,6 +85,10 @@ private slots:
         shape->stroke = QColor(255, 255, 255);
         shape->strokeWidth = 3.0;
         shape->cornerRadius = 12.0;
+        shape->gradient.enabled = true;
+        shape->gradient.kind = GradientKind::Linear;
+        shape->gradient.angleDeg = 45.0;
+        shape->gradient.stops = {{0.2f, QColor(255, 210, 0)}, {0.8f, QColor(255, 45, 0)}};
 
         auto image = std::make_unique<ImageLayer>();
         const LayerId imageId = image->id();
@@ -121,6 +130,14 @@ private slots:
         auto* loadedBg = static_cast<BackgroundLayer*>(root->children[0].get());
         QCOMPARE(loadedBg->name, QStringLiteral("Background"));
         QCOMPARE(loadedBg->fill, QColor(16, 16, 20));
+        QVERIFY(loadedBg->gradient.isValid());
+        QCOMPARE(static_cast<int>(loadedBg->gradient.kind),
+                 static_cast<int>(GradientKind::Radial));
+        QCOMPARE(loadedBg->gradient.center, QPointF(0.5, 0.4));
+        QCOMPARE(loadedBg->gradient.radius, 0.9);
+        QCOMPARE(loadedBg->gradient.stops.size(), 2);
+        QCOMPARE(loadedBg->gradient.stops[0].color, QColor(30, 42, 74));
+        QCOMPARE(loadedBg->gradient.stops[1].color, QColor(5, 7, 15));
 
         auto* loadedGroup = static_cast<GroupLayer*>(root->children[1].get());
         QCOMPARE(loadedGroup->name, QStringLiteral("Characters"));
@@ -147,6 +164,14 @@ private slots:
         QCOMPARE(loadedShape->cornerRadius, 12.0);
         QCOMPARE(loadedShape->fill, QColor(10, 200, 30));
         QCOMPARE(loadedShape->stroke, QColor(255, 255, 255));
+        QVERIFY(loadedShape->gradient.isValid());
+        QCOMPARE(static_cast<int>(loadedShape->gradient.kind),
+                 static_cast<int>(GradientKind::Linear));
+        QCOMPARE(loadedShape->gradient.angleDeg, 45.0);
+        QCOMPARE(loadedShape->gradient.stops.size(), 2);
+        QCOMPARE(loadedShape->gradient.stops[0].position, 0.2f);
+        QCOMPARE(loadedShape->gradient.stops[0].color, QColor(255, 210, 0));
+        QCOMPARE(loadedShape->gradient.stops[1].color, QColor(255, 45, 0));
 
         auto* loadedImage = static_cast<ImageLayer*>(root->children[2].get());
         QCOMPARE(loadedImage->assetId, assetId);

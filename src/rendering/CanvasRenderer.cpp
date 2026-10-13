@@ -16,6 +16,41 @@
 #include "core/image/ImageProcessing.h"
 
 namespace cc {
+
+namespace {
+
+/// Converte o Gradient do documento em QBrush sobre a area dada.
+QBrush gradientBrush(const Gradient& g, const QRectF& rect)
+{
+    if (g.stops.isEmpty())
+        return QBrush(Qt::black);
+    QVector<GradientStop> stops = g.stops;
+    std::sort(stops.begin(), stops.end(),
+              [](const GradientStop& a, const GradientStop& b) {
+                  return a.position < b.position;
+              });
+    if (g.kind == GradientKind::Radial) {
+        const QPointF c(rect.left() + rect.width() * g.center.x(),
+                        rect.top() + rect.height() * g.center.y());
+        const double r = qMax(1.0, qMax(rect.width(), rect.height()) * g.radius);
+        QRadialGradient qg(c, r);
+        for (const auto& s : stops)
+            qg.setColorAt(qBound(0.0, double(s.position), 1.0), s.color);
+        return QBrush(qg);
+    }
+    const QPointF c = rect.center();
+    const double rad = qDegreesToRadians(g.angleDeg);
+    const QPointF dir(std::cos(rad), std::sin(rad));
+    const double half = (rect.width() * std::abs(std::cos(rad))
+                         + rect.height() * std::abs(std::sin(rad))) / 2.0;
+    QLinearGradient qg(c - dir * half, c + dir * half);
+    for (const auto& s : stops)
+        qg.setColorAt(qBound(0.0, double(s.position), 1.0), s.color);
+    return QBrush(qg);
+}
+
+} // namespace
+
 namespace {
 
 QPainter::CompositionMode compositionMode(BlendMode mode)
@@ -106,6 +141,11 @@ void drawShape(QPainter* painter, const ShapeLayer& shape)
     pen.setJoinStyle(Qt::RoundJoin);
     painter->setPen(pen);
 
+    // Preenchimento: gradiente quando ativo, cor solida caso contrario.
+    const QBrush fillBrush = shape.gradient.isValid()
+        ? gradientBrush(shape.gradient, shape.points.boundingRect())
+        : QBrush(shape.fill);
+
     switch (shape.kind) {
     case ShapeKind::Line: {
         painter->setBrush(Qt::NoBrush);
@@ -116,7 +156,7 @@ void drawShape(QPainter* painter, const ShapeLayer& shape)
         break;
     }
     case ShapeKind::Polygon: {
-        painter->setBrush(shape.fill);
+        painter->setBrush(fillBrush);
         painter->drawPolygon(shape.points);
         break;
     }
@@ -124,7 +164,7 @@ void drawShape(QPainter* painter, const ShapeLayer& shape)
     case ShapeKind::RoundedRect:
     case ShapeKind::Ellipse: {
         const QRectF rect = shape.points.boundingRect();
-        painter->setBrush(shape.fill);
+        painter->setBrush(fillBrush);
         if (shape.kind == ShapeKind::Ellipse)
             painter->drawEllipse(rect);
         else if (shape.kind == ShapeKind::RoundedRect)
@@ -155,7 +195,7 @@ void drawShape(QPainter* painter, const ShapeLayer& shape)
         path.lineTo(x, shaftBottom);
         path.closeSubpath();
 
-        painter->setBrush(shape.fill);
+        painter->setBrush(fillBrush);
         painter->drawPath(path);
         break;
     }
@@ -181,7 +221,7 @@ void drawShape(QPainter* painter, const ShapeLayer& shape)
                     x + w * 0.15, y + h);
         path.closeSubpath();
 
-        painter->setBrush(shape.fill);
+        painter->setBrush(fillBrush);
         painter->drawPath(path);
         break;
     }
@@ -209,7 +249,7 @@ void drawShape(QPainter* painter, const ShapeLayer& shape)
         }
         path.closeSubpath();
 
-        painter->setBrush(shape.fill);
+        painter->setBrush(fillBrush);
         painter->drawPath(path);
         break;
     }
@@ -238,7 +278,7 @@ void drawShape(QPainter* painter, const ShapeLayer& shape)
         }
         path.closeSubpath();
 
-        painter->setBrush(shape.fill);
+        painter->setBrush(fillBrush);
         painter->drawPath(path);
         break;
     }
@@ -269,7 +309,7 @@ void drawShape(QPainter* painter, const ShapeLayer& shape)
         path.arcTo(x, y, 2 * cr, 2 * cr, 180, -90);
         path.closeSubpath();
 
-        painter->setBrush(shape.fill);
+        painter->setBrush(fillBrush);
         painter->drawPath(path);
         break;
     }
@@ -300,7 +340,7 @@ void drawShape(QPainter* painter, const ShapeLayer& shape)
                      midX, topY);
         path.closeSubpath();
 
-        painter->setBrush(shape.fill);
+        painter->setBrush(fillBrush);
         painter->drawPath(path);
         break;
     }
@@ -553,7 +593,11 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
     switch (layer.type()) {
     case LayerType::Background: {
         const auto& background = static_cast<const BackgroundLayer&>(layer);
-        painter->fillRect(canvasRect, background.fill);
+        if (background.gradient.isValid())
+            painter->fillRect(canvasRect,
+                              gradientBrush(background.gradient, canvasRect));
+        else
+            painter->fillRect(canvasRect, background.fill);
         break;
     }
     case LayerType::Group: {

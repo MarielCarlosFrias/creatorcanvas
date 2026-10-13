@@ -76,6 +76,8 @@ public:
     // Propriedades de ShapeLayer (retângulos, elipses, linhas)
     // Passadas por valor para garantir compatibilidade com LayerPropertyCommand (Undo/Redo)
     bool setShapeFill(const LayerId& id, QColor fill);
+    bool setShapeGradient(const LayerId& id, Gradient gradient);
+    bool setBackgroundGradient(const LayerId& id, Gradient gradient);
     bool setShapeStroke(const LayerId& id, QColor stroke);
     bool setShapeStrokeWidth(const LayerId& id, double width);
     bool setShapeCornerRadius(const LayerId& id, double radius);

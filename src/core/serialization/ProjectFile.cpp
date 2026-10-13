@@ -170,6 +170,53 @@ QColor colorFromString(const QString& value)
     return color.isValid() ? color : QColor(0, 0, 0, 0);
 }
 
+QJsonObject gradientToJson(const Gradient& g)
+{
+    QJsonObject o;
+    o.insert(QStringLiteral("enabled"), g.enabled);
+    o.insert(QStringLiteral("kind"),
+             g.kind == GradientKind::Radial ? QStringLiteral("radial")
+                                            : QStringLiteral("linear"));
+    o.insert(QStringLiteral("angle"), g.angleDeg);
+    o.insert(QStringLiteral("centerX"), g.center.x());
+    o.insert(QStringLiteral("centerY"), g.center.y());
+    o.insert(QStringLiteral("radius"), g.radius);
+    QJsonArray stops;
+    for (const GradientStop& s : g.stops) {
+        QJsonArray pair;
+        pair.append(double(s.position));
+        pair.append(colorToString(s.color));
+        stops.append(pair);
+    }
+    o.insert(QStringLiteral("stops"), stops);
+    return o;
+}
+
+Gradient gradientFromJson(const QJsonObject& o)
+{
+    Gradient g;
+    g.enabled = o.value(QStringLiteral("enabled")).toBool(false);
+    g.kind = o.value(QStringLiteral("kind")).toString() == QLatin1String("radial")
+                 ? GradientKind::Radial
+                 : GradientKind::Linear;
+    g.angleDeg = o.value(QStringLiteral("angle")).toDouble(90.0);
+    g.center = QPointF(o.value(QStringLiteral("centerX")).toDouble(0.5),
+                       o.value(QStringLiteral("centerY")).toDouble(0.5));
+    g.radius = o.value(QStringLiteral("radius")).toDouble(0.75);
+    const QJsonArray stops = o.value(QStringLiteral("stops")).toArray();
+    for (const QJsonValue& stop : stops) {
+        const QJsonArray pair = stop.toArray();
+        if (pair.size() == 2) {
+            GradientStop stop;
+            stop.position = static_cast<float>(pair.at(0).toDouble());
+            stop.color = colorFromString(pair.at(1).toString());
+            g.stops.append(stop);
+        }
+    }
+    return g;
+}
+
+
 QJsonObject writeLayer(const Layer& layer)
 {
     QJsonObject o;
@@ -324,6 +371,8 @@ QJsonObject writeLayer(const Layer& layer)
         o.insert(QStringLiteral("stroke"), colorToString(shape.stroke));
         o.insert(QStringLiteral("strokeWidth"), shape.strokeWidth);
         o.insert(QStringLiteral("cornerRadius"), shape.cornerRadius);
+        if (shape.gradient.enabled)
+            o.insert(QStringLiteral("gradient"), gradientToJson(shape.gradient));
         QJsonArray points;
         for (const QPointF& point : shape.points)
             points.append(QJsonArray{point.x(), point.y()});
@@ -334,6 +383,9 @@ QJsonObject writeLayer(const Layer& layer)
         o.insert(QStringLiteral("type"), QStringLiteral("background"));
         const auto& background = static_cast<const BackgroundLayer&>(layer);
         o.insert(QStringLiteral("fill"), colorToString(background.fill));
+        if (background.gradient.enabled)
+            o.insert(QStringLiteral("gradient"),
+                      gradientToJson(background.gradient));
         break;
     }
     }
@@ -962,6 +1014,9 @@ private:
             o.value(QStringLiteral("strokeWidth")).toDouble(0.0);
         shape->cornerRadius =
             o.value(QStringLiteral("cornerRadius")).toDouble(0.0);
+        if (o.contains(QStringLiteral("gradient")))
+            shape->gradient =
+                gradientFromJson(o.value(QStringLiteral("gradient")).toObject());
 
         const QJsonArray points = o.value(QStringLiteral("points")).toArray();
         for (const QJsonValue& point : points) {
@@ -982,6 +1037,9 @@ private:
         auto background = std::make_unique<BackgroundLayer>();
         background->fill =
             colorFromString(o.value(QStringLiteral("fill")).toString());
+        if (o.contains(QStringLiteral("gradient")))
+            background->gradient =
+                gradientFromJson(o.value(QStringLiteral("gradient")).toObject());
         finishLayer(*background, o, id);
         *out = std::move(background);
         return true;

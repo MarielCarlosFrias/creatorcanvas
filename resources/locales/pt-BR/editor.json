@@ -79,7 +79,15 @@
         "fill": "Cor de Preenchimento",
         "stroke": "Cor do Contorno",
         "strokeWidth": "Espessura do Contorno",
-        "cornerRadius": "Raio dos Cantos"
+        "cornerRadius": "Raio dos Cantos",
+        "gradient.title": "Gradiente",
+        "gradient.enable": "Ativar preenchimento em gradiente",
+        "gradient.kind": "Tipo:",
+        "gradient.angle": "Ângulo (linear):",
+        "gradient.start": "Cor inicial:",
+        "gradient.end": "Cor final:",
+        "gradient.linear": "Linear",
+        "gradient.radial": "Radial"
     },
     "export": {
         "dialog.title": "Exportar Como...",

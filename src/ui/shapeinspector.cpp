@@ -6,7 +6,9 @@
 #include "core/history/DocumentCommands.h"
 
 // Inclusões de componentes de interface gráfica do Qt
+#include <QCheckBox>
 #include <QColorDialog>
+#include <QDoubleSpinBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QGroupBox>
@@ -133,6 +135,26 @@ void ShapeInspector::refresh()
     m_fillColorBtn->setEnabled(canHaveFill);
     m_fillLabel->setEnabled(canHaveFill);
 
+    // Gradiente
+    m_gradientOn->setChecked(layer->gradient.enabled);
+    m_gradientKindCombo->setCurrentIndex(
+        layer->gradient.kind == GradientKind::Radial ? 1 : 0);
+    m_gradientAngleSpin->setValue(layer->gradient.angleDeg);
+    const bool hasStops = layer->gradient.stops.size() >= 2;
+    updateColorButton(m_gradientStartBtn,
+                      hasStops ? layer->gradient.stops.first().color : QColor(255, 210, 0));
+    updateColorButton(m_gradientEndBtn,
+                      hasStops ? layer->gradient.stops.last().color : QColor(255, 45, 0));
+    const bool gradEnabled = layer->gradient.enabled;
+    m_gradientKindCombo->setEnabled(gradEnabled);
+    m_gradientAngleSpin->setEnabled(gradEnabled && layer->gradient.kind == GradientKind::Linear);
+    m_gradientStartBtn->setEnabled(gradEnabled);
+    m_gradientEndBtn->setEnabled(gradEnabled);
+    m_gradientKindLabel->setEnabled(gradEnabled);
+    m_gradientAngleLabel->setEnabled(gradEnabled && layer->gradient.kind == GradientKind::Linear);
+    m_gradientStartLabel->setEnabled(gradEnabled);
+    m_gradientEndLabel->setEnabled(gradEnabled);
+
     // O raio dos cantos aplica-se a retângulos arredondados e balões de fala
     const bool canHaveRadius = (layer->kind == ShapeKind::RoundedRect || layer->kind == ShapeKind::SpeechBubble);
     m_cornerRadiusLabel->setVisible(canHaveRadius);
@@ -217,6 +239,95 @@ void ShapeInspector::buildUi()
         updateColorButton(m_fillColorBtn, chosen);
     });
 
+    // 1b. Secao de Gradiente (preenchimento com 2 cores)
+    m_gradientBox = new QGroupBox(content);
+    m_gradientBox->setObjectName(QStringLiteral("GradientSection"));
+    m_gradientForm = new QFormLayout(m_gradientBox);
+    m_gradientForm->setRowWrapPolicy(QFormLayout::WrapLongRows);
+
+    m_gradientOn = new QCheckBox(m_gradientBox);
+    m_gradientForm->addRow(m_gradientOn);
+    m_gradientKindLabel = new QLabel(m_gradientBox);
+    m_gradientKindCombo = new QComboBox(m_gradientBox);
+    m_gradientForm->addRow(m_gradientKindLabel, m_gradientKindCombo);
+
+    m_gradientAngleLabel = new QLabel(m_gradientBox);
+    m_gradientAngleSpin = new QDoubleSpinBox(m_gradientBox);
+    m_gradientAngleSpin->setRange(-360.0, 360.0);
+    m_gradientAngleSpin->setDecimals(0);
+    m_gradientAngleSpin->setValue(90.0);
+    m_gradientForm->addRow(m_gradientAngleLabel, m_gradientAngleSpin);
+
+    m_gradientStartLabel = new QLabel(m_gradientBox);
+    m_gradientStartBtn = new QPushButton(m_gradientBox);
+    m_gradientForm->addRow(m_gradientStartLabel, m_gradientStartBtn);
+
+    m_gradientEndLabel = new QLabel(m_gradientBox);
+    m_gradientEndBtn = new QPushButton(m_gradientBox);
+    m_gradientForm->addRow(m_gradientEndLabel, m_gradientEndBtn);
+
+    auto readGradientFromUi = [this]() -> Gradient {
+        ShapeLayer* layer = nullptr;
+        Gradient g;
+        if (!editingLayer(&layer))
+            return g;
+        g = layer->gradient;
+        g.enabled = m_gradientOn->isChecked();
+        g.kind = m_gradientKindCombo->currentIndex() == 1
+                     ? GradientKind::Radial : GradientKind::Linear;
+        g.angleDeg = m_gradientAngleSpin->value();
+        if (g.stops.size() < 2) {
+            g.stops = {{0.0f, QColor(255, 210, 0)}, {1.0f, QColor(255, 45, 0)}};
+        }
+        return g;
+    };
+
+    connect(m_gradientOn, &QCheckBox::toggled, this, [this, readGradientFromUi](bool) {
+        if (m_loading) return;
+        commitGradient(readGradientFromUi());
+    });
+    connect(m_gradientKindCombo, qOverload<int>(&QComboBox::currentIndexChanged),
+            this, [this, readGradientFromUi](int) {
+        if (m_loading) return;
+        commitGradient(readGradientFromUi());
+    });
+    connect(m_gradientAngleSpin, qOverload<double>(&QDoubleSpinBox::valueChanged),
+            this, [this, readGradientFromUi](double) {
+        if (m_loading) return;
+        commitGradient(readGradientFromUi());
+    });
+    connect(m_gradientStartBtn, &QPushButton::clicked, this, [this, readGradientFromUi] {
+        ShapeLayer* layer = nullptr;
+        if (!editingLayer(&layer)) return;
+        const QColor chosen = QColorDialog::getColor(
+            layer->gradient.stops.isEmpty() ? QColor(255, 210, 0)
+                                           : layer->gradient.stops.first().color,
+            this, QString(), QColorDialog::ShowAlphaChannel);
+        if (!chosen.isValid()) return;
+        Gradient g = readGradientFromUi();
+        if (g.stops.isEmpty())
+            g.stops.append({0.0f, chosen});
+        else
+            g.stops.first().color = chosen;
+        if (g.stops.size() < 2)
+            g.stops.append({1.0f, QColor(255, 45, 0)});
+        commitGradient(std::move(g));
+    });
+    connect(m_gradientEndBtn, &QPushButton::clicked, this, [this, readGradientFromUi] {
+        ShapeLayer* layer = nullptr;
+        if (!editingLayer(&layer)) return;
+        const QColor chosen = QColorDialog::getColor(
+            layer->gradient.stops.size() < 2 ? QColor(255, 45, 0)
+                                             : layer->gradient.stops.last().color,
+            this, QString(), QColorDialog::ShowAlphaChannel);
+        if (!chosen.isValid()) return;
+        Gradient g = readGradientFromUi();
+        while (g.stops.size() < 2)
+            g.stops.append({static_cast<float>(g.stops.size()), QColor(255, 210, 0)});
+        g.stops.last().color = chosen;
+        commitGradient(std::move(g));
+    });
+
     // 2. Botão e label de Cor do Contorno (Stroke Color)
     m_strokeLabel = new QLabel(m_groupBox);
     m_strokeColorBtn = new QPushButton(m_groupBox);
@@ -280,6 +391,7 @@ void ShapeInspector::buildUi()
     });
 
     mainLayout->addWidget(m_groupBox);
+    mainLayout->addWidget(m_gradientBox);
     mainLayout->addStretch();
     auto* scroll = new QScrollArea(this);
     scroll->setWidgetResizable(true);
@@ -292,6 +404,23 @@ void ShapeInspector::buildUi()
 }
 
 // Atualiza todos os textos com base no serviço de internacionalização
+void ShapeInspector::commitGradient(Gradient next)
+{
+    ShapeLayer* layer = nullptr;
+    if (!editingLayer(&layer))
+        return;
+    if (layer->gradient == next)
+        return;
+    if (m_history && m_document) {
+        m_history->execute(std::make_unique<SetShapeGradientCommand>(
+            *m_document, m_id, QStringLiteral("shape.gradient"),
+            &Document::setShapeGradient, layer->gradient, std::move(next)));
+    } else if (m_document) {
+        m_document->setShapeGradient(m_id, std::move(next));
+    }
+    refresh();
+}
+
 void ShapeInspector::retranslateUi()
 {
     if (!m_i18n)
@@ -303,6 +432,17 @@ void ShapeInspector::retranslateUi()
     m_strokeLabel->setText(m_i18n->t("editor", "shape.stroke"));
     m_strokeWidthLabel->setText(m_i18n->t("editor", "shape.strokeWidth"));
     m_cornerRadiusLabel->setText(m_i18n->t("editor", "shape.cornerRadius"));
+    m_gradientOn->setText(m_i18n->t("editor", "shape.gradient.enable"));
+    m_gradientKindLabel->setText(m_i18n->t("editor", "shape.gradient.kind"));
+    m_gradientAngleLabel->setText(m_i18n->t("editor", "shape.gradient.angle"));
+    m_gradientStartLabel->setText(m_i18n->t("editor", "shape.gradient.start"));
+    m_gradientEndLabel->setText(m_i18n->t("editor", "shape.gradient.end"));
+    m_gradientBox->setTitle(m_i18n->t("editor", "shape.gradient.title"));
+    const int gk = m_gradientKindCombo->currentIndex();
+    m_gradientKindCombo->clear();
+    m_gradientKindCombo->addItem(m_i18n->t("editor", "shape.gradient.linear"));
+    m_gradientKindCombo->addItem(m_i18n->t("editor", "shape.gradient.radial"));
+    m_gradientKindCombo->setCurrentIndex(gk >= 0 ? gk : 0);
 
     const int currentIdx = m_kindCombo->currentIndex();
     const int currentData = (currentIdx >= 0) ? m_kindCombo->itemData(currentIdx).toInt() : 0;

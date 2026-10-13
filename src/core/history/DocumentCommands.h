@@ -432,6 +432,8 @@ using SetShapeStrokeCommand       = LayerPropertyCommand<QColor>;
 using SetShapeStrokeWidthCommand  = LayerPropertyCommand<double>;
 using SetShapeCornerRadiusCommand = LayerPropertyCommand<double>;
 using SetShapeKindCommand         = LayerPropertyCommand<ShapeKind>;
+using SetShapeGradientCommand     = LayerPropertyCommand<Gradient>;
+using SetBackgroundGradientCommand = LayerPropertyCommand<Gradient>;
 
 // Comandos de histórico para operações de texto (TextLayer)
 using SetTextFontFamilyCommand = LayerPropertyCommand<QString>;

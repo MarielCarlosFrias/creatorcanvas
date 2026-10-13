@@ -142,6 +142,7 @@ std::unique_ptr<Layer> ShapeLayer::deepCopy() const
     copy->copyCommonFrom(*this);
     copy->kind = kind;
     copy->fill = fill;
+    copy->gradient = gradient;
     copy->stroke = stroke;
     copy->strokeWidth = strokeWidth;
     copy->cornerRadius = cornerRadius;
@@ -162,6 +163,7 @@ std::unique_ptr<Layer> BackgroundLayer::deepCopy() const
     auto copy = std::make_unique<BackgroundLayer>();
     copy->copyCommonFrom(*this);
     copy->fill = fill;
+    copy->gradient = gradient;
     return copy;
 }
 

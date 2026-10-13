@@ -480,6 +480,27 @@ bool Document::setShapeFill(const LayerId& id, QColor fill)
     emit layerPropertyChanged(id);
     return true;
 }
+bool Document::setShapeGradient(const LayerId& id, Gradient gradient)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Shape)
+        return false;
+    static_cast<ShapeLayer*>(layer)->gradient = std::move(gradient);
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
+bool Document::setBackgroundGradient(const LayerId& id, Gradient gradient)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Background)
+        return false;
+    static_cast<BackgroundLayer*>(layer)->gradient = std::move(gradient);
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
 
 // Altera a cor do contorno (stroke) da forma geométrica
 bool Document::setShapeStroke(const LayerId& id, QColor stroke)

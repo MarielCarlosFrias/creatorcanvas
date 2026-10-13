@@ -13,6 +13,7 @@
 
 #include "../geometry/AffineTransform.h"
 #include "BlendIf.h"
+#include "Gradient.h"
 #include "ImageEffects.h"
 #include "TextEffects.h"
 
@@ -150,6 +151,7 @@ public:
 
     ShapeKind kind = ShapeKind::Rectangle;
     QColor fill = Qt::white;
+    Gradient gradient; ///< preenchimento em gradiente (substitui fill quando ativo)
     QColor stroke = Qt::transparent;
     double strokeWidth = 0.0;
     double cornerRadius = 0.0;
@@ -163,6 +165,7 @@ public:
     std::unique_ptr<Layer> deepCopy() const override;
 
     QColor fill = Qt::white;
+    Gradient gradient; ///< fundo em gradiente (substitui fill quando ativo)
 };
 
 std::unique_ptr<Layer> makeLayer(LayerType type);

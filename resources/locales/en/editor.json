@@ -79,7 +79,15 @@
         "fill": "Fill Color",
         "stroke": "Stroke Color",
         "strokeWidth": "Stroke Width",
-        "cornerRadius": "Corner Radius"
+        "cornerRadius": "Corner Radius",
+        "gradient.title": "Gradient",
+        "gradient.enable": "Enable gradient fill",
+        "gradient.kind": "Type:",
+        "gradient.angle": "Angle (linear):",
+        "gradient.start": "Start color:",
+        "gradient.end": "End color:",
+        "gradient.linear": "Linear",
+        "gradient.radial": "Radial"
     },
     "export": {
         "dialog.title": "Export As...",
