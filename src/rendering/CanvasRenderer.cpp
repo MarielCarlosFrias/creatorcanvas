@@ -613,7 +613,38 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
         // Effects path: build the glyph outline(s), then draw
         // shadow (blurred silhouette) -> outline stroke -> fill/gradient.
         const QFontMetrics metrics(font);
-        const QStringList lines = text.content.split(QLatin1Char('\n'));
+        QStringList lines = text.content.split(QLatin1Char('\n'));
+        // Envolver palavras quando houver caixa fixa — sem isso o texto com
+        // efeitos ignorava a caixa e transbordava (o caminho simples usa
+        // TextWordWrap via drawText). Palavra mais larga que a caixa
+        // transborda, igual ao comportamento do drawText.
+        if (!text.box.isEmpty() && drawRect.width() > 0.0) {
+            QStringList wrapped;
+            wrapped.reserve(lines.size());
+            for (const QString& paragraph : lines) {
+                const QStringList words =
+                    paragraph.split(QLatin1Char(' '), Qt::SkipEmptyParts);
+                if (words.isEmpty()) {
+                    wrapped.append(QString());
+                    continue;
+                }
+                QString current;
+                for (const QString& word : words) {
+                    const QString candidate =
+                        current.isEmpty() ? word
+                                          : current + QLatin1Char(' ') + word;
+                    if (current.isEmpty()
+                        || metrics.horizontalAdvance(candidate) <= drawRect.width()) {
+                        current = candidate;
+                    } else {
+                        wrapped.append(current);
+                        current = word;
+                    }
+                }
+                wrapped.append(current);
+            }
+            lines = std::move(wrapped);
+        }
         const double lineSpacing = metrics.lineSpacing() * (text.lineHeightMult > 0.0 ? text.lineHeightMult : 1.0);
         QPainterPath path;
         double lineY = metrics.ascent();
