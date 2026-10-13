@@ -111,6 +111,9 @@ QString buildQss(const Skin& k)
     s += "QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QPlainTextEdit { background-color: " + k.base1 + "; color: " + k.textHi + "; border: 1px solid " + k.line + "; border-radius: 5px; padding: 4px 8px; selection-background-color: " + k.accent + "; }";
     s += "QLineEdit:hover, QSpinBox:hover, QDoubleSpinBox:hover, QComboBox:hover { border-color: " + k.hov + "; }";
     s += "QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus, QPlainTextEdit:focus { border: 1px solid " + k.accent + "; }";
+    // Campos compactos para caber em docks de 240px sem corte horizontal
+    s += "QSpinBox, QDoubleSpinBox { min-width: 48px; padding-left: 4px; padding-right: 4px; }";
+    s += "QComboBox { min-width: 56px; }";
     s += "QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QComboBox:disabled { color: " + k.textLo + "; }";
     s += "QComboBox::drop-down { border: none; width: 22px; }";
     s += "QComboBox QAbstractItemView { background-color: " + k.base2 + "; color: " + k.textHi + "; border: 1px solid " + k.line + "; selection-background-color: " + k.accent + "; selection-color: #ffffff; outline: none; border-radius: 5px; }";

@@ -253,7 +253,7 @@ void ImageInspector::buildUi()
     // --- ABA 1: Ajustes & Cor (Ajustes de Luz, Cores e Filtros Rápidos) ---
     auto* adjustScroll = new QScrollArea(this);
     adjustScroll->setWidgetResizable(true);
-    adjustScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    adjustScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     adjustScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     adjustScroll->setFrameShape(QFrame::NoFrame);
     auto* adjustContainer = new QWidget(adjustScroll);
@@ -264,7 +264,7 @@ void ImageInspector::buildUi()
     // --- ABA 2: Estilos & Efeitos (fx) (Contorno, Sombra Projetada, Sombra Interna, Sobreposição) ---
     auto* fxScroll = new QScrollArea(this);
     fxScroll->setWidgetResizable(true);
-    fxScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    fxScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     fxScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     fxScroll->setFrameShape(QFrame::NoFrame);
     auto* fxContainer = new QWidget(fxScroll);
@@ -275,7 +275,7 @@ void ImageInspector::buildUi()
     // --- ABA 3: Avançado (Chroma Key, 3D Tilt, Mockup, Blend If) ---
     auto* advScroll = new QScrollArea(this);
     advScroll->setWidgetResizable(true);
-    advScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    advScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     advScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     advScroll->setFrameShape(QFrame::NoFrame);
     auto* advContainer = new QWidget(advScroll);
