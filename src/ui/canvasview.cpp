@@ -579,10 +579,8 @@ void CanvasView::paintEvent(QPaintEvent*)
     options.previewLayerId = m_previewLayerId;
     options.previewImage = m_previewImage;
     options.interactive = (m_gesture != Gesture::None) || m_panning;
-    options.checkerLight = dark ? QColor(0x2a, 0x2e, 0x39)
-                                : QColor(0xe5, 0xe9, 0xef);
-    options.checkerDark = dark ? QColor(0x1e, 0x22, 0x2a)
-                               : QColor(0xff, 0xff, 0xff);
+    options.checkerLight = dark ? Design::Base3() : QColor(0xe5, 0xe9, 0xef);
+    options.checkerDark = dark ? Design::Base2() : QColor(0xff, 0xff, 0xff);
     options.canvasBorder = dark ? Design::DBorder() : Design::LBorder();
     renderDocument(*m_document, &painter, docToDevice(), options);
 
@@ -1889,8 +1887,10 @@ void CanvasView::drawRubberBand(QPainter* painter)
     const QRectF rect = QRectF(p1, p2).normalized();
 
     painter->resetTransform();
-    painter->setPen(QPen(QColor(0x2f, 0x6f, 0xed), 1.0, Qt::DashLine));
-    painter->setBrush(QColor(0x2f, 0x6f, 0xed, 35));
+    QColor selFill = Design::Accent();
+    selFill.setAlpha(35);
+    painter->setPen(QPen(Design::Accent(), 1.0, Qt::DashLine));
+    painter->setBrush(selFill);
     painter->drawRect(rect);
     painter->restore();
 }
@@ -2008,8 +2008,10 @@ void CanvasView::drawMockupPlacementOverlay(QPainter* painter)
     for (const QPointF& point : m_mockupCorners)
         screen << toScreen.map(point);
 
-    painter->setPen(QPen(QColor(0x22, 0xa6, 0xf2), 2.0, Qt::DashLine));
-    painter->setBrush(QColor(0x22, 0xa6, 0xf2, 32));
+    QColor mkFill = Design::Accent();
+    mkFill.setAlpha(32);
+    painter->setPen(QPen(Design::Accent(), 2.0, Qt::DashLine));
+    painter->setBrush(mkFill);
     if (screen.size() >= 3)
         painter->drawPolygon(screen);
     else if (screen.size() == 2)
