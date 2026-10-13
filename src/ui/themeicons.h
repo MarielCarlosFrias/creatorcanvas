@@ -76,6 +76,8 @@ public:
     // --- Transform & Alignment Actions ---
     static QIcon actionFlipH(const QColor& color = QColor(220, 220, 220));
     static QIcon actionFlipV(const QColor& color = QColor(220, 220, 220));
+    static QIcon actionRotateLeft(const QColor& color = QColor(220, 220, 220));
+    static QIcon actionRotateRight(const QColor& color = QColor(220, 220, 220));
     static QIcon actionAlignLeft(const QColor& color = QColor(220, 220, 220));
     static QIcon actionAlignCenter(const QColor& color = QColor(220, 220, 220));
     static QIcon actionAlignRight(const QColor& color = QColor(220, 220, 220));

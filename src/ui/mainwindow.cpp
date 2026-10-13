@@ -1019,10 +1019,10 @@ void MainWindow::buildActions()
     connect(m_flipVAction, &QAction::triggered,
             this, [this] { flipLayer(false); });
     m_rotateLeftAction = new QAction(this);
-    m_rotateLeftAction->setIcon(style()->standardIcon(QStyle::SP_ArrowBack));
+    m_rotateLeftAction->setIcon(ThemeIcons::actionRotateLeft());
     connect(m_rotateLeftAction, &QAction::triggered, this, [this] { rotateLayer(-90.0); });
     m_rotateRightAction = new QAction(this);
-    m_rotateRightAction->setIcon(style()->standardIcon(QStyle::SP_ArrowForward));
+    m_rotateRightAction->setIcon(ThemeIcons::actionRotateRight());
     connect(m_rotateRightAction, &QAction::triggered, this, [this] { rotateLayer(90.0); });
 
     m_deleteAction = new QAction(this);
@@ -1083,6 +1083,7 @@ void MainWindow::buildActions()
     m_toolSelectAction->setCheckable(true);
     m_toolSelectAction->setChecked(true);
     m_toolSelectAction->setShortcut(QKeySequence(QStringLiteral("V")));
+    m_toolSelectAction->setToolTip(QStringLiteral("Selecionar / Mover (V)"));
     m_toolGroup->addAction(m_toolSelectAction);
     connect(m_toolSelectAction, &QAction::triggered, this, [this] {
         if (m_canvas) m_canvas->setTool(CanvasTool::Select);
@@ -1091,6 +1092,7 @@ void MainWindow::buildActions()
     m_toolCropAction = new QAction(this);
     m_toolCropAction->setCheckable(true);
     m_toolCropAction->setShortcut(QKeySequence(QStringLiteral("C")));
+    m_toolCropAction->setToolTip(QStringLiteral("Cortar (C)"));
     m_toolGroup->addAction(m_toolCropAction);
     connect(m_toolCropAction, &QAction::triggered, this, [this] {
         if (m_canvas) m_canvas->setTool(CanvasTool::Crop);
@@ -1099,6 +1101,7 @@ void MainWindow::buildActions()
     m_toolScissorsAction = new QAction(this);
     m_toolScissorsAction->setCheckable(true);
     m_toolScissorsAction->setShortcut(QKeySequence(QStringLiteral("X")));
+    m_toolScissorsAction->setToolTip(QStringLiteral("Recortar seleção (X)"));
     m_toolGroup->addAction(m_toolScissorsAction);
     connect(m_toolScissorsAction, &QAction::triggered, this, [this] {
         if (m_canvas) m_canvas->setTool(CanvasTool::Scissors);
@@ -1107,6 +1110,7 @@ void MainWindow::buildActions()
     m_toolWandAction = new QAction(this);
     m_toolWandAction->setCheckable(true);
     m_toolWandAction->setShortcut(QKeySequence(QStringLiteral("W")));
+    m_toolWandAction->setToolTip(QStringLiteral("Varinha mágica (W)"));
     m_toolGroup->addAction(m_toolWandAction);
     connect(m_toolWandAction, &QAction::triggered, this, [this] {
         if (m_canvas) m_canvas->setTool(CanvasTool::MagicWand);
@@ -1115,6 +1119,7 @@ void MainWindow::buildActions()
     m_toolCloneAction = new QAction(this);
     m_toolCloneAction->setCheckable(true);
     m_toolCloneAction->setShortcut(QKeySequence(QStringLiteral("S")));
+    m_toolCloneAction->setToolTip(QStringLiteral("Carimbo de clonagem (S)"));
     m_toolGroup->addAction(m_toolCloneAction);
     connect(m_toolCloneAction, &QAction::triggered, this, [this] {
         if (m_canvas) m_canvas->setTool(CanvasTool::CloneStamp);
@@ -1123,6 +1128,7 @@ void MainWindow::buildActions()
     m_toolPaintAction = new QAction(this);
     m_toolPaintAction->setCheckable(true);
     m_toolPaintAction->setShortcut(QKeySequence(QStringLiteral("B")));
+    m_toolPaintAction->setToolTip(QStringLiteral("Pincel (B)"));
     m_toolGroup->addAction(m_toolPaintAction);
     connect(m_toolPaintAction, &QAction::triggered, this, [this] {
         if (m_canvas) m_canvas->setTool(CanvasTool::Paint);
@@ -1131,6 +1137,7 @@ void MainWindow::buildActions()
     m_toolFloodAction = new QAction(this);
     m_toolFloodAction->setCheckable(true);
     m_toolFloodAction->setShortcut(QKeySequence(QStringLiteral("G")));
+    m_toolFloodAction->setToolTip(QStringLiteral("Balde de tinta (G)"));
     m_toolGroup->addAction(m_toolFloodAction);
     connect(m_toolFloodAction, &QAction::triggered, this, [this] {
         if (m_canvas) m_canvas->setTool(CanvasTool::FloodFill);
@@ -1139,6 +1146,7 @@ void MainWindow::buildActions()
     m_toolEyedropperAction = new QAction(this);
     m_toolEyedropperAction->setCheckable(true);
     m_toolEyedropperAction->setShortcut(QKeySequence(QStringLiteral("I")));
+    m_toolEyedropperAction->setToolTip(QStringLiteral("Pipeta (I)"));
     m_toolGroup->addAction(m_toolEyedropperAction);
     connect(m_toolEyedropperAction, &QAction::triggered, this, [this] {
         if (m_canvas) m_canvas->setTool(CanvasTool::Eyedropper);
@@ -1218,7 +1226,7 @@ void MainWindow::buildToolBars()
     QHBoxLayout* selectLayout = new QHBoxLayout(selectPage);
     selectLayout->setContentsMargins(8, 2, 8, 2);
     m_selectHintLabel = new QLabel(this);
-    m_selectHintLabel->setStyleSheet(QStringLiteral("color: #888888; font-size: 11px;"));
+    m_selectHintLabel->setObjectName(QStringLiteral("HintLabel"));
     selectLayout->addWidget(m_selectHintLabel);
     selectLayout->addStretch();
     m_toolOptionsStack->addWidget(selectPage);
@@ -1586,10 +1594,10 @@ void MainWindow::buildMenus()
     flipVAct->setIcon(ThemeIcons::actionFlipV());
     connect(flipVAct, &QAction::triggered, this, [this] { flipLayer(false); });
     auto* rotLeftAct = m_imageMenu->addAction(QStringLiteral("Girar 90° para a Esquerda"));
-    rotLeftAct->setIcon(style()->standardIcon(QStyle::SP_ArrowBack));
+    rotLeftAct->setIcon(ThemeIcons::actionRotateLeft());
     connect(rotLeftAct, &QAction::triggered, this, [this] { rotateLayer(-90.0); });
     auto* rotRightAct = m_imageMenu->addAction(QStringLiteral("Girar 90° para a Direita"));
-    rotRightAct->setIcon(style()->standardIcon(QStyle::SP_ArrowForward));
+    rotRightAct->setIcon(ThemeIcons::actionRotateRight());
     connect(rotRightAct, &QAction::triggered, this, [this] { rotateLayer(90.0); });
     m_imageMenu->addSeparator();
 

@@ -987,6 +987,45 @@ QIcon ThemeIcons::actionFlipV(const QColor& color)
     });
 }
 
+QIcon ThemeIcons::actionRotateLeft(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        // 3/4 de circulo (270 graus), abrindo para a direita
+        p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.setBrush(Qt::NoBrush);
+        p.drawArc(QRectF(4 * scale, 4 * scale, 16 * scale, 16 * scale),
+                  45 * 16, 270 * 16);
+        // Ponta da seta no topo (girando anti-horario)
+        QPolygonF tip;
+        tip << QPointF(12 * scale, 1.5 * scale)
+            << QPointF(15.5 * scale, 6 * scale)
+            << QPointF(8.5 * scale, 6 * scale);
+        p.setPen(Qt::NoPen);
+        p.setBrush(color);
+        p.drawPolygon(tip);
+    });
+}
+
+QIcon ThemeIcons::actionRotateRight(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.setBrush(Qt::NoBrush);
+        p.drawArc(QRectF(4 * scale, 4 * scale, 16 * scale, 16 * scale),
+                  45 * 16, 270 * 16);
+        // Ponta da seta na base (girando horario)
+        QPolygonF tip;
+        tip << QPointF(12 * scale, 22.5 * scale)
+            << QPointF(15.5 * scale, 18 * scale)
+            << QPointF(8.5 * scale, 18 * scale);
+        p.setPen(Qt::NoPen);
+        p.setBrush(color);
+        p.drawPolygon(tip);
+    });
+}
+
 QIcon ThemeIcons::actionAlignLeft(const QColor& color)
 {
     return makeMultiSizeIcon([color](QPainter& p, int s) {
