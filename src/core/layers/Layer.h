@@ -15,6 +15,7 @@
 #include "BlendIf.h"
 #include "Gradient.h"
 #include "ImageEffects.h"
+#include "ShapeEffects.h"
 #include "TextEffects.h"
 
 namespace cc {
@@ -42,7 +43,10 @@ enum class BlendMode {
     Exclusion
 };
 enum class TextAlignment { Left, Center, Right };
-enum class ShapeKind { Rectangle, RoundedRect, Ellipse, Line, Polygon, ArrowRight, ArrowCurved, Star, Badge, SpeechBubble, Heart };
+enum class ShapeKind { Rectangle, RoundedRect, Ellipse, Line, Polygon, ArrowRight,
+                       ArrowCurved, Star, Badge, SpeechBubble, Heart,
+                       Triangle, Diamond, Pentagon, Hexagon, Cross, Checkmark,
+                       Cloud, Explosion };
 enum class LayerColorTag { None, Red, Orange, Yellow, Green, Blue, Purple, Gray };
 
 /// Base class of every layer. UI/commands mutate layers ONLY through
@@ -155,7 +159,12 @@ public:
     QColor stroke = Qt::transparent;
     double strokeWidth = 0.0;
     double cornerRadius = 0.0;
+    double strokeDashRatio = 0.0; ///< 0 = traço sólido; >0 = tracejado (escala do strokeWidth)
     QPolygonF points;
+    // Estrela (kind == Star)
+    int starPoints = 5;         ///< 3..16 pontas
+    double starInnerRatio = 0.42; ///< 0.1..0.9 — afiação das pontas internas
+    ShapeShadow shadow;
 };
 
 class BackgroundLayer final : public Layer

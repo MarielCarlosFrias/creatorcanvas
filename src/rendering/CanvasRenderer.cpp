@@ -131,21 +131,15 @@ void drawCheckerboard(QPainter* painter, const QRectF& canvasOnDevice,
     painter->restore();
 }
 
-void drawShape(QPainter* painter, const ShapeLayer& shape)
+namespace {
+
+// Desenha o conteudo da forma em coordenadas LOCAIS (o painter ja tem a
+// transformacao da camada aplicada). Exercicio de cuidado: este e o mesmo
+// codigo que existia no drawShape — preservado caso a caso para nao alterar
+// a silhueta de shapes existentes.
+void paintShapeContents(QPainter* painter, const ShapeLayer& shape,
+                        const QBrush& fillBrush)
 {
-    if (shape.points.size() < 2)
-        return; // no geometry yet (the shape tool arrives in M9)
-
-    QPen pen(shape.stroke, shape.strokeWidth);
-    pen.setCapStyle(Qt::RoundCap);
-    pen.setJoinStyle(Qt::RoundJoin);
-    painter->setPen(pen);
-
-    // Preenchimento: gradiente quando ativo, cor solida caso contrario.
-    const QBrush fillBrush = shape.gradient.isValid()
-        ? gradientBrush(shape.gradient, shape.points.boundingRect())
-        : QBrush(shape.fill);
-
     switch (shape.kind) {
     case ShapeKind::Line: {
         painter->setBrush(Qt::NoBrush);
@@ -180,7 +174,6 @@ void drawShape(QPainter* painter, const ShapeLayer& shape)
         const double y = rect.top();
         const double w = rect.width();
         const double h = rect.height();
-        // Seta para a direita: haste retangular + ponta triangular
         const double shaftTop = y + h * 0.28;
         const double shaftBottom = y + h * 0.72;
         const double headStart = x + w * 0.58;
@@ -206,7 +199,6 @@ void drawShape(QPainter* painter, const ShapeLayer& shape)
         const double w = rect.width();
         const double h = rect.height();
 
-        // Seta curva dinâmica (swoop arrow) muito usada em thumbnails
         QPainterPath path;
         path.moveTo(x, y + h * 0.9);
         path.cubicTo(x + w * 0.1, y + h * 0.35,
@@ -230,12 +222,13 @@ void drawShape(QPainter* painter, const ShapeLayer& shape)
         const double cx = rect.center().x();
         const double cy = rect.center().y();
         const double rOuter = std::min(rect.width(), rect.height()) / 2.0;
-        const double rInner = rOuter * 0.42;
+        const int numPoints = qBound(3, shape.starPoints, 16);
+        const double rInner = rOuter * qBound(0.1, shape.starInnerRatio, 0.9);
 
         QPainterPath path;
-        constexpr int numPoints = 5;
-        constexpr double angleStep = 3.14159265358979323846 / numPoints;
-        double currentAngle = -3.14159265358979323846 / 2.0; // Começa no topo
+        constexpr double kPi = 3.14159265358979323846;
+        const double angleStep = kPi / numPoints;
+        double currentAngle = -kPi / 2.0; // Comeca no topo
 
         for (int i = 0; i < numPoints * 2; ++i) {
             const double r = (i % 2 == 0) ? rOuter : rInner;
@@ -260,7 +253,6 @@ void drawShape(QPainter* painter, const ShapeLayer& shape)
         const double rx = rect.width() / 2.0;
         const double ry = rect.height() / 2.0;
 
-        // Selo / Badge com 12 pontas arredondadas / recortadas estilo burst promocional
         QPainterPath path;
         constexpr int points = 12;
         constexpr double angleStep = 3.14159265358979323846 / points;
@@ -344,7 +336,240 @@ void drawShape(QPainter* painter, const ShapeLayer& shape)
         painter->drawPath(path);
         break;
     }
+    case ShapeKind::Triangle: {
+        const QRectF rect = shape.points.boundingRect();
+        QPainterPath path;
+        path.moveTo(rect.center().x(), rect.top());
+        path.lineTo(rect.right(), rect.bottom());
+        path.lineTo(rect.left(), rect.bottom());
+        path.closeSubpath();
+        painter->setBrush(fillBrush);
+        painter->drawPath(path);
+        break;
     }
+    case ShapeKind::Diamond: {
+        const QRectF rect = shape.points.boundingRect();
+        const double cx = rect.center().x();
+        const double cy = rect.center().y();
+        QPainterPath path;
+        path.moveTo(cx, rect.top());
+        path.lineTo(rect.right(), cy);
+        path.lineTo(cx, rect.bottom());
+        path.lineTo(rect.left(), cy);
+        path.closeSubpath();
+        painter->setBrush(fillBrush);
+        painter->drawPath(path);
+        break;
+    }
+    case ShapeKind::Pentagon:
+    case ShapeKind::Hexagon: {
+        const QRectF rect = shape.points.boundingRect();
+        const double cx = rect.center().x();
+        const double cy = rect.center().y();
+        const double rx = rect.width() / 2.0;
+        const double ry = rect.height() / 2.0;
+        const int sides = (shape.kind == ShapeKind::Pentagon) ? 5 : 6;
+        constexpr double kPi = 3.14159265358979323846;
+        QPainterPath path;
+        for (int i = 0; i < sides; ++i) {
+            const double a = -kPi / 2.0 + i * (2.0 * kPi / sides);
+            const QPointF p(cx + rx * std::cos(a), cy + ry * std::sin(a));
+            if (i == 0)
+                path.moveTo(p);
+            else
+                path.lineTo(p);
+        }
+        path.closeSubpath();
+        painter->setBrush(fillBrush);
+        painter->drawPath(path);
+        break;
+    }
+    case ShapeKind::Cross: {
+        const QRectF rect = shape.points.boundingRect();
+        const double x = rect.left();
+        const double y = rect.top();
+        const double w = rect.width();
+        const double h = rect.height();
+        const double t = std::min(w, h) * 0.36;
+        const double mx = x + (w - t) / 2.0;
+        const double my = y + (h - t) / 2.0;
+        QPainterPath path;
+        path.moveTo(mx, y);
+        path.lineTo(mx + t, y);
+        path.lineTo(mx + t, my);
+        path.lineTo(x + w, my);
+        path.lineTo(x + w, my + t);
+        path.lineTo(mx + t, my + t);
+        path.lineTo(mx + t, y + h);
+        path.lineTo(mx, y + h);
+        path.lineTo(mx, my + t);
+        path.lineTo(x, my + t);
+        path.lineTo(x, my);
+        path.lineTo(mx, my);
+        path.closeSubpath();
+        painter->setBrush(fillBrush);
+        painter->drawPath(path);
+        break;
+    }
+    case ShapeKind::Checkmark: {
+        const QRectF rect = shape.points.boundingRect();
+        const double x = rect.left();
+        const double y = rect.top();
+        const double w = rect.width();
+        const double h = rect.height();
+        QPainterPath path;
+        path.moveTo(x + w * 0.08, y + h * 0.52);
+        path.lineTo(x + w * 0.38, y + h * 0.84);
+        path.lineTo(x + w * 0.94, y + h * 0.14);
+        const QColor ink = shape.gradient.isValid()
+            ? shape.gradient.stops.value(0).color
+            : shape.fill;
+        painter->save();
+        painter->setBrush(Qt::NoBrush);
+        painter->setPen(QPen(ink, std::min(w, h) * 0.16,
+                             Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        painter->drawPath(path);
+        painter->restore();
+        break;
+    }
+    case ShapeKind::Cloud: {
+        const QRectF rect = shape.points.boundingRect();
+        const double cx = rect.center().x();
+        const double cy = rect.top() + rect.height() * 0.55;
+        QPainterPath path;
+        path.addEllipse(QRectF(rect.left(), cy - rect.height() * 0.22,
+                                rect.width() * 0.42, rect.height() * 0.44));
+        path.addEllipse(QRectF(cx - rect.width() * 0.30,
+                               rect.top() + rect.height() * 0.12,
+                               rect.width() * 0.52, rect.height() * 0.56));
+        path.addEllipse(QRectF(cx + rect.width() * 0.02, cy - rect.height() * 0.26,
+                               rect.width() * 0.46, rect.height() * 0.52));
+        path.addEllipse(QRectF(rect.left() + rect.width() * 0.12,
+                               rect.top() + rect.height() * 0.42,
+                               rect.width() * 0.76, rect.height() * 0.45));
+        painter->setBrush(fillBrush);
+        painter->drawPath(path);
+        break;
+    }
+    case ShapeKind::Explosion: {
+        // Explosao (burst) com pontas organicamente irregulares
+        const QRectF rect = shape.points.boundingRect();
+        const double cx = rect.center().x();
+        const double cy = rect.center().y();
+        const double rx = rect.width() / 2.0;
+        const double ry = rect.height() / 2.0;
+        static const double factors[12] = {1.0, 0.42, 0.95, 0.50, 1.0, 0.38,
+                                           0.90, 0.52, 1.0, 0.44, 0.96, 0.55};
+        constexpr double kPi = 3.14159265358979323846;
+        QPainterPath path;
+        for (int i = 0; i < 12; ++i) {
+            const double a = -kPi / 2.0 + i * (2.0 * kPi / 12.0);
+            const double r = factors[i];
+            const QPointF p(cx + rx * r * std::cos(a),
+                            cy + ry * r * std::sin(a));
+            if (i == 0)
+                path.moveTo(p);
+            else
+                path.lineTo(p);
+        }
+        path.closeSubpath();
+        painter->setBrush(fillBrush);
+        painter->drawPath(path);
+        break;
+    }
+    }
+}
+
+// Sombra da forma: extrai o alfa do buffer, desfoca (downscale/upscale como
+// a sombra de texto) e tinge com a cor da sombra, desenhando com offset.
+void paintShapeShadow(QPainter* painter, const ShapeLayer& shape,
+                      const QImage& contents, const QRectF& rect, double margin)
+{
+    const auto& sh = shape.shadow;
+    const QImage alpha = contents.convertToFormat(QImage::Format_Alpha8);
+
+    QImage soft = alpha;
+    if (sh.blur > 0.5) {
+        const int k = qMax(2, static_cast<int>(sh.blur));
+        const QImage small = soft.scaled(qMax(1, soft.width() / k),
+                                         qMax(1, soft.height() / k),
+                                         Qt::IgnoreAspectRatio,
+                                         Qt::SmoothTransformation);
+        soft = small.scaled(alpha.size(), Qt::IgnoreAspectRatio,
+                            Qt::SmoothTransformation);
+    }
+
+    const int sa = sh.color.alpha();
+    QImage tinted(soft.width(), soft.height(), QImage::Format_ARGB32_Premultiplied);
+    tinted.fill(Qt::transparent);
+    for (int y = 0; y < soft.height(); ++y) {
+        const quint8* srcRow = soft.constScanLine(y);
+        QRgb* dstRow = reinterpret_cast<QRgb*>(tinted.scanLine(y));
+        for (int x = 0; x < soft.width(); ++x) {
+            const int a = srcRow[x] * sa / 255;
+            if (a <= 0)
+                continue;
+            dstRow[x] = qRgba(sh.color.red() * a / 255,
+                              sh.color.green() * a / 255,
+                              sh.color.blue() * a / 255, a);
+        }
+    }
+
+    painter->drawImage(
+        QPointF(rect.left() - margin + sh.offsetX,
+                rect.top() - margin + sh.offsetY),
+        tinted);
+}
+
+} // namespace
+
+void drawShape(QPainter* painter, const ShapeLayer& shape)
+{
+    if (shape.points.size() < 2)
+        return; // no geometry yet (the shape tool arrives in M9)
+
+    QPen pen(shape.stroke, shape.strokeWidth);
+    pen.setCapStyle(Qt::RoundCap);
+    pen.setJoinStyle(Qt::RoundJoin);
+    // Traco tracejado: padrao em multiplos da espessura (0 = solido, padrao)
+    if (shape.strokeDashRatio > 0.0 && shape.strokeWidth > 0.0) {
+        const double u = qMax(0.25, shape.strokeDashRatio);
+        pen.setStyle(Qt::CustomDashLine);
+        pen.setDashPattern({4.0 * u, 2.0 * u});
+    }
+    painter->setPen(pen);
+
+    // Preenchimento: gradiente quando ativo, cor solida caso contrario.
+    const QBrush fillBrush = shape.gradient.isValid()
+        ? gradientBrush(shape.gradient, shape.points.boundingRect())
+        : QBrush(shape.fill);
+
+    // SEM sombra: caminho rapido identico ao historico (zero regressao)
+    if (!shape.shadow.enabled) {
+        paintShapeContents(painter, shape, fillBrush);
+        return;
+    }
+
+    // COM sombra: renderiza a forma num buffer, extrai a silhueta e compoe
+    const QRectF rect = shape.points.boundingRect();
+    const auto& sh = shape.shadow;
+    const double margin = qMax(16.0, sh.blur * 3.0)
+        + std::max({std::abs(sh.offsetX), std::abs(sh.offsetY),
+                    shape.strokeWidth * 2.0}) + 2.0;
+    const QSize bufSize(qMax(1, int(rect.width() + 2 * margin)),
+                        qMax(1, int(rect.height() + 2 * margin)));
+    QImage contents(bufSize, QImage::Format_ARGB32_Premultiplied);
+    contents.fill(Qt::transparent);
+    {
+        QPainter bp(&contents);
+        bp.setRenderHint(QPainter::Antialiasing);
+        bp.setPen(pen);
+        bp.translate(-rect.left() + margin, -rect.top() + margin);
+        paintShapeContents(&bp, shape, fillBrush);
+    }
+    paintShapeShadow(painter, shape, contents, rect, margin);
+    painter->drawImage(QPointF(rect.left() - margin, rect.top() - margin),
+                       contents);
 }
 
 struct OutlineCacheKey {

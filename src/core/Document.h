@@ -77,6 +77,10 @@ public:
     // Passadas por valor para garantir compatibilidade com LayerPropertyCommand (Undo/Redo)
     bool setShapeFill(const LayerId& id, QColor fill);
     bool setShapeGradient(const LayerId& id, Gradient gradient);
+    bool setShapeStarPoints(const LayerId& id, int points);
+    bool setShapeStarInnerRatio(const LayerId& id, double ratio);
+    bool setShapeStrokeDashRatio(const LayerId& id, double ratio);
+    bool setShapeShadow(const LayerId& id, ShapeShadow shadow);
     bool setBackgroundGradient(const LayerId& id, Gradient gradient);
     bool setShapeStroke(const LayerId& id, QColor stroke);
     bool setShapeStrokeWidth(const LayerId& id, double width);

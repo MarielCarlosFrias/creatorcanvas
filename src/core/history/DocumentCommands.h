@@ -433,6 +433,10 @@ using SetShapeStrokeWidthCommand  = LayerPropertyCommand<double>;
 using SetShapeCornerRadiusCommand = LayerPropertyCommand<double>;
 using SetShapeKindCommand         = LayerPropertyCommand<ShapeKind>;
 using SetShapeGradientCommand     = LayerPropertyCommand<Gradient>;
+using SetShapeStarPointsCommand   = LayerPropertyCommand<int>;
+using SetShapeStarInnerRatioCommand = LayerPropertyCommand<double>;
+using SetShapeStrokeDashRatioCommand = LayerPropertyCommand<double>;
+using SetShapeShadowCommand       = LayerPropertyCommand<ShapeShadow>;
 using SetBackgroundGradientCommand = LayerPropertyCommand<Gradient>;
 
 // Comandos de histórico para operações de texto (TextLayer)

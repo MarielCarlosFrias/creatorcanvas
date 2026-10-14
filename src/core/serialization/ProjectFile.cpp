@@ -93,6 +93,14 @@ QString shapeKindToString(ShapeKind kind)
     case ShapeKind::Badge:       return QStringLiteral("badge");
     case ShapeKind::SpeechBubble: return QStringLiteral("speechBubble");
     case ShapeKind::Heart:       return QStringLiteral("heart");
+    case ShapeKind::Triangle:    return QStringLiteral("triangle");
+    case ShapeKind::Diamond:     return QStringLiteral("diamond");
+    case ShapeKind::Pentagon:    return QStringLiteral("pentagon");
+    case ShapeKind::Hexagon:     return QStringLiteral("hexagon");
+    case ShapeKind::Cross:       return QStringLiteral("cross");
+    case ShapeKind::Checkmark:   return QStringLiteral("checkmark");
+    case ShapeKind::Cloud:       return QStringLiteral("cloud");
+    case ShapeKind::Explosion:   return QStringLiteral("explosion");
     }
     return QStringLiteral("rectangle");
 }
@@ -373,6 +381,17 @@ QJsonObject writeLayer(const Layer& layer)
         o.insert(QStringLiteral("cornerRadius"), shape.cornerRadius);
         if (shape.gradient.enabled)
             o.insert(QStringLiteral("gradient"), gradientToJson(shape.gradient));
+        o.insert(QStringLiteral("starPoints"), shape.starPoints);
+        o.insert(QStringLiteral("starInnerRatio"), shape.starInnerRatio);
+        o.insert(QStringLiteral("strokeDashRatio"), shape.strokeDashRatio);
+        if (shape.shadow.enabled) {
+            QJsonObject sh;
+            sh.insert(QStringLiteral("color"), colorToString(shape.shadow.color));
+            sh.insert(QStringLiteral("offsetX"), shape.shadow.offsetX);
+            sh.insert(QStringLiteral("offsetY"), shape.shadow.offsetY);
+            sh.insert(QStringLiteral("blur"), shape.shadow.blur);
+            o.insert(QStringLiteral("shadow"), sh);
+        }
         QJsonArray points;
         for (const QPointF& point : shape.points)
             points.append(QJsonArray{point.x(), point.y()});
@@ -1017,6 +1036,17 @@ private:
         if (o.contains(QStringLiteral("gradient")))
             shape->gradient =
                 gradientFromJson(o.value(QStringLiteral("gradient")).toObject());
+        shape->starPoints = qBound(3, o.value(QStringLiteral("starPoints")).toInt(5), 16);
+        shape->starInnerRatio = qBound(0.1, o.value(QStringLiteral("starInnerRatio")).toDouble(0.42), 0.9);
+        shape->strokeDashRatio = qBound(0.0, o.value(QStringLiteral("strokeDashRatio")).toDouble(0.0), 10.0);
+        if (o.contains(QStringLiteral("shadow"))) {
+            const QJsonObject sh = o.value(QStringLiteral("shadow")).toObject();
+            shape->shadow.enabled = true;
+            shape->shadow.color = colorFromString(sh.value(QStringLiteral("color")).toString());
+            shape->shadow.offsetX = sh.value(QStringLiteral("offsetX")).toDouble(5.0);
+            shape->shadow.offsetY = sh.value(QStringLiteral("offsetY")).toDouble(5.0);
+            shape->shadow.blur = sh.value(QStringLiteral("blur")).toDouble(8.0);
+        }
 
         const QJsonArray points = o.value(QStringLiteral("points")).toArray();
         for (const QJsonValue& point : points) {

@@ -491,6 +491,65 @@ bool Document::setShapeGradient(const LayerId& id, Gradient gradient)
     return true;
 }
 
+bool Document::setShapeStarPoints(const LayerId& id, int points)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Shape)
+        return false;
+    auto* shape = static_cast<ShapeLayer*>(layer);
+    const int next = qBound(3, points, 16);
+    if (shape->starPoints == next)
+        return true;
+    shape->starPoints = next;
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
+bool Document::setShapeStarInnerRatio(const LayerId& id, double ratio)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Shape)
+        return false;
+    auto* shape = static_cast<ShapeLayer*>(layer);
+    const double next = qBound(0.1, ratio, 0.9);
+    if (shape->starInnerRatio == next)
+        return true;
+    shape->starInnerRatio = next;
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
+bool Document::setShapeStrokeDashRatio(const LayerId& id, double ratio)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Shape)
+        return false;
+    auto* shape = static_cast<ShapeLayer*>(layer);
+    const double next = qBound(0.0, ratio, 10.0);
+    if (shape->strokeDashRatio == next)
+        return true;
+    shape->strokeDashRatio = next;
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
+bool Document::setShapeShadow(const LayerId& id, ShapeShadow shadow)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Shape)
+        return false;
+    auto* shape = static_cast<ShapeLayer*>(layer);
+    if (shape->shadow == shadow)
+        return true;
+    shape->shadow = std::move(shadow);
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
 bool Document::setBackgroundGradient(const LayerId& id, Gradient gradient)
 {
     Layer* layer = findLayer(id);

@@ -146,7 +146,11 @@ std::unique_ptr<Layer> ShapeLayer::deepCopy() const
     copy->stroke = stroke;
     copy->strokeWidth = strokeWidth;
     copy->cornerRadius = cornerRadius;
+    copy->strokeDashRatio = strokeDashRatio;
     copy->points = points;
+    copy->starPoints = starPoints;
+    copy->starInnerRatio = starInnerRatio;
+    copy->shadow = shadow;
     return copy;
 }
 

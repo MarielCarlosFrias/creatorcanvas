@@ -8,6 +8,7 @@
 // Forward declarations de classes Qt necessárias para a interface gráfica
 class QCheckBox;
 class QDoubleSpinBox;
+class QSpinBox;
 class QPushButton;
 class QLabel;
 class QGroupBox;
@@ -80,6 +81,26 @@ private:
     QLabel* m_gradientAngleLabel = nullptr;
     QLabel* m_gradientStartLabel = nullptr;
     QLabel* m_gradientEndLabel = nullptr;
+
+    // Estrela / Tracejado / Sombra
+    QSpinBox* m_starPointsSpin = nullptr;
+    QDoubleSpinBox* m_starRatioSpin = nullptr;
+    QDoubleSpinBox* m_dashRatioSpin = nullptr;
+    QLabel* m_starPointsLabel = nullptr;
+    QLabel* m_starRatioLabel = nullptr;
+    QLabel* m_dashLabel = nullptr;
+
+    QGroupBox* m_shadowBox = nullptr;
+    QFormLayout* m_shadowForm = nullptr;
+    QCheckBox* m_shadowOn = nullptr;
+    QPushButton* m_shadowColorBtn = nullptr;
+    QDoubleSpinBox* m_shadowXSpin = nullptr;
+    QDoubleSpinBox* m_shadowYSpin = nullptr;
+    QDoubleSpinBox* m_shadowBlurSpin = nullptr;
+    QLabel* m_shadowColorLabel = nullptr;
+    QLabel* m_shadowXLabel = nullptr;
+    QLabel* m_shadowYLabel = nullptr;
+    QLabel* m_shadowBlurLabel = nullptr;
     QDoubleSpinBox* m_strokeWidthSpin = nullptr;
     QDoubleSpinBox* m_cornerRadiusSpin = nullptr;
 

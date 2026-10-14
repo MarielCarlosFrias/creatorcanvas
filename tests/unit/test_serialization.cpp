@@ -89,6 +89,14 @@ private slots:
         shape->gradient.kind = GradientKind::Linear;
         shape->gradient.angleDeg = 45.0;
         shape->gradient.stops = {{0.2f, QColor(255, 210, 0)}, {0.8f, QColor(255, 45, 0)}};
+        shape->strokeDashRatio = 2.0;
+        shape->starPoints = 7;
+        shape->starInnerRatio = 0.6;
+        shape->shadow.enabled = true;
+        shape->shadow.color = QColor(10, 20, 30, 200);
+        shape->shadow.offsetX = 6.0;
+        shape->shadow.offsetY = 7.0;
+        shape->shadow.blur = 9.0;
 
         auto image = std::make_unique<ImageLayer>();
         const LayerId imageId = image->id();
@@ -172,6 +180,14 @@ private slots:
         QCOMPARE(loadedShape->gradient.stops[0].position, 0.2f);
         QCOMPARE(loadedShape->gradient.stops[0].color, QColor(255, 210, 0));
         QCOMPARE(loadedShape->gradient.stops[1].color, QColor(255, 45, 0));
+        QCOMPARE(loadedShape->strokeDashRatio, 2.0);
+        QCOMPARE(loadedShape->starPoints, 7);
+        QCOMPARE(loadedShape->starInnerRatio, 0.6);
+        QVERIFY(loadedShape->shadow.enabled);
+        QCOMPARE(loadedShape->shadow.color, QColor(10, 20, 30, 200));
+        QCOMPARE(loadedShape->shadow.offsetX, 6.0);
+        QCOMPARE(loadedShape->shadow.offsetY, 7.0);
+        QCOMPARE(loadedShape->shadow.blur, 9.0);
 
         auto* loadedImage = static_cast<ImageLayer*>(root->children[2].get());
         QCOMPARE(loadedImage->assetId, assetId);

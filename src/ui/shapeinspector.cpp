@@ -9,6 +9,7 @@
 #include <QCheckBox>
 #include <QColorDialog>
 #include <QDoubleSpinBox>
+#include <QSpinBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QGroupBox>
@@ -135,6 +136,36 @@ void ShapeInspector::refresh()
     m_fillColorBtn->setEnabled(canHaveFill);
     m_fillLabel->setEnabled(canHaveFill);
 
+    // Estrela / Tracejado
+    m_starPointsSpin->setValue(layer->starPoints);
+    m_starRatioSpin->setValue(layer->starInnerRatio);
+    m_dashRatioSpin->setValue(layer->strokeDashRatio);
+    const bool isStar = (layer->kind == ShapeKind::Star);
+    m_starPointsLabel->setVisible(isStar);
+    m_starPointsSpin->setVisible(isStar);
+    m_starRatioLabel->setVisible(isStar);
+    m_starRatioSpin->setVisible(isStar);
+    m_dashLabel->setVisible(layer->strokeWidth > 0.0);
+    m_dashRatioSpin->setVisible(layer->strokeWidth > 0.0);
+
+    // Sombra
+    m_shadowOn->setChecked(layer->shadow.enabled);
+    updateColorButton(m_shadowColorBtn,
+                      layer->shadow.color.isValid()
+                          ? layer->shadow.color : QColor(0, 0, 0, 170));
+    m_shadowXSpin->setValue(layer->shadow.offsetX);
+    m_shadowYSpin->setValue(layer->shadow.offsetY);
+    m_shadowBlurSpin->setValue(layer->shadow.blur);
+    const bool shadowOn = layer->shadow.enabled;
+    m_shadowColorLabel->setEnabled(shadowOn);
+    m_shadowColorBtn->setEnabled(shadowOn);
+    m_shadowXLabel->setEnabled(shadowOn);
+    m_shadowXSpin->setEnabled(shadowOn);
+    m_shadowYLabel->setEnabled(shadowOn);
+    m_shadowYSpin->setEnabled(shadowOn);
+    m_shadowBlurLabel->setEnabled(shadowOn);
+    m_shadowBlurSpin->setEnabled(shadowOn);
+
     // Gradiente
     m_gradientOn->setChecked(layer->gradient.enabled);
     m_gradientKindCombo->setCurrentIndex(
@@ -239,6 +270,66 @@ void ShapeInspector::buildUi()
         updateColorButton(m_fillColorBtn, chosen);
     });
 
+    // 1a-bis. Parametros de Estrela e Traco Tracejado
+    m_starPointsLabel = new QLabel(m_groupBox);
+    m_starPointsSpin = new QSpinBox(m_groupBox);
+    m_starPointsSpin->setRange(3, 16);
+    m_formLayout->addRow(m_starPointsLabel, m_starPointsSpin);
+
+    m_starRatioLabel = new QLabel(m_groupBox);
+    m_starRatioSpin = new QDoubleSpinBox(m_groupBox);
+    m_starRatioSpin->setRange(0.1, 0.9);
+    m_starRatioSpin->setSingleStep(0.05);
+    m_starRatioSpin->setDecimals(2);
+    m_formLayout->addRow(m_starRatioLabel, m_starRatioSpin);
+
+    m_dashLabel = new QLabel(m_groupBox);
+    m_dashRatioSpin = new QDoubleSpinBox(m_groupBox);
+    m_dashRatioSpin->setRange(0.0, 10.0);
+    m_dashRatioSpin->setSingleStep(0.5);
+    m_dashRatioSpin->setDecimals(1);
+    m_dashRatioSpin->setSpecialValueText(QStringLiteral("Solid"));
+    m_formLayout->addRow(m_dashLabel, m_dashRatioSpin);
+
+    auto commitShapeField = [this](auto commitOne) {
+        if (m_loading) return;
+        ShapeLayer* layer = nullptr;
+        if (editingLayer(&layer)) commitOne(layer);
+    };
+    connect(m_starPointsSpin, qOverload<int>(&QSpinBox::valueChanged), this,
+            [this, commitShapeField](int v) {
+        commitShapeField([this, v](ShapeLayer* layer) {
+            if (m_history && m_document)
+                m_history->execute(std::make_unique<SetShapeStarPointsCommand>(
+                    *m_document, m_id, QStringLiteral("shape.starPoints"),
+                    &Document::setShapeStarPoints, layer->starPoints, v));
+            else if (m_document)
+                m_document->setShapeStarPoints(m_id, v);
+        });
+    });
+    connect(m_starRatioSpin, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
+            [this, commitShapeField](double v) {
+        commitShapeField([this, v](ShapeLayer* layer) {
+            if (m_history && m_document)
+                m_history->execute(std::make_unique<SetShapeStarInnerRatioCommand>(
+                    *m_document, m_id, QStringLiteral("shape.starInnerRatio"),
+                    &Document::setShapeStarInnerRatio, layer->starInnerRatio, v));
+            else if (m_document)
+                m_document->setShapeStarInnerRatio(m_id, v);
+        });
+    });
+    connect(m_dashRatioSpin, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
+            [this, commitShapeField](double v) {
+        commitShapeField([this, v](ShapeLayer* layer) {
+            if (m_history && m_document)
+                m_history->execute(std::make_unique<SetShapeStrokeDashRatioCommand>(
+                    *m_document, m_id, QStringLiteral("shape.strokeDash"),
+                    &Document::setShapeStrokeDashRatio, layer->strokeDashRatio, v));
+            else if (m_document)
+                m_document->setShapeStrokeDashRatio(m_id, v);
+        });
+    });
+
     // 1b. Secao de Gradiente (preenchimento com 2 cores)
     m_gradientBox = new QGroupBox(content);
     m_gradientBox->setObjectName(QStringLiteral("GradientSection"));
@@ -328,6 +419,84 @@ void ShapeInspector::buildUi()
         commitGradient(std::move(g));
     });
 
+    // 1c. Secao Sombra Projetada
+    m_shadowBox = new QGroupBox(content);
+    m_shadowForm = new QFormLayout(m_shadowBox);
+    m_shadowForm->setRowWrapPolicy(QFormLayout::WrapLongRows);
+
+    m_shadowOn = new QCheckBox(m_shadowBox);
+    m_shadowForm->addRow(m_shadowOn);
+
+    m_shadowColorLabel = new QLabel(m_shadowBox);
+    m_shadowColorBtn = new QPushButton(m_shadowBox);
+    m_shadowForm->addRow(m_shadowColorLabel, m_shadowColorBtn);
+
+    m_shadowXLabel = new QLabel(m_shadowBox);
+    m_shadowXSpin = new QDoubleSpinBox(m_shadowBox);
+    m_shadowXSpin->setRange(-200.0, 200.0);
+    m_shadowXSpin->setDecimals(0);
+    m_shadowForm->addRow(m_shadowXLabel, m_shadowXSpin);
+
+    m_shadowYLabel = new QLabel(m_shadowBox);
+    m_shadowYSpin = new QDoubleSpinBox(m_shadowBox);
+    m_shadowYSpin->setRange(-200.0, 200.0);
+    m_shadowYSpin->setDecimals(0);
+    m_shadowForm->addRow(m_shadowYLabel, m_shadowYSpin);
+
+    m_shadowBlurLabel = new QLabel(m_shadowBox);
+    m_shadowBlurSpin = new QDoubleSpinBox(m_shadowBox);
+    m_shadowBlurSpin->setRange(0.0, 60.0);
+    m_shadowBlurSpin->setDecimals(0);
+    m_shadowForm->addRow(m_shadowBlurLabel, m_shadowBlurSpin);
+
+    auto readShadowFromUi = [this]() -> ShapeShadow {
+        ShapeLayer* layer = nullptr;
+        ShapeShadow s;
+        if (!editingLayer(&layer))
+            return s;
+        s = layer->shadow;
+        s.enabled = m_shadowOn->isChecked();
+        s.offsetX = m_shadowXSpin->value();
+        s.offsetY = m_shadowYSpin->value();
+        s.blur = m_shadowBlurSpin->value();
+        if (!s.color.isValid())
+            s.color = QColor(0, 0, 0, 170);
+        return s;
+    };
+    auto commitShadow = [this, readShadowFromUi]() {
+        if (m_loading) return;
+        ShapeLayer* layer = nullptr;
+        if (!editingLayer(&layer)) return;
+        ShapeShadow next = readShadowFromUi();
+        if (layer->shadow == next) return;
+        if (m_history && m_document)
+            m_history->execute(std::make_unique<SetShapeShadowCommand>(
+                *m_document, m_id, QStringLiteral("shape.shadow"),
+                &Document::setShapeShadow, layer->shadow, std::move(next)));
+        else if (m_document)
+            m_document->setShapeShadow(m_id, std::move(next));
+    };
+    connect(m_shadowOn, &QCheckBox::toggled, this, commitShadow);
+    connect(m_shadowXSpin, qOverload<double>(&QDoubleSpinBox::valueChanged), this, commitShadow);
+    connect(m_shadowYSpin, qOverload<double>(&QDoubleSpinBox::valueChanged), this, commitShadow);
+    connect(m_shadowBlurSpin, qOverload<double>(&QDoubleSpinBox::valueChanged), this, commitShadow);
+    connect(m_shadowColorBtn, &QPushButton::clicked, this, [this, commitShadow, readShadowFromUi] {
+        ShapeLayer* layer = nullptr;
+        if (!editingLayer(&layer)) return;
+        const QColor chosen = QColorDialog::getColor(
+            layer->shadow.color.isValid() ? layer->shadow.color : QColor(0, 0, 0, 170),
+            this, QString(), QColorDialog::ShowAlphaChannel);
+        if (!chosen.isValid()) return;
+        ShapeShadow s = readShadowFromUi();
+        s.color = chosen;
+        if (m_history && m_document)
+            m_history->execute(std::make_unique<SetShapeShadowCommand>(
+                *m_document, m_id, QStringLiteral("shape.shadow"),
+                &Document::setShapeShadow, layer->shadow, s));
+        else if (m_document)
+            m_document->setShapeShadow(m_id, s);
+    });
+
     // 2. Botão e label de Cor do Contorno (Stroke Color)
     m_strokeLabel = new QLabel(m_groupBox);
     m_strokeColorBtn = new QPushButton(m_groupBox);
@@ -392,6 +561,7 @@ void ShapeInspector::buildUi()
 
     mainLayout->addWidget(m_groupBox);
     mainLayout->addWidget(m_gradientBox);
+    mainLayout->addWidget(m_shadowBox);
     mainLayout->addStretch();
     auto* scroll = new QScrollArea(this);
     scroll->setWidgetResizable(true);
@@ -443,6 +613,23 @@ void ShapeInspector::retranslateUi()
     m_gradientKindCombo->addItem(m_i18n->t("editor", "shape.gradient.linear"));
     m_gradientKindCombo->addItem(m_i18n->t("editor", "shape.gradient.radial"));
     m_gradientKindCombo->setCurrentIndex(gk >= 0 ? gk : 0);
+    m_starPointsLabel->setText(m_i18n->t("editor", "shape.starPoints"));
+    m_starRatioLabel->setText(m_i18n->t("editor", "shape.starSharpness"));
+    m_dashLabel->setText(m_i18n->t("editor", "shape.strokeDash"));
+    m_shadowOn->setText(m_i18n->t("editor", "shape.shadow.enable"));
+    m_shadowColorLabel->setText(m_i18n->t("editor", "shape.shadow.color"));
+    m_shadowXLabel->setText(m_i18n->t("editor", "shape.shadow.offsetX"));
+    m_shadowYLabel->setText(m_i18n->t("editor", "shape.shadow.offsetY"));
+    m_shadowBlurLabel->setText(m_i18n->t("editor", "shape.shadow.blur"));
+    m_shadowBox->setTitle(m_i18n->t("editor", "shape.shadow.title"));
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.triangle"), static_cast<int>(ShapeKind::Triangle));
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.diamond"), static_cast<int>(ShapeKind::Diamond));
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.pentagon"), static_cast<int>(ShapeKind::Pentagon));
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.hexagon"), static_cast<int>(ShapeKind::Hexagon));
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.cross"), static_cast<int>(ShapeKind::Cross));
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.checkmark"), static_cast<int>(ShapeKind::Checkmark));
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.cloud"), static_cast<int>(ShapeKind::Cloud));
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.explosion"), static_cast<int>(ShapeKind::Explosion));
 
     const int currentIdx = m_kindCombo->currentIndex();
     const int currentData = (currentIdx >= 0) ? m_kindCombo->itemData(currentIdx).toInt() : 0;
