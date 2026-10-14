@@ -47,4 +47,9 @@ cc_add_test(test_ui_phase1 unit/test_ui_phase1.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/darktheme.cpp
 )
 cc_add_test(test_photocraft unit/test_photocraft.cpp)
+cc_add_test(test_hit_alpha unit/test_hit_alpha.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvasview.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/aibackgrounddialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/maskeditcanvas.cpp
+)
 cc_add_test(test_template_textfit unit/test_template_textfit.cpp)

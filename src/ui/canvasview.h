@@ -174,8 +174,12 @@ private:
 
     enum class Gesture { None, Move, Scale, Rotate };
 
+public:
+    /// Conversão de coordenadas (exposta para testes e sincronia de UI).
     QTransform docToDevice() const;
     QTransform deviceToDoc() const;
+
+private:
     void zoomAt(const QPointF& widgetPos, double factor);
     void emitZoomChanged();
     Layer* hitTestLayer(const QPointF& docPos) const;
