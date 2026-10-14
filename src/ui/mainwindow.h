@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QList>
 #include <QPointF>
 #include <QString>
 
@@ -157,7 +158,8 @@ private:
     QAction* m_addStarAction = nullptr;
     QAction* m_addBadgeAction = nullptr;
     QAction* m_addSpeechBubbleAction = nullptr;
-    QAction* m_addHeartAction = nullptr;
+    QAction* m_addHeartAction = nullptr;    // Shape Power Pack: ações data-driven do submenu de formas
+    QList<QAction*> m_addNewShapeActions;
     QMenu* m_alignMenu = nullptr;
     QAction* m_alignLeftAction = nullptr;
     QAction* m_alignCenterXAction = nullptr;

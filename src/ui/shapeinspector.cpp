@@ -475,6 +475,9 @@ void ShapeInspector::buildUi()
                 &Document::setShapeShadow, layer->shadow, std::move(next)));
         else if (m_document)
             m_document->setShapeShadow(m_id, std::move(next));
+        // Re-sincroniza: sem isto os campos X/Y/cor ficavam desativados
+        // depois de ligar a sombra (nunca havia um refresh).
+        refresh();
     };
     connect(m_shadowOn, &QCheckBox::toggled, this, commitShadow);
     connect(m_shadowXSpin, qOverload<double>(&QDoubleSpinBox::valueChanged), this, commitShadow);
@@ -495,6 +498,7 @@ void ShapeInspector::buildUi()
                 &Document::setShapeShadow, layer->shadow, s));
         else if (m_document)
             m_document->setShapeShadow(m_id, s);
+        refresh();
     });
 
     // 2. Botão e label de Cor do Contorno (Stroke Color)
@@ -622,15 +626,6 @@ void ShapeInspector::retranslateUi()
     m_shadowYLabel->setText(m_i18n->t("editor", "shape.shadow.offsetY"));
     m_shadowBlurLabel->setText(m_i18n->t("editor", "shape.shadow.blur"));
     m_shadowBox->setTitle(m_i18n->t("editor", "shape.shadow.title"));
-    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.triangle"), static_cast<int>(ShapeKind::Triangle));
-    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.diamond"), static_cast<int>(ShapeKind::Diamond));
-    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.pentagon"), static_cast<int>(ShapeKind::Pentagon));
-    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.hexagon"), static_cast<int>(ShapeKind::Hexagon));
-    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.cross"), static_cast<int>(ShapeKind::Cross));
-    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.checkmark"), static_cast<int>(ShapeKind::Checkmark));
-    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.cloud"), static_cast<int>(ShapeKind::Cloud));
-    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.explosion"), static_cast<int>(ShapeKind::Explosion));
-
     const int currentIdx = m_kindCombo->currentIndex();
     const int currentData = (currentIdx >= 0) ? m_kindCombo->itemData(currentIdx).toInt() : 0;
     m_kindCombo->clear();
@@ -644,6 +639,14 @@ void ShapeInspector::retranslateUi()
     m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.badge"), static_cast<int>(ShapeKind::Badge));
     m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.speechBubble"), static_cast<int>(ShapeKind::SpeechBubble));
     m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.heart"), static_cast<int>(ShapeKind::Heart));
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.triangle"), static_cast<int>(ShapeKind::Triangle));
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.diamond"), static_cast<int>(ShapeKind::Diamond));
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.pentagon"), static_cast<int>(ShapeKind::Pentagon));
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.hexagon"), static_cast<int>(ShapeKind::Hexagon));
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.cross"), static_cast<int>(ShapeKind::Cross));
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.checkmark"), static_cast<int>(ShapeKind::Checkmark));
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.cloud"), static_cast<int>(ShapeKind::Cloud));
+    m_kindCombo->addItem(m_i18n->t("editor", "shape.kind.explosion"), static_cast<int>(ShapeKind::Explosion));
 
     for (int i = 0; i < m_kindCombo->count(); ++i) {
         if (m_kindCombo->itemData(i).toInt() == currentData) {

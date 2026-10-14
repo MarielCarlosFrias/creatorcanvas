@@ -59,6 +59,22 @@
 namespace cc {
 namespace {
 
+
+// Formas do Shape Power Pack (menu Inserir > Forma): kind + chave i18n + fallback PT
+struct NewShapeDef { ShapeKind kind; const char* key; const char* fallback; };
+static const NewShapeDef kNewShapeDefs[] = {
+    {ShapeKind::Triangle,   "triangle",   QT_TRANSLATE_NOOP("editor", "Triângulo")},
+    {ShapeKind::Diamond,    "diamond",    "Losango"},
+    {ShapeKind::Pentagon,   "pentagon",   "Pentágono"},
+    {ShapeKind::Hexagon,    "hexagon",    "Hexágono"},
+    {ShapeKind::Cross,      "cross",      "Cruz"},
+    {ShapeKind::Checkmark,  "checkmark",  "Marca de verificação"},
+    {ShapeKind::Cloud,      "cloud",      "Nuvem"},
+    {ShapeKind::Explosion,  "explosion",  "Explosão (Burst)"},
+};
+constexpr int kNewShapeCount = sizeof(kNewShapeDefs) / sizeof(kNewShapeDefs[0]);
+
+
 QImage generateThumbnail(const Document& doc)
 {
     if (doc.width() <= 0 || doc.height() <= 0)
@@ -1723,6 +1739,14 @@ void MainWindow::buildMenus()
     m_addShapeMenu->addSeparator();
     m_addShapeMenu->addAction(m_addSpeechBubbleAction);
     m_addShapeMenu->addAction(m_addHeartAction);
+    m_addShapeMenu->addSeparator();
+    for (const auto& def : kNewShapeDefs) {
+        QAction* act = m_addShapeMenu->addAction(QString());
+        act->setIcon(ThemeIcons::toolShape());
+        const ShapeKind kind = def.kind;
+        connect(act, &QAction::triggered, this, [this, kind] { addShape(kind); });
+        m_addNewShapeActions.append(act);
+    }
 
     // Submenu de alinhamento rápido da camada em relação à tela
     m_alignMenu = m_layerMenu->addMenu(QString());
@@ -3098,6 +3122,11 @@ void MainWindow::retranslateUi()
         m_addSpeechBubbleAction->setText(m_i18n->t("common", "menu.layer.shape.speechBubble"));
     if (m_addHeartAction)
         m_addHeartAction->setText(m_i18n->t("common", "menu.layer.shape.heart"));
+    for (int i = 0; i < m_addNewShapeActions.size() && i < kNewShapeCount; ++i) {
+        m_addNewShapeActions[i]->setText(
+            m_i18n->t("editor", QStringLiteral("shape.kind.%1")
+                          .arg(QLatin1String(kNewShapeDefs[i].key))));
+    }
     if (m_alignMenu)
         m_alignMenu->setTitle(m_i18n->t("common", "menu.layer.align"));
     if (m_alignLeftAction)
