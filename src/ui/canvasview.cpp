@@ -351,21 +351,35 @@ void CanvasView::setMultiSelection(const QList<LayerId>& ids)
     update();
 }
 
-QList<Layer*> CanvasView::hitTestRubberBand(const QRectF& docRect) const
+namespace {
+// Coleta recursivamente as camadas folha (desce em grupos) que intersectam a
+// área de seleção — rubber band também tem que achar formas dentro de grupos.
+void collectRubberBandHits(const GroupLayer& group, const QRectF& docRect,
+                           QList<Layer*>& result)
 {
-    QList<Layer*> result;
-    if (!m_document) return result;
-    const auto& children = m_document->rootGroup()->children;
-    for (const auto& child : children) {
+    for (const auto& child : group.children) {
         Layer* layer = child.get();
         if (!layer->visible || layer->locked) continue;
         if (layer->type() == LayerType::Background) continue;
+        if (layer->type() == LayerType::Group) {
+            collectRubberBandHits(static_cast<const GroupLayer&>(*layer),
+                                  docRect, result);
+            continue;
+        }
         const QRectF bounds = layer->contentBounds();
         if (bounds.isEmpty()) continue;
         const QRectF layerDocRect = layer->transform.matrix(bounds).mapRect(bounds);
         if (docRect.intersects(layerDocRect))
             result.append(layer);
     }
+}
+} // namespace
+
+QList<Layer*> CanvasView::hitTestRubberBand(const QRectF& docRect) const
+{
+    QList<Layer*> result;
+    if (!m_document) return result;
+    collectRubberBandHits(*m_document->rootGroup(), docRect, result);
     return result;
 }
 
@@ -485,10 +499,14 @@ bool CanvasView::imagePixelTransparent(const ImageLayer& image,
     return alpha < 16;
 }
 
-Layer* CanvasView::hitTestLayer(const QPointF& docPos) const
+// Percorre os filhos de um grupo do TOPO para o FUNDO (o de cima ganha),
+// DESCENDO dentro de subgrupos: formas dentro de grupos também recebem
+// clique e menu de contexto. Grupos não interceptam cliques por si — só os
+// filhos visíveis.
+Layer* CanvasView::hitTestChildrenRecursive(const GroupLayer& group,
+                                            const QPointF& docPos) const
 {
-    const auto& children = m_document->rootGroup()->children;
-    for (auto it = children.rbegin(); it != children.rend(); ++it) {
+    for (auto it = group.children.rbegin(); it != group.children.rend(); ++it) {
         Layer* layer = it->get();
         if (!layer->visible || layer->locked)
             continue;
@@ -496,6 +514,12 @@ Layer* CanvasView::hitTestLayer(const QPointF& docPos) const
             continue; // invisível de fato não captura cliques
         if (layer->type() == LayerType::Background)
             continue;
+        if (layer->type() == LayerType::Group) {
+            if (Layer* child = hitTestChildrenRecursive(
+                    static_cast<const GroupLayer&>(*layer), docPos))
+                return child;
+            continue; // clicou fora dos filhos: o grupo não captura
+        }
         const QRectF bounds = layer->contentBounds();
         if (bounds.isEmpty())
             continue;
@@ -513,6 +537,13 @@ Layer* CanvasView::hitTestLayer(const QPointF& docPos) const
         return layer;
     }
     return nullptr;
+}
+
+Layer* CanvasView::hitTestLayer(const QPointF& docPos) const
+{
+    if (!m_document)
+        return nullptr;
+    return hitTestChildrenRecursive(*m_document->rootGroup(), docPos);
 }
 
 CanvasView::HandleSet CanvasView::handlePositions(const Layer& layer) const

@@ -92,6 +92,63 @@ private slots:
         QApplication::sendEvent(&canvas, &pressEdge);
         QCOMPARE(canvas.selectedLayers().first(), imageId);
     }
+
+    void contextMenuOnGroupedShapeDoesNotFallBack()
+    {
+        // Cenario exato reportado: imagem selecionada primeiro; forma DENTRO
+        // de um grupo embaixo. Botao direito na forma tem que selecionar A
+        // FORMA — nao pode cair na selecao anterior (a imagem).
+        CanvasView canvas;
+        Document doc(200, 200, 96);
+
+        // Grupo com uma forma dentro
+        auto group = std::make_unique<GroupLayer>();
+        group->name = QStringLiteral("grupo");
+        auto shape = std::make_unique<ShapeLayer>();
+        shape->name = QStringLiteral("forma no grupo");
+        shape->kind = ShapeKind::Rectangle;
+        shape->points = QPolygonF{QPointF(-80, -80), QPointF(80, -80),
+                                  QPointF(80, 80), QPointF(-80, 80)};
+        shape->fill = QColor(0, 90, 255);
+        shape->transform.position = QPointF(100, 100);
+        const LayerId shapeId = shape->id();
+        group->children.push_back(std::move(shape));
+        doc.addLayer(std::move(group));
+
+        // Imagem 100x100 opaca por cima, cobrindo parcialmente a forma
+        QImage img(100, 100, QImage::Format_ARGB32);
+        img.fill(qRgba(0, 200, 0, 255));
+        img.setPixel(50, 50, qRgba(0, 0, 0, 0)); // 1 pixel furado no centro
+        const LayerId assetId = doc.assets().addImage(img);
+        auto image = std::make_unique<ImageLayer>();
+        image->name = QStringLiteral("imagem");
+        image->assetId = assetId;
+        image->naturalWidth = 100;
+        image->naturalHeight = 100;
+        image->transform.position = QPointF(100, 100);
+        const LayerId imageId = image->id();
+        doc.addLayer(std::move(image));
+
+        canvas.setDocument(&doc);
+        canvas.resize(600, 600);
+
+        // "Seleciono um objeto primeiro" — a imagem
+        canvas.setSelectedLayer(imageId);
+        QCOMPARE(canvas.selectedLayers().first(), imageId);
+
+        // Botao direito na forma DO GRUPO (ponto visivel da forma, fora da
+        // imagem: doc (160,100)) — tem que selecionar a forma, nao a imagem
+        const QPoint shapeDevice = canvas.docToDevice().map(QPointF(160, 100)).toPoint();
+        QTimer::singleShot(0, [] {
+            for (QWidget* w : QApplication::topLevelWidgets())
+                if (auto* m = qobject_cast<QMenu*>(w))
+                    m->close();
+        });
+        QContextMenuEvent ctx(QContextMenuEvent::Mouse, shapeDevice,
+                              canvas.mapToGlobal(shapeDevice));
+        QApplication::sendEvent(&canvas, &ctx);
+        QCOMPARE(canvas.selectedLayers().first(), shapeId);
+    }
 };
 
 QTEST_MAIN(TestHitAlpha)
