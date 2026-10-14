@@ -179,6 +179,7 @@ private:
     void zoomAt(const QPointF& widgetPos, double factor);
     void emitZoomChanged();
     Layer* hitTestLayer(const QPointF& docPos) const;
+    bool imagePixelTransparent(const ImageLayer& image, const QPointF& local) const;
     HandleSet handlePositions(const Layer& layer) const;
     int handleAt(const QPointF& widgetPos) const;
     void drawSelectionOverlay(QPainter* painter);

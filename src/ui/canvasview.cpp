@@ -442,6 +442,49 @@ void CanvasView::emitZoomChanged()
     emit zoomChanged(m_zoom);
 }
 
+// Amostra o alfa efetivo (imagem * mascara alfa) nas coordenadas naturais
+// da camada. Retorna true se o pixel for praticamente transparente — nesses
+// pontos o clique deve ATRAVESSAR a imagem e acertar o que está por baixo.
+bool CanvasView::imagePixelTransparent(const ImageLayer& image,
+                                        const QPointF& local) const
+{
+    if (image.naturalWidth <= 0 || image.naturalHeight <= 0)
+        return false;
+    if (!m_document)
+        return false;
+    const QImage src = m_document->assets().decodedImage(image.assetId);
+    if (src.isNull())
+        return false; // sem bitmap: mantém o comportamento de retângulo
+
+    const int ix = qBound(0, static_cast<int>(std::floor(local.x())),
+                          image.naturalWidth - 1);
+    const int iy = qBound(0, static_cast<int>(std::floor(local.y())),
+                          image.naturalHeight - 1);
+
+    // Fast-path 32bpp: leitura direta do pixel, sem conversão nem cópia.
+    int alpha = 255;
+    if (src.depth() == 32) {
+        const QRgb* row = reinterpret_cast<const QRgb*>(src.constScanLine(iy));
+        alpha = qAlpha(row[ix]);
+    } else {
+        alpha = qAlpha(src.pixelColor(ix, iy).rgba());
+    }
+
+    // Máscara alfa não-destrutiva também esconde o pixel
+    if (!image.alphaMask.isNull()) {
+        const QImage& mask = image.alphaMask;
+        if (mask.valid(ix, iy)) {
+            const int m = mask.format() == QImage::Format_Alpha8
+                             ? mask.constScanLine(iy)[ix]
+                             : qAlpha(mask.pixel(ix, iy));
+            alpha = alpha * m / 255;
+        }
+    }
+
+    // Limiar ~6%: abaixo disso consideramos "furado"
+    return alpha < 16;
+}
+
 Layer* CanvasView::hitTestLayer(const QPointF& docPos) const
 {
     const auto& children = m_document->rootGroup()->children;
@@ -449,14 +492,25 @@ Layer* CanvasView::hitTestLayer(const QPointF& docPos) const
         Layer* layer = it->get();
         if (!layer->visible || layer->locked)
             continue;
+        if (layer->opacity() <= 0.01f)
+            continue; // invisível de fato não captura cliques
         if (layer->type() == LayerType::Background)
             continue;
         const QRectF bounds = layer->contentBounds();
         if (bounds.isEmpty())
             continue;
         const QPointF local = layer->transform.matrix(bounds).inverted().map(docPos);
-        if (bounds.contains(local))
-            return layer;
+        if (!bounds.contains(local))
+            continue;
+
+        // Imagens são testadas POR PIXEL: clicar numa área transparente de
+        // uma imagem (ex.: cantos do recorte da IA) seleciona a camada de
+        // baixo, não a imagem inteira.
+        if (layer->type() == LayerType::Image) {
+            if (imagePixelTransparent(static_cast<const ImageLayer&>(*layer), local))
+                continue;
+        }
+        return layer;
     }
     return nullptr;
 }
