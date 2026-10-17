@@ -101,7 +101,11 @@ private slots:
         auto image = std::make_unique<ImageLayer>();
         const LayerId imageId = image->id();
         image->name = QStringLiteral("Photo");
-        const LayerId assetId = newLayerId();
+        // Asset real no store: id pendurado sem asset agora é rejeitado
+        // no load (antes virava uma camada invisível e silenciosa).
+        QImage src(3, 2, QImage::Format_ARGB32);
+        src.fill(Qt::red);
+        const LayerId assetId = doc.assets().addImage(src);
         image->assetId = assetId;
         image->naturalWidth = 3;
         image->naturalHeight = 2;
@@ -216,6 +220,48 @@ private slots:
         QCOMPARE(loaded->height(), 500);
         QCOMPARE(loaded->dpi(), 72);
         QCOMPARE(loaded->rootGroup()->children.size(), std::size_t(0));
+    }
+
+    void roundTripAllShapeKinds()
+    {
+        // Regressão: shapeKindFromString não parseava os 8 shapes do Power
+        // Pack — ao recarregar, viravam Rectangle silenciosamente.
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath("kinds.creatorcanvas");
+
+        const std::vector<ShapeKind> kinds = {
+            ShapeKind::Rectangle,   ShapeKind::RoundedRect, ShapeKind::Ellipse,
+            ShapeKind::Line,       ShapeKind::Polygon,      ShapeKind::ArrowRight,
+            ShapeKind::ArrowCurved, ShapeKind::Star,        ShapeKind::Badge,
+            ShapeKind::SpeechBubble, ShapeKind::Heart,      ShapeKind::Triangle,
+            ShapeKind::Diamond,    ShapeKind::Pentagon,     ShapeKind::Hexagon,
+            ShapeKind::Cross,      ShapeKind::Checkmark,    ShapeKind::Cloud,
+            ShapeKind::Explosion,
+        };
+
+        Document doc(400, 400);
+        std::vector<std::pair<LayerId, ShapeKind>> created;
+        for (ShapeKind kind : kinds) {
+            auto shape = std::make_unique<ShapeLayer>();
+            shape->name = QStringLiteral("k%1").arg(static_cast<int>(kind));
+            shape->kind = kind;
+            created.emplace_back(shape->id(), kind);
+            QVERIFY(doc.addLayer(std::move(shape)));
+        }
+
+        QString error;
+        QVERIFY(saveDocument(doc, path, &error));
+        auto loaded = loadDocument(path, &error);
+        QVERIFY(loaded != nullptr);
+
+        const auto* root = loaded->rootGroup();
+        QVERIFY(root->children.size() == kinds.size());
+        for (std::size_t i = 0; i < created.size(); ++i) {
+            const auto* layer = static_cast<const ShapeLayer*>(root->children[i].get());
+            QCOMPARE(layer->id(), created[i].first);
+            QCOMPARE(layer->kind, created[i].second);
+        }
     }
 
     void roundTripSpecialValues()

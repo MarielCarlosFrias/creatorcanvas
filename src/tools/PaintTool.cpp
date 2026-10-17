@@ -99,8 +99,12 @@ void PaintTool::mousePress(QMouseEvent* event, const QPointF& docPos, const Tool
             m_workingImage, m_prevPointLocal, localPos,
             m_brushType, m_color, m_size, m_opacity);
 
-        LayerId tempAssetId = ctx.document->assets().addImage(m_workingImage);
-        ctx.document->setImageLayerAsset(img->id(), tempAssetId, img->naturalWidth, img->naturalHeight);
+        // A5: durante o gesto NAO criamos assets — antes eram addImage()
+        // por mouse-move (cada um ~1x a imagem inteira, retidos para
+        // sempre no AssetStore e no arquivo salvo). A prévia vai pelo
+        // overlay do CanvasView; um único asset nasce no release.
+        if (ctx.setLayerPreview)
+            ctx.setLayerPreview(m_activeLayerId, m_workingImage);
 
         if (ctx.requestUpdate)
             ctx.requestUpdate();
@@ -116,7 +120,6 @@ void PaintTool::mouseMove(QMouseEvent* event, const QPointF& docPos, const ToolC
     if (m_isPainting && ctx.document && !m_activeLayerId.isNull()) {
         Layer* layer = ctx.document->findLayer(m_activeLayerId);
         if (layer && layer->type() == LayerType::Image) {
-            auto* img = static_cast<ImageLayer*>(layer);
             const QTransform matrix = layer->transform.matrix(layer->contentBounds());
             const QPointF localPos = matrix.inverted().map(docPos);
 
@@ -126,8 +129,8 @@ void PaintTool::mouseMove(QMouseEvent* event, const QPointF& docPos, const ToolC
 
             m_prevPointLocal = localPos;
 
-            LayerId tempAssetId = ctx.document->assets().addImage(m_workingImage);
-            ctx.document->setImageLayerAsset(img->id(), tempAssetId, img->naturalWidth, img->naturalHeight);
+            if (ctx.setLayerPreview)
+                ctx.setLayerPreview(m_activeLayerId, m_workingImage);
 
             if (ctx.requestUpdate)
                 ctx.requestUpdate();
@@ -147,13 +150,14 @@ void PaintTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const To
         Layer* layer = ctx.document->findLayer(m_activeLayerId);
         if (layer && layer->type() == LayerType::Image) {
             auto* img = static_cast<ImageLayer*>(layer);
-            LayerId finalAssetId = ctx.document->assets().addImage(m_workingImage);
-
-            // Revert live preview temporarily so history executes cleanly
-            ctx.document->setImageLayerAsset(img->id(), m_origAssetId, m_origWidth, m_origHeight);
-
+            const LayerId finalAssetId = ctx.document->assets().addImage(m_workingImage);
             const QString cmdName = ctx.i18n ? ctx.i18n->t("editor", "canvas.layer.paint") : QStringLiteral("Painting");
 
+            if (ctx.clearLayerPreview)
+                ctx.clearLayerPreview();
+
+            // O documento nunca foi mutado durante o gesto (prévia via
+            // overlay), então não há "revert" — só o commit final.
             if (ctx.history) {
                 ctx.history->execute(std::make_unique<ModifyImageLayerCommand>(
                     *ctx.document, img->id(),
@@ -194,13 +198,8 @@ void PaintTool::drawOverlay(QPainter* painter, const ToolContext& ctx)
 
 void PaintTool::cancel(const ToolContext& ctx)
 {
-    if (m_isPainting && ctx.document && !m_activeLayerId.isNull()) {
-        Layer* layer = ctx.document->findLayer(m_activeLayerId);
-        if (layer && layer->type() == LayerType::Image) {
-            auto* img = static_cast<ImageLayer*>(layer);
-            ctx.document->setImageLayerAsset(img->id(), m_origAssetId, m_origWidth, m_origHeight);
-        }
-    }
+    if (m_isPainting && ctx.clearLayerPreview && !m_activeLayerId.isNull())
+        ctx.clearLayerPreview(); // documento nunca foi mutado
     m_isPainting = false;
     m_workingImage = QImage();
     if (ctx.requestUpdate)

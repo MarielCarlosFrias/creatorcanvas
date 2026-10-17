@@ -23,6 +23,7 @@ AiBackgroundDialog::AiBackgroundDialog(const QImage& sourceImage, I18nService* i
     : QDialog(parent),
       m_originalImage(sourceImage),
       m_i18n(i18n)
+    , m_cancelFlag(std::make_shared<std::atomic<bool>>(false))
 {
     setWindowTitle(m_i18n ? m_i18n->t("editor", "aiBackground.title") : QStringLiteral("Remoção de Fundo com IA - CreatorCanvas"));
     setMinimumSize(920, 640);
@@ -38,31 +39,25 @@ AiBackgroundDialog::AiBackgroundDialog(const QImage& sourceImage, I18nService* i
 
 AiBackgroundDialog::~AiBackgroundDialog()
 {
-    m_cancelRequested.store(true);
-    if (m_workerThread) {
-        if (m_workerThread->isRunning()) {
-            m_workerThread->requestInterruption();
-            m_workerThread->wait(2000);
-        }
-    }
+    if (m_cancelFlag)
+        m_cancelFlag->store(true);
+    // O worker captura o flag por valor (shared_ptr): mesmo que este wait
+    // estoure o tempo, ele NUNCA lê memória do diálogo destruído.
+    if (m_workerThread && m_workerThread->isRunning())
+        m_workerThread->wait(2000);
 }
 
 void AiBackgroundDialog::reject()
 {
-    m_cancelRequested.store(true);
-    if (m_workerThread && m_workerThread->isRunning()) {
-        m_workerThread->requestInterruption();
-    }
+    if (m_cancelFlag)
+        m_cancelFlag->store(true);
     QDialog::reject();
 }
 
 void AiBackgroundDialog::closeEvent(QCloseEvent* event)
 {
-    m_cancelRequested.store(true);
-    if (m_workerThread && m_workerThread->isRunning()) {
-        m_workerThread->requestInterruption();
-        m_workerThread->wait(1000);
-    }
+    if (m_cancelFlag)
+        m_cancelFlag->store(true);
     QDialog::closeEvent(event);
 }
 
@@ -350,7 +345,7 @@ void AiBackgroundDialog::runAiInference()
         return;
     }
 
-    m_cancelRequested.store(false);
+    m_cancelFlag = std::make_shared<std::atomic<bool>>(false);
     m_runAiButton->setEnabled(false);
     m_modelCombo->setEnabled(false);
     m_browseModelBtn->setEnabled(false);
@@ -362,25 +357,24 @@ void AiBackgroundDialog::runAiInference()
     const bool removeSpecks = m_specksCheck ? m_specksCheck->isChecked() : true;
     QPointer<AiBackgroundDialog> self(this);
 
-    m_workerThread = QThread::create([self, input, modelPath, cutLevel, removeSpecks]() {
+    const std::shared_ptr<std::atomic<bool>> cancelFlag = m_cancelFlag;
+    m_workerThread = QThread::create([self, input, modelPath, cutLevel, removeSpecks, cancelFlag]() {
         BackgroundRemover remover(modelPath);
-        const std::atomic<bool>* cancelPtr = self ? &self->m_cancelRequested : nullptr;
+        const std::atomic<bool>* cancelPtr = cancelFlag.get();
         MatteOptions options;
         options.cutLevel = cutLevel;
         options.removeSpecks = removeSpecks;
         QImage rawAlpha;
         QImage result = remover.removeBackground(input, cancelPtr, options, &rawAlpha);
 
-        QMetaObject::invokeMethod(qApp, [self, result, rawAlpha]() {
+        QMetaObject::invokeMethod(qApp, [self, result, rawAlpha, cancelFlag]() {
             if (!self)
                 return;
             self->m_progressBar->setVisible(false);
             self->m_runAiButton->setEnabled(true);
             self->m_modelCombo->setEnabled(true);
             self->m_browseModelBtn->setEnabled(true);
-            self->m_workerThread = nullptr;
-
-            if (self->m_cancelRequested.load() || result.isNull()) {
+            if (cancelFlag->load() || result.isNull()) {
                 self->m_statusLabel->setText(self->m_i18n ? self->m_i18n->t("editor", "aiBackground.tip") : QStringLiteral("Processamento cancelado ou interrompido."));
                 return;
             }
@@ -395,6 +389,11 @@ void AiBackgroundDialog::runAiInference()
     });
 
     connect(m_workerThread, &QThread::finished, m_workerThread, &QObject::deleteLater);
+    connect(m_workerThread, &QThread::finished, this, [this]() {
+        // QPointer já zera quando o deleteLater roda; limpar aqui mantém o
+        // guard de re-entrada coerente se o evento rodar antes do delete.
+        m_workerThread = nullptr;
+    });
     m_workerThread->start();
 }
 

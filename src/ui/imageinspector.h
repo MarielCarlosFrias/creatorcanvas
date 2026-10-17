@@ -9,6 +9,7 @@
 
 #include <QTimer>
 #include <atomic>
+#include <functional>
 
 class QDoubleSpinBox;
 class QSlider;
@@ -58,6 +59,9 @@ private:
     void buildUi();
     void retranslateUi();
     bool editingLayer(ImageLayer** out) const;
+    /// A4: aplica uma mutação de ImageEffects SEMPRE via comando de undo
+    /// (SetLayerImageEffectsCommand, com merge para arrastar sliders).
+    void commitEffectChange(const std::function<void(ImageEffects&)>& mutate);
     void applyAdjustments();
     void resetAdjustments();
     void schedulePreview();

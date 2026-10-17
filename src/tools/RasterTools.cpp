@@ -174,8 +174,9 @@ void CloneStampTool::mousePress(QMouseEvent* event, const QPointF& docPos, const
                 const QPoint dstLocal = matrix.inverted().map(docPos).toPoint();
 
                 ImageProcessing::cloneStamp(m_workingImage, m_workingImage, m_srcPointLocal, dstLocal, m_radius, m_opacity, m_hardness);
-                LayerId tempAssetId = ctx.document->assets().addImage(m_workingImage);
-                ctx.document->setImageLayerAsset(img->id(), tempAssetId, img->naturalWidth, img->naturalHeight);
+                // A5: prévia via overlay — nenhum asset temporário por move
+                if (ctx.setLayerPreview)
+                    ctx.setLayerPreview(img->id(), m_workingImage);
 
                 if (ctx.requestUpdate)
                     ctx.requestUpdate();
@@ -202,8 +203,8 @@ void CloneStampTool::mouseMove(QMouseEvent* event, const QPointF& docPos, const 
             const QPoint dstLocal = matrix.inverted().map(docPos).toPoint();
 
             ImageProcessing::cloneStamp(m_workingImage, m_workingImage, m_srcPointLocal, dstLocal, m_radius, m_opacity, m_hardness);
-            LayerId tempAssetId = ctx.document->assets().addImage(m_workingImage);
-            ctx.document->setImageLayerAsset(img->id(), tempAssetId, img->naturalWidth, img->naturalHeight);
+            if (ctx.setLayerPreview)
+                ctx.setLayerPreview(img->id(), m_workingImage);
 
             if (ctx.requestUpdate)
                 ctx.requestUpdate();
@@ -226,10 +227,10 @@ void CloneStampTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, con
 
         if (layer && layer->type() == LayerType::Image) {
             auto* img = static_cast<ImageLayer*>(layer);
-            LayerId finalAssetId = ctx.document->assets().addImage(m_workingImage);
+            const LayerId finalAssetId = ctx.document->assets().addImage(m_workingImage);
 
-            // Revert temporary live asset
-            ctx.document->setImageLayerAsset(img->id(), m_origAssetId, m_origWidth, m_origHeight);
+            if (ctx.clearLayerPreview)
+                ctx.clearLayerPreview();
 
             const QString cmdName = ctx.i18n ? ctx.i18n->t("editor", "canvas.command.cloneStamp") : QStringLiteral("Clone Stamp");
 
@@ -295,13 +296,8 @@ void CloneStampTool::drawOverlay(QPainter* painter, const ToolContext& ctx)
 
 void CloneStampTool::cancel(const ToolContext& ctx)
 {
-    if (m_isCloning && ctx.document && !m_srcLayerId.isNull()) {
-        Layer* layer = ctx.document->findLayer(m_srcLayerId);
-        if (layer && layer->type() == LayerType::Image) {
-            auto* img = static_cast<ImageLayer*>(layer);
-            ctx.document->setImageLayerAsset(img->id(), m_origAssetId, m_origWidth, m_origHeight);
-        }
-    }
+    if (m_isCloning && ctx.clearLayerPreview && !m_srcLayerId.isNull())
+        ctx.clearLayerPreview(); // documento nunca foi mutado
     m_isCloning = false;
     m_workingImage = QImage();
     if (ctx.requestUpdate)

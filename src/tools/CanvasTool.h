@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QPointF>
+#include <QImage>
 #include <QList>
 #include <functional>
 #include "core/Document.h"
@@ -55,6 +56,10 @@ struct ToolContext {
     std::function<void(const QString&)> requestStatusMessage;
     std::function<void(const LayerId&)> selectLayer;
     std::function<void(CanvasTool)> switchTool;
+    /// Prévia não-destrutiva de bitmap durante gestos (pincel/clone):
+    /// renderiza por cima da camada sem criar assets no documento.
+    std::function<void(const LayerId&, const QImage&)> setLayerPreview;
+    std::function<void()> clearLayerPreview;
 };
 
 /// Abstract base class for all canvas interaction tools

@@ -294,6 +294,19 @@ void MainWindow::connectDocumentSignals()
         return;
     connect(m_document, &Document::structureChanged,
             m_canvas, qOverload<>(&QWidget::update), Qt::UniqueConnection);
+    // M2: undo/redo destrói camadas — sem esta poda, m_selectedId ficava
+    // pendurado e deleteSelectedLayer crashava (A1) no comando seguinte.
+    // (UniqueConnection não é permitido com lambda; attachDocument troca de
+    // Document a cada chamada e as conexões antigas morrem com o objeto.)
+    connect(m_document, &Document::structureChanged,
+            this, [this]() {
+                if (!m_selectedId.isNull()
+                    && m_document && !m_document->findLayer(m_selectedId)) {
+                    m_selectedId = LayerId();
+                }
+                if (m_canvas)
+                    m_canvas->pruneSelection();
+            });
     connect(m_document, &Document::layerPropertyChanged,
             m_canvas, qOverload<>(&QWidget::update), Qt::UniqueConnection);
     if (m_layersPanel) {
@@ -2694,9 +2707,17 @@ void MainWindow::flattenDocument()
     }
 
     // Rasterizar SOMENTE as camadas desbloqueadas: esconde as bloqueadas
-    // durante o render (o renderer lê `visible` direto) e devolve o estado.
-    for (Layer* lockedLayer : kept)
-        lockedLayer->visible = false;
+    // durante o render (o renderer lê `visible` direto) e devolve o estado
+    // EXATO de antes — antes, uma camada travada que estava oculta era
+    // reexibida involuntariamente após o flatten.
+    QVector<QPair<Layer*, bool>> hiddenForRender;
+    hiddenForRender.reserve(kept.size());
+    for (Layer* lockedLayer : kept) {
+        if (lockedLayer->visible) {
+            lockedLayer->visible = false;
+            hiddenForRender.append({lockedLayer, true});
+        }
+    }
     QImage raster(m_document->width(), m_document->height(), QImage::Format_ARGB32_Premultiplied);
     raster.fill(Qt::transparent);
     {
@@ -2706,8 +2727,8 @@ void MainWindow::flattenDocument()
         options.canvasBorder = Qt::transparent;
         renderDocument(*m_document, &painter, QTransform(), options);
     }
-    for (Layer* lockedLayer : kept)
-        lockedLayer->visible = true;
+    for (const auto& [layer, wasVisible] : hiddenForRender)
+        layer->visible = wasVisible;
     const LayerId assetId = m_document->assets().addImage(raster);
     if (assetId.isNull())
         return;
@@ -2917,6 +2938,13 @@ void MainWindow::deleteSelectedLayer()
 {
     if (m_selectedId.isNull() || !m_document || !m_history)
         return;
+    // A1: seleção pendurada após undo de grupo/adição/remoção — sem este
+    // guard o comando dereferenciava um pai nulo e crashava no Delete.
+    if (!m_document->findLayer(m_selectedId)) {
+        m_selectedId = LayerId();
+        m_canvas->clearSelection();
+        return;
+    }
     m_history->execute(
         std::make_unique<RemoveLayerCommand>(*m_document, m_selectedId));
     m_canvas->clearSelection();
@@ -3015,7 +3043,9 @@ void MainWindow::checkForRecoveryFile()
 
     RecoveryDialog dialog(m_i18n, m_autosave->recoveryFilePath(), this);
     if (dialog.exec() != QDialog::Accepted) {
-        m_autosave->discardRecovery();
+        // Esc/X NÃO apaga a única cópia do trabalho não salvo — só um
+        // descarte explícito remove o arquivo. O diálogo reaparece no
+        // próximo início.
         return;
     }
 
@@ -3031,7 +3061,10 @@ void MainWindow::checkForRecoveryFile()
         if (m_i18n)
             QMessageBox::warning(this,
                                  m_i18n->t("common", "dialog.openError.title"), error);
-        m_autosave->discardRecovery();
+        // Recuperação ilegível (corrompida/versão nova): preserva o arquivo
+        // renomeado para .corrupt em vez de apagá-lo — o usuário ainda pode
+        // resgatar o conteúdo.
+        m_autosave->quarantineRecovery();
         return;
     }
 

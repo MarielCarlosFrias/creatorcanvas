@@ -175,14 +175,23 @@ public:
         , m_doc(&doc)
         , m_id(id)
     {
+        // A1: Q_ASSERT compila fora em release — um id pendurado
+        // (seleção pós-undo) deref nulo aqui. Guard em vez de assert.
         GroupLayer* parent = doc.parentOf(id);
-        Q_ASSERT(parent);
-        m_parentId = parent->id();
-        m_index = doc.indexOf(id);
+        m_valid = (parent != nullptr);
+        if (m_valid) {
+            m_parentId = parent->id();
+            m_index = doc.indexOf(id);
+        } else {
+            m_parentId = LayerId();
+            m_index = -1;
+        }
     }
 
     void redo() override
     {
+        if (!m_valid)
+            return;
         Q_ASSERT(!m_layer);
         m_layer = m_doc->takeLayer(m_id);
         Q_ASSERT(m_layer);
@@ -190,7 +199,8 @@ public:
 
     void undo() override
     {
-        Q_ASSERT(m_layer);
+        if (!m_valid || !m_layer)
+            return;
         m_doc->addLayer(std::move(m_layer),
                         detail::resolveGroup(m_doc, m_parentId), m_index);
     }
@@ -199,7 +209,8 @@ private:
     Document* m_doc;
     LayerId m_id;
     LayerId m_parentId;
-    int m_index;
+    int m_index = -1;
+    bool m_valid = false;
     std::unique_ptr<Layer> m_layer;
 };
 
@@ -340,11 +351,63 @@ public:
     void redo() override { m_doc->setLayerImageEffects(m_id, m_new); }
     void undo() override { m_doc->setLayerImageEffects(m_id, m_old); }
 
+    /// Arrastar um slider gera um comando por tick; coalesce os seguidos
+    /// da mesma camada num único passo de undo (mantém o oldValue primeiro).
+    bool mergeWith(const Command& other) override
+    {
+        const auto* next = dynamic_cast<const SetLayerImageEffectsCommand*>(&other);
+        if (!next || next->m_id != m_id)
+            return false;
+        m_new = next->m_new;
+        return true;
+    }
+
 private:
     Document* m_doc;
     LayerId m_id;
     ImageEffects m_old;
     ImageEffects m_new;
+};
+
+/// Troca o asset bitmap de uma camada de imagem (filtros destrutivos como
+/// Inverter/Posterizar/Threshold). O asset antigo continua no AssetStore,
+/// então undo/redo é só restaurar o id e as dimensões gravadas.
+class SetLayerImageAssetCommand final : public Command
+{
+public:
+    SetLayerImageAssetCommand(Document& doc, const LayerId& layerId,
+                              LayerId oldAssetId, int oldW, int oldH,
+                              LayerId newAssetId, int newW, int newH)
+        : Command(QStringLiteral("layer.imageAsset"))
+        , m_doc(&doc)
+        , m_id(layerId)
+        , m_oldAssetId(std::move(oldAssetId))
+        , m_oldW(oldW)
+        , m_oldH(oldH)
+        , m_newAssetId(std::move(newAssetId))
+        , m_newW(newW)
+        , m_newH(newH)
+    {
+    }
+
+    void redo() override
+    {
+        m_doc->setImageLayerAsset(m_id, m_newAssetId, m_newW, m_newH);
+    }
+    void undo() override
+    {
+        m_doc->setImageLayerAsset(m_id, m_oldAssetId, m_oldW, m_oldH);
+    }
+
+private:
+    Document* m_doc;
+    LayerId m_id;
+    LayerId m_oldAssetId;
+    int m_oldW = 0;
+    int m_oldH = 0;
+    LayerId m_newAssetId;
+    int m_newW = 0;
+    int m_newH = 0;
 };
 
 /// Resizes a text layer's wrap box (handle gesture on text).
@@ -628,7 +691,10 @@ public:
         m_groupId = group->id();
         m_groupHolder = std::move(group);
 
-        // Store the original parent and index of each layer
+        // A2: os ids chegam em ordem de CLIQUE, não de empilhamento.
+        // Guardamos as infos e as ordenamos ASC por (pai, índice) para
+        // (1) os filhos entrarem no grupo mantendo a ordem relativa e
+        // (2) o undo restaurar índices sem deslocar os ainda pendentes.
         for (const auto& id : m_layerIds) {
             LayerInfo info;
             info.id = id;
@@ -641,40 +707,58 @@ public:
             }
             m_layerInfos.push_back(info);
         }
+        std::sort(m_layerInfos.begin(), m_layerInfos.end(),
+                  [](const LayerInfo& a, const LayerInfo& b) {
+                      if (a.parentId != b.parentId)
+                          return a.parentId < b.parentId;
+                      return a.index < b.index;
+                  });
+
+        // O grupo entra no pai do membro mais alto, na posição dele:
+        // acima dos irmãos que sobraram abaixo dele.
+        if (!m_layerInfos.empty()) {
+            const LayerInfo& top = m_layerInfos.back();
+            m_groupParentId = top.parentId;
+            int below = 0;
+            for (const auto& info : m_layerInfos)
+                if (info.parentId == top.parentId && info.index < top.index)
+                    ++below;
+            m_groupIndex = std::max(0, top.index - below);
+        } else {
+            m_groupParentId = m_doc->rootGroup()->id();
+            m_groupIndex = -1;
+        }
     }
 
     const LayerId& groupId() const { return m_groupId; }
 
     void redo() override
     {
-        if (!m_created) {
-            auto* group = static_cast<GroupLayer*>(m_groupHolder.get());
-            // Take layers from document and add to group children
-            for (const auto& id : m_layerIds) {
-                if (auto taken = m_doc->takeLayer(id))
-                    group->children.push_back(std::move(taken));
-            }
-
-            m_doc->addLayer(std::move(m_groupHolder));
-            m_created = true;
-        } else {
-            Q_ASSERT(m_groupHolder);
-            m_doc->addLayer(std::move(m_groupHolder));
+        // Idempotente: funciona no primeiro redo E no redo-pós-undo
+        // (antes, o re-redo adicionava o grupo VAZIO e perdia os filhos).
+        auto* group = static_cast<GroupLayer*>(m_groupHolder.get());
+        Q_ASSERT(group);
+        for (const auto& info : m_layerInfos) {
+            if (auto taken = m_doc->takeLayer(info.id))
+                group->children.push_back(std::move(taken));
         }
+        m_doc->addLayer(std::move(m_groupHolder),
+                        detail::resolveGroup(m_doc, m_groupParentId),
+                        m_groupIndex);
     }
 
     void undo() override
     {
         // Take the group from the document
         m_groupHolder = m_doc->takeLayer(m_groupId);
-        Q_ASSERT(m_groupHolder);
-
+        if (!m_groupHolder)
+            return;
         auto* group = static_cast<GroupLayer*>(m_groupHolder.get());
 
-        // Restore child layers back to original positions in the document
-        // Group children are moved back to their original parent
+        // Restore child layers back to original positions in the document,
+        // em ordem ASC de índice — inserir em ordem decrescente/click
+        // corrompia o empilhamento dos irmãos (swap permanente de camadas).
         for (const auto& info : m_layerInfos) {
-            // Find and extract child from group
             auto& children = group->children;
             auto it = std::find_if(children.begin(), children.end(),
                                    [&](const auto& c) { return c->id() == info.id; });
@@ -698,9 +782,10 @@ private:
     QList<LayerId> m_layerIds;
     QString m_groupName;
     LayerId m_groupId;
-    std::vector<LayerInfo> m_layerInfos;
+    LayerId m_groupParentId;
+    int m_groupIndex = -1;
+    std::vector<LayerInfo> m_layerInfos; // ordenado ASC (pai, índice)
     std::unique_ptr<Layer> m_groupHolder;
-    bool m_created = false;
 };
 
 /// Ungroups a group without rasterizing its contents. The children return to

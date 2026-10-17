@@ -28,6 +28,9 @@ public:
 
     bool hasRecoveryFile() const;
     void discardRecovery();
+    /// Renomeia a recuperação ilegível para "<caminho>.corrupt" em vez de
+    /// apagá-la — preserva os bytes para um resgate manual do usuário.
+    void quarantineRecovery();
     void saveNow();
 
 private slots:

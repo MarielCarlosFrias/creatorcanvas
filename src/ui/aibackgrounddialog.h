@@ -2,7 +2,9 @@
 
 #include <QDialog>
 #include <QImage>
+#include <QPointer>
 #include <atomic>
+#include <memory>
 #include "maskeditcanvas.h"
 
 class QComboBox;
@@ -66,8 +68,14 @@ private:
     QPushButton* m_resetBtn = nullptr;
     QLabel* m_statusLabel = nullptr;
     I18nService* m_i18n = nullptr;
-    QThread* m_workerThread = nullptr;
-    std::atomic<bool> m_cancelRequested{false};
+    // QPointer: zera sozinho quando o thread se auto-deleta via deleteLater,
+    // blindando os guards de re-entrada contra um QThread destruído.
+    QPointer<QThread> m_workerThread;
+    // shared_ptr capturado POR VALOR pelo worker: o flag sobrevive ao
+    // diálogo (alocado na stack) mesmo que a inferência ultrapasse os
+    // waits do destrutor — antes era um ponteiro cru para o membro e o
+    // worker lesse memória liberada.
+    std::shared_ptr<std::atomic<bool>> m_cancelFlag;
 };
 
 } // namespace cc

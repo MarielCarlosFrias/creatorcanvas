@@ -20,6 +20,7 @@
 #include <miniz.h>
 
 #include <cstring>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -118,6 +119,14 @@ std::optional<ShapeKind> shapeKindFromString(const QString& value)
     if (value == QLatin1String("badge"))        return ShapeKind::Badge;
     if (value == QLatin1String("speechBubble")) return ShapeKind::SpeechBubble;
     if (value == QLatin1String("heart"))        return ShapeKind::Heart;
+    if (value == QLatin1String("triangle"))     return ShapeKind::Triangle;
+    if (value == QLatin1String("diamond"))      return ShapeKind::Diamond;
+    if (value == QLatin1String("pentagon"))     return ShapeKind::Pentagon;
+    if (value == QLatin1String("hexagon"))      return ShapeKind::Hexagon;
+    if (value == QLatin1String("cross"))        return ShapeKind::Cross;
+    if (value == QLatin1String("checkmark"))    return ShapeKind::Checkmark;
+    if (value == QLatin1String("cloud"))        return ShapeKind::Cloud;
+    if (value == QLatin1String("explosion"))    return ShapeKind::Explosion;
     return std::nullopt;
 }
 
@@ -649,19 +658,35 @@ bool writeArchive(const QString& filePath, const QByteArray& jsonBytes,
 
     mz_zip_writer_end(&zip);
 
-    // Substituição atômica: se o arquivo de destino já existe, remove-o de forma segura e move o temporário
-    if (QFile::exists(filePath)) {
-        if (!QFile::remove(filePath)) {
+    // Substituição segura: NUNCA deixar o usuário sem nenhuma cópia do
+    // projeto. Em POSIX, QFile::rename sobre arquivo existente substitui
+    // atomicamente (remove+rename deixava uma janela em que um crash ou
+    // falha de rename apagava TODAS as cópias).
+    if (!QFile::rename(tempFilePath, filePath)) {
+        // Rename pode falhar se o destino estiver aberto/travado (Windows).
+        // Estratégia de backup: move o antigo para .bak, promove o temp e
+        // só então remove o .bak — em qualquer falha, restaura o .bak.
+        const QString bakPath = filePath + QStringLiteral(".bak");
+        const bool hadExisting = QFile::exists(filePath);
+        if (!hadExisting) {
+            QFile::remove(tempFilePath);
+            *error = QStringLiteral("Could not finalize the project file rename.");
+            return false;
+        }
+        QFile::remove(bakPath);
+        if (!QFile::rename(filePath, bakPath)) {
             QFile::remove(tempFilePath);
             *error = QStringLiteral("Could not overwrite the existing project file.");
             return false;
         }
-    }
-
-    if (!QFile::rename(tempFilePath, filePath)) {
-        QFile::remove(tempFilePath);
-        *error = QStringLiteral("Could not finalize the project file rename.");
-        return false;
+        if (!QFile::rename(tempFilePath, filePath)) {
+            // Fim do mundo: temp não virou destino. Restaura o .bak.
+            QFile::rename(bakPath, filePath);
+            QFile::remove(tempFilePath);
+            *error = QStringLiteral("Could not finalize the project file rename.");
+            return false;
+        }
+        QFile::remove(bakPath);
     }
 
     return true;
@@ -766,6 +791,33 @@ public:
         for (const QJsonValue& value : layers) {
             std::unique_ptr<Layer> layer;
             if (!readLayer(value.toObject(), error, &layer))
+                return nullptr;
+            // Asset pendurado (arquivo editado/corrompido) viraria uma
+            // camada invisível e silenciosa — falha com erro claro.
+            std::function<bool(const Layer*)> validateAssets =
+                [&](const Layer* l) -> bool {
+                if (l->type() == LayerType::Image) {
+                    const auto* img = static_cast<const ImageLayer*>(l);
+                    // assetId nulo é legítimo (camada de imagem sem bitmap);
+                    // id apontando para um asset que NÃO está no arquivo é
+                    // corrupção — a camada ficaria invisível e silenciosa.
+                    if (!img->assetId.isNull()
+                        && !doc->assets().find(img->assetId)) {
+                        *error = QStringLiteral(
+                            "The project references an image that is not "
+                            "embedded in the archive.");
+                        return false;
+                    }
+                }
+                if (l->type() == LayerType::Group) {
+                    for (const auto& child :
+                         static_cast<const GroupLayer*>(l)->children)
+                        if (!validateAssets(child.get()))
+                            return false;
+                }
+                return true;
+            };
+            if (!validateAssets(layer.get()))
                 return nullptr;
             doc->addLayer(std::move(layer));
         }
@@ -894,6 +946,18 @@ private:
                       std::vector<std::unique_ptr<Layer>>& children,
                       QString* error)
     {
+        // Anti stack-overflow: um arquivo hostil com grupos aninhados até
+        // centenas de milhares de níveis estourava a pilha do C. Limite
+        // generoso para projetos reais, falha com erro amigável acima dele.
+        if (m_readDepth >= 64) {
+            *error = QStringLiteral(
+                "The project contains groups nested too deeply.");
+            return false;
+        }
+        struct DepthRestore {
+            int& d;
+            ~DepthRestore() { --d; }
+        } restore{++m_readDepth};
         const QJsonArray array =
             o.value(QStringLiteral("children")).toArray();
         for (const QJsonValue& value : array) {
@@ -1126,6 +1190,7 @@ private:
 
     QJsonObject m_root;
     const QHash<QString, QByteArray>& m_media;
+    int m_readDepth = 0;
 };
 
 bool saveDocument(const Document& doc, const QString& filePath,

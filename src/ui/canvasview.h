@@ -41,6 +41,10 @@ public:
     void setI18n(I18nService* i18n);
     void setHistory(CommandStack* history);
     void clearSelection();
+    /// Remove da seleção ids que não existem mais no documento (após
+    /// undo/redo de grupo/remoção) — evita estado pendurado que podia
+    /// crashar o delete/ações de camada no MainWindow.
+    void pruneSelection();
     void setSelectedLayer(const LayerId& id);
     QList<LayerId> selectedLayers() const;
     void setMultiSelection(const QList<LayerId>& ids);

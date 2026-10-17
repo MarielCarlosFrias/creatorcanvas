@@ -10,7 +10,7 @@ function(cc_add_test name)
     cc_enable_warnings(${name})
     add_test(NAME ${name} COMMAND ${name})
     set_tests_properties(${name} PROPERTIES
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;ASAN_OPTIONS=detect_leaks=1;LSAN_OPTIONS=suppressions=${PROJECT_SOURCE_DIR}/tests/asan_suppressions.txt"
     )
 endfunction()
 

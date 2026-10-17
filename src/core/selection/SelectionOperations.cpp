@@ -69,13 +69,19 @@ bool SelectionOperations::extractToLayer(Document& document, CommandStack* histo
     newLayer->naturalHeight = copy.height();
     newLayer->transform = imageLayer->transform;
     const LayerId newId = newLayer->id();
-    history->execute(std::make_unique<AddLayerCommand>(
+    // M3: um único passo de undo — antes eram AddLayerCommand +
+    // visible=false separados; o Ctrl+Z parava num estado intermediário
+    // (cópia presente E fonte oculta) que nunca existiu de verdade.
+    auto compound = std::make_unique<CompoundCommand>(
+        QStringLiteral("selection.cutToLayer"));
+    compound->addCommand(std::make_unique<AddLayerCommand>(
         document, std::move(newLayer), document.rootGroup(), -1));
     if (cut) {
-        history->execute(std::make_unique<LayerPropertyCommand<bool>>(
+        compound->addCommand(std::make_unique<LayerPropertyCommand<bool>>(
             document, sourceId, QStringLiteral("layer.visible"),
             &Document::setLayerVisible, imageLayer->visible, false));
     }
+    history->execute(std::move(compound));
     document.clearPixelSelection();
     if (createdId)
         *createdId = newId;

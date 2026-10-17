@@ -13,6 +13,8 @@
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
+#include <QPointer>
+#include <QApplication>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -62,6 +64,22 @@ bool ImageInspector::editingLayer(ImageLayer** out) const
         return false;
     *out = static_cast<ImageLayer*>(layer);
     return true;
+}
+
+void ImageInspector::commitEffectChange(const std::function<void(ImageEffects&)>& mutate)
+{
+    ImageLayer* layer = nullptr;
+    if (!editingLayer(&layer))
+        return;
+    const ImageEffects oldFx = layer->effects;
+    ImageEffects newFx = oldFx;
+    mutate(newFx);
+    if (m_history) {
+        m_history->execute(std::make_unique<SetLayerImageEffectsCommand>(
+            *m_document, m_id, oldFx, newFx));
+    } else {
+        m_document->setLayerImageEffects(m_id, newFx);
+    }
 }
 
 void ImageInspector::setDocument(Document* document)
@@ -365,7 +383,6 @@ void ImageInspector::buildUi()
                 m_outlineColor->setStyleSheet(QStringLiteral("background: %1; color: %2; font-weight: bold; border-radius: 4px;")
                     .arg(hex, color.lightness() > 128 ? QStringLiteral("#000000") : QStringLiteral("#ffffff")));
             }
-            if (m_document) m_document->touchLayer(m_id);
         });
         quickColorsRow->addWidget(qBtn);
     }
@@ -755,18 +772,31 @@ void ImageInspector::buildUi()
     mainLayout->addWidget(m_subTabs);
 
     // Signal connections
+    // A4: antes mutava transform.shearX/Y direto, sem passo de undo.
     connect(m_tiltX, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double val) {
         ImageLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
-        layer->transform.shearX = val;
-        if (m_document) m_document->touchLayer(m_id);
+        const AffineTransform oldT = layer->transform;
+        AffineTransform newT = oldT;
+        newT.shearX = val;
+        if (m_history)
+            m_history->execute(std::make_unique<SetLayerTransformCommand>(
+                *m_document, m_id, oldT, newT));
+        else
+            m_document->setLayerTransform(m_id, newT);
     });
 
     connect(m_tiltY, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double val) {
         ImageLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
-        layer->transform.shearY = val;
-        if (m_document) m_document->touchLayer(m_id);
+        const AffineTransform oldT = layer->transform;
+        AffineTransform newT = oldT;
+        newT.shearY = val;
+        if (m_history)
+            m_history->execute(std::make_unique<SetLayerTransformCommand>(
+                *m_document, m_id, oldT, newT));
+        else
+            m_document->setLayerTransform(m_id, newT);
     });
 
     connect(m_resetTiltBtn, &QPushButton::clicked, this, [this] {
@@ -793,8 +823,7 @@ void ImageInspector::buildUi()
     connect(m_outlineOn, &QCheckBox::toggled, this, [this](bool on) {
         ImageLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
-        layer->effects.outline.enabled = on;
-        if (m_document) m_document->touchLayer(m_id);
+        commitEffectChange([on](ImageEffects& fx) { fx.outline.enabled = on; });
     });
 
     connect(m_outlineColor, &QPushButton::clicked, this, [this] {
@@ -802,34 +831,30 @@ void ImageInspector::buildUi()
         if (!editingLayer(&layer)) return;
         const QColor chosen = QColorDialog::getColor(layer->effects.outline.color, this);
         if (!chosen.isValid()) return;
-        layer->effects.outline.color = chosen;
+        commitEffectChange([chosen](ImageEffects& fx) { fx.outline.color = chosen; });
         const QString hex = chosen.name(QColor::HexRgb);
         m_outlineColor->setText(hex);
         m_outlineColor->setStyleSheet(QStringLiteral("background: %1; color: %2; font-weight: bold; border-radius: 4px;")
             .arg(hex, chosen.lightness() > 128 ? QStringLiteral("#000000") : QStringLiteral("#ffffff")));
-        if (m_document) m_document->touchLayer(m_id);
     });
 
     connect(m_outlineWidth, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double val) {
         ImageLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
-        layer->effects.outline.width = val;
-        if (m_document) m_document->touchLayer(m_id);
+        commitEffectChange([val](ImageEffects& fx) { fx.outline.width = val; });
     });
 
     connect(m_outlineBlur, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double val) {
         ImageLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
-        layer->effects.outline.blur = val;
-        if (m_document) m_document->touchLayer(m_id);
+        commitEffectChange([val](ImageEffects& fx) { fx.outline.blur = val; });
     });
 
     // Conexões de Sombra Projetada (Drop Shadow)
     connect(m_shadowOn, &QCheckBox::toggled, this, [this](bool on) {
         ImageLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
-        layer->effects.dropShadow.enabled = on;
-        if (m_document) m_document->touchLayer(m_id);
+        commitEffectChange([on](ImageEffects& fx) { fx.dropShadow.enabled = on; });
     });
 
     connect(m_shadowColor, &QPushButton::clicked, this, [this] {
@@ -837,49 +862,43 @@ void ImageInspector::buildUi()
         if (!editingLayer(&layer)) return;
         const QColor chosen = QColorDialog::getColor(layer->effects.dropShadow.color, this);
         if (!chosen.isValid()) return;
-        layer->effects.dropShadow.color = chosen;
+        commitEffectChange([chosen](ImageEffects& fx) { fx.dropShadow.color = chosen; });
         const QString hex = chosen.name(QColor::HexRgb);
         m_shadowColor->setText(hex);
         m_shadowColor->setStyleSheet(QStringLiteral("background: %1; color: %2; font-weight: bold; border-radius: 4px;")
             .arg(hex, chosen.lightness() > 128 ? QStringLiteral("#000000") : QStringLiteral("#ffffff")));
-        if (m_document) m_document->touchLayer(m_id);
     });
 
     connect(m_shadowDistance, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double val) {
         ImageLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
-        layer->effects.dropShadow.distance = val;
-        if (m_document) m_document->touchLayer(m_id);
+        commitEffectChange([val](ImageEffects& fx) { fx.dropShadow.distance = val; });
     });
 
     connect(m_shadowAngle, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double val) {
         ImageLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
-        layer->effects.dropShadow.angleDeg = val;
-        if (m_document) m_document->touchLayer(m_id);
+        commitEffectChange([val](ImageEffects& fx) { fx.dropShadow.angleDeg = val; });
     });
 
     connect(m_shadowBlur, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double val) {
         ImageLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
-        layer->effects.dropShadow.blur = val;
-        if (m_document) m_document->touchLayer(m_id);
+        commitEffectChange([val](ImageEffects& fx) { fx.dropShadow.blur = val; });
     });
 
     connect(m_shadowOpacitySlider, &QSlider::valueChanged, this, [this](int val) {
         m_shadowOpacityValue->setText(QStringLiteral("%1%").arg(val));
         ImageLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
-        layer->effects.dropShadow.opacity = val / 100.0;
-        if (m_document) m_document->touchLayer(m_id);
+        commitEffectChange([val](ImageEffects& fx) { fx.dropShadow.opacity = val / 100.0; });
     });
 
     // Conexões de Sombra Interna (Inner Shadow)
     connect(m_innerShadowOn, &QCheckBox::toggled, this, [this](bool on) {
         ImageLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
-        layer->effects.innerShadow.enabled = on;
-        if (m_document) m_document->touchLayer(m_id);
+        commitEffectChange([on](ImageEffects& fx) { fx.innerShadow.enabled = on; });
     });
 
     connect(m_innerShadowColor, &QPushButton::clicked, this, [this] {
@@ -887,49 +906,43 @@ void ImageInspector::buildUi()
         if (!editingLayer(&layer)) return;
         const QColor chosen = QColorDialog::getColor(layer->effects.innerShadow.color, this);
         if (!chosen.isValid()) return;
-        layer->effects.innerShadow.color = chosen;
+        commitEffectChange([chosen](ImageEffects& fx) { fx.innerShadow.color = chosen; });
         const QString hex = chosen.name(QColor::HexRgb);
         m_innerShadowColor->setText(hex);
         m_innerShadowColor->setStyleSheet(QStringLiteral("background: %1; color: %2; font-weight: bold; border-radius: 4px;")
             .arg(hex, chosen.lightness() > 128 ? QStringLiteral("#000000") : QStringLiteral("#ffffff")));
-        if (m_document) m_document->touchLayer(m_id);
     });
 
     connect(m_innerShadowDistance, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double val) {
         ImageLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
-        layer->effects.innerShadow.distance = val;
-        if (m_document) m_document->touchLayer(m_id);
+        commitEffectChange([val](ImageEffects& fx) { fx.innerShadow.distance = val; });
     });
 
     connect(m_innerShadowAngle, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double val) {
         ImageLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
-        layer->effects.innerShadow.angleDeg = val;
-        if (m_document) m_document->touchLayer(m_id);
+        commitEffectChange([val](ImageEffects& fx) { fx.innerShadow.angleDeg = val; });
     });
 
     connect(m_innerShadowBlur, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double val) {
         ImageLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
-        layer->effects.innerShadow.blur = val;
-        if (m_document) m_document->touchLayer(m_id);
+        commitEffectChange([val](ImageEffects& fx) { fx.innerShadow.blur = val; });
     });
 
     connect(m_innerShadowOpacitySlider, &QSlider::valueChanged, this, [this](int val) {
         m_innerShadowOpacityValue->setText(QStringLiteral("%1%").arg(val));
         ImageLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
-        layer->effects.innerShadow.opacity = val / 100.0;
-        if (m_document) m_document->touchLayer(m_id);
+        commitEffectChange([val](ImageEffects& fx) { fx.innerShadow.opacity = val / 100.0; });
     });
 
     // Conexões de Sobreposição de Cor (Color Overlay)
     connect(m_colorOverlayOn, &QCheckBox::toggled, this, [this](bool on) {
         ImageLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
-        layer->effects.colorOverlay.enabled = on;
-        if (m_document) m_document->touchLayer(m_id);
+        commitEffectChange([on](ImageEffects& fx) { fx.colorOverlay.enabled = on; });
     });
 
     connect(m_colorOverlayColor, &QPushButton::clicked, this, [this] {
@@ -937,20 +950,18 @@ void ImageInspector::buildUi()
         if (!editingLayer(&layer)) return;
         const QColor chosen = QColorDialog::getColor(layer->effects.colorOverlay.color, this);
         if (!chosen.isValid()) return;
-        layer->effects.colorOverlay.color = chosen;
+        commitEffectChange([chosen](ImageEffects& fx) { fx.colorOverlay.color = chosen; });
         const QString hex = chosen.name(QColor::HexRgb);
         m_colorOverlayColor->setText(hex);
         m_colorOverlayColor->setStyleSheet(QStringLiteral("background: %1; color: %2; font-weight: bold; border-radius: 4px;")
             .arg(hex, chosen.lightness() > 128 ? QStringLiteral("#000000") : QStringLiteral("#ffffff")));
-        if (m_document) m_document->touchLayer(m_id);
     });
 
     connect(m_colorOverlayOpacitySlider, &QSlider::valueChanged, this, [this](int val) {
         m_colorOverlayOpacityValue->setText(QStringLiteral("%1%").arg(val));
         ImageLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer)) return;
-        layer->effects.colorOverlay.opacity = val / 100.0;
-        if (m_document) m_document->touchLayer(m_id);
+        commitEffectChange([val](ImageEffects& fx) { fx.colorOverlay.opacity = val / 100.0; });
     });
 
     connect(m_mockupButton, &QPushButton::clicked, this, &ImageInspector::openMockupDialog);
@@ -1281,13 +1292,22 @@ void ImageInspector::onPreviewTimeout()
             adjusted = adjusted.scaled(originalSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
         return adjusted;
     });
-    std::thread([this, generation, layerId, future = std::move(future)]() mutable {
+    // UAF fix: antes o thread desanexado capturava `this` cru — se o
+    // inspector fosse destruído durante o cálculo (ex.: sair do app logo
+    // após arrastar um slider), invokeMethod dereferenciava um QObject
+    // liberado. Agora: QPointer + post via qApp com guarda de shutdown.
+    QPointer<ImageInspector> self(this);
+    std::thread([self, generation, layerId, future = std::move(future)]() mutable {
         QImage adjusted = future.get();
-        QMetaObject::invokeMethod(this, [this, generation, layerId, adjusted = std::move(adjusted)]() mutable {
-            if (generation != m_previewGeneration.load() || layerId != m_id || !m_document)
+        if (!QApplication::instance())
+            return; // app em teardown: não posta em fila de objeto morto
+        QMetaObject::invokeMethod(QApplication::instance(), [self, generation, layerId, adjusted = std::move(adjusted)]() mutable {
+            if (!self)
                 return;
-            m_latestPreviewImage = adjusted;
-            emit imagePreviewReady(layerId, adjusted);
+            if (generation != self->m_previewGeneration.load() || layerId != self->m_id || !self->m_document)
+                return;
+            self->m_latestPreviewImage = std::move(adjusted);
+            emit self->imagePreviewReady(layerId, self->m_latestPreviewImage);
         }, Qt::QueuedConnection);
     }).detach();
 }
@@ -1418,8 +1438,17 @@ void ImageInspector::applyPreset(int presetIndex)
                 else if (presetIndex == 10) filter = ImageProcessing::PresetFilter::Threshold;
                 const QImage filtered = ImageProcessing::applyPresetFilter(base, filter);
                 const LayerId newAsset = m_document->assets().addImage(filtered, QStringLiteral("png"));
-                m_document->setImageLayerAsset(m_id, newAsset, filtered.width(), filtered.height());
-                m_document->touchLayer(m_id);
+                // A4: antes mutava sem comando — "Inverter cores" era
+                // impossível de desfazer. O asset antigo fica no store e o
+                // undo só restaura id + dimensões.
+                if (m_history) {
+                    m_history->execute(std::make_unique<SetLayerImageAssetCommand>(
+                        *m_document, m_id, layer->assetId,
+                        layer->naturalWidth, layer->naturalHeight,
+                        newAsset, filtered.width(), filtered.height()));
+                } else {
+                    m_document->setImageLayerAsset(m_id, newAsset, filtered.width(), filtered.height());
+                }
             }
         }
         m_loading = false;

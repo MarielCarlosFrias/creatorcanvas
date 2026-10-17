@@ -136,6 +136,12 @@ ToolContext CanvasView::makeToolContext() const
     ctx.switchTool = [this](CanvasTool t) {
         const_cast<CanvasView*>(this)->setTool(t);
     };
+    ctx.setLayerPreview = [this](const LayerId& id, const QImage& img) {
+        const_cast<CanvasView*>(this)->setImagePreview(id, img);
+    };
+    ctx.clearLayerPreview = [this]() {
+        const_cast<CanvasView*>(this)->clearImagePreview();
+    };
     return ctx;
 }
 
@@ -175,6 +181,25 @@ void CanvasView::clearSelection()
     if (m_textEditor && m_textEditor->isVisible())
         commitTextEdit();
     selectLayer(LayerId());
+}
+
+void CanvasView::pruneSelection()
+{
+    if (!m_document)
+        return;
+    bool changed = false;
+    if (!m_selectedId.isNull() && !m_document->findLayer(m_selectedId)) {
+        m_selectedId = LayerId();
+        changed = true;
+    }
+    for (int i = m_multiSelection.size() - 1; i >= 0; --i) {
+        if (!m_document->findLayer(m_multiSelection.at(i))) {
+            m_multiSelection.removeAt(i);
+            changed = true;
+        }
+    }
+    if (changed)
+        update();
 }
 
 void CanvasView::setSelectedLayer(const LayerId& id)
@@ -470,10 +495,15 @@ bool CanvasView::imagePixelTransparent(const ImageLayer& image,
     if (src.isNull())
         return false; // sem bitmap: mantém o comportamento de retângulo
 
-    const int ix = qBound(0, static_cast<int>(std::floor(local.x())),
-                          image.naturalWidth - 1);
-    const int iy = qBound(0, static_cast<int>(std::floor(local.y())),
-                          image.naturalHeight - 1);
+    // Limite contra as dimensões REAIS do bitmap decodificado, não contra
+    // naturalWidth/naturalHeight salvos no projeto: um arquivo editado à mão
+    // ou corrompido pode divergir, e indexar scanLine fora dos limites é OOB.
+    const int maxX = qMin(image.naturalWidth, src.width()) - 1;
+    const int maxY = qMin(image.naturalHeight, src.height()) - 1;
+    if (maxX < 0 || maxY < 0)
+        return false;
+    const int ix = qBound(0, static_cast<int>(std::floor(local.x())), maxX);
+    const int iy = qBound(0, static_cast<int>(std::floor(local.y())), maxY);
 
     // Fast-path 32bpp: leitura direta do pixel, sem conversão nem cópia.
     int alpha = 255;
@@ -1206,7 +1236,51 @@ void CanvasView::mouseReleaseEvent(QMouseEvent* event)
 
     if (event->button() == Qt::LeftButton && m_gesture != Gesture::None) {
         if (m_document && !m_selectedId.isNull()) {
-            if (Layer* layer = m_document->findLayer(m_selectedId)) {
+            if (m_multiSelection.size() > 1) {
+                // A3: UM passo de undo para o gesto inteiro — antes cada
+                // camada arrastada virava um comando separado e o Ctrl+Z
+                // movia uma camada por vez, criando estados que nunca
+                // existiram.
+                if (m_history) {
+                    auto compound = std::make_unique<CompoundCommand>(
+                        QStringLiteral("layer.transform"));
+                    for (int i = 0; i < m_multiSelection.size(); ++i) {
+                        Layer* ml = m_document->findLayer(m_multiSelection[i]);
+                        if (!ml) continue;
+                        const AffineTransform oldT =
+                            (m_multiSelection[i] == m_selectedId)
+                                ? m_gestureStart
+                                : (i < m_multiGestureStarts.size()
+                                       ? m_multiGestureStarts[i]
+                                       : ml->transform);
+                        if (oldT != ml->transform)
+                            compound->addCommand(
+                                std::make_unique<SetLayerTransformCommand>(
+                                    *m_document, m_multiSelection[i], oldT,
+                                    ml->transform));
+                    }
+                    if (!compound->isEmpty())
+                        m_history->execute(std::move(compound));
+                } else {
+                    for (int i = 0; i < m_multiSelection.size(); ++i) {
+                        if (m_multiSelection[i] == m_selectedId) continue;
+                        if (Layer* ml = m_document->findLayer(m_multiSelection[i])) {
+                            if (i < m_multiGestureStarts.size())
+                                emit transformCommitted(m_multiSelection[i],
+                                                        m_multiGestureStarts[i], ml->transform);
+                        }
+                    }
+                }
+                // Caixa de texto da camada principal segue o fluxo existente.
+                if (Layer* layer = m_document->findLayer(m_selectedId)) {
+                    if (layer->type() == LayerType::Text) {
+                        const QSizeF newBox = static_cast<TextLayer*>(layer)->box;
+                        if (newBox != m_gestureStartBox)
+                            emit textBoxCommitted(m_selectedId, m_gestureStartBox,
+                                                  newBox);
+                    }
+                }
+            } else if (Layer* layer = m_document->findLayer(m_selectedId)) {
                 emit transformCommitted(m_selectedId, m_gestureStart,
                                         layer->transform);
                 if (layer->type() == LayerType::Text) {
@@ -1214,16 +1288,6 @@ void CanvasView::mouseReleaseEvent(QMouseEvent* event)
                     if (newBox != m_gestureStartBox)
                         emit textBoxCommitted(m_selectedId, m_gestureStartBox,
                                               newBox);
-                }
-            }
-            if (m_multiSelection.size() > 1) {
-                for (int i = 0; i < m_multiSelection.size(); ++i) {
-                    if (m_multiSelection[i] == m_selectedId) continue;
-                    if (Layer* ml = m_document->findLayer(m_multiSelection[i])) {
-                        if (i < m_multiGestureStarts.size())
-                            emit transformCommitted(m_multiSelection[i],
-                                                   m_multiGestureStarts[i], ml->transform);
-                    }
                 }
             }
         }
@@ -1454,9 +1518,21 @@ void CanvasView::contextMenuEvent(QContextMenuEvent* event)
     } else if (chosen == deleteAction) {
         emit deleteRequested(id);
     } else if (chosen == frontAction) {
-        m_document->reorderLayer(id, m_document->rootGroup(), -1);
+        // A4: antes mutava direto reorderLayer(root) — (1) sem comando de
+        // undo e (2) arrancava a camada do seu grupo pai para a raiz.
+        if (m_history) {
+            m_history->execute(std::make_unique<ReorderLayerCommand>(
+                *m_document, id, m_document->parentOf(id), -1));
+        } else {
+            m_document->reorderLayer(id, m_document->parentOf(id), -1);
+        }
     } else if (chosen == backAction) {
-        m_document->reorderLayer(id, m_document->rootGroup(), 0);
+        if (m_history) {
+            m_history->execute(std::make_unique<ReorderLayerCommand>(
+                *m_document, id, m_document->parentOf(id), 0));
+        } else {
+            m_document->reorderLayer(id, m_document->parentOf(id), 0);
+        }
     } else if (chosen == flipHAction) {
         const AffineTransform oldT = layer->transform;
         AffineTransform newT = oldT;
@@ -1476,7 +1552,15 @@ void CanvasView::contextMenuEvent(QContextMenuEvent* event)
         m_document->setLayerTransform(id, newT);
         emit transformCommitted(id, oldT, newT);
     } else if (chosen == lockAction) {
-        m_document->setLayerLocked(id, !layer->locked);
+        // A4: mesmo comando do painel de camadas — antes era mutação
+        // silenciosa, sem passo no undo.
+        if (m_history) {
+            m_history->execute(std::make_unique<LayerLockCommand>(
+                *m_document, id, QStringLiteral("layer.lock"),
+                &Document::setLayerLocked, layer->locked, !layer->locked));
+        } else {
+            m_document->setLayerLocked(id, !layer->locked);
+        }
     }
 }
 

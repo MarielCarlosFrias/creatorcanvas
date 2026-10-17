@@ -39,7 +39,8 @@ int SettingsService::autosaveIntervalMinutes() const
 {
     bool ok = false;
     const int v = value(kAutosaveInterval, kDefaultAutosaveInterval).toInt(&ok);
-    return ok ? v : kDefaultAutosaveInterval;
+    // Limitado: um settings.ini editado à mão podia estourar int no timer.
+    return ok ? qBound(0, v, 1440) : kDefaultAutosaveInterval;
 }
 
 void SettingsService::setAutosaveIntervalMinutes(int minutes)

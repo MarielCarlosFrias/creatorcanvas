@@ -1,0 +1,6 @@
+# Supressões de vazamentos conhecidos de bibliotecas de terceiros.
+# O ASan/LSan continua ativo para TODO o código do CreatorCanvas.
+
+# ONNX Runtime faz 2 alocacões internas (2x32 bytes) que não liberta no
+# encerramento da sessão — vazio conhecido da biblioteca fechada.
+leak:libonnxruntime

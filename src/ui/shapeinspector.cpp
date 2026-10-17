@@ -238,6 +238,17 @@ void ShapeInspector::buildUi()
         const bool canHaveRadius = (newKind == ShapeKind::RoundedRect || newKind == ShapeKind::SpeechBubble);
         m_cornerRadiusLabel->setVisible(canHaveRadius);
         m_cornerRadiusSpin->setVisible(canHaveRadius);
+
+        // Sincroniza a visibilidade dos campos do Shape Power Pack com o
+        // novo tipo (estrela/tracejado) sem esperar re-seleção.
+        const bool isStar = (newKind == ShapeKind::Star);
+        m_starPointsLabel->setVisible(isStar);
+        m_starPointsSpin->setVisible(isStar);
+        m_starRatioLabel->setVisible(isStar);
+        m_starRatioSpin->setVisible(isStar);
+        const bool hasDash = (m_strokeWidthSpin->value() > 0.0);
+        m_dashLabel->setVisible(hasDash);
+        m_dashRatioSpin->setVisible(hasDash);
     });
 
     // 1. Botão e label de Cor de Preenchimento (Fill Color)
@@ -381,6 +392,7 @@ void ShapeInspector::buildUi()
             this, [this, readGradientFromUi](int) {
         if (m_loading) return;
         commitGradient(readGradientFromUi());
+        refresh();
     });
     connect(m_gradientAngleSpin, qOverload<double>(&QDoubleSpinBox::valueChanged),
             this, [this, readGradientFromUi](double) {
@@ -544,6 +556,7 @@ void ShapeInspector::buildUi()
         if (m_loading || !m_document)
             return;
         m_document->setShapeStrokeWidth(m_id, value);
+        refresh();
     });
 
     // 4. Spinbox de Raio dos Cantos (Corner Radius para RoundedRect)

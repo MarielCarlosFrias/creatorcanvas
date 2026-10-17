@@ -7,7 +7,10 @@
 #include <QLoggingCategory>
 #include <QStandardPaths>
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cmath>
+#include <thread>
 #include <vector>
 
 namespace cc {
@@ -78,6 +81,11 @@ std::vector<quint8> backgroundFromBorders(const QImage& bin)
 QImage composite(const QImage& img, const QImage& alpha)
 {
     QImage result = img.convertToFormat(QImage::Format_RGBA8888);
+    // Endurecimento anti-detach: se a entrada já era RGBA8888 a conversão
+    // devolve cópia rasa; o scanLine() de escrita destacaria o buffer no
+    // meio do loop deixando rgbRow apontando para o bloco antigo.
+    if (result.constBits() == img.constBits())
+        result = result.copy();
     for (int y = 0; y < result.height(); ++y) {
         const QRgb* rgbRow = reinterpret_cast<const QRgb*>(result.constScanLine(y));
         const quint8* alphaRow = alpha.constScanLine(y);
@@ -142,8 +150,28 @@ public:
         if (cancelFlag && cancelFlag->load())
             return QImage();
 
+        // Cancelamento REAL da inferência: RunOptions::SetTerminate é
+        // seguro de outra thread e interrompe o Run da ONNX no ato. O
+        // watchdog pola o flag enquanto o Run bloqueia o worker.
+        Ort::RunOptions runOpts;
+        std::atomic<bool> runDone{false};
+        std::thread watchdog([&runOpts, cancelFlag, &runDone]() {
+            while (!runDone.load()) {
+                if (cancelFlag && cancelFlag->load()) {
+                    runOpts.SetTerminate();
+                    return;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            }
+        });
+        struct WatchdogJoiner {
+            std::thread& t;
+            std::atomic<bool>& done;
+            ~WatchdogJoiner() { done.store(true); t.join(); }
+        } joiner{watchdog, runDone};
+
         auto outputs = m_session.Run(
-            Ort::RunOptions{nullptr},
+            runOpts,
             &inName, &inputTensor, 1,
             &outName, 1);
 
@@ -159,7 +187,7 @@ public:
         if (rawAlphaOut)
             *rawAlphaOut = alpha;
 
-        return BackgroundRemover::applyMatte(input, alpha, options);
+        return BackgroundRemover::applyMatte(input, alpha, options, cancelFlag);
     }
 
 private:
@@ -265,7 +293,8 @@ QImage BackgroundRemover::removeBackground(const QImage& input,
 }
 
 QImage BackgroundRemover::applyMatte(const QImage& input, const QImage& rawAlpha,
-                                     const MatteOptions& options)
+                                     const MatteOptions& options,
+                                     const std::atomic<bool>* cancelFlag)
 {
     if (input.isNull() || rawAlpha.isNull())
         return input;
@@ -292,6 +321,9 @@ QImage BackgroundRemover::applyMatte(const QImage& input, const QImage& rawAlpha
         }
     }
 
+    if (cancelFlag && cancelFlag->load())
+        return QImage();
+
     // 2) Decisao binaria para a limpeza topologica.
     QImage bin(w, h, QImage::Format_Grayscale8);
     for (int y = 0; y < h; ++y) {
@@ -313,6 +345,9 @@ QImage BackgroundRemover::applyMatte(const QImage& input, const QImage& rawAlpha
             }
         }
     }
+
+    if (cancelFlag && cancelFlag->load())
+        return QImage();
 
     // 4) Remover manchas: componentes conectados pequenos somem.
     if (options.removeSpecks) {
@@ -349,6 +384,8 @@ QImage BackgroundRemover::applyMatte(const QImage& input, const QImage& rawAlpha
         const qint64 minArea = qMax<qint64>(24, largestArea / 200);
         std::fill(visited.begin(), visited.end(), quint8(0));
         for (int y = 0; y < h; ++y) {
+            if (cancelFlag && (y & 15) == 0 && cancelFlag->load())
+                return QImage();
             for (int x = 0; x < w; ++x) {
                 const int start = y * w + x;
                 if (visited[start] || bin.constScanLine(y)[x] < 128)
@@ -381,6 +418,9 @@ QImage BackgroundRemover::applyMatte(const QImage& input, const QImage& rawAlpha
             }
         }
     }
+
+    if (cancelFlag && cancelFlag->load())
+        return QImage();
 
     // Seguranca: se o corte apagou tudo, devolve a rampa original.
     qint64 subjectPixels = 0;

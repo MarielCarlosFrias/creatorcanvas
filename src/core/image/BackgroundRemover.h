@@ -46,8 +46,11 @@ public:
 
     /// Re-aplica o refinamento do matte sobre uma mascara bruta ja existente
     /// (sem inferencia). Estatico e barato — permite ajustes ao vivo na UI.
+    /// cancelFlag interrompe os loops pesados (flood fill / componentes
+    /// conectados) quando o usuario cancela o recorte.
     static QImage applyMatte(const QImage& input, const QImage& rawAlpha,
-                             const MatteOptions& options = {});
+                             const MatteOptions& options = {},
+                             const std::atomic<bool>* cancelFlag = nullptr);
 
     /// Localiza o caminho absoluto para o arquivo de modelo .onnx nos caminhos padrao do sistema.
     static QString findModelPath(const QString& preferredName = QStringLiteral("u2netp.onnx"));
