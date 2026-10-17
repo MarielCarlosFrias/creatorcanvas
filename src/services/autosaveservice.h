@@ -24,7 +24,14 @@ public:
     void onDocumentChanged(Document* doc) override { setDocument(doc); }
     void setDocument(Document* document);
     void setDocumentController(DocumentController* controller) { m_docController = controller; }
+    /// Caminho do projeto atualmente aberto — gravado junto à recuperação
+    /// para dar procedência ao diálogo de recuperação.
+    void setSourcePath(const QString& path) { m_sourcePath = path; }
     QString recoveryFilePath() const { return m_recoveryPath; }
+    /// Caminho do projeto de origem gravado no sidecar .meta da última
+    /// gravação (vazio se desconhecido). Usado para avisar quando o arquivo
+    /// original é mais NOVO que a recuperação.
+    QString recoverySourcePath() const;
 
     bool hasRecoveryFile() const;
     void discardRecovery();
@@ -42,8 +49,9 @@ private:
 
     SettingsService* m_settings = nullptr;
     QPointer<Document> m_document;
-    QPointer<DocumentController> m_docController;
+    QPointer<DocumentController> m_docController = nullptr;
     QString m_recoveryPath;
+    QString m_sourcePath; ///< caminho do projeto aberto (procedência)
     QTimer m_timer;
 };
 

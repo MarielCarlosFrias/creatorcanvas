@@ -50,6 +50,19 @@ inline GroupLayer* resolveGroup(Document* doc, const LayerId& id)
                ? static_cast<GroupLayer*>(p)
                : nullptr;
 }
+
+/// Percorre a camada (e subgrupos) coletando os assetIds que ela mantém
+/// vivos no AssetStore. Usado pelo GC de comandos expulsos da pilha.
+inline void collectLayerAssetIds(const Layer* layer, QSet<LayerId>& out)
+{
+    if (!layer)
+        return;
+    if (layer->type() == LayerType::Image)
+        out.insert(static_cast<const ImageLayer*>(layer)->assetId);
+    if (layer->type() == LayerType::Group)
+        for (const auto& child : static_cast<const GroupLayer*>(layer)->children)
+            collectLayerAssetIds(child.get(), out);
+}
 } // namespace detail
 
 class AddLayerCommand final : public Command
@@ -78,6 +91,11 @@ public:
     {
         m_layer = m_doc->takeLayer(m_layerId);
         Q_ASSERT(m_layer);
+    }
+
+    void collectAssetIds(QSet<LayerId>& out) const override
+    {
+        detail::collectLayerAssetIds(m_layer.get(), out);
     }
 
 private:
@@ -205,6 +223,11 @@ public:
                         detail::resolveGroup(m_doc, m_parentId), m_index);
     }
 
+    void collectAssetIds(QSet<LayerId>& out) const override
+    {
+        detail::collectLayerAssetIds(m_layer.get(), out);
+    }
+
 private:
     Document* m_doc;
     LayerId m_id;
@@ -223,24 +246,30 @@ public:
         , m_doc(&doc)
         , m_id(id)
     {
+        // B3: Q_ASSERT some em release — um id inválido aqui virava null
+        // deref. Guard explícito + comando no-op em vez de crash.
         GroupLayer* oldParent = doc.parentOf(id);
-        Q_ASSERT(oldParent);
-        m_oldParentId = oldParent->id();
-        m_oldIndex = doc.indexOf(id);
-        m_newParentId = newParent ? newParent->id() : doc.rootGroup()->id();
-        m_newIndex = newIndex;
+        m_valid = (oldParent != nullptr);
+        if (m_valid) {
+            m_oldParentId = oldParent->id();
+            m_oldIndex = doc.indexOf(id);
+            m_newParentId = newParent ? newParent->id() : doc.rootGroup()->id();
+            m_newIndex = newIndex;
+        }
     }
 
     void redo() override
     {
-        m_doc->reorderLayer(m_id, detail::resolveGroup(m_doc, m_newParentId),
-                            m_newIndex);
+        if (m_valid)
+            m_doc->reorderLayer(m_id, detail::resolveGroup(m_doc, m_newParentId),
+                                m_newIndex);
     }
 
     void undo() override
     {
-        m_doc->reorderLayer(m_id, detail::resolveGroup(m_doc, m_oldParentId),
-                            m_oldIndex);
+        if (m_valid)
+            m_doc->reorderLayer(m_id, detail::resolveGroup(m_doc, m_oldParentId),
+                                m_oldIndex);
     }
 
 private:
@@ -250,6 +279,7 @@ private:
     int m_oldIndex = -1;
     LayerId m_newParentId;
     int m_newIndex = -1;
+    bool m_valid = false;
 };
 
 class DuplicateLayerCommand final : public Command
@@ -290,6 +320,11 @@ public:
         Q_ASSERT(!m_copyId.isNull());
         m_clone = m_doc->takeLayer(m_copyId);
         Q_ASSERT(m_clone);
+    }
+
+    void collectAssetIds(QSet<LayerId>& out) const override
+    {
+        detail::collectLayerAssetIds(m_clone.get(), out);
     }
 
 private:
@@ -388,6 +423,12 @@ public:
         , m_newW(newW)
         , m_newH(newH)
     {
+    }
+
+    void collectAssetIds(QSet<LayerId>& out) const override
+    {
+        out.insert(m_oldAssetId);
+        out.insert(m_newAssetId);
     }
 
     void redo() override
@@ -540,6 +581,12 @@ public:
     {
     }
 
+    void collectAssetIds(QSet<LayerId>& out) const override
+    {
+        out.insert(m_oldAssetId);
+        out.insert(m_newAssetId);
+    }
+
     void redo() override
     {
         m_doc->setImageLayerAsset(m_id, m_newAssetId, m_newWidth, m_newHeight);
@@ -589,6 +636,12 @@ public:
 
     bool isEmpty() const { return m_commands.empty(); }
     std::size_t size() const { return m_commands.size(); }
+
+    void collectAssetIds(QSet<LayerId>& out) const override
+    {
+        for (const auto& cmd : m_commands)
+            cmd->collectAssetIds(out);
+    }
 
     void redo() override
     {
@@ -647,6 +700,13 @@ public:
         }
         Q_ASSERT(m_raster);
         m_doc->addLayer(std::move(m_raster), detail::resolveGroup(m_doc, m_parentId), m_insertIndex);
+    }
+
+    void collectAssetIds(QSet<LayerId>& out) const override
+    {
+        detail::collectLayerAssetIds(m_raster.get(), out);
+        for (const auto& source : m_sources)
+            detail::collectLayerAssetIds(source.layer.get(), out);
     }
 
     void undo() override
@@ -732,6 +792,11 @@ public:
 
     const LayerId& groupId() const { return m_groupId; }
 
+    void collectAssetIds(QSet<LayerId>& out) const override
+    {
+        detail::collectLayerAssetIds(m_groupHolder.get(), out);
+    }
+
     void redo() override
     {
         // Idempotente: funciona no primeiro redo E no redo-pós-undo
@@ -799,8 +864,11 @@ public:
         , m_doc(&doc)
         , m_groupId(groupId)
     {
+        // B3: guard em vez de Q_ASSERT (some em release).
         Layer* layer = doc.findLayer(groupId);
-        Q_ASSERT(layer && layer->type() == LayerType::Group);
+        m_valid = (layer && layer->type() == LayerType::Group);
+        if (!m_valid)
+            return;
         GroupLayer* parent = doc.parentOf(groupId);
         m_parentId = parent ? parent->id() : doc.rootGroup()->id();
         m_groupIndex = doc.indexOf(groupId);
@@ -811,8 +879,11 @@ public:
 
     void redo() override
     {
+        if (!m_valid)
+            return;
         m_groupHolder = m_doc->takeLayer(m_groupId);
-        Q_ASSERT(m_groupHolder);
+        if (!m_groupHolder)
+            return;
         auto* group = static_cast<GroupLayer*>(m_groupHolder.get());
         GroupLayer* parent = detail::resolveGroup(m_doc, m_parentId);
         int insertion = m_groupIndex;
@@ -825,13 +896,19 @@ public:
 
     void undo() override
     {
-        Q_ASSERT(m_groupHolder);
+        if (!m_valid || !m_groupHolder)
+            return;
         auto* group = static_cast<GroupLayer*>(m_groupHolder.get());
         for (const LayerId& childId : m_childIds) {
             if (auto child = m_doc->takeLayer(childId))
                 group->children.push_back(std::move(child));
         }
         m_doc->addLayer(std::move(m_groupHolder), detail::resolveGroup(m_doc, m_parentId), m_groupIndex);
+    }
+
+    void collectAssetIds(QSet<LayerId>& out) const override
+    {
+        detail::collectLayerAssetIds(m_groupHolder.get(), out);
     }
 
 private:
@@ -841,6 +918,7 @@ private:
     int m_groupIndex = -1;
     QList<LayerId> m_childIds;
     std::unique_ptr<Layer> m_groupHolder;
+    bool m_valid = false;
 };
 
 } // namespace cc

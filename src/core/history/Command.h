@@ -1,6 +1,9 @@
 #pragma once
 
 #include <QString>
+#include <QSet>
+#include <QUuid>
+#include "core/layers/Layer.h"
 
 namespace cc {
 
@@ -15,6 +18,12 @@ public:
 
     virtual void redo() = 0;
     virtual void undo() = 0;
+
+    /// Coleta os ids de asset que ESTE comando mantém vivos (bitmaps que só
+    /// ele pode devolver ao documento num undo/redo). Usado pelo GC: quando
+    /// o comando é expulso da pilha, esses ids viram candidatos a remoção
+    /// do AssetStore — se nenhuma camada nem comando restante os referir.
+    virtual void collectAssetIds(QSet<LayerId>& out) const { Q_UNUSED(out); }
 
     // Allows rapid edits of the same property (for example a slider drag) to
     // appear as one logical history step. Commands that cannot be combined

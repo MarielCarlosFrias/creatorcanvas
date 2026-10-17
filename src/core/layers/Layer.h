@@ -70,6 +70,10 @@ public:
     BlendMode blendMode = BlendMode::Normal;
     BlendIf blendIf;
     LayerColorTag colorTag = LayerColorTag::None;
+    /// Camada transitória (prévia de mockup em diálogo modal): existe só
+    /// em memória — NUNCA é serializada em save/autosave. Limpa a flag
+    /// antes de promover a camada a definitiva.
+    bool transient = false;
 
     AffineTransform transform;
 

@@ -123,6 +123,21 @@ MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
         std::make_unique<PresetStore>(configDir + QStringLiteral("/presets.json"));
     m_history = std::make_unique<CommandStack>(
         m_settings ? m_settings->historyLimit() : 100);
+    // GC de assets: quando comandos saem da pilha (limite, redo invalidado,
+    // clear), os bitmaps que SÓ eles sustentavam são removidos do store,
+    // desde que nenhuma camada atual os referencie. Sem isto, cada filtro
+    // destrutivo/pincel deixava uma cópia inteira da imagem gravada para
+    // sempre no arquivo salvo.
+    connect(m_history.get(), &CommandStack::assetsOrphaned, this,
+            [this](const QSet<QUuid>& orphanedIds) {
+                if (orphanedIds.isEmpty() || !m_document)
+                    return;
+                const QSet<LayerId> referenced = m_document->referencedAssetIds();
+                for (const auto& id : orphanedIds) {
+                    if (!referenced.contains(id))
+                        m_document->assets().remove(id);
+                }
+            });
     if (m_settings) {
         connect(m_settings, &SettingsService::changed, this, [this] {
             if (m_settings && m_history)
@@ -269,6 +284,9 @@ void MainWindow::attachDocument(std::unique_ptr<Document> doc, const QString& fi
     m_selectedId = LayerId();
     m_currentFilePath = filePath;
     m_modified = false;
+    // Proveniência para o sidecar do autosave (de que projeto veio).
+    if (m_autosave)
+        m_autosave->setSourcePath(filePath);
     if (m_history)
         m_history->clear();
 
@@ -2975,10 +2993,16 @@ bool MainWindow::saveDocumentAs()
 {
     if (!m_i18n)
         return false;
+    // Pré-preenchimento: vazio por padrão; após abrir uma recuperação como
+    // cópia, sugere o arquivo original para o usuário não perder o rastro.
+    const QString suggestion = !m_suggestedSavePath.isEmpty()
+                                   ? m_suggestedSavePath
+                                   : QStringLiteral("untitled.creatorcanvas");
+    m_suggestedSavePath.clear();
     QString path = QFileDialog::getSaveFileName(
         this,
         m_i18n->t("common", "dialog.saveAs.title"),
-        QStringLiteral("untitled.creatorcanvas"),
+        suggestion,
         QStringLiteral("CreatorCanvas (*.creatorcanvas)"));
     if (path.isEmpty())
         return false;
@@ -2994,8 +3018,10 @@ bool MainWindow::saveDocumentAs()
     }
     m_currentFilePath = path;
     m_modified = false;
-    if (m_autosave)
+    if (m_autosave) {
         m_autosave->discardRecovery();
+        m_autosave->setSourcePath(path);
+    }
     updateWindowTitle();
     return true;
 }
@@ -3041,7 +3067,8 @@ void MainWindow::checkForRecoveryFile()
     if (!m_autosave || !m_autosave->hasRecoveryFile())
         return;
 
-    RecoveryDialog dialog(m_i18n, m_autosave->recoveryFilePath(), this);
+    RecoveryDialog dialog(m_i18n, m_autosave->recoveryFilePath(),
+                          m_autosave->recoverySourcePath(), this);
     if (dialog.exec() != QDialog::Accepted) {
         // Esc/X NÃO apaga a única cópia do trabalho não salvo — só um
         // descarte explícito remove o arquivo. O diálogo reaparece no
@@ -3068,6 +3095,33 @@ void MainWindow::checkForRecoveryFile()
         return;
     }
 
+    // Procedência: se o arquivo ORIGINAL é mais recente que a recuperação,
+    // avisar antes de abrir — salvar a recuperação por cima pode jogar fora
+    // trabalho novo (o usuário editou e salvou entre o crash e agora).
+    const QString sourcePath = m_autosave->recoverySourcePath();
+    if (!sourcePath.isEmpty() && QFileInfo::exists(sourcePath)) {
+        const QDateTime srcModified = QFileInfo(sourcePath).lastModified();
+        const QDateTime recModified = QFileInfo(m_autosave->recoveryFilePath()).lastModified();
+        if (srcModified > recModified) {
+            const QString title = m_i18n
+                ? m_i18n->t("common", "dialog.recovery.newerTitle")
+                : QStringLiteral("O arquivo do projeto é mais recente");
+            const QString body = (m_i18n
+                ? m_i18n->t("common", "dialog.recovery.newerBody")
+                : QStringLiteral("O arquivo \"%1\" foi salvo em %2 — DEPOIS da recuperação (%3). Se você salvar a recuperação por cima dele, pode perder o trabalho mais novo. Continuar com a recuperação?"))
+                  .arg(QDir::toNativeSeparators(sourcePath),
+                       srcModified.toString(QStringLiteral("dd/MM/yyyy HH:mm:ss")),
+                       recModified.toString(QStringLiteral("dd/MM/yyyy HH:mm:ss")));
+            const auto answer = QMessageBox::warning(
+                this, title, body,
+                QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+            if (answer != QMessageBox::Yes) {
+                // Mantém a recuperação no disco e o documento atual intacto.
+                return;
+            }
+        }
+    }
+
     attachDocument(std::move(loaded));
     m_modified = true; // recovered session stays unsaved until explicitly saved
     if (m_docController) {
@@ -3077,6 +3131,9 @@ void MainWindow::checkForRecoveryFile()
     enterEditor();
 
     if (choice == RecoveryDialog::Choice::OpenAsCopy) {
+        // Pré-preenche o "Salvar Como" com o arquivo original: conveniente
+        // e mantém a trilha de onde veio o conteúdo.
+        m_suggestedSavePath = sourcePath;
         saveDocumentAs();
     }
 }

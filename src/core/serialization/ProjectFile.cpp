@@ -493,8 +493,14 @@ QJsonObject buildProjectJson(const Document& doc)
     root.insert(QStringLiteral("assets"), assets);
 
     QJsonArray layers;
-    for (const auto& child : doc.rootGroup()->children)
+    for (const auto& child : doc.rootGroup()->children) {
+        // B5: camadas transientes (prévia do mockup em diálogo modal) não
+        // pertencem ao documento persistido — um autosave no meio do
+        // diálogo gravaria uma camada que o usuário ainda nem confirmou.
+        if (child->transient)
+            continue;
         layers.append(writeLayer(*child));
+    }
     root.insert(QLatin1String(kLayersKey), layers);
 
     // Keep the active pixel selection in the native project as well. This is
@@ -603,6 +609,8 @@ bool writeArchive(const QString& filePath, const QByteArray& jsonBytes,
 
     if (assetsOk) {
         for (const auto& child : doc.rootGroup()->children) {
+            if (child->transient)
+                continue; // B5: máscaras de prévia não entram no arquivo
             if (!writeLayerMasks(&zip, *child)) {
                 assetsOk = false;
                 break;

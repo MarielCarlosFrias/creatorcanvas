@@ -4,6 +4,7 @@
 #include <QtGlobal>
 
 #include <memory>
+#include <QSet>
 
 #include "assets/AssetStore.h"
 #include "document/LayerComps.h"
@@ -48,6 +49,10 @@ public:
     bool removeLayer(const LayerId& id);
     bool reorderLayer(const LayerId& id, GroupLayer* newParent, int newIndex);
     LayerId duplicateLayer(const LayerId& id);
+
+    /// Todos os assetIds referenciados por camadas de imagem do documento
+    /// (recursivo em grupos). Base do GC do AssetStore.
+    QSet<LayerId> referencedAssetIds() const;
 
     bool setLayerName(const LayerId& id, QString name);
     bool setLayerVisible(const LayerId& id, bool visible);

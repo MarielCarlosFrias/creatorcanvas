@@ -484,6 +484,67 @@ private slots:
         QCOMPARE(stack.undoCount(), 1);
         QVERIFY(doc.findLayer(gid) != nullptr);
     }
+
+    void assetGcPurgesOnlyOrphans()
+    {
+        // Regressão do GC: assets que só a pilha mantinha vivos eram
+        // gravados para sempre no arquivo salvo.
+        Document doc(64, 64);
+        CommandStack stack(10);
+
+        QImage img(4, 4, QImage::Format_ARGB32);
+        img.fill(Qt::red);
+        const LayerId assetA = doc.assets().addImage(img);
+
+        auto layer = std::make_unique<ImageLayer>();
+        const LayerId layerId = layer->id();
+        layer->assetId = assetA;
+        layer->naturalWidth = 4;
+        layer->naturalHeight = 4;
+        QVERIFY(doc.addLayer(std::move(layer)));
+        QCOMPARE(doc.assets().assets().size(), 1);
+
+        // O mesmo purge do MainWindow: órfãs não referenciadas pelo doc.
+        QSet<LayerId> purged;
+        QObject::connect(&stack, &CommandStack::assetsOrphaned,
+                         &stack, [&](const QSet<QUuid>& ids) {
+                             const auto referenced = doc.referencedAssetIds();
+                             for (const auto& id : ids) {
+                                 if (!referenced.contains(id)) {
+                                     doc.assets().remove(id);
+                                     purged.insert(id);
+                                 }
+                             }
+                         });
+
+        // Filtro destrutivo: A -> B
+        const LayerId assetB = doc.assets().addImage(img);
+        stack.execute(std::make_unique<SetLayerImageAssetCommand>(
+            doc, layerId, assetA, 4, 4, assetB, 4, 4));
+        QCOMPARE(doc.assets().assets().size(), 2);
+        QVERIFY(purged.isEmpty());
+
+        // Undo volta a camada para A; B sobrevive só no redo.
+        stack.undo();
+        QCOMPARE(static_cast<const ImageLayer*>(doc.findLayer(layerId))->assetId, assetA);
+        QCOMPARE(doc.assets().assets().size(), 2);
+
+        // Nova ação descarta o redo: B vira órfã e é coletada.
+        stack.execute(std::make_unique<LayerPropertyCommand<QString>>(
+            doc, layerId, QStringLiteral("layer.name"),
+            &Document::setLayerName, QStringLiteral("img"),
+            QStringLiteral("renamed")));
+        QCOMPARE(doc.assets().assets().size(), 1);
+        QVERIFY(purged.contains(assetB));
+        QVERIFY(!purged.contains(assetA));
+        QVERIFY(doc.assets().find(assetA) != nullptr);
+        QVERIFY(doc.assets().find(assetB) == nullptr);
+
+        // Undo do rename não deve trazer B de volta (comando segue vivo
+        // com o id — apenas inverte o estado nominal).
+        stack.undo();
+        QCOMPARE(doc.assets().assets().size(), 1);
+    }
 };
 
 QTEST_GUILESS_MAIN(TestHistory)

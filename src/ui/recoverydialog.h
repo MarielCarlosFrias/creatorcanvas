@@ -24,12 +24,13 @@ public:
     };
 
     explicit RecoveryDialog(I18nService* i18n, const QString& recoveryFilePath,
+                            const QString& sourcePath = QString(),
                             QWidget* parent = nullptr);
 
     Choice userChoice() const { return m_choice; }
 
 private:
-    void buildUi(const QString& recoveryFilePath);
+    void buildUi(const QString& recoveryFilePath, const QString& sourcePath);
 
     I18nService* m_i18n = nullptr;
     Choice m_choice = Choice::Discard;

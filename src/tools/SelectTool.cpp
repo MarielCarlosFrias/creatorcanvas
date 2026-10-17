@@ -194,7 +194,9 @@ void SelectTool::mouseMove(QMouseEvent* event, const QPointF& docPos, const Tool
         if (m_gesture == Gesture::Move) {
             AffineTransform t = m_initialTransforms[id];
             t.position += delta;
-            layer->transform = t;
+            // Pela API do Document: clamp + bumpRevision + sinal, em vez de
+            // mutar o membro direto (que não notificava nada).
+            ctx.document->setLayerTransform(id, t);
         }
     }
 }
@@ -221,18 +223,23 @@ void SelectTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const T
         }
     } else if (m_gesture == Gesture::Move || m_gesture == Gesture::Scale || m_gesture == Gesture::Rotate) {
         if (ctx.history) {
+            // Um gesto = UM passo de undo (CompoundCommand), não um por camada.
+            auto compound = std::make_unique<CompoundCommand>(
+                QStringLiteral("layer.transform"));
             for (const auto& id : m_selectedLayers) {
                 Layer* layer = ctx.document->findLayer(id);
                 if (layer && m_initialTransforms.contains(id)) {
                     const AffineTransform oldT = m_initialTransforms[id];
                     const AffineTransform newT = layer->transform;
-                    if (oldT.position != newT.position || oldT.scaleX != newT.scaleX || oldT.scaleY != newT.scaleY || oldT.rotationDeg != newT.rotationDeg) {
-                        ctx.history->execute(std::make_unique<SetLayerTransformCommand>(
+                    if (oldT != newT) {
+                        compound->addCommand(std::make_unique<SetLayerTransformCommand>(
                             *ctx.document, id, oldT, newT
                         ));
                     }
                 }
             }
+            if (!compound->isEmpty())
+                ctx.history->execute(std::move(compound));
         }
     }
 

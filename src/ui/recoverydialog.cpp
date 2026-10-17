@@ -1,6 +1,7 @@
 #include "recoverydialog.h"
 
 #include <QDateTime>
+#include <QDir>
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -13,7 +14,7 @@
 namespace cc {
 
 RecoveryDialog::RecoveryDialog(I18nService* i18n, const QString& recoveryFilePath,
-                               QWidget* parent)
+                               const QString& sourcePath, QWidget* parent)
     : QDialog(parent)
     , m_i18n(i18n)
 {
@@ -21,10 +22,10 @@ RecoveryDialog::RecoveryDialog(I18nService* i18n, const QString& recoveryFilePat
                           : QStringLiteral("Recuperação Automática de Projeto"));
     setWindowIcon(ThemeIcons::appIcon());
     setMinimumWidth(440);
-    buildUi(recoveryFilePath);
+    buildUi(recoveryFilePath, sourcePath);
 }
 
-void RecoveryDialog::buildUi(const QString& recoveryFilePath)
+void RecoveryDialog::buildUi(const QString& recoveryFilePath, const QString& sourcePath)
 {
     auto* mainLayout = new QVBoxLayout(this);
     mainLayout->setSpacing(16);
@@ -65,6 +66,16 @@ void RecoveryDialog::buildUi(const QString& recoveryFilePath)
     auto* sizeLabel = new QLabel(QStringLiteral("<b>Tamanho:</b> %1").arg(sizeStr), detailsBox);
     detailsLayout->addWidget(timeLabel);
     detailsLayout->addWidget(sizeLabel);
+    // Procedência: de qual projeto veio a recuperação (sidecar .meta)
+    if (!sourcePath.isEmpty()) {
+        const QString srcLabel = m_i18n ? m_i18n->t("common", "dialog.recovery.source")
+                                        : QStringLiteral("Projeto original:");
+        auto* sourceLabel = new QLabel(QStringLiteral("<b>%1</b> %2")
+                                           .arg(srcLabel, QDir::toNativeSeparators(sourcePath)),
+                                       detailsBox);
+        sourceLabel->setToolTip(sourcePath);
+        detailsLayout->addWidget(sourceLabel);
+    }
     mainLayout->addWidget(detailsBox);
 
     // Botões de ação

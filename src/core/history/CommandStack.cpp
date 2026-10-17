@@ -1,5 +1,8 @@
 #include "CommandStack.h"
 
+#include <QSet>
+
+#include <iterator>
 #include <utility>
 
 namespace cc {
@@ -13,8 +16,14 @@ CommandStack::CommandStack(int limit, QObject* parent)
 void CommandStack::setLimit(int limit)
 {
     m_limit = qMax(1, limit);
-    while (m_undoStack.size() > static_cast<std::size_t>(m_limit))
-        m_undoStack.erase(m_undoStack.begin());
+    if (m_undoStack.size() > static_cast<std::size_t>(m_limit)) {
+        const auto dropCount = m_undoStack.size() - static_cast<std::size_t>(m_limit);
+        std::vector<std::unique_ptr<Command>> dropped(
+            std::make_move_iterator(m_undoStack.begin()),
+            std::make_move_iterator(m_undoStack.begin() + dropCount));
+        m_undoStack.erase(m_undoStack.begin(), m_undoStack.begin() + dropCount);
+        reportOrphanedAssets(std::move(dropped));
+    }
     emit stateChanged();
 }
 
@@ -32,15 +41,20 @@ void CommandStack::execute(std::unique_ptr<Command> command)
     // slider values. The existing command keeps its original value and lets
     // the incoming command provide the final value.
     if (!m_undoStack.empty() && m_undoStack.back()->mergeWith(*command)) {
-        m_redoStack.clear();
+        reportOrphanedAssets(std::move(m_redoStack));
         emitStateChanged(wasUndoable, wasRedoable);
         return;
     }
 
-    m_redoStack.clear();
+    reportOrphanedAssets(std::move(m_redoStack));
     m_undoStack.push_back(std::move(command));
-    if (m_undoStack.size() > static_cast<std::size_t>(m_limit))
+    if (m_undoStack.size() > static_cast<std::size_t>(m_limit)) {
+        auto dropped = std::move(m_undoStack.front());
         m_undoStack.erase(m_undoStack.begin());
+        std::vector<std::unique_ptr<Command>> vec;
+        vec.push_back(std::move(dropped));
+        reportOrphanedAssets(std::move(vec));
+    }
 
     emitStateChanged(wasUndoable, wasRedoable);
 }
@@ -85,8 +99,13 @@ void CommandStack::clear()
     const bool wasUndoable = canUndo();
     const bool wasRedoable = canRedo();
 
+    std::vector<std::unique_ptr<Command>> all;
+    all.reserve(m_undoStack.size() + m_redoStack.size());
+    std::move(m_undoStack.begin(), m_undoStack.end(), std::back_inserter(all));
+    std::move(m_redoStack.begin(), m_redoStack.end(), std::back_inserter(all));
     m_undoStack.clear();
     m_redoStack.clear();
+    reportOrphanedAssets(std::move(all));
 
     emitStateChanged(wasUndoable, wasRedoable);
 }
@@ -151,6 +170,30 @@ void CommandStack::jumpToState(int targetIndex)
     }
 
     emitStateChanged(wasUndoable, wasRedoable);
+}
+
+void CommandStack::reportOrphanedAssets(std::vector<std::unique_ptr<Command>> dropped)
+{
+    if (dropped.empty())
+        return;
+
+    QSet<QUuid> candidates;
+    for (const auto& cmd : dropped)
+        cmd->collectAssetIds(candidates);
+    if (candidates.isEmpty())
+        return;
+
+    // Ids que comandos RESTANTES ainda mantêm vivos não são órfãos.
+    QSet<QUuid> stillAlive;
+    for (const auto& cmd : m_undoStack)
+        cmd->collectAssetIds(stillAlive);
+    for (const auto& cmd : m_redoStack)
+        cmd->collectAssetIds(stillAlive);
+    candidates.subtract(stillAlive);
+    if (candidates.isEmpty())
+        return;
+
+    emit assetsOrphaned(candidates);
 }
 
 void CommandStack::emitStateChanged(bool beforeUndoable, bool beforeRedoable)

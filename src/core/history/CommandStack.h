@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <QSet>
 #include <QString>
 
 #include <memory>
@@ -42,9 +43,17 @@ signals:
     void canUndoChanged(bool canUndo);
     void canRedoChanged(bool canRedo);
     void stateChanged();
+    /// Emitido quando comandos são descartados (limite da pilha, redo
+    /// invalidado ou clear). `orphanedIds` traz os assets que SÓ os
+    /// comandos descartados mantinham vivos — o dono do documento decide
+    /// se remove do AssetStore (verificando as camadas atuais).
+    void assetsOrphaned(const QSet<QUuid>& orphanedIds);
 
 private:
     void emitStateChanged(bool beforeUndoable, bool beforeRedoable);
+    /// Coleta ids dos comandos descartados, subtrai os que ainda vivem
+    /// nas pilhas restantes e emite assetsOrphaned com a diferença.
+    void reportOrphanedAssets(std::vector<std::unique_ptr<Command>> dropped);
 
     std::vector<std::unique_ptr<Command>> m_undoStack;
     std::vector<std::unique_ptr<Command>> m_redoStack;

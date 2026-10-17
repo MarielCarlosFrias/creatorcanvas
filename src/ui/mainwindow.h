@@ -132,6 +132,9 @@ private:
     QDockWidget* m_historyDock = nullptr;
     LayerId m_selectedId;
     QString m_currentFilePath;
+    /// Sugestão de caminho para o próximo "Salvar Como" (ex.: origem de uma
+    /// recuperação aberta como cópia) — pré-preenche o diálogo.
+    QString m_suggestedSavePath;
     bool m_modified = false;
 
     QAction* m_newAction = nullptr;

@@ -10,6 +10,7 @@
 #include <QComboBox>
 #include <QContextMenuEvent>
 #include <QEvent>
+#include <QSet>
 #include <QDrag>
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
@@ -961,27 +962,60 @@ void LayersPanel::onMoved()
 
     const auto& children = m_document->rootGroup()->children;
     const int total = static_cast<int>(children.size());
-    if (total <= 1 || m_list->count() != total) {
+    if (total <= 1) {
         rebuild();
         return;
     }
 
-    // A lista UI exibe as camadas do topo para a base (inverso da ordem do Document).
-    // O item na linha 0 da lista corresponde ao topo da pilha (índice total - 1 no Document).
-    // Vamos sincronizar a nova ordem da lista diretamente com o Document.
-    // Preserve the order emitted by the widget before applying changes.  The
-    // custom drag path emits layerReordered directly; this fallback path is
-    // used by native QListWidget moves and must use the same history command.
-    QList<QPair<LayerId, int>> desiredOrder;
-    desiredOrder.reserve(m_list->count());
+    // A lista UI exibe as camadas do topo para a base (inverso da ordem do
+    // Document). A linha 0 da lista corresponde ao topo da pilha (índice
+    // total-1 no Document).
+    //
+    // B4: com grupos EXPANDIDOS a lista mistura linhas de filhos, e o
+    // mapeamento linha→índice só vale para as linhas cuja camada é filha
+    // direta da raiz. Antes: count() != total → drag não fazia NADA,
+    // silenciosamente. Agora filtramos as linhas raiz e aplicamos a ordem
+    // RELATIVA delas — arrastar itens da raiz funciona; arrastar um filho
+    // (que exige mudar o pai) continua como no-op seguro até existir UI
+    // de re-parent explícita.
+    QList<LayerId> visualOrder;
+    visualOrder.reserve(m_list->count());
     for (int row = 0; row < m_list->count(); ++row) {
         QListWidgetItem* item = m_list->item(row);
         if (!item)
             continue;
         const LayerId id = item->data(Qt::UserRole).value<LayerId>();
         if (!id.isNull())
-            desiredOrder.append({id, total - 1 - row});
+            visualOrder.append(id);
     }
+
+    QList<LayerId> rootOrder;
+    rootOrder.reserve(total);
+    for (const LayerId& id : visualOrder) {
+        Layer* l = m_document->findLayer(id);
+        if (l && m_document->parentOf(id) == m_document->rootGroup())
+            rootOrder.append(id);
+    }
+    // Conjunto divergente (drag afetou estrutura aninhada) → recarrega.
+    if (rootOrder.size() != total) {
+        rebuild();
+        return;
+    }
+    {
+        QSet<LayerId> seen;
+        for (const LayerId& id : rootOrder)
+            seen.insert(id);
+        for (const auto& child : children)
+            if (!seen.contains(child->id())) {
+                rebuild();
+                return;
+            }
+    }
+
+    // k-ésima linha raiz (topo→baixo) = índice total-1-k no Document.
+    QList<QPair<LayerId, int>> desiredOrder;
+    for (int k = 0; k < rootOrder.size(); ++k)
+        desiredOrder.append({rootOrder.at(k), total - 1 - k});
 
     m_updating = true;
     if (m_history) {

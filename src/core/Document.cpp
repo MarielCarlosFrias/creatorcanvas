@@ -1,6 +1,7 @@
 #include "Document.h"
 
 #include <algorithm>
+#include <functional>
 #include <cstddef>
 #include <utility>
 
@@ -120,6 +121,23 @@ std::unique_ptr<Layer> Document::takeLayer(const LayerId& id)
 bool Document::removeLayer(const LayerId& id)
 {
     return takeLayer(id) != nullptr;
+}
+
+QSet<LayerId> Document::referencedAssetIds() const
+{
+    QSet<LayerId> ids;
+    std::function<void(const Layer*)> walk = [&](const Layer* layer) {
+        if (!layer)
+            return;
+        if (layer->type() == LayerType::Image)
+            ids.insert(static_cast<const ImageLayer*>(layer)->assetId);
+        if (layer->type() == LayerType::Group)
+            for (const auto& child :
+                 static_cast<const GroupLayer*>(layer)->children)
+                walk(child.get());
+    };
+    walk(m_root.get());
+    return ids;
 }
 
 bool Document::reorderLayer(const LayerId& id, GroupLayer* newParent, int newIndex)

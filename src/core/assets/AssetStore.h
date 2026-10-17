@@ -29,6 +29,9 @@ public:
     LayerId add(const QByteArray& encoded, const QString& format);
     LayerId addImage(const QImage& image, const QString& format = QStringLiteral("png"));
     void restore(const Asset& asset);
+    /// Remove um asset do store (GC de comandos expulsos da pilha).
+    /// Retorna true se existia.
+    bool remove(const LayerId& id);
     const Asset* find(const LayerId& id) const;
     QImage decodedImage(const LayerId& id) const;
     QImage previewImage(const LayerId& id, int maxDimension = 2048) const;

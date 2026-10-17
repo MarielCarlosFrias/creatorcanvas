@@ -29,6 +29,20 @@ LayerId AssetStore::addImage(const QImage& image, const QString& format)
     return asset.id;
 }
 
+bool AssetStore::remove(const LayerId& id)
+{
+    // GC: chamado só com ids que nem o documento nem a pilha de undo
+    // referem mais. QImage é shared — cópias vivas (ex.: prévia na UI)
+    // mantêm os pixels; só o cache do store é liberado.
+    for (int i = 0; i < m_assets.size(); ++i) {
+        if (m_assets.at(i).id == id) {
+            m_assets.removeAt(i);
+            return true;
+        }
+    }
+    return false;
+}
+
 LayerId AssetStore::add(const QByteArray& encoded, const QString& format)
 {
     QImage decoded;

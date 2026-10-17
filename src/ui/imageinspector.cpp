@@ -1189,6 +1189,10 @@ void ImageInspector::setMockupArea(const QPolygonF& destination)
         + QPointF(cropped.width() / 2.0, cropped.height() / 2.0);
 
     const LayerId previewId = overlay->id();
+    // B5: prévia transitória — o autosave continua rodando durante o
+    // diálogo modal, mas esta camada NUNCA é gravada em save/recuperação
+    // enquanto o usuário não confirmar.
+    overlay->transient = true;
     // Adiciona temporariamente a camada para que o diálogo mostre o resultado.
     m_document->addLayer(std::move(overlay));
     auto* previewLayer = static_cast<ImageLayer*>(m_document->findLayer(previewId));
@@ -1221,10 +1225,15 @@ void ImageInspector::setMockupArea(const QPolygonF& destination)
     const bool accepted = dialog.exec() == QDialog::Accepted;
     auto finalLayer = m_document->takeLayer(previewId);
     if (!finalLayer) return;
-    if (accepted && m_history)
-        m_history->execute(std::make_unique<AddLayerCommand>(*m_document, std::move(finalLayer)));
-    else if (accepted)
-        m_document->addLayer(std::move(finalLayer));
+    if (accepted) {
+        // Promovida a definitiva: sai do modo transitório antes de entrar
+        // na história (e, com ela, no documento persistido).
+        finalLayer->transient = false;
+        if (m_history)
+            m_history->execute(std::make_unique<AddLayerCommand>(*m_document, std::move(finalLayer)));
+        else
+            m_document->addLayer(std::move(finalLayer));
+    }
     if (m_mockupHint)
         m_mockupHint->setText(accepted
             ? QStringLiteral("Mockup criado numa camada separada. Pode selecionar, mover, ocultar ou desfazer.")

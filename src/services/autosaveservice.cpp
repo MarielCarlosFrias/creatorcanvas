@@ -7,6 +7,10 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonParseError>
+#include <QDateTime>
 #include <QLoggingCategory>
 
 #include <utility>
@@ -45,6 +49,7 @@ void AutosaveService::discardRecovery()
 {
     if (QFile::exists(m_recoveryPath))
         QFile::remove(m_recoveryPath);
+    QFile::remove(m_recoveryPath + QStringLiteral(".meta"));
 }
 
 void AutosaveService::quarantineRecovery()
@@ -54,6 +59,19 @@ void AutosaveService::quarantineRecovery()
     QFile::remove(m_recoveryPath + QStringLiteral(".corrupt"));
     if (!QFile::rename(m_recoveryPath, m_recoveryPath + QStringLiteral(".corrupt")))
         qCWarning(lcAutosave) << "Could not quarantine unreadable recovery file";
+    QFile::remove(m_recoveryPath + QStringLiteral(".meta"));
+}
+
+QString AutosaveService::recoverySourcePath() const
+{
+    QFile f(m_recoveryPath + QStringLiteral(".meta"));
+    if (!f.open(QIODevice::ReadOnly))
+        return {};
+    QJsonParseError err;
+    const QJsonDocument doc = QJsonDocument::fromJson(f.readAll(), &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject())
+        return {};
+    return doc.object().value(QStringLiteral("source")).toString();
 }
 
 void AutosaveService::saveNow()
@@ -88,6 +106,18 @@ void AutosaveService::saveNow()
         return;
     }
     QFile::remove(m_recoveryPath + QStringLiteral(".bak"));
+
+    // Procedência: sidecar com o projeto de origem e o momento da gravação,
+    // para o diálogo de recuperação avisar se o arquivo original é mais novo.
+    {
+        QJsonObject meta;
+        meta.insert(QStringLiteral("source"), m_sourcePath);
+        meta.insert(QStringLiteral("savedAt"),
+                    QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
+        QFile metaFile(m_recoveryPath + QStringLiteral(".meta"));
+        if (metaFile.open(QIODevice::WriteOnly | QIODevice::Truncate))
+            metaFile.write(QJsonDocument(meta).toJson(QJsonDocument::Compact));
+    }
 
     qCInfo(lcAutosave) << "Autosave written safely:" << m_recoveryPath;
 }
