@@ -123,12 +123,14 @@ bool Document::removeLayer(const LayerId& id)
     return takeLayer(id) != nullptr;
 }
 
-QSet<LayerId> Document::referencedAssetIds() const
+QSet<LayerId> Document::referencedAssetIds(bool includeTransient) const
 {
     QSet<LayerId> ids;
     std::function<void(const Layer*)> walk = [&](const Layer* layer) {
         if (!layer)
             return;
+        if (!includeTransient && layer->transient)
+            return; // prévia de mockup: não persiste
         if (layer->type() == LayerType::Image)
             ids.insert(static_cast<const ImageLayer*>(layer)->assetId);
         if (layer->type() == LayerType::Group)

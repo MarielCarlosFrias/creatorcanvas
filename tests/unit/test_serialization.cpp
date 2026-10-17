@@ -264,6 +264,49 @@ private slots:
         }
     }
 
+    void saveSkipsTransientAndOrphanAssets()
+    {
+        // B5 + GC: prévia transitória (mockup) e assets que só a pilha
+        // sustenta NÃO pertencem ao arquivo persistido.
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath("transient.creatorcanvas");
+
+        Document doc(200, 200);
+        QImage img(4, 4, QImage::Format_ARGB32);
+        img.fill(Qt::blue);
+        const LayerId keepAsset = doc.assets().addImage(img);
+
+        auto keeper = std::make_unique<ImageLayer>();
+        keeper->assetId = keepAsset;
+        keeper->naturalWidth = 4;
+        keeper->naturalHeight = 4;
+        QVERIFY(doc.addLayer(std::move(keeper)));
+
+        // Asset órfão (ninguém referencia) e camada transitória de prévia.
+        [[maybe_unused]] const LayerId orphanAsset = doc.assets().addImage(img);
+        auto preview = std::make_unique<ImageLayer>();
+        preview->transient = true;
+        const LayerId previewAsset = doc.assets().addImage(img);
+        preview->assetId = previewAsset;
+        preview->naturalWidth = 4;
+        preview->naturalHeight = 4;
+        doc.addLayer(std::move(preview));
+        QCOMPARE(doc.assets().assets().size(), 3);
+
+        QString error;
+        QVERIFY(saveDocument(doc, path, &error));
+        auto loaded = loadDocument(path, &error);
+        QVERIFY(loaded != nullptr);
+
+        // Só o asset da camada real entrou no arquivo.
+        QCOMPARE(loaded->assets().assets().size(), 1);
+        QCOMPARE(loaded->assets().assets().first().id, keepAsset);
+        QVERIFY(loaded->rootGroup()->children.size() == std::size_t(1));
+        QCOMPARE(static_cast<const ImageLayer*>(loaded->rootGroup()->children[0].get())->assetId,
+                 keepAsset);
+    }
+
     void roundTripSpecialValues()
     {
         QTemporaryDir dir;

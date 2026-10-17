@@ -52,7 +52,9 @@ public:
 
     /// Todos os assetIds referenciados por camadas de imagem do documento
     /// (recursivo em grupos). Base do GC do AssetStore.
-    QSet<LayerId> referencedAssetIds() const;
+    /// includeTransient=false exclui camadas de prévia (mockup) — usado
+    /// pelo writer para não gravar assets órfãos no arquivo.
+    QSet<LayerId> referencedAssetIds(bool includeTransient = true) const;
 
     bool setLayerName(const LayerId& id, QString name);
     bool setLayerVisible(const LayerId& id, bool visible);

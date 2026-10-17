@@ -476,7 +476,14 @@ QJsonObject buildProjectJson(const Document& doc)
     root.insert(QLatin1String(kDocumentKey), document);
 
     QJsonArray assets;
+    // Grava apenas os assets que camadas do documento referenciam. O
+    // store também guarda bitmaps que só a PILHA de undo sustenta (e a
+    // prévia transitória do mockup) — nenhum deles sobrevive a um
+    // reload, então serializá-los era só peso morto no arquivo.
+    const QSet<LayerId> persistedAssets = doc.referencedAssetIds(false);
     for (const Asset& asset : doc.assets().assets()) {
+        if (!persistedAssets.contains(asset.id))
+            continue;
         QJsonObject o;
         o.insert(QStringLiteral("id"),
                  asset.id.toString(QUuid::WithoutBraces));
@@ -593,7 +600,11 @@ bool writeArchive(const QString& filePath, const QByteArray& jsonBytes,
 
     bool assetsOk = jsonOk;
     if (jsonOk) {
+        // Mesmo filtro do JSON de assets: só o que as camadas referenciam.
+        const QSet<LayerId> persistedAssets = doc.referencedAssetIds(false);
         for (const Asset& asset : doc.assets().assets()) {
+            if (!persistedAssets.contains(asset.id))
+                continue;
             const QString entry = QStringLiteral("media/%1.%2")
                                       .arg(asset.id.toString(QUuid::WithoutBraces),
                                            asset.format);

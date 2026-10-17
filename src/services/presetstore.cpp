@@ -5,6 +5,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QIODevice>
+#include <QSaveFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -143,12 +144,14 @@ bool PresetStore::addUserPreset(const DocumentPreset& preset)
     userPresets.append(preset);
 
     QDir().mkpath(QFileInfo(m_userFilePath).absolutePath());
-    QFile file(m_userFilePath);
+    // Atômico: crash no meio da gravação não apaga os presets existentes.
+    QSaveFile file(m_userFilePath);
     if (!file.open(QIODevice::WriteOnly))
         return false;
     if (file.write(serializePresets(userPresets)) < 0)
         return false;
-    file.close();
+    if (!file.commit())
+        return false;
 
     m_presets.append(preset);
     return true;
@@ -164,11 +167,11 @@ bool PresetStore::removeUserPreset(const QString& name)
         if (isUserPreset(existing.name) && existing.name != name)
             userPresets.append(existing);
 
-    QFile file(m_userFilePath);
+    QSaveFile file(m_userFilePath);
     if (!file.open(QIODevice::WriteOnly))
         return false;
     file.write(serializePresets(userPresets));
-    file.close();
+    file.commit();
 
     reload();
     return true;

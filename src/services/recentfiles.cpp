@@ -1,6 +1,7 @@
 #include "recentfiles.h"
 #include <QDir>
 #include <QFile>
+#include <QSaveFile>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -28,9 +29,11 @@ void RecentFiles::save()
         array.append(path);
     QJsonObject root;
     root.insert(QStringLiteral("recent"), array);
-    QFile file(m_storageFilePath);
-    if (file.open(QIODevice::WriteOnly))
+    QSaveFile file(m_storageFilePath);
+    if (file.open(QIODevice::WriteOnly)) {
         file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+        file.commit();
+    }
 }
 
 void RecentFiles::push(const QString& filePath)

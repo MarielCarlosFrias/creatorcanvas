@@ -23,9 +23,18 @@ private slots:
 
         Document doc(200, 200);
         service.setDocument(&doc);
+        // P1: procedência — sidecar .meta grava o projeto de origem.
+        service.setSourcePath(QStringLiteral("/tmp/projeto-teste.creatorcanvas"));
         service.saveNow();
 
         QVERIFY(service.hasRecoveryFile());
+        QCOMPARE(service.recoverySourcePath(),
+                 QStringLiteral("/tmp/projeto-teste.creatorcanvas"));
+
+        // discard remove o sidecar junto.
+        service.discardRecovery();
+        QVERIFY(!service.hasRecoveryFile());
+        QVERIFY(service.recoverySourcePath().isEmpty());
     }
 
     void discardRecoveryRemovesFile()

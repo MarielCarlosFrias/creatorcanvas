@@ -165,6 +165,11 @@ void PaintTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const To
                     finalAssetId, img->naturalWidth, img->naturalHeight, layer->transform,
                     cmdName
                 ));
+            } else {
+                // Sem histórico o traço não pode se perder (regressão do
+                // refactoring da prévia): aplica direto.
+                ctx.document->setImageLayerAsset(img->id(), finalAssetId,
+                                                 img->naturalWidth, img->naturalHeight);
             }
         }
     }

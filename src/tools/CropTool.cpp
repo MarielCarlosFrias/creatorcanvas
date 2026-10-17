@@ -297,6 +297,13 @@ void CropTool::applyCrop(const ToolContext& ctx)
             newAssetId, cropped.width(), cropped.height(), newTransform,
             cmdName, oldAlphaMask, newAlphaMask
         ));
+    } else {
+        // Sem pilha de histórico: aplica direto — antes o corte simplesmente
+        // NÃO acontecia (asset criado e nunca aplicado à camada).
+        ctx.document->setImageLayerAsset(img->id(), newAssetId, cropped.width(), cropped.height());
+        ctx.document->setLayerTransform(img->id(), newTransform);
+        if (!newAlphaMask.isNull())
+            ctx.document->setLayerAlphaMask(img->id(), newAlphaMask);
     }
 
     cancel(ctx);

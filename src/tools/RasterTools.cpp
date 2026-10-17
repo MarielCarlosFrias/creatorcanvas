@@ -241,6 +241,9 @@ void CloneStampTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, con
                     finalAssetId, img->naturalWidth, img->naturalHeight, layer->transform,
                     cmdName
                 ));
+            } else {
+                ctx.document->setImageLayerAsset(img->id(), finalAssetId,
+                                                 img->naturalWidth, img->naturalHeight);
             }
         }
     }
@@ -361,6 +364,10 @@ void FloodFillTool::mousePress(QMouseEvent* event, const QPointF& docPos, const 
                         newAssetId, filledImg.width(), filledImg.height(), imgLayer->transform,
                         cmdName
                     ));
+                } else {
+                    ctx.document->setImageLayerAsset(imgLayer->id(), newAssetId,
+                                                     filledImg.width(), filledImg.height());
+                    ctx.document->touchLayer(imgLayer->id());
                 }
 
                 if (ctx.requestUpdate)
