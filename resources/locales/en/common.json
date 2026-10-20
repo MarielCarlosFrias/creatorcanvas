@@ -171,5 +171,7 @@
   "panel.history.textEffects": "Text Effects",
   "panel.history.imageEffects": "Image Effects",
   "panel.history.layerColor": "Layer Color",
-  "menu.view.history": "&History Panel"
+  "menu.view.history": "&History Panel",
+  "layer.typeAdjustment": "Adjustment Layer",
+  "layer.typeFill": "Fill Layer"
 }

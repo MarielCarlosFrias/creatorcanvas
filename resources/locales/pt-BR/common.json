@@ -171,5 +171,7 @@
   "panel.history.textEffects": "Efeitos de Texto",
   "panel.history.imageEffects": "Efeitos de Imagem",
   "panel.history.layerColor": "Cor da Camada",
-  "menu.view.history": "Painel de &Histórico"
+  "menu.view.history": "Painel de &Histórico",
+  "layer.typeAdjustment": "Camada de Ajuste",
+  "layer.typeFill": "Camada de Preenchimento"
 }

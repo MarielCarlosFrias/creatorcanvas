@@ -26,7 +26,7 @@ using LayerId = QUuid;
 
 inline LayerId newLayerId() { return QUuid::createUuid(); }
 
-enum class LayerType { Group, Image, Text, Shape, Background };
+enum class LayerType { Group, Image, Text, Shape, Background, Adjustment, Fill };
 enum class BlendMode {
     Normal,
     Multiply,
@@ -49,6 +49,22 @@ enum class ShapeKind { Rectangle, RoundedRect, Ellipse, Line, Polygon, ArrowRigh
                        Cloud, Explosion };
 enum class LayerColorTag { None, Red, Orange, Yellow, Green, Blue, Purple, Gray };
 
+/// Granular per-pixel lock flags (Photoshop-style). A group lock applies to
+/// all descendants via effective locks.
+struct LayerLocks
+{
+    bool transparency = false; // lock transparent pixels
+    bool pixels = false;       // lock image pixels
+    bool position = false;     // lock position
+    bool all = false;          // lock all (override)
+
+    bool operator==(const LayerLocks& other) const noexcept
+    {
+        return transparency == other.transparency && pixels == other.pixels
+            && position == other.position && all == other.all;
+    }
+};
+
 /// Base class of every layer. UI/commands mutate layers ONLY through
 /// Document methods; direct field access is the read path (renderer,
 /// serializer) and interactive gestures (which push one command at release).
@@ -66,7 +82,8 @@ public:
 
     QString name;
     bool visible = true;
-    bool locked = false;
+    bool locked = false;        // legacy single lock flag (kept for compat)
+    LayerLocks locks;           // granular per-pixel locks
     BlendMode blendMode = BlendMode::Normal;
     BlendIf blendIf;
     LayerColorTag colorTag = LayerColorTag::None;
@@ -79,6 +96,22 @@ public:
 
     float opacity() const { return m_opacity; }
     void setOpacity(float value); // clamps to [0, 1]
+
+    /// Fill opacity: applies to content only (not effects), like Photoshop.
+    float fillOpacity() const { return m_fillOpacity; }
+    void setFillOpacity(float value); // clamps to [0, 1]
+
+    /// Clipped to layer below (clipping mask). When true, this layer only
+    /// shows where the layer beneath is opaque.
+    bool clipped = false;
+
+    /// Layer link group: layers sharing the same link group move together.
+    /// None = not linked.
+    std::optional<qint64> linkGroup;
+
+    /// Vector mask (applied together with alphaMask). Shape layers keep
+    /// their outline in their own path instead.
+    QImage vectorMask;
 
     /// Content bounds in LOCAL (untransformed) coordinates. Empty rect for
     /// layers without intrinsic geometry (Background).
@@ -95,6 +128,7 @@ private:
     LayerType m_type;
     LayerId m_id;
     float m_opacity = 1.0f;
+    float m_fillOpacity = 1.0f;
 };
 
 class GroupLayer final : public Layer
@@ -179,6 +213,46 @@ public:
 
     QColor fill = Qt::white;
     Gradient gradient; ///< fundo em gradiente (substitui fill quando ativo)
+};
+
+/// Fill Layer (Photoshop-style): gera preenchimento procedural (cor/gradiente/padrão)
+/// sem depender de um asset externo. Afetada pela opacity da camada.
+enum class FillType { Solid, Gradient, Pattern };
+
+class FillLayer final : public Layer
+{
+public:
+    FillLayer();
+    std::unique_ptr<Layer> deepCopy() const override;
+    QRectF contentBounds() const override;
+
+    FillType kind = FillType::Solid;
+    QColor color = Qt::white;
+    Gradient gradient;
+    bool dither = false;
+    bool alignWithLayer = false; // alinha gradiente/padrão ao frame da camada
+    QPointF patternOffset;       // deslocamento do padrão em relação à camada
+};
+
+/// Adjustment Layer (Photoshop-style): aplica ajuste procedural a todas as
+/// camadas abaixo (ou apenas às vinculadas por clipping mask).
+enum class AdjustmentType { Levels, Curves, BrightnessContrast, HueSaturation,
+                            ColorBalance, PhotoFilter, ChannelMixer,
+                            Invert, Threshold, Posterize, GradientMap };
+
+class AdjustmentLayer final : public Layer
+{
+public:
+    AdjustmentLayer();
+    std::unique_ptr<Layer> deepCopy() const override;
+    QRectF contentBounds() const override;
+
+    AdjustmentType kind = AdjustmentType::Levels;
+    /// Parâmetros serializados como pares chave/valor (ex.: "brightness": 20).
+    /// Mantém o formato simples e extensível sem depender de um schema fixo.
+    std::vector<std::pair<QString, double>> parameters;
+    bool useLegacy = false;
+    bool preserveLuminosity = true;
 };
 
 std::unique_ptr<Layer> makeLayer(LayerType type);

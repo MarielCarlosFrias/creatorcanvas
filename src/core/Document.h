@@ -4,6 +4,7 @@
 #include <QtGlobal>
 
 #include <memory>
+#include <optional>
 #include <QSet>
 
 #include "assets/AssetStore.h"
@@ -64,6 +65,11 @@ public:
     bool setLayerOpacity(const LayerId& id, float opacity);
     bool setLayerBlendMode(const LayerId& id, BlendMode mode);
     bool setLayerBlendIf(const LayerId& id, BlendIf blendIf);
+    bool setLayerFillOpacity(const LayerId& id, float fillOpacity);
+    bool setLayerClipped(const LayerId& id, bool clipped);
+    bool setLayerLinkGroup(const LayerId& id, std::optional<qint64> linkGroup);
+    bool setLayerVectorMask(const LayerId& id, QImage mask);
+    bool setLayerLocks(const LayerId& id, const LayerLocks& locks);
     bool setLayerTransform(const LayerId& id, const AffineTransform& transform);
     bool setLayerTextBox(const LayerId& id, const QSizeF& box);
     bool setLayerTextEffects(const LayerId& id, const TextEffects& effects);

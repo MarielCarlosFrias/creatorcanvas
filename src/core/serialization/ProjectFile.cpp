@@ -269,6 +269,28 @@ QJsonObject writeLayer(const Layer& layer)
         o.insert(QStringLiteral("blendIf"), rangesArr);
     }
 
+    QJsonObject locksObj;
+    locksObj.insert(QStringLiteral("transparency"), layer.locks.transparency);
+    locksObj.insert(QStringLiteral("pixels"), layer.locks.pixels);
+    locksObj.insert(QStringLiteral("position"), layer.locks.position);
+    locksObj.insert(QStringLiteral("all"), layer.locks.all);
+    o.insert(QStringLiteral("locks"), locksObj);
+
+    if (!qFuzzyCompare(layer.fillOpacity(), 1.0f))
+        o.insert(QStringLiteral("fillOpacity"), double(layer.fillOpacity()));
+
+    if (layer.clipped)
+        o.insert(QStringLiteral("clipped"), layer.clipped);
+
+    if (layer.linkGroup.has_value())
+        o.insert(QStringLiteral("linkGroup"), static_cast<double>(*layer.linkGroup));
+
+    if (!layer.vectorMask.isNull()) {
+        const QString entry = QStringLiteral("masks/%1.png")
+            .arg(layer.id().toString(QUuid::WithoutBraces));
+        o.insert(QStringLiteral("vectorMask"), entry);
+    }
+
     switch (layer.type()) {
     case LayerType::Group: {
         o.insert(QStringLiteral("type"), QStringLiteral("group"));
@@ -416,14 +438,43 @@ QJsonObject writeLayer(const Layer& layer)
                       gradientToJson(background.gradient));
         break;
     }
+    case LayerType::Adjustment: {
+        o.insert(QStringLiteral("type"), QStringLiteral("adjustment"));
+        const auto& adj = static_cast<const AdjustmentLayer&>(layer);
+        o.insert(QStringLiteral("kind"), static_cast<int>(adj.kind));
+        QJsonArray params;
+        for (const auto& [key, value] : adj.parameters) {
+            QJsonObject p;
+            p.insert(QStringLiteral("key"), key);
+            p.insert(QStringLiteral("value"), value);
+            params.append(p);
+        }
+        o.insert(QStringLiteral("parameters"), params);
+        o.insert(QStringLiteral("useLegacy"), adj.useLegacy);
+        o.insert(QStringLiteral("preserveLuminosity"), adj.preserveLuminosity);
+        break;
+    }
+    case LayerType::Fill: {
+        o.insert(QStringLiteral("type"), QStringLiteral("fill"));
+        const auto& fill = static_cast<const FillLayer&>(layer);
+        o.insert(QStringLiteral("kind"), static_cast<int>(fill.kind));
+        o.insert(QStringLiteral("color"), colorToString(fill.color));
+        if (fill.gradient.enabled)
+            o.insert(QStringLiteral("gradient"), gradientToJson(fill.gradient));
+        o.insert(QStringLiteral("dither"), fill.dither);
+        o.insert(QStringLiteral("alignWithLayer"), fill.alignWithLayer);
+        o.insert(QStringLiteral("patternOffsetX"), fill.patternOffset.x());
+        o.insert(QStringLiteral("patternOffsetY"), fill.patternOffset.y());
+        break;
+    }
     }
     return o;
 }
 
-QString alphaMaskEntry(const ImageLayer& image)
+QString alphaMaskEntry(const Layer& layer)
 {
     return QStringLiteral("masks/%1.png")
-        .arg(image.id().toString(QUuid::WithoutBraces));
+        .arg(layer.id().toString(QUuid::WithoutBraces));
 }
 
 bool writeLayerMasks(mz_zip_archive* zip, const Layer& layer)
@@ -437,24 +488,46 @@ bool writeLayerMasks(mz_zip_archive* zip, const Layer& layer)
         return true;
     }
 
-    if (layer.type() != LayerType::Image)
+    if (layer.type() != LayerType::Image && layer.vectorMask.isNull())
         return true;
 
-    const auto& image = static_cast<const ImageLayer&>(layer);
-    if (image.alphaMask.isNull())
-        return true;
+    if (layer.type() == LayerType::Image) {
+        const auto& image = static_cast<const ImageLayer&>(layer);
+        if (!image.alphaMask.isNull()) {
+            QByteArray pngBytes;
+            QBuffer buffer(&pngBytes);
+            if (!buffer.open(QIODevice::WriteOnly)
+                || !image.alphaMask.convertToFormat(QImage::Format_Alpha8).save(&buffer, "PNG")) {
+                return false;
+            }
 
-    QByteArray pngBytes;
-    QBuffer buffer(&pngBytes);
-    if (!buffer.open(QIODevice::WriteOnly)
-        || !image.alphaMask.convertToFormat(QImage::Format_Alpha8).save(&buffer, "PNG")) {
-        return false;
+            const QByteArray entry = alphaMaskEntry(layer).toUtf8();
+            if (!mz_zip_writer_add_mem(zip, entry.constData(), pngBytes.constData(),
+                                       static_cast<size_t>(pngBytes.size()),
+                                       MZ_DEFAULT_LEVEL)) {
+                return false;
+            }
+        }
     }
 
-    const QByteArray entry = alphaMaskEntry(image).toUtf8();
-    return mz_zip_writer_add_mem(zip, entry.constData(), pngBytes.constData(),
-                                 static_cast<size_t>(pngBytes.size()),
-                                 MZ_DEFAULT_LEVEL);
+    if (!layer.vectorMask.isNull()) {
+        QByteArray pngBytes;
+        QBuffer buffer(&pngBytes);
+        if (!buffer.open(QIODevice::WriteOnly)
+            || !layer.vectorMask.convertToFormat(QImage::Format_Alpha8).save(&buffer, "PNG")) {
+            return false;
+        }
+
+        const QByteArray entry = QStringLiteral("masks/vector_%1.png")
+            .arg(layer.id().toString(QUuid::WithoutBraces)).toUtf8();
+        if (!mz_zip_writer_add_mem(zip, entry.constData(), pngBytes.constData(),
+                                   static_cast<size_t>(pngBytes.size()),
+                                   MZ_DEFAULT_LEVEL)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 QJsonObject buildProjectJson(const Document& doc)
@@ -937,6 +1010,10 @@ private:
             return readShape(o, id, out);
         if (type == QLatin1String("background"))
             return readBackground(o, id, out);
+        if (type == QLatin1String("adjustment"))
+            return readAdjustment(o, id, out);
+        if (type == QLatin1String("fill"))
+            return readFill(o, id, out);
 
         qCWarning(lcSerialization)
             << "Unknown layer type" << type
@@ -1158,6 +1235,50 @@ private:
         return true;
     }
 
+    bool readAdjustment(const QJsonObject& o, const LayerId& id,
+                        std::unique_ptr<Layer>* out)
+    {
+        auto adjustment = std::make_unique<AdjustmentLayer>();
+        adjustment->kind =
+            static_cast<AdjustmentType>(o.value(QStringLiteral("kind")).toInt(0));
+        const QJsonArray paramsArr =
+            o.value(QStringLiteral("parameters")).toArray();
+        for (const QJsonValue& p : paramsArr) {
+            const QJsonObject pObj = p.toObject();
+            adjustment->parameters.emplace_back(
+                pObj.value(QStringLiteral("key")).toString(),
+                pObj.value(QStringLiteral("value")).toDouble(0.0));
+        }
+        adjustment->useLegacy = o.value(QStringLiteral("useLegacy")).toBool(false);
+        adjustment->preserveLuminosity =
+            o.value(QStringLiteral("preserveLuminosity")).toBool(true);
+        finishLayer(*adjustment, o, id);
+        *out = std::move(adjustment);
+        return true;
+    }
+
+    bool readFill(const QJsonObject& o, const LayerId& id,
+                  std::unique_ptr<Layer>* out)
+    {
+        auto fill = std::make_unique<FillLayer>();
+        fill->kind =
+            static_cast<FillType>(o.value(QStringLiteral("kind")).toInt(0));
+        fill->color =
+            colorFromString(o.value(QStringLiteral("color")).toString());
+        if (o.contains(QStringLiteral("gradient")))
+            fill->gradient =
+                gradientFromJson(o.value(QStringLiteral("gradient")).toObject());
+        fill->dither = o.value(QStringLiteral("dither")).toBool(false);
+        fill->alignWithLayer =
+            o.value(QStringLiteral("alignWithLayer")).toBool(false);
+        fill->patternOffset = QPointF(
+            o.value(QStringLiteral("patternOffsetX")).toDouble(0.0),
+            o.value(QStringLiteral("patternOffsetY")).toDouble(0.0));
+        finishLayer(*fill, o, id);
+        *out = std::move(fill);
+        return true;
+    }
+
     void finishLayer(Layer& layer, const QJsonObject& o, const LayerId& id)
     {
         layer.m_id = id;
@@ -1169,6 +1290,8 @@ private:
                 .value_or(LayerColorTag::None);
         layer.setOpacity(
             float(o.value(QStringLiteral("opacity")).toDouble(1.0)));
+        layer.setFillOpacity(
+            float(o.value(QStringLiteral("fillOpacity")).toDouble(1.0)));
         layer.blendMode =
             blendModeFromString(o.value(QStringLiteral("blendMode")).toString())
                 .value_or(BlendMode::Normal);
@@ -1185,6 +1308,30 @@ private:
             o.value(QStringLiteral("shearX")).toDouble(0.0);
         layer.transform.shearY =
             o.value(QStringLiteral("shearY")).toDouble(0.0);
+
+        if (o.contains(QStringLiteral("locks"))) {
+            const QJsonObject locksObj = o.value(QStringLiteral("locks")).toObject();
+            layer.locks.transparency = locksObj.value(QStringLiteral("transparency")).toBool(false);
+            layer.locks.pixels = locksObj.value(QStringLiteral("pixels")).toBool(false);
+            layer.locks.position = locksObj.value(QStringLiteral("position")).toBool(false);
+            layer.locks.all = locksObj.value(QStringLiteral("all")).toBool(false);
+        }
+
+        if (o.contains(QStringLiteral("clipped")))
+            layer.clipped = o.value(QStringLiteral("clipped")).toBool(false);
+
+        if (o.contains(QStringLiteral("linkGroup")))
+            layer.linkGroup =
+                o.value(QStringLiteral("linkGroup")).toVariant().toLongLong();
+
+        if (o.contains(QStringLiteral("vectorMask"))) {
+            const QString maskFile =
+                o.value(QStringLiteral("vectorMask")).toString();
+            const QByteArray maskBytes = m_media.value(maskFile);
+            QImage mask;
+            if (!maskBytes.isEmpty() && mask.loadFromData(maskBytes, "PNG"))
+                layer.vectorMask = mask.convertToFormat(QImage::Format_Alpha8);
+        }
 
         if (o.contains(QStringLiteral("blendIf"))) {
             const QJsonArray rangesArr = o.value(QStringLiteral("blendIf")).toArray();

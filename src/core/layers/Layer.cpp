@@ -17,6 +17,11 @@ void Layer::setOpacity(float value)
     m_opacity = std::clamp(value, 0.0f, 1.0f);
 }
 
+void Layer::setFillOpacity(float value)
+{
+    m_fillOpacity = std::clamp(value, 0.0f, 1.0f);
+}
+
 QRectF Layer::contentBounds() const
 {
     return QRectF(); // no intrinsic geometry by default
@@ -28,10 +33,15 @@ void Layer::copyCommonFrom(const Layer& other)
     name = other.name;
     visible = other.visible;
     locked = other.locked;
+    locks = other.locks;
     blendMode = other.blendMode;
     blendIf = other.blendIf;
     transform = other.transform;
     m_opacity = other.m_opacity;
+    m_fillOpacity = other.m_fillOpacity;
+    clipped = other.clipped;
+    linkGroup = other.linkGroup;
+    vectorMask = other.vectorMask;
 }
 
 GroupLayer::GroupLayer()
@@ -72,6 +82,7 @@ std::unique_ptr<Layer> ImageLayer::deepCopy() const
     copy->naturalWidth = naturalWidth;
     copy->naturalHeight = naturalHeight;
     copy->alphaMask = alphaMask.copy();
+    copy->vectorMask = vectorMask.copy();
     copy->effects = effects;
     return copy;
 }
@@ -171,6 +182,46 @@ std::unique_ptr<Layer> BackgroundLayer::deepCopy() const
     return copy;
 }
 
+FillLayer::FillLayer()
+    : Layer(LayerType::Fill) {}
+
+std::unique_ptr<Layer> FillLayer::deepCopy() const
+{
+    auto copy = std::make_unique<FillLayer>();
+    copy->copyCommonFrom(*this);
+    copy->kind = kind;
+    copy->color = color;
+    copy->gradient = gradient;
+    copy->dither = dither;
+    copy->alignWithLayer = alignWithLayer;
+    copy->patternOffset = patternOffset;
+    return copy;
+}
+
+QRectF FillLayer::contentBounds() const
+{
+    return QRectF(); // preenchimento procedural cobre a camada inteira
+}
+
+AdjustmentLayer::AdjustmentLayer()
+    : Layer(LayerType::Adjustment) {}
+
+std::unique_ptr<Layer> AdjustmentLayer::deepCopy() const
+{
+    auto copy = std::make_unique<AdjustmentLayer>();
+    copy->copyCommonFrom(*this);
+    copy->kind = kind;
+    copy->parameters = parameters;
+    copy->useLegacy = useLegacy;
+    copy->preserveLuminosity = preserveLuminosity;
+    return copy;
+}
+
+QRectF AdjustmentLayer::contentBounds() const
+{
+    return QRectF(); // ajuste procedural não tem geometria própria
+}
+
 std::unique_ptr<Layer> makeLayer(LayerType type)
 {
     switch (type) {
@@ -179,6 +230,8 @@ std::unique_ptr<Layer> makeLayer(LayerType type)
     case LayerType::Text:       return std::make_unique<TextLayer>();
     case LayerType::Shape:      return std::make_unique<ShapeLayer>();
     case LayerType::Background: return std::make_unique<BackgroundLayer>();
+    case LayerType::Adjustment: return std::make_unique<AdjustmentLayer>();
+    case LayerType::Fill:       return std::make_unique<FillLayer>();
     }
     return nullptr;
 }

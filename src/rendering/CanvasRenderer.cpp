@@ -834,6 +834,23 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
     case LayerType::Shape:
         drawShape(painter, static_cast<const ShapeLayer&>(layer));
         break;
+    case LayerType::Fill: {
+        const auto& fillLayer = static_cast<const FillLayer&>(layer);
+        QRectF rect = canvasRect;
+        if (fillLayer.kind == FillType::Solid) {
+            painter->fillRect(rect, fillLayer.color);
+        } else if (fillLayer.kind == FillType::Gradient && fillLayer.gradient.enabled) {
+            painter->fillRect(rect, gradientBrush(fillLayer.gradient, rect));
+        } else {
+            painter->fillRect(rect, fillLayer.color);
+        }
+        break;
+    }
+    case LayerType::Adjustment: {
+        // Camada de ajuste não desenha pixels próprios; afeta camadas abaixo
+        // (aplicado no pipeline de composição). Aqui apenas pulamos.
+        break;
+    }
     case LayerType::Text: {
         const auto& text = static_cast<const TextLayer&>(layer);
         if (text.content.isEmpty())

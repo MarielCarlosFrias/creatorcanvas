@@ -528,6 +528,11 @@ using LayerColorTagCommand   = LayerPropertyCommand<LayerColorTag>;
 using LayerOpacityCommand    = LayerPropertyCommand<float>;
 using LayerBlendModeCommand  = LayerPropertyCommand<BlendMode>;
 using LayerBlendIfCommand    = LayerPropertyCommand<BlendIf>;
+using LayerFillOpacityCommand = LayerPropertyCommand<float>;
+using LayerClippedCommand    = LayerPropertyCommand<bool>;
+using LayerLinkGroupCommand  = LayerPropertyCommand<std::optional<qint64>>;
+using LayerVectorMaskCommand = LayerPropertyCommand<QImage>;
+using LayerLocksCommand      = LayerPropertyCommand<LayerLocks>;
 
 // Comandos de histórico fortemente tipados para operações de formas geométricas (ShapeLayer)
 // Permitem desfazer (Undo) e refazer (Redo) edições de cores, bordas e cantos arredondados
@@ -563,7 +568,8 @@ public:
                             LayerId oldAssetId, int oldWidth, int oldHeight, AffineTransform oldTransform,
                             LayerId newAssetId, int newWidth, int newHeight, AffineTransform newTransform,
                             QString commandName = QStringLiteral("image.modify"),
-                            QImage oldAlphaMask = {}, QImage newAlphaMask = {})
+                            QImage oldAlphaMask = {}, QImage newAlphaMask = {},
+                            QImage oldVectorMask = {}, QImage newVectorMask = {})
         : Command(std::move(commandName))
         , m_doc(&doc)
         , m_id(id)
@@ -577,7 +583,10 @@ public:
         , m_newTransform(std::move(newTransform))
         , m_oldAlphaMask(std::move(oldAlphaMask))
         , m_newAlphaMask(std::move(newAlphaMask))
+        , m_oldVectorMask(std::move(oldVectorMask))
+        , m_newVectorMask(std::move(newVectorMask))
         , m_hasAlphaMasks(!m_oldAlphaMask.isNull() || !m_newAlphaMask.isNull())
+        , m_hasVectorMasks(!m_oldVectorMask.isNull() || !m_newVectorMask.isNull())
     {
     }
 
@@ -592,6 +601,8 @@ public:
         m_doc->setImageLayerAsset(m_id, m_newAssetId, m_newWidth, m_newHeight);
         if (m_hasAlphaMasks)
             m_doc->setLayerAlphaMask(m_id, m_newAlphaMask);
+        if (m_hasVectorMasks)
+            m_doc->setLayerVectorMask(m_id, m_newVectorMask);
         m_doc->setLayerTransform(m_id, m_newTransform);
     }
 
@@ -600,6 +611,8 @@ public:
         m_doc->setImageLayerAsset(m_id, m_oldAssetId, m_oldWidth, m_oldHeight);
         if (m_hasAlphaMasks)
             m_doc->setLayerAlphaMask(m_id, m_oldAlphaMask);
+        if (m_hasVectorMasks)
+            m_doc->setLayerVectorMask(m_id, m_oldVectorMask);
         m_doc->setLayerTransform(m_id, m_oldTransform);
     }
 
@@ -616,7 +629,10 @@ private:
     AffineTransform m_newTransform;
     QImage m_oldAlphaMask;
     QImage m_newAlphaMask;
+    QImage m_oldVectorMask;
+    QImage m_newVectorMask;
     bool m_hasAlphaMasks = false;
+    bool m_hasVectorMasks = false;
 };
 
 /// Macro command that executes multiple commands sequentially as a single undo/redo step.

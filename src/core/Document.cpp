@@ -285,6 +285,66 @@ bool Document::setLayerBlendIf(const LayerId& id, BlendIf blendIf)
     return true;
 }
 
+bool Document::setLayerFillOpacity(const LayerId& id, float fillOpacity)
+{
+    Layer* layer = findLayer(id);
+    if (!layer)
+        return false;
+    const float old = layer->fillOpacity();
+    layer->setFillOpacity(fillOpacity);
+    if (qFuzzyCompare(layer->fillOpacity(), old))
+        return true;
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
+bool Document::setLayerClipped(const LayerId& id, bool clipped)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->clipped == clipped)
+        return layer != nullptr;
+    layer->clipped = clipped;
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
+bool Document::setLayerLinkGroup(const LayerId& id, std::optional<qint64> linkGroup)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->linkGroup == linkGroup)
+        return layer != nullptr;
+    layer->linkGroup = linkGroup;
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
+bool Document::setLayerVectorMask(const LayerId& id, QImage mask)
+{
+    Layer* layer = findLayer(id);
+    if (!layer)
+        return false;
+    static_cast<void>(layer); // mask stored on specific layer types; ImageLayer/TextLayer/ShapeLayer handle it
+    // For now, vector mask is stored on the base Layer class directly.
+    layer->vectorMask = std::move(mask);
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
+bool Document::setLayerLocks(const LayerId& id, const LayerLocks& locks)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->locks == locks)
+        return layer != nullptr;
+    layer->locks = locks;
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
 bool Document::setLayerTransform(const LayerId& id, const AffineTransform& transform)
 {
     Layer* layer = findLayer(id);
