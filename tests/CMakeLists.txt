@@ -2,6 +2,8 @@ function(cc_add_test name)
     add_executable(${name} ${ARGN})
     target_link_libraries(${name} PRIVATE Qt6::Test Qt6::Widgets cc_services cc_localization cc_tools cc_core cc_rendering miniz)
     target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}/src)
+    target_compile_definitions(${name} PRIVATE
+        CC_PROJECT_ROOT="${PROJECT_SOURCE_DIR}")
     if(NOT WIN32)
         set_target_properties(${name} PROPERTIES
             BUILD_RPATH "${PROJECT_SOURCE_DIR}/3rdparty/onnxruntime/lib"

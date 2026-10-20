@@ -315,7 +315,7 @@ Saves write a temporary file and rename into place (atomic replace on the same v
 **20** QTest executables in `tests/CMakeLists.txt` (all run with `QT_QPA_PLATFORM=offscreen`):
 
 1. `test_settings` — preferences persistence
-2. `test_i18n` — catalogs, key symmetry, fallback
+2. `test_i18n` — catalogs, key symmetry, fallback, and a **source scan** that fails if any `t("section", "key")` used in `src/` is missing from either catalog (regression: the status bar showed the raw key `editor.canvas.status.paintHelp`)
 3. `test_logging` — log formatting
 4. `test_layers` — hierarchy, z-order, clone
 5. `test_document` — lifecycle, queries, bounds
@@ -334,6 +334,11 @@ Saves write a temporary file and rename into place (atomic replace on the same v
 18. `test_tools` — modular tool activation, event delegation, and context handling
 19. `test_ai_quick` — quick AI / canvas-adjacent paths (`canvasview`, AI dialog, mask canvas compiled in)
 20. `test_ui_phase1` — start screen, layers panel, theme icons, collapsible sections
+21. `test_photocraft` — pixel selection, layer comps and web slices round-trip
+22. `test_hit_alpha` — alpha-aware hit testing
+23. `test_tools_extras` — marquee/gradient/retouch/healing behaviour, undo steps and raster ops
+24. `test_canvas_zoom` — fit mode refits on resize, manual zoom is preserved
+25. `test_template_textfit` — template text fit rules
 
 ### Smoke test
 
@@ -342,6 +347,14 @@ QT_QPA_PLATFORM=offscreen CreatorCanvas --smoke-test
 ```
 
 Checks catalog load, optional ONNX inference, in-memory document, `.creatorcanvas` save/load, thumbnail extract, PNG/JPEG/WebP export, and a headless `MainWindow` load.
+
+### UI snapshot (layout regression)
+
+```bash
+QT_QPA_PLATFORM=offscreen CreatorCanvas --ui-snapshot /tmp/shots
+```
+
+Renders the editor at 1600×1000, 1280×800, 1024×700, 900×620 and 800×520 for every tool (12 tools → 60 PNGs) so responsive layout can be reviewed headlessly through the same `MainWindow` the user runs.
 
 ## 13. Build & distribution
 
@@ -396,6 +409,7 @@ Logs live under the OS application data directory used by `LogService` / `Settin
 - **Marquee + transformed layers** — the marquee is mapped through the layer inverse transform and collapsed to a bounding rectangle, so a rotated layer gets an axis-aligned selection in its own bitmap space.
 - **Retouch/Healing run on the UI thread** — the brush patch is small, but each stroke event still converts/duplicates the full layer bitmap; multi-megapixel layers can feel heavy.
 - **Spot Healing auto-source** — the source is sampled from a fixed offset to the right (clamped to bounds); there is no Alt-click source picking or patch-match synthesis.
+- **UBSan noise from miniz** — the smoke test's zip path reports misaligned loads/stores inside vendored `3rdparty/miniz` (benign on x86-64); no project code is implicated.
 - **Blend/gradient surface smaller than older README copy** — 7 blends, linear+radial two-stop gradients, no conical.
 - **No `platform/` isolation** — Windows vs Unix still appears in CMake and isolated `#ifdef`s (e.g. ONNX).
 - **`Q_OBJECT` + `unique_ptr`** — incomplete type in the header still breaks the generated destructor; include the full type.

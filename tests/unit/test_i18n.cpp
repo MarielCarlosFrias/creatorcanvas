@@ -2,8 +2,14 @@
 #include "services/settingsservice.h"
 
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QMap>
+#include <QRegularExpression>
+#include <QSet>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -19,6 +25,19 @@ bool writeFile(const QString &path, const QByteArray &contents)
     if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
         return false;
     return f.write(contents) == contents.size();
+}
+
+/// Achata um objeto JSON aninhado em chaves pontuadas (mesma regra do
+/// I18nService: {"menu": {"file": {"new": "..."}}} -> menu.file.new).
+void flattenObject(const QJsonObject& obj, const QString& prefix, QSet<QString>& out)
+{
+    for (auto it = obj.begin(); it != obj.end(); ++it) {
+        const QString key = prefix.isEmpty() ? it.key() : prefix + QLatin1Char('.') + it.key();
+        if (it.value().isObject())
+            flattenObject(it.value().toObject(), key, out);
+        else
+            out.insert(key);
+    }
 }
 
 } // namespace
@@ -163,6 +182,74 @@ private slots:
         QVERIFY(!i18n.setLanguage(QStringLiteral("fr")));
         QCOMPARE(i18n.currentLanguage(), QStringLiteral("en"));
     }
+    /// Regressão real: a barra de status mostrava a chave crua
+    /// ("editor.canvas.status.paintHelp") quando o código pedia uma chave
+    /// ausente do catálogo. Este teste varre src/ e falha para qualquer
+    /// chave sem tradução em nenhum dos idiomas.
+    void everyKeyUsedInSourcesExists()
+    {
+        const QString root = QString::fromLatin1(CC_PROJECT_ROOT);
+        const QDir locales(root + QStringLiteral("/resources/locales"));
+        if (!locales.exists())
+            QSKIP("catálogos de locale não encontrados (build empacotado)");
+
+        QMap<QString, QSet<QString>> catalogs;
+        const QStringList languages =
+            locales.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+        QVERIFY(languages.contains(QStringLiteral("en")));
+        for (const QString& lang : languages) {
+            const QDir langDir(locales.filePath(lang));
+            QSet<QString> keys;
+            for (const QString& file :
+                 langDir.entryList({QStringLiteral("*.json")}, QDir::Files)) {
+                QFile f(langDir.filePath(file));
+                if (!f.open(QIODevice::ReadOnly))
+                    continue;
+                const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+                if (!doc.isObject())
+                    continue;
+                const QString section = QFileInfo(file).completeBaseName();
+                flattenObject(doc.object(), section, keys);
+            }
+            // Metadados (nativeName etc.) não são chaves de tradução.
+            keys.remove(QStringLiteral("_meta"));
+            catalogs.insert(lang, keys);
+        }
+
+        // Varre o código por chamadas t("seção", "chave").
+        QSet<QString> used;
+        static const QRegularExpression callPattern(QStringLiteral(
+            "\\bt\\(\\s*\"([A-Za-z0-9_\\-]+)\"\\s*,\\s*\"([^\"]+)\""));
+        QDirIterator it(root + QStringLiteral("/src"),
+                        {QStringLiteral("*.cpp"), QStringLiteral("*.h")},
+                        QDir::Files, QDirIterator::Subdirectories);
+        while (it.hasNext()) {
+            QFile f(it.next());
+            if (!f.open(QIODevice::ReadOnly))
+                continue;
+            const QString source = QString::fromUtf8(f.readAll());
+            auto matches = callPattern.globalMatch(source);
+            while (matches.hasNext()) {
+                const auto match = matches.next();
+                used.insert(match.captured(1) + QLatin1Char('.') + match.captured(2));
+            }
+        }
+        QVERIFY2(used.size() > 100,
+                 "varredura de i18n não encontrou chamadas t(...) — caminho errado?");
+
+        QStringList missing;
+        for (const QString& lang : languages) {
+            for (const QString& key : used) {
+                if (!catalogs.value(lang).contains(key))
+                    missing << lang + QStringLiteral(": ") + key;
+            }
+        }
+        missing.sort();
+        QVERIFY2(missing.isEmpty(),
+                 qPrintable(QStringLiteral("Chaves i18n ausentes no catálogo:\n")
+                                + missing.join(QLatin1Char('\n'))));
+    }
+
 };
 
 QTEST_GUILESS_MAIN(TestI18n)

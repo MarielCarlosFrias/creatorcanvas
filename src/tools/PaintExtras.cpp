@@ -1,3 +1,5 @@
+#include <cmath>
+#include <algorithm>
 #include "PaintExtras.h"
 
 #include <QKeyEvent>

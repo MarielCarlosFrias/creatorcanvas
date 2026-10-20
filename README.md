@@ -163,7 +163,7 @@ build\windows-release\bin\Release\CreatorCanvas.exe
 
 Every commit passes a comprehensive verification pipeline:
 
-- **Unit Test Suites**: 24/24 test executables passing (`test_document`, `test_layers`, `test_tools`, `test_serialization`, `test_effects`, etc.).
+- **Unit Test Suites**: 25/25 test executables passing (`test_document`, `test_layers`, `test_tools`, `test_serialization`, `test_effects`, etc.).
 - **Self-Diagnostic Smoke Test**:
   ```bash
   ./build/linux-debug/bin/CreatorCanvas --smoke-test

@@ -186,7 +186,8 @@
     "healing.spot": "Spot Healing",
     "healing.redEye": "Red Eye",
     "healing.radius": "Radius",
-    "healing.strength": "Strength"
+    "healing.strength": "Strength",
+    "eyedropper.hint": "Click the canvas to sample a color. (Tip: holding Alt with any tool also activates the eyedropper)"
   },
   "section": {
     "typography": "Typography",
@@ -295,6 +296,36 @@
     "command.retouch": "Retouch",
     "command.healing": "Spot Healing",
     "command.redEye": "Red Eye",
-    "status.colorPicked": "Color picked: %1 (R:%2 G:%3 B:%4)"
+    "status.colorPicked": "Color picked: %1 (R:%2 G:%3 B:%4)",
+    "command.floodFill": "Paint Bucket",
+    "status.cropHelp": "Crop: drag the handles, then Enter to apply or Esc to cancel.",
+    "status.fillHelp": "Fill: click a region to fill it with the current color.",
+    "status.paintHelp": "Paint: drag to paint. Choose brush, size and opacity above.",
+    "status.scissorsHelp": "Scissors: click or drag to outline; double-click or Enter to cut."
+  },
+  "filters": {
+    "title": "Filter",
+    "artistic": "Artistic & Color",
+    "tone": "Tone & Special Effects",
+    "grayscale": "Black & White",
+    "sepia": "Classic Sepia",
+    "vintage": "Vintage Look",
+    "highContrast": "High Contrast",
+    "vividPop": "Vivid Pop",
+    "cyberpunk": "Cyberpunk Neon",
+    "goldenHour": "Golden Hour (Sunset)",
+    "cinemaNoir": "Cinema Noir",
+    "invert": "Invert Colors",
+    "posterize": "Posterize (4 Levels)",
+    "threshold": "Threshold B&W"
+  },
+  "selection": {
+    "deselect": "Deselect",
+    "invert": "Invert Selection",
+    "operations": "Selection Operations (Copy / Cut / Mask)...",
+    "operationsTooltip": "Opens the operations menu with the active selection"
+  },
+  "layer": {
+    "group": "Group"
   }
 }

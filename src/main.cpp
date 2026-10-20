@@ -1,3 +1,4 @@
+#include <QPixmap>
 #include "core/Document.h"
 #include "core/image/BackgroundRemover.h"
 #include "core/layers/Layer.h"
@@ -189,8 +190,11 @@ int main(int argc, char *argv[])
         };
         const QStringList tools = {
             QStringLiteral("select"), QStringLiteral("marquee"),
-            QStringLiteral("gradient"), QStringLiteral("retouch"),
-            QStringLiteral("healing"),
+            QStringLiteral("crop"), QStringLiteral("scissors"),
+            QStringLiteral("wand"), QStringLiteral("clone"),
+            QStringLiteral("paint"), QStringLiteral("gradient"),
+            QStringLiteral("flood"), QStringLiteral("retouch"),
+            QStringLiteral("healing"), QStringLiteral("eyedropper"),
         };
         for (const QSize& size : sizes) {
             window.resize(size);

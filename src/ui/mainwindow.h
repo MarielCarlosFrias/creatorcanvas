@@ -253,6 +253,14 @@ private:
     QAction* m_toolRetouchAction = nullptr;
     QAction* m_toolHealingAction = nullptr;
     QMenu* m_toolsMenu = nullptr;
+    // Menus de filtro (títulos e ações re-traduzidos em retranslateUi)
+    QMenu* m_artisticMenu = nullptr;
+    QMenu* m_toneMenu = nullptr;
+    QList<QAction*> m_filterActions;
+    // Ações do menu Seleção (re-traduzidas em retranslateUi)
+    QAction* m_deselectAction = nullptr;
+    QAction* m_invertSelectionAction = nullptr;
+    QAction* m_selectionOpsAction = nullptr;
     QMenu* m_selectionToolsMenu = nullptr;
     QMenu* m_retouchToolsMenu = nullptr;
     QMenu* m_createToolsMenu = nullptr;
@@ -300,6 +308,8 @@ private:
     QSlider* m_paintOpacitySlider = nullptr;
     QLabel* m_paintOpacityValueLabel = nullptr;
     QColor m_currentPaintColor{230, 50, 50};
+
+    QLabel* m_eyedropperHintLabel = nullptr;
 
     QLabel* m_floodTolLabel = nullptr;
     QSlider* m_floodTolSlider = nullptr;

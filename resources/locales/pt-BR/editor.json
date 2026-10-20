@@ -186,7 +186,8 @@
     "healing.spot": "Reparo pontual",
     "healing.redEye": "Olho vermelho",
     "healing.radius": "Raio",
-    "healing.strength": "Intensidade"
+    "healing.strength": "Intensidade",
+    "eyedropper.hint": "Clique no canvas para amostrar a cor. (Dica: segurar Alt em qualquer ferramenta também ativa o conta-gotas)"
   },
   "section": {
     "typography": "Tipografia",
@@ -295,6 +296,36 @@
     "command.retouch": "Retoque",
     "command.healing": "Reparo pontual",
     "command.redEye": "Olho vermelho",
-    "status.colorPicked": "Cor capturada: %1 (R:%2 G:%3 B:%4)"
+    "status.colorPicked": "Cor capturada: %1 (R:%2 G:%3 B:%4)",
+    "command.floodFill": "Balde de tinta",
+    "status.cropHelp": "Cortar: arraste as alças e pressione Enter para aplicar ou Esc para cancelar.",
+    "status.fillHelp": "Preenchimento: clique em uma região para preencher com a cor atual.",
+    "status.paintHelp": "Pintura: arraste para pintar. Escolha pincel, tamanho e opacidade acima.",
+    "status.scissorsHelp": "Tesoura: clique ou arraste para contornar; dê dois cliques ou Enter para cortar."
+  },
+  "filters": {
+    "title": "Filtro",
+    "artistic": "Artístico & Cor",
+    "tone": "Tonalidade & Efeitos Especiais",
+    "grayscale": "Preto e Branco",
+    "sepia": "Sépia Clássico",
+    "vintage": "Vintage Nostálgico",
+    "highContrast": "Alto Contraste",
+    "vividPop": "Vivid Pop",
+    "cyberpunk": "Cyberpunk Neon",
+    "goldenHour": "Golden Hour (Pôr do Sol)",
+    "cinemaNoir": "Cinema Noir",
+    "invert": "Inverter Cores",
+    "posterize": "Posterizar (4 Níveis)",
+    "threshold": "Limiar P&B"
+  },
+  "selection": {
+    "deselect": "Desmarcar Seleção",
+    "invert": "Inverter Seleção",
+    "operations": "Operações de Seleção (Copiar / Cortar / Mascarar)...",
+    "operationsTooltip": "Abre o menu de operações com a seleção ativa"
+  },
+  "layer": {
+    "group": "Agrupar"
   }
 }

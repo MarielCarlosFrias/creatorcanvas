@@ -1690,11 +1690,16 @@ void MainWindow::buildToolBars()
 
     m_paintBrushLabel = new QLabel(this);
     m_paintBrushCombo = new QComboBox(this);
-    m_paintBrushCombo->addItem(QStringLiteral("Pincel"), 0);
-    m_paintBrushCombo->addItem(QStringLiteral("Lápis"), 1);
-    m_paintBrushCombo->addItem(QStringLiteral("Marca-Texto"), 2);
-    m_paintBrushCombo->addItem(QStringLiteral("Aerógrafo"), 3);
-    m_paintBrushCombo->addItem(QStringLiteral("Borracha"), 4);
+    m_paintBrushCombo->addItem(m_i18n ? m_i18n->t("editor", "tools.paint.brush")
+                                      : QStringLiteral("Brush"), 0);
+    m_paintBrushCombo->addItem(m_i18n ? m_i18n->t("editor", "tools.paint.pencil")
+                                      : QStringLiteral("Pencil"), 1);
+    m_paintBrushCombo->addItem(m_i18n ? m_i18n->t("editor", "tools.paint.highlighter")
+                                      : QStringLiteral("Highlighter"), 2);
+    m_paintBrushCombo->addItem(m_i18n ? m_i18n->t("editor", "tools.paint.airbrush")
+                                      : QStringLiteral("Airbrush"), 3);
+    m_paintBrushCombo->addItem(m_i18n ? m_i18n->t("editor", "tools.paint.eraser")
+                                      : QStringLiteral("Eraser"), 4);
     connect(m_paintBrushCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
         if (m_canvas && idx >= 0) m_canvas->setPaintBrush(idx);
     });
@@ -1793,7 +1798,12 @@ void MainWindow::buildToolBars()
     QHBoxLayout* eyedropperLayout = new QHBoxLayout(eyedropperPage);
     eyedropperLayout->setContentsMargins(8, 2, 8, 2);
     eyedropperLayout->setSpacing(8);
-    auto* eyedropperHint = new QLabel(QStringLiteral("Clique no canvas para amostrar a cor. (Dica: Segurar Alt em qualquer ferramenta também ativa o conta-gotas)"), this);
+    // Guardado em membro para re-traduzir na troca de idioma.
+    m_eyedropperHintLabel = new QLabel(
+        m_i18n ? m_i18n->t("editor", "tools.eyedropper.hint")
+               : QStringLiteral("Click the canvas to sample a color."),
+        this);
+    auto* eyedropperHint = m_eyedropperHintLabel;
     eyedropperLayout->addWidget(eyedropperHint);
     eyedropperLayout->addStretch();
     m_toolOptionsStack->addWidget(eyedropperPage);
@@ -2162,20 +2172,36 @@ void MainWindow::buildMenus()
         return act;
     };
 
-    auto* artisticMenu = m_filterMenu->addMenu(QStringLiteral("Artístico & Cor"));
-    addFilterAction(artisticMenu, QStringLiteral("Preto e Branco"), 0);
-    addFilterAction(artisticMenu, QStringLiteral("Sépia Clássico"), 1);
-    addFilterAction(artisticMenu, QStringLiteral("Vintage Nostálgico"), 2);
-    addFilterAction(artisticMenu, QStringLiteral("Alto Contraste"), 3);
-    addFilterAction(artisticMenu, QStringLiteral("Vivid Pop"), 4);
-    addFilterAction(artisticMenu, QStringLiteral("Cyberpunk Neon"), 5);
-    addFilterAction(artisticMenu, QStringLiteral("Golden Hour (Pôr do Sol)"), 6);
-    addFilterAction(artisticMenu, QStringLiteral("Cinema Noir"), 7);
-
-    auto* toneMenu = m_filterMenu->addMenu(QStringLiteral("Tonalidade & Efeitos Especiais"));
-    addFilterAction(toneMenu, QStringLiteral("Inverter Cores (Invert)"), 8);
-    addFilterAction(toneMenu, QStringLiteral("Posterizar (Posterize 4 Níveis)"), 9);
-    addFilterAction(toneMenu, QStringLiteral("Limiar P&B (Threshold)"), 10);
+    const auto tr = [this](const char* key, const char* fallback) {
+        return m_i18n ? m_i18n->t("editor", QString::fromLatin1(key))
+                      : QString::fromLatin1(fallback);
+    };
+    m_artisticMenu = m_filterMenu->addMenu(
+        tr("filters.artistic", "Artistic & Color"));
+    m_toneMenu = m_filterMenu->addMenu(
+        tr("filters.tone", "Tone & Special Effects"));
+    // Mesma ordem dos presets (0..10); os textos são re-traduzidos em
+    // retranslateUi, por isso os ponteiros ficam guardados.
+    const QList<QPair<QMenu*, QPair<const char*, const char*>>> filterDefs = {
+        {m_artisticMenu, {"filters.grayscale", "Black & White"}},
+        {m_artisticMenu, {"filters.sepia", "Classic Sepia"}},
+        {m_artisticMenu, {"filters.vintage", "Vintage Look"}},
+        {m_artisticMenu, {"filters.highContrast", "High Contrast"}},
+        {m_artisticMenu, {"filters.vividPop", "Vivid Pop"}},
+        {m_artisticMenu, {"filters.cyberpunk", "Cyberpunk Neon"}},
+        {m_artisticMenu, {"filters.goldenHour", "Golden Hour (Sunset)"}},
+        {m_artisticMenu, {"filters.cinemaNoir", "Cinema Noir"}},
+        {m_toneMenu, {"filters.invert", "Invert Colors"}},
+        {m_toneMenu, {"filters.posterize", "Posterize (4 Levels)"}},
+        {m_toneMenu, {"filters.threshold", "Threshold B&W"}},
+    };
+    for (int i = 0; i < filterDefs.size(); ++i) {
+        QAction* act = addFilterAction(filterDefs[i].first,
+                                       tr(filterDefs[i].second.first,
+                                          filterDefs[i].second.second),
+                                       i);
+        m_filterActions.append(act);
+    }
 
     m_filterMenu->addSeparator();
     auto* openInspectAct = m_filterMenu->addAction(QStringLiteral("Abrir Painel de Ajustes e Efeitos..."));
@@ -2196,14 +2222,18 @@ void MainWindow::buildMenus()
             m_document->setPixelSelection(full);
         }
     });
-    auto* clearSelection = m_selectMenu->addAction(QStringLiteral("Desmarcar Seleção"));
-    clearSelection->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_D));
-    auto* invertSelection = m_selectMenu->addAction(QStringLiteral("Inverter Seleção"));
-    invertSelection->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_I));
+    m_deselectAction = m_selectMenu->addAction(
+        tr("selection.deselect", "Deselect"));
+    m_deselectAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_D));
+    m_invertSelectionAction = m_selectMenu->addAction(
+        tr("selection.invert", "Invert Selection"));
+    m_invertSelectionAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_I));
     m_selectMenu->addSeparator();
-    auto* selectionOperations = m_selectMenu->addAction(QStringLiteral("Operações de Seleção (Copiar / Cortar / Mascarar)..."));
-    selectionOperations->setToolTip(QStringLiteral("Abre o menu de operações com a seleção ativa"));
-    connect(invertSelection, &QAction::triggered, this, [this] {
+    m_selectionOpsAction = m_selectMenu->addAction(
+        tr("selection.operations", "Selection Operations (Copy / Cut / Mask)..."));
+    m_selectionOpsAction->setToolTip(
+        tr("selection.operationsTooltip", "Opens the operations menu with the active selection"));
+    connect(m_invertSelectionAction, &QAction::triggered, this, [this] {
         if (!m_document || m_document->pixelSelection().isNull()) return;
         QImage mask = m_document->pixelSelection().convertToFormat(QImage::Format_Alpha8);
         for (int y = 0; y < mask.height(); ++y) {
@@ -2212,10 +2242,10 @@ void MainWindow::buildMenus()
         }
         m_document->setPixelSelection(mask);
     });
-    connect(clearSelection, &QAction::triggered, this, [this] {
+    connect(m_deselectAction, &QAction::triggered, this, [this] {
         if (m_document) m_document->clearPixelSelection();
     });
-    connect(selectionOperations, &QAction::triggered, this, [this] {
+    connect(m_selectionOpsAction, &QAction::triggered, this, [this] {
         if (m_canvas) m_canvas->openSelectionActionsMenu();
     });
 
@@ -3809,26 +3839,79 @@ void MainWindow::retranslateUi()
         if (action)
             action->setToolTip(label + QStringLiteral("  ") + shortcut);
     };
-    setToolTipWithShortcut(m_toolSelectAction,
-                           m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Mover") : QStringLiteral("Move"), "V");
-    setToolTipWithShortcut(m_toolCropAction,
-                           m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Cortar") : QStringLiteral("Crop"), "C");
-    setToolTipWithShortcut(m_toolScissorsAction,
-                           m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Tesoura") : QStringLiteral("Scissors Cut"), "X");
-    setToolTipWithShortcut(m_toolWandAction,
-                           m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Varinha mágica") : QStringLiteral("Magic Wand"), "W");
-    setToolTipWithShortcut(m_toolCloneAction,
-                           m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Carimbo") : QStringLiteral("Clone Stamp"), "S");
-    setToolTipWithShortcut(m_toolPaintAction,
-                           m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Pincel") : QStringLiteral("Brush"), "B");
-    setToolTipWithShortcut(m_toolFloodAction,
-                           m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Preenchimento") : QStringLiteral("Fill"), "G");
-    setToolTipWithShortcut(m_toolEyedropperAction,
-                           m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Conta-gotas") : QStringLiteral("Eyedropper"), "I");
+    // Uma única tabela (nome i18n + atalho) para TODAS as ferramentas:
+    // antes o retranslate sobrescrevia os tooltips e esquecia gradiente/
+    // retoque/reparo, e o balde ainda anunciava "G" (virou Shift+G).
+    const bool pt = m_i18n->currentLanguage() == QStringLiteral("pt-BR");
+    struct ToolTipDef {
+        QAction* action;
+        const char* key;
+        const char* shortcut;
+    };
+    const ToolTipDef toolTips[] = {
+        {m_toolSelectAction,     "tools.select",     "V"},
+        {m_toolMarqueeAction,    "tools.marquee",    "M"},
+        {m_toolScissorsAction,   "tools.scissors",   "X"},
+        {m_toolWandAction,       "tools.wand",       "W"},
+        {m_toolCropAction,       "tools.crop",       "C"},
+        {m_toolPaintAction,      "tools.paint",      "B"},
+        {m_toolGradientAction,   "tools.gradient",   "G"},
+        {m_toolFloodAction,      "tools.flood",      "Shift+G"},
+        {m_toolCloneAction,      "tools.clone",      "S"},
+        {m_toolRetouchAction,    "tools.retouch",    "U"},
+        {m_toolHealingAction,    "tools.healing",    "J"},
+        {m_toolEyedropperAction, "tools.eyedropper", "I"},
+    };
+    for (const ToolTipDef& def : toolTips) {
+        if (!def.action)
+            continue;
+        setToolTipWithShortcut(def.action,
+                               m_i18n->t("editor", QString::fromLatin1(def.key)),
+                               QString::fromLatin1(def.shortcut));
+    }
     setToolTipWithShortcut(m_addTextAction,
-                           m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Texto") : QStringLiteral("Text"), "T");
+                           pt ? QStringLiteral("Texto") : QStringLiteral("Text"), "T");
     setToolTipWithShortcut(m_addRectAction,
-                           m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Retângulo") : QStringLiteral("Rectangle"), "R");
+                           pt ? QStringLiteral("Retângulo") : QStringLiteral("Rectangle"), "R");
+
+    // Menus Filtro/Seleção, dica do conta-gotas e pincéis: antes ficavam
+    // só em português (usuário em inglês via texto PT).
+    if (m_artisticMenu)
+        m_artisticMenu->setTitle(m_i18n->t("editor", "filters.artistic"));
+    if (m_toneMenu)
+        m_toneMenu->setTitle(m_i18n->t("editor", "filters.tone"));
+    {
+        static const char* const filterKeys[] = {
+            "filters.grayscale", "filters.sepia", "filters.vintage",
+            "filters.highContrast", "filters.vividPop", "filters.cyberpunk",
+            "filters.goldenHour", "filters.cinemaNoir", "filters.invert",
+            "filters.posterize", "filters.threshold",
+        };
+        const int filterCount = int(sizeof(filterKeys) / sizeof(filterKeys[0]));
+        for (int i = 0; i < m_filterActions.size() && i < filterCount; ++i) {
+            if (m_filterActions[i])
+                m_filterActions[i]->setText(
+                    m_i18n->t("editor", QString::fromLatin1(filterKeys[i])));
+        }
+    }
+    if (m_deselectAction)
+        m_deselectAction->setText(m_i18n->t("editor", "selection.deselect"));
+    if (m_invertSelectionAction)
+        m_invertSelectionAction->setText(m_i18n->t("editor", "selection.invert"));
+    if (m_selectionOpsAction) {
+        m_selectionOpsAction->setText(m_i18n->t("editor", "selection.operations"));
+        m_selectionOpsAction->setToolTip(
+            m_i18n->t("editor", "selection.operationsTooltip"));
+    }
+    if (m_eyedropperHintLabel)
+        m_eyedropperHintLabel->setText(m_i18n->t("editor", "tools.eyedropper.hint"));
+    if (m_paintBrushCombo && m_paintBrushCombo->count() >= 5) {
+        m_paintBrushCombo->setItemText(0, m_i18n->t("editor", "tools.paint.brush"));
+        m_paintBrushCombo->setItemText(1, m_i18n->t("editor", "tools.paint.pencil"));
+        m_paintBrushCombo->setItemText(2, m_i18n->t("editor", "tools.paint.highlighter"));
+        m_paintBrushCombo->setItemText(3, m_i18n->t("editor", "tools.paint.airbrush"));
+        m_paintBrushCombo->setItemText(4, m_i18n->t("editor", "tools.paint.eraser"));
+    }
     if (m_toggleGridAction) {
         m_toggleGridAction->setText(m_i18n->t("common", "menu.view.showGrid"));
         m_toggleGridAction->setToolTip(m_toggleGridAction->text() + QStringLiteral(" (Ctrl+')"));
@@ -3907,7 +3990,6 @@ void MainWindow::retranslateUi()
     if (m_openRecentMenu)
         m_openRecentMenu->setTitle(m_i18n->t("common", "menu.file.openRecent"));
     m_editMenu->setTitle(m_i18n->t("common", "menu.edit"));
-    const bool pt = m_i18n->currentLanguage() == QStringLiteral("pt-BR");
     if (m_imageMenu) m_imageMenu->setTitle(pt ? QStringLiteral("Imagem") : QStringLiteral("Image"));
     if (m_selectMenu) m_selectMenu->setTitle(pt ? QStringLiteral("Selecionar") : QStringLiteral("Select"));
     if (m_filterMenu) m_filterMenu->setTitle(pt ? QStringLiteral("Filtro") : QStringLiteral("Filter"));
