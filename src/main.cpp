@@ -1,4 +1,3 @@
-#include <QPixmap>
 #include "core/Document.h"
 #include "core/image/BackgroundRemover.h"
 #include "core/layers/Layer.h"
@@ -16,6 +15,7 @@
 #include <QDir>
 #include <QFile>
 #include <QImageWriter>
+#include <QPixmap>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 

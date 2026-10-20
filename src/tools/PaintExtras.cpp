@@ -1,6 +1,7 @@
-#include <cmath>
-#include <algorithm>
 #include "PaintExtras.h"
+
+#include <algorithm>
+#include <cmath>
 
 #include <QKeyEvent>
 #include <QMouseEvent>
