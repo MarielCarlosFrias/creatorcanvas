@@ -53,9 +53,16 @@ void NewDocumentDialog::buildUi()
     m_categoryTabs->setExpanding(false);
     m_categoryTabs->setUsesScrollButtons(true);
     m_categoryTabs->setElideMode(Qt::ElideRight);
-    m_categories = {QStringLiteral("Todos"), QStringLiteral("YouTube"),
-                    QStringLiteral("Instagram"), QStringLiteral("TikTok"),
-                    QStringLiteral("Custom")};
+    m_categories = {m_i18n ? m_i18n->t("editor", "dialog.newDocument.category.all")
+                           : QStringLiteral("All"),
+                    m_i18n ? m_i18n->t("editor", "dialog.newDocument.category.youtube")
+                           : QStringLiteral("YouTube"),
+                    m_i18n ? m_i18n->t("editor", "dialog.newDocument.category.instagram")
+                           : QStringLiteral("Instagram"),
+                    m_i18n ? m_i18n->t("editor", "dialog.newDocument.category.tiktok")
+                           : QStringLiteral("TikTok"),
+                    m_i18n ? m_i18n->t("editor", "dialog.newDocument.category.custom")
+                           : QStringLiteral("Custom")};
     for (const QString& category : m_categories)
         m_categoryTabs->addTab(category);
     connect(m_categoryTabs, &QTabBar::currentChanged,
@@ -93,8 +100,10 @@ void NewDocumentDialog::buildUi()
     auto* orientationRow = new QHBoxLayout;
     m_orientPortrait = new QToolButton(this);
     m_orientLandscape = new QToolButton(this);
-    m_orientPortrait->setText(QStringLiteral("Portrait"));
-    m_orientLandscape->setText(QStringLiteral("Landscape"));
+    m_orientPortrait->setText(m_i18n ? m_i18n->t("editor", "dialog.newDocument.orientation.portrait")
+                                     : QStringLiteral("Portrait"));
+    m_orientLandscape->setText(m_i18n ? m_i18n->t("editor", "dialog.newDocument.orientation.landscape")
+                                      : QStringLiteral("Landscape"));
     m_orientPortrait->setCheckable(true);
     m_orientLandscape->setCheckable(true);
     m_orientPortrait->setAutoExclusive(true);
@@ -107,7 +116,8 @@ void NewDocumentDialog::buildUi()
     orientationRow->addWidget(m_orientPortrait);
     orientationRow->addWidget(m_orientLandscape);
     orientationRow->addStretch();
-    form->addRow(QStringLiteral("Orientation"), orientationRow);
+    form->addRow(m_i18n ? m_i18n->t("editor", "dialog.newDocument.orientation")
+                        : QStringLiteral("Orientation"), orientationRow);
     form->addRow(m_dpiLabel, m_dpi);
     layout->addLayout(form);
 
@@ -148,18 +158,17 @@ void NewDocumentDialog::populatePresetList()
     m_presetList->clear();
     if (!m_presets)
         return;
-    const QString category = m_categoryTabs && m_categoryTabs->currentIndex() >= 0
-        ? m_categoryTabs->tabText(m_categoryTabs->currentIndex()) : QStringLiteral("Todos");
+    const int categoryIndex = m_categoryTabs ? m_categoryTabs->currentIndex() : 0;
     for (const DocumentPreset& preset : m_presets->all()) {
         const QString name = preset.name;
-        bool visible = category == QStringLiteral("Todos");
-        if (category == QStringLiteral("YouTube"))
+        bool visible = (categoryIndex == 0); // "All"
+        if (categoryIndex == 1)              // "YouTube"
             visible = name.contains(QStringLiteral("youtube"), Qt::CaseInsensitive);
-        else if (category == QStringLiteral("Instagram"))
+        else if (categoryIndex == 2)         // "Instagram"
             visible = name.contains(QStringLiteral("instagram"), Qt::CaseInsensitive);
-        else if (category == QStringLiteral("TikTok"))
+        else if (categoryIndex == 3)         // "TikTok"
             visible = name.contains(QStringLiteral("tiktok"), Qt::CaseInsensitive);
-        else if (category == QStringLiteral("Custom"))
+        else if (categoryIndex == 4)         // "Custom"
             visible = preset.category.compare(QStringLiteral("Custom"), Qt::CaseInsensitive) == 0;
         if (!visible)
             continue;
@@ -262,6 +271,21 @@ void NewDocumentDialog::retranslateUi()
     m_backgroundLabel->setText(m_i18n->t("editor", "dialog.newDocument.background"));
     m_transparent->setText(m_i18n->t("editor", "dialog.newDocument.transparent"));
     m_savePresetButton->setText(m_i18n->t("editor", "dialog.newDocument.savePreset"));
+
+    // Categorias das abas
+    const QStringList cats = {
+        m_i18n->t("editor", "dialog.newDocument.category.all"),
+        m_i18n->t("editor", "dialog.newDocument.category.youtube"),
+        m_i18n->t("editor", "dialog.newDocument.category.instagram"),
+        m_i18n->t("editor", "dialog.newDocument.category.tiktok"),
+        m_i18n->t("editor", "dialog.newDocument.category.custom"),
+    };
+    for (int i = 0; i < cats.size() && i < m_categoryTabs->count(); ++i)
+        m_categoryTabs->setTabText(i, cats.at(i));
+
+    // Orientação
+    m_orientPortrait->setText(m_i18n->t("editor", "dialog.newDocument.orientation.portrait"));
+    m_orientLandscape->setText(m_i18n->t("editor", "dialog.newDocument.orientation.landscape"));
 }
 
 } // namespace cc

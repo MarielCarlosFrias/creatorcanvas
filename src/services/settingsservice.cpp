@@ -13,6 +13,9 @@ constexpr auto kConfirmExit      = "general/confirmBeforeExit";
 constexpr auto kShowGrid         = "canvas/showGridByDefault";
 constexpr auto kSnapToGrid       = "canvas/snapToGridByDefault";
 
+constexpr auto kWindowGeometry   = "window/geometry";
+constexpr auto kWindowState      = "window/state";
+
 constexpr int kDefaultAutosaveInterval = 5;
 constexpr int kDefaultHistoryLimit = 100;
 } // namespace
@@ -78,6 +81,36 @@ bool SettingsService::showGridByDefault() const { return value(kShowGrid, false)
 void SettingsService::setShowGridByDefault(bool enabled) { setValue(kShowGrid, enabled); }
 bool SettingsService::snapToGridByDefault() const { return value(kSnapToGrid, false).toBool(); }
 void SettingsService::setSnapToGridByDefault(bool enabled) { setValue(kSnapToGrid, enabled); }
+
+QByteArray SettingsService::windowGeometry() const
+{
+    const QString hex = value(kWindowGeometry, QString()).toString();
+    return QByteArray::fromHex(hex.toLatin1());
+}
+
+void SettingsService::setWindowGeometry(const QByteArray &geometry)
+{
+    // Nunca grava um valor vazio: isso preservaria o último valor válido
+    // armazenado em vez de apagá-lo acidentalmente.
+    if (geometry.isEmpty())
+        return;
+    const QString hex = QString::fromLatin1(geometry.toHex());
+    setValue(kWindowGeometry, hex);
+}
+
+QByteArray SettingsService::windowState() const
+{
+    const QString hex = value(kWindowState, QString()).toString();
+    return QByteArray::fromHex(hex.toLatin1());
+}
+
+void SettingsService::setWindowState(const QByteArray &state)
+{
+    if (state.isEmpty())
+        return;
+    const QString hex = QString::fromLatin1(state.toHex());
+    setValue(kWindowState, hex);
+}
 
 QVariant SettingsService::value(const QString &key, const QVariant &fallback) const
 {

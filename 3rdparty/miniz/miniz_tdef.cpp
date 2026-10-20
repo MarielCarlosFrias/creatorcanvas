@@ -473,7 +473,13 @@ static mz_bool tdefl_compress_lz_codes(tdefl_compressor *d)
         if (flags & 1)
         {
             mz_uint s0, s1, n0, n1, sym, num_extra_bits;
-            mz_uint match_len = pLZ_codes[0], match_dist = *(const mz_uint16 *)(pLZ_codes + 1);
+            mz_uint match_len = pLZ_codes[0], match_dist;
+            /* leitura alinhada (UB antes): pLZ_codes+1 pode não estar em
+               múltiplo de 2. Lê em mz_uint16 e promove (os 2 bytes altos
+               de match_dist ficam definidos, como no cast original). */
+            mz_uint16 match_dist16 = 0;
+            memcpy(&match_dist16, pLZ_codes + 1, sizeof(match_dist16));
+            match_dist = match_dist16;
             pLZ_codes += 3;
 
             MZ_ASSERT(d->m_huff_code_sizes[0][s_tdefl_len_sym[match_len]]);
@@ -518,7 +524,9 @@ static mz_bool tdefl_compress_lz_codes(tdefl_compressor *d)
         if (pOutput_buf >= d->m_pOutput_buf_end)
             return MZ_FALSE;
 
-        *(mz_uint64 *)pOutput_buf = bit_buffer;
+        /* escrita alinhada (UB antes): pOutput_buf não é garantidamente
+           múltiplo de 8; memcpy grava os mesmos bytes. */
+        memcpy(pOutput_buf, &bit_buffer, sizeof(bit_buffer));
         pOutput_buf += (bits_in >> 3);
         bit_buffer >>= (bits_in & ~7);
         bits_in &= 7;

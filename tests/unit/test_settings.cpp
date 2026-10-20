@@ -64,6 +64,24 @@ private slots:
         s.setAutosaveIntervalMinutes(1);
         QCOMPARE(spy.count(), 2);
     }
+
+    void windowGeometryRoundTrip()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        SettingsService s(dir.filePath("settings.ini"));
+        s.setWindowGeometry("ABCD1234");
+        QCOMPARE(s.windowGeometry(), QByteArray("ABCD1234"));
+        s.setWindowState("WXYZ");
+        QCOMPARE(s.windowState(), QByteArray("WXYZ"));
+        // Vazio nunca sobrescreve um valor válido.
+        s.setWindowGeometry(QByteArray());
+        QCOMPARE(s.windowGeometry(), QByteArray("ABCD1234"));
+        // Default é array vazio quando nunca setado.
+        SettingsService s2(dir.filePath("settings_empty.ini"));
+        QVERIFY(s2.windowGeometry().isEmpty());
+        QVERIFY(s2.windowState().isEmpty());
+    }
 };
 
 QTEST_GUILESS_MAIN(TestSettings)

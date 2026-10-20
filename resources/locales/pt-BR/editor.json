@@ -10,7 +10,15 @@
       "transparent": "Fundo transparente",
       "savePreset": "Salvar como predefinição...",
       "presetName": "Nome da predefinição",
-      "exists": "Já existe uma predefinição com esse nome."
+      "exists": "Já existe uma predefinição com esse nome.",
+      "category.all": "Todos",
+      "category.youtube": "YouTube",
+      "category.instagram": "Instagram",
+      "category.tiktok": "TikTok",
+      "category.custom": "Personalizado",
+      "orientation": "Orientação",
+      "orientation.portrait": "Retrato",
+      "orientation.landscape": "Paisagem"
     }
   },
   "import": {
@@ -116,7 +124,23 @@
     "scopeLayer": "Apenas Camada Selecionada",
     "success.title": "Exportação concluída",
     "success": "Exportado para %1",
-    "error.title": "Falha na exportação"
+    "error.title": "Falha na exportação",
+    "preset.original": "Original",
+    "preset.ytThumb": "Miniatura YouTube (1280x720)",
+    "preset.igPost": "Post Instagram (1080x1080)",
+    "preset.story": "Stories / TikTok (1080x1920)",
+    "preset.xBanner": "Banner Twitter/X (1500x500)",
+    "format.png": "PNG",
+    "format.jpeg": "JPEG",
+    "format.webp": "WebP",
+    "scale.50": "50%",
+    "scale.100": "100%",
+    "scale.150": "150%",
+    "scale.200": "200%",
+    "dimension": "%1 x %2 px",
+    "fileSizeKB": "Est: ~%1 KB",
+    "fileSizeMB": "Est: ~%1 MB",
+    "fileSizeUnknown": "~ -- KB"
   },
   "tools": {
     "title": "Ferramentas",
@@ -253,7 +277,8 @@
     "cutLevel": "Nível do corte:",
     "removeSpecks": "Limpar manchas",
     "refineTitle": "Refinamento do Recorte:",
-    "refineNote": "Aplicado ao vivo sobre o recorte da IA (edições do pincel são refeitas)."
+    "refineNote": "Aplicado ao vivo sobre o recorte da IA (edições do pincel são refeitas).",
+    "more": "Mais ações"
   },
   "canvas": {
     "context.aiDialog": "✨ Remover Fundo com IA...",

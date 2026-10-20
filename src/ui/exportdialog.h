@@ -9,6 +9,7 @@ class QLabel;
 class QSpinBox;
 class QRadioButton;
 class QButtonGroup;
+class QTimer;
 
 namespace cc {
 
@@ -70,6 +71,9 @@ private:
 
     // Cached rendered preview thumbnail
     QImage m_cachedBaseThumbnail;
+
+    // Debounce timer for preview re-render (avoid heavy continuous renders)
+    QTimer* m_previewDebounceTimer = nullptr;
 };
 
 } // namespace cc

@@ -11,6 +11,12 @@ add_library(miniz STATIC
     ${PROJECT_SOURCE_DIR}/3rdparty/miniz/miniz_zip.cpp
 )
 target_include_directories(miniz SYSTEM PUBLIC ${PROJECT_SOURCE_DIR}/3rdparty/miniz)
+# UBSan apontava loads/stores desalinhados durante salvar/abrir projetos: os
+# macros MZ_READ_LE16/32 faziam cast de ponteiro para word. O upstream já tem
+# a alternativa byte-a-byte; forçá-la mantém a saída do ZIP byte-a-byte igual
+# (mesmos valores, mesma compressão) e elimina o comportamento indefinido.
+# PUBLIC: ProjectFile.cpp também inclui <miniz.h> e usa os mesmos macros.
+target_compile_definitions(miniz PUBLIC MINIZ_USE_UNALIGNED_LOADS_AND_STORES=0)
 
 # -------------------------------------------------------- 3rdparty: onnxruntime --
 set(ONNX_DIR "${PROJECT_SOURCE_DIR}/3rdparty/onnxruntime")

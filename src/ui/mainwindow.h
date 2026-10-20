@@ -46,9 +46,14 @@ class MainWindow final : public QMainWindow
 {
     Q_OBJECT
 public:
+    /// suppressStartupInteractions=true é usado por `--smoke-test` e
+    /// `--ui-snapshot`: sem isso o diálogo de recuperação (ou "alterações
+    /// não salvas") abre modal e trava qualquer execução headless, e o
+    /// autosave deixa um recovery falso que quebra a execução seguinte.
     explicit MainWindow(SettingsService* settings,
                         I18nService* i18n,
-                        QWidget* parent = nullptr);
+                        QWidget* parent = nullptr,
+                        bool suppressStartupInteractions = false);
     ~MainWindow() override;
 
     /// Ferramenta de desenvolvimento (--ui-snapshot): seleciona a
@@ -118,6 +123,8 @@ private:
     void checkForRecoveryFile();
     void updateWindowTitle();
     void retranslateUi();
+    void restoreWindowLayout();
+    bool windowFitsOnScreen() const;
     void updateZoomLabel();
     void updatePositionLabel(const QPointF& documentPos);
 
@@ -364,6 +371,7 @@ private:
 
     // Responsividade: docks auto-ocultados em janelas estreitas, com o
     // estado escolhido pelo usuário guardado para ser restaurado.
+    bool m_suppressStartupInteractions = false;
     bool m_docksAutoHidden = false;
     QList<QPair<QDockWidget*, bool>> m_savedDockVisibility;
 };

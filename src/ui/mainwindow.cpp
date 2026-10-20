@@ -45,6 +45,7 @@
 #include <QMessageBox>
 #include <QPainter>
 #include <QPushButton>
+#include <QScreen>
 #include <QSlider>
 #include <QStandardPaths>
 #include <QStatusBar>
@@ -169,7 +170,7 @@ MainWindow::~MainWindow()
 }
 
 MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
-                       QWidget* parent)
+                       QWidget* parent, bool suppressStartupInteractions)
     : QMainWindow(parent)
     , m_settings(settings)
     , m_i18n(i18n)
@@ -208,15 +209,19 @@ MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
         });
     }
 
+    m_suppressStartupInteractions = suppressStartupInteractions;
     const QString recoveryPath =
         configDir + QStringLiteral("/autosave/recovery.creatorcanvas");
-    m_autosave = std::make_unique<AutosaveService>(m_settings, recoveryPath, this);
+    if (!m_suppressStartupInteractions)
+        m_autosave = std::make_unique<AutosaveService>(m_settings, recoveryPath, this);
     m_recentFiles = std::make_unique<RecentFiles>(
         configDir + QStringLiteral("/recent.json"));
 
     m_docController = std::make_unique<DocumentController>(this);
-    m_autosave->setDocumentController(m_docController.get());
-    m_docController->registerObserver(m_autosave.get());
+    if (m_autosave) {
+        m_autosave->setDocumentController(m_docController.get());
+        m_docController->registerObserver(m_autosave.get());
+    }
 
     buildCentralWidget();
     buildLayersDock();
@@ -253,8 +258,49 @@ MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
         connect(m_i18n, &I18nService::languageChanged,
                 this, &MainWindow::retranslateUi);
     retranslateUi();
+    restoreWindowLayout();
 
-    checkForRecoveryFile();
+    if (!m_suppressStartupInteractions)
+        checkForRecoveryFile();
+    else
+        qInfo() << "[MainWindow] interações de startup suprimidas (modo automatizado)";
+}
+
+void MainWindow::restoreWindowLayout()
+{
+    if (m_suppressStartupInteractions || !m_settings)
+        return;
+
+    const QByteArray geometry = m_settings->windowGeometry();
+    const QByteArray state = m_settings->windowState();
+
+    bool restored = false;
+    if (!geometry.isEmpty())
+        restored = restoreGeometry(geometry);
+    if (!state.isEmpty())
+        restored = restoreState(state) || restored;
+
+    // Restaurar apenas se o layout couber em alguma tela disponível.
+    // Caso contrário (monitor removido, coordenadas inválidas, etc.) usamos
+    // o layout padrão seguro do tamanho mínimo da aplicação.
+    if (!restored || !windowFitsOnScreen()) {
+        restoreGeometry(QByteArray());
+        restoreState(QByteArray());
+        resize(Design::EditorMinWidth, Design::EditorMinHeight);
+    }
+}
+
+bool MainWindow::windowFitsOnScreen() const
+{
+    const QRect rect = geometry();
+    if (rect.isNull() || rect.isEmpty())
+        return false;
+    for (QScreen* screen : QGuiApplication::screens()) {
+        const QRect available = screen->availableGeometry();
+        if (!available.intersected(rect).isEmpty())
+            return true;
+    }
+    return false;
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)
@@ -263,6 +309,15 @@ void MainWindow::closeEvent(QCloseEvent* event)
         event->ignore();
         return;
     }
+
+    // Persistir o workspace do usuário (geometria + estado dos docks/
+    // barras de ferramentas) para restaurar na próxima abertura. Nunca
+    // gravamos em modo suprimido (testes/capturas automatizadas).
+    if (!m_suppressStartupInteractions && m_settings) {
+        m_settings->setWindowGeometry(saveGeometry());
+        m_settings->setWindowState(saveState());
+    }
+
     event->accept();
 }
 
@@ -2416,7 +2471,25 @@ void MainWindow::selectToolByName(const QString& name)
 
 void MainWindow::applyToolOptionsCompact(bool compact)
 {
-    const int sliderMin = compact ? 64 : 90;
+    // Três níveis de compactez para as barras de opção das ferramentas:
+    //  * Largo  (>= 1100 px): rótulos e sliders completos.
+    //  * Médio  (800-1099 px): rótulos ocultos, sliders reduzidos.
+    //  * Estreito (<= 800 px):  sliders mínimos, apenas o essencial visível;
+    //    o QScrollArea já fornece rolagem horizontal como fallback, mas os
+    //    controles principais (modo, tamanho, opacidade, tolerância) cabem
+    //    sem rolagem graças aos mínimos reduzidos.
+    int sliderMin;
+    bool hideLabels;
+    if (width() <= Design::EditorMinWidth) {
+        sliderMin = 48;
+        hideLabels = true;
+    } else if (compact) {
+        sliderMin = 64;
+        hideLabels = true;
+    } else {
+        sliderMin = 90;
+        hideLabels = false;
+    }
     for (QLabel* label : {m_cropAspectLabel, m_scissorsModeLabel, m_wandTolLabel,
                           m_cloneRadiusLabel, m_cloneHardnessLabel, m_cloneOpacityLabel,
                           m_paintSizeLabel, m_paintOpacityLabel, m_floodTolLabel,
@@ -2426,7 +2499,7 @@ void MainWindow::applyToolOptionsCompact(bool compact)
                           m_healingModeLabel, m_healingRadiusLabel,
                           m_healingStrengthLabel}) {
         if (label)
-            label->setVisible(!compact);
+            label->setVisible(!hideLabels);
     }
     for (QSlider* slider : {m_paintSizeSlider, m_paintOpacitySlider, m_floodTolSlider,
                             m_wandTolSlider, m_cloneRadiusSlider, m_cloneHardnessSlider,
@@ -2436,6 +2509,13 @@ void MainWindow::applyToolOptionsCompact(bool compact)
                             m_healingStrengthSlider}) {
         if (slider)
             slider->setMinimumWidth(sliderMin);
+    }
+    // Comboboxes de modo também precisam de menos largura em telas estreitas.
+    for (QComboBox* combo : {m_marqueeShapeCombo, m_gradientTypeCombo,
+                             m_retouchModeCombo, m_healingModeCombo,
+                             m_paintBrushCombo}) {
+        if (combo)
+            combo->setMinimumWidth(hideLabels ? 56 : 80);
     }
 }
 

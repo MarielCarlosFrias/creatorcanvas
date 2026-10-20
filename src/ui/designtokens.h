@@ -20,6 +20,7 @@ constexpr int CanvasPadding = 32;
 constexpr int BreakXS = 620, BreakSM = 980, BreakMD = 1440;
 /// Largura mínima da janela do editor e limite para mostrar dicas longas.
 constexpr int EditorMinWidth = 800;
+constexpr int EditorMinHeight = 520;
 constexpr int HintBreakWidth = 1380;
 /// Abaixo disto os docks são auto-ocultados (layout ultra-compacto).
 constexpr int UltraCompactWidth = 840;
@@ -53,6 +54,11 @@ inline QColor LLine()  { return {0xd4,0xd9,0xe0}; }
 inline QColor LTextHi(){ return {0x1a,0x1e,0x24}; }
 inline QColor LTextMd(){ return {0x4f,0x57,0x63}; }
 inline QColor LTextLo(){ return {0x98,0xa0,0xab}; }
+
+// ===== ESTADOS (ações destrutivas/confirmadas) =====
+inline QColor Success()      { return {0x2e,0x7d,0x32}; }
+inline QColor SuccessHover() { return {0x38,0x8e,0x3c}; }
+inline QColor Danger()       { return {0xc6,0x28,0x28}; }
 
 // ===== ACCENT (compartilhado dark/light) =====
 inline QColor Accent()      { return {0x3d,0x7e,0xff}; }

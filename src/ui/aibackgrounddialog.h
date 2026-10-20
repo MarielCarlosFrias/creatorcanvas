@@ -25,7 +25,12 @@ class AiBackgroundDialog : public QDialog
 {
     Q_OBJECT
 public:
-    explicit AiBackgroundDialog(const QImage& sourceImage, I18nService* i18n = nullptr, QWidget* parent = nullptr);
+    /// autoRunInference=false é usado por testes/capturas de layout: sem
+    /// isso o diálogo abre a inferência e, sem modelo, um QMessageBox modal
+    /// bloqueia qualquer execução headless.
+    explicit AiBackgroundDialog(const QImage& sourceImage, I18nService* i18n = nullptr,
+                                QWidget* parent = nullptr,
+                                bool autoRunInference = true);
     ~AiBackgroundDialog() override;
 
     QImage finalImage() const;

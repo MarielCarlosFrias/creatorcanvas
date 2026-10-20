@@ -17,6 +17,7 @@
 #include <QPainter>
 #include <QRadioButton>
 #include <QSpinBox>
+#include <QTimer>
 #include <QVBoxLayout>
 
 namespace cc {
@@ -35,6 +36,15 @@ ExportDialog::ExportDialog(const Document* doc, I18nService* i18n,
     }
     retranslateUi();
     updateQualityEnabled();
+
+    // Debounce timer: heavy preview render runs only after the user stops
+    // changing settings for ~150 ms, avoiding continuous expensive renders.
+    m_previewDebounceTimer = new QTimer(this);
+    m_previewDebounceTimer->setSingleShot(true);
+    m_previewDebounceTimer->setInterval(150);
+    connect(m_previewDebounceTimer, &QTimer::timeout, this,
+            &ExportDialog::updatePreview);
+
     updatePreview();
 }
 
@@ -77,20 +87,28 @@ void ExportDialog::buildUi()
 
     // Presets dropdown
     m_presetCombo = new QComboBox(this);
-    m_presetCombo->addItem(QStringLiteral("Original"), QStringLiteral("original"));
-    m_presetCombo->addItem(QStringLiteral("YouTube Thumbnail (1280x720)"), QStringLiteral("yt_thumb"));
-    m_presetCombo->addItem(QStringLiteral("Instagram Post (1080x1080)"), QStringLiteral("ig_post"));
-    m_presetCombo->addItem(QStringLiteral("Story / TikTok (1080x1920)"), QStringLiteral("story"));
-    m_presetCombo->addItem(QStringLiteral("Twitter/X Banner (1500x500)"), QStringLiteral("x_banner"));
+    m_presetCombo->addItem(m_i18n ? m_i18n->t("editor", "export.preset.original")
+                                 : QStringLiteral("Original"), QStringLiteral("original"));
+    m_presetCombo->addItem(m_i18n ? m_i18n->t("editor", "export.preset.ytThumb")
+                                 : QStringLiteral("YouTube Thumbnail (1280x720)"), QStringLiteral("yt_thumb"));
+    m_presetCombo->addItem(m_i18n ? m_i18n->t("editor", "export.preset.igPost")
+                                 : QStringLiteral("Instagram Post (1080x1080)"), QStringLiteral("ig_post"));
+    m_presetCombo->addItem(m_i18n ? m_i18n->t("editor", "export.preset.story")
+                                 : QStringLiteral("Story / TikTok (1080x1920)"), QStringLiteral("story"));
+    m_presetCombo->addItem(m_i18n ? m_i18n->t("editor", "export.preset.xBanner")
+                                 : QStringLiteral("Twitter/X Banner (1500x500)"), QStringLiteral("x_banner"));
 
     m_presetLabel = new QLabel(this);
     form->addRow(m_presetLabel, m_presetCombo);
 
     // Format
     m_format = new QComboBox(this);
-    m_format->addItem(QStringLiteral("PNG"), QStringLiteral("png"));
-    m_format->addItem(QStringLiteral("JPEG"), QStringLiteral("jpeg"));
-    m_format->addItem(QStringLiteral("WebP"), QStringLiteral("webp"));
+    m_format->addItem(m_i18n ? m_i18n->t("editor", "export.format.png")
+                            : QStringLiteral("PNG"), QStringLiteral("png"));
+    m_format->addItem(m_i18n ? m_i18n->t("editor", "export.format.jpeg")
+                            : QStringLiteral("JPEG"), QStringLiteral("jpeg"));
+    m_format->addItem(m_i18n ? m_i18n->t("editor", "export.format.webp")
+                            : QStringLiteral("WebP"), QStringLiteral("webp"));
 
     m_formatLabel = new QLabel(this);
     form->addRow(m_formatLabel, m_format);
@@ -105,10 +123,14 @@ void ExportDialog::buildUi()
 
     // Scale
     m_scale = new QComboBox(this);
-    m_scale->addItem(QStringLiteral("50%"), 0.5);
-    m_scale->addItem(QStringLiteral("100%"), 1.0);
-    m_scale->addItem(QStringLiteral("150%"), 1.5);
-    m_scale->addItem(QStringLiteral("200%"), 2.0);
+    m_scale->addItem(m_i18n ? m_i18n->t("editor", "export.scale.50")
+                           : QStringLiteral("50%"), 0.5);
+    m_scale->addItem(m_i18n ? m_i18n->t("editor", "export.scale.100")
+                           : QStringLiteral("100%"), 1.0);
+    m_scale->addItem(m_i18n ? m_i18n->t("editor", "export.scale.150")
+                           : QStringLiteral("150%"), 1.5);
+    m_scale->addItem(m_i18n ? m_i18n->t("editor", "export.scale.200")
+                           : QStringLiteral("200%"), 2.0);
     m_scale->setCurrentIndex(1); // 100%
 
     m_scaleLabel = new QLabel(this);
@@ -172,11 +194,11 @@ void ExportDialog::buildUi()
             this, &ExportDialog::estimateFileSize);
     connect(m_scale, qOverload<int>(&QComboBox::currentIndexChanged),
             this, [this]() {
-                updatePreview();
+                m_previewDebounceTimer->start();
             });
     connect(m_scopeGroup, &QButtonGroup::idClicked,
             this, [this]() {
-                updatePreview();
+                m_previewDebounceTimer->start();
             });
 }
 
@@ -345,6 +367,54 @@ void ExportDialog::retranslateUi()
     m_presetLabel->setText(m_i18n->t("editor", "export.preset"));
     m_scopeEntire->setText(m_i18n->t("editor", "export.scopeEntire"));
     m_scopeLayer->setText(m_i18n->t("editor", "export.scopeLayer"));
+
+    // Traduz itens dos combos por dado de usuário (estável entre idiomas)
+    auto setComboItem = [this](QComboBox* combo, const QString& dataKey,
+                               const QString& trKey) {
+        if (!combo)
+            return;
+        for (int i = 0; i < combo->count(); ++i) {
+            if (combo->itemData(i).toString() == dataKey) {
+                combo->setItemText(i, m_i18n->t("editor", trKey));
+                break;
+            }
+        }
+    };
+
+    // Presets
+    setComboItem(m_presetCombo, QStringLiteral("original"),
+                 QStringLiteral("export.preset.original"));
+    setComboItem(m_presetCombo, QStringLiteral("yt_thumb"),
+                 QStringLiteral("export.preset.ytThumb"));
+    setComboItem(m_presetCombo, QStringLiteral("ig_post"),
+                 QStringLiteral("export.preset.igPost"));
+    setComboItem(m_presetCombo, QStringLiteral("story"),
+                 QStringLiteral("export.preset.story"));
+    setComboItem(m_presetCombo, QStringLiteral("x_banner"),
+                 QStringLiteral("export.preset.xBanner"));
+
+    // Formatos
+    setComboItem(m_format, QStringLiteral("png"),
+                 QStringLiteral("export.format.png"));
+    setComboItem(m_format, QStringLiteral("jpeg"),
+                 QStringLiteral("export.format.jpeg"));
+    setComboItem(m_format, QStringLiteral("webp"),
+                 QStringLiteral("export.format.webp"));
+
+    // Escalas fixas (item dinâmico de preset não tem chave fixa, mantém %)
+    setComboItem(m_scale, QStringLiteral("0.5"),
+                 QStringLiteral("export.scale.50"));
+    setComboItem(m_scale, QStringLiteral("1"),
+                 QStringLiteral("export.scale.100"));
+    setComboItem(m_scale, QStringLiteral("1.5"),
+                 QStringLiteral("export.scale.150"));
+    setComboItem(m_scale, QStringLiteral("2"),
+                 QStringLiteral("export.scale.200"));
+
+    // Recalcula preview e estimativa para aplicar textos traduzidos
+    // (dimensão "%1 x %2 px" e tamanho de arquivo).
+    updatePreview();
+    estimateFileSize();
 }
 
 } // namespace cc

@@ -114,6 +114,31 @@ private slots:
         image->alphaMask.scanLine(0)[0] = 255;
         image->alphaMask.scanLine(0)[1] = 127;
         image->alphaMask.scanLine(1)[2] = 64;
+        // Transformação + efeitos precisam sobreviver ao arquivo.
+        image->transform.position = QPointF(41.5, 33.25);
+        image->transform.rotationDeg = 12.5;
+        image->transform.scaleX = 1.25;
+        image->transform.scaleY = 0.8;
+        image->transform.shearX = 0.1;
+        image->transform.shearY = -0.05;
+        image->effects.outline.enabled = true;
+        image->effects.outline.color = QColor(10, 240, 30);
+        image->effects.outline.width = 6.5;
+        image->effects.outline.blur = 2.0;
+        image->effects.outline.opacity = 0.9;
+        image->effects.dropShadow.enabled = true;
+        image->effects.dropShadow.color = QColor(0, 0, 0, 160);
+        image->effects.dropShadow.distance = 11.0;
+        image->effects.dropShadow.angleDeg = 130.0;
+        image->effects.dropShadow.blur = 7.5;
+        image->effects.dropShadow.opacity = 0.65;
+        image->effects.innerShadow.enabled = true;
+        image->effects.innerShadow.distance = 4.0;
+        image->effects.colorOverlay.enabled = true;
+        image->effects.colorOverlay.color = QColor(255, 0, 128);
+        image->effects.colorOverlay.opacity = 0.35;
+        // Copiado ANTES do std::move(image): depois o unique_ptr é nulo.
+        const ImageEffects expectedEffects = image->effects;
 
         group->children.push_back(std::move(text));
         group->children.push_back(std::move(shape));
@@ -202,6 +227,86 @@ private slots:
         QCOMPARE(loadedImage->alphaMask.constScanLine(0)[0], uchar(255));
         QCOMPARE(loadedImage->alphaMask.constScanLine(0)[1], uchar(127));
         QCOMPARE(loadedImage->alphaMask.constScanLine(1)[2], uchar(64));
+
+        QCOMPARE(loadedImage->transform.position, QPointF(41.5, 33.25));
+        QCOMPARE(loadedImage->transform.rotationDeg, 12.5);
+        QCOMPARE(loadedImage->transform.scaleX, 1.25);
+        QCOMPARE(loadedImage->transform.scaleY, 0.8);
+        QCOMPARE(loadedImage->transform.shearX, 0.1);
+        QCOMPARE(loadedImage->transform.shearY, -0.05);
+        QVERIFY(loadedImage->effects == expectedEffects);
+    }
+
+    /// Regressão de estabilidade do formato: máscara alpha e seleção ativa
+    /// com valores PARCIAIS (não só 0/255) no mesmo arquivo, junto de
+    /// transformação e efeitos. Comparação pixel a pixel (QImage::operator==)
+    /// garante que nada foi binarizado nem desalinhado pelo ZIP.
+    void roundTripKeepsPartialSelectionAndMaskExact()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath(QStringLiteral("selection-mask.creatorcanvas"));
+
+        Document doc(48, 32);
+        auto image = std::make_unique<ImageLayer>();
+        const LayerId imageId = image->id();
+        QImage bitmap(48, 32, QImage::Format_ARGB32_Premultiplied);
+        for (int y = 0; y < bitmap.height(); ++y)
+            for (int x = 0; x < bitmap.width(); ++x)
+                bitmap.setPixelColor(x, y, QColor(x * 5 % 256, y * 7 % 256, 128));
+        image->assetId = doc.assets().addImage(bitmap);
+        image->naturalWidth = 48;
+        image->naturalHeight = 32;
+        image->transform.position = QPointF(24.0, 16.0);
+        image->transform.rotationDeg = -7.5;
+        image->transform.scaleX = 1.1;
+        image->transform.scaleY = 0.9;
+        image->effects.dropShadow.enabled = true;
+        image->effects.dropShadow.distance = 9.0;
+        image->effects.colorOverlay.enabled = true;
+
+        QImage mask(48, 32, QImage::Format_Alpha8);
+        QImage selection(48, 32, QImage::Format_Alpha8);
+        for (int y = 0; y < 32; ++y) {
+            uchar* mrow = mask.scanLine(y);
+            uchar* srow = selection.scanLine(y);
+            for (int x = 0; x < 48; ++x) {
+                // valores intermediários reais (feather/anti-aliasing)
+                mrow[x] = static_cast<uchar>((x * 5 + y * 3) % 256);
+                srow[x] = static_cast<uchar>((x * 11 + y * 7) % 256);
+            }
+        }
+        image->alphaMask = mask;
+        QVERIFY(doc.addLayer(std::move(image)));
+        doc.setPixelSelection(selection);
+
+        QString error;
+        QVERIFY2(saveDocument(doc, path, &error), qPrintable(error));
+        auto loaded = loadDocument(path, &error);
+        QVERIFY2(loaded != nullptr, qPrintable(error));
+
+        QCOMPARE(loaded->pixelSelection().size(), selection.size());
+        QVERIFY2(loaded->pixelSelection() == selection,
+                 "seleção parcialmente transparente não sobreviveu ao round-trip");
+
+        auto* loadedImage = static_cast<ImageLayer*>(loaded->findLayer(imageId));
+        QVERIFY(loadedImage != nullptr);
+        QVERIFY2(loadedImage->alphaMask == mask,
+                 "máscara alpha parcial não sobreviveu ao round-trip");
+        QCOMPARE(loadedImage->transform.position, QPointF(24.0, 16.0));
+        QCOMPARE(loadedImage->transform.rotationDeg, -7.5);
+        QVERIFY(loadedImage->effects.dropShadow.enabled);
+        QVERIFY(loadedImage->effects.colorOverlay.enabled);
+
+        // Segundo round-trip: reabrir e salvar de novo não pode degradar.
+        const QString path2 = dir.filePath(QStringLiteral("selection-mask-2.creatorcanvas"));
+        QVERIFY2(saveDocument(*loaded, path2, &error), qPrintable(error));
+        auto reloaded = loadDocument(path2, &error);
+        QVERIFY2(reloaded != nullptr, qPrintable(error));
+        QVERIFY2(reloaded->pixelSelection() == selection, "2º round-trip degradou a seleção");
+        auto* reloadedImage = static_cast<ImageLayer*>(reloaded->findLayer(imageId));
+        QVERIFY(reloadedImage != nullptr);
+        QVERIFY2(reloadedImage->alphaMask == mask, "2º round-trip degradou a máscara");
     }
 
     void roundTripEmptyDocument()

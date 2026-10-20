@@ -6,6 +6,7 @@
 #include "localization/i18nservice.h"
 #include "services/logservice.h"
 #include "services/settingsservice.h"
+#include "ui/aibackgrounddialog.h"
 #include "ui/darktheme.h"
 #include "ui/mainwindow.h"
 #include "ui/themeicons.h"
@@ -166,7 +167,7 @@ int main(int argc, char *argv[])
         }
 
         // 4. MainWindow headless instantiation and project opening
-        cc::MainWindow window(&settings, &i18n);
+        cc::MainWindow window(&settings, &i18n, nullptr, /*suppressStartupInteractions=*/true);
         window.openFromPath(projPath);
         qInfo() << "[SmokeTest] MainWindow initialized and project opened successfully.";
 
@@ -179,7 +180,7 @@ int main(int argc, char *argv[])
         const QString outDir = parser.value(uiSnapshotOption);
         QDir().mkpath(outDir);
 
-        cc::MainWindow window(&settings, &i18n);
+        cc::MainWindow window(&settings, &i18n, nullptr, /*suppressStartupInteractions=*/true);
         // Documento demo para o canvas não ficar vazio na captura.
         window.createDemoDocumentForSnapshot();
         window.show();
@@ -213,6 +214,30 @@ int main(int argc, char *argv[])
                 qInfo() << "[UISnapshot]" << path << shot.size();
             }
         }
+
+        // Diálogo de IA: precisa caber em 800x520 (mínimo real do app).
+        {
+            QImage demo(640, 360, QImage::Format_ARGB32_Premultiplied);
+            for (int y = 0; y < demo.height(); ++y)
+                for (int x = 0; x < demo.width(); ++x)
+                    demo.setPixelColor(x, y, QColor(x * 255 / demo.width(),
+                                                    y * 255 / demo.height(), 90));
+            cc::AiBackgroundDialog dialog(demo, &i18n, nullptr, /*autoRunInference=*/false);
+            for (const QSize& size : {QSize(800, 520), QSize(560, 380)}) {
+                dialog.resize(size);
+                QApplication::processEvents();
+                QApplication::processEvents();
+                const QString path = QDir(outDir).filePath(
+                    QStringLiteral("dialog_ai_%1x%2.png")
+                        .arg(size.width()).arg(size.height()));
+                const QPixmap shot = dialog.grab();
+                if (!shot.save(path))
+                    qWarning() << "[UISnapshot] failed to save" << path;
+                qInfo() << "[UISnapshot]" << path << shot.size();
+            }
+            dialog.close();
+        }
+
         cc::LogService::shutdown();
         return 0;
     }

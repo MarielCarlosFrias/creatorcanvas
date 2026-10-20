@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <QByteArray>
 #include <QString>
 #include <QVariant>
 
@@ -42,6 +43,12 @@ public:
     void setShowGridByDefault(bool enabled);
     bool snapToGridByDefault() const;
     void setSnapToGridByDefault(bool enabled);
+
+    // Window layout / workspace ---------------------------------------------
+    QByteArray windowGeometry() const;
+    void setWindowGeometry(const QByteArray &geometry);
+    QByteArray windowState() const;
+    void setWindowState(const QByteArray &state);
 
 signals:
     /// Emitted once after any value actually changes.

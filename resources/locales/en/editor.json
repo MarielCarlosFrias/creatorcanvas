@@ -10,7 +10,15 @@
       "transparent": "Transparent background",
       "savePreset": "Save as preset...",
       "presetName": "Preset name",
-      "exists": "A preset with this name already exists."
+      "exists": "A preset with this name already exists.",
+      "category.all": "All",
+      "category.youtube": "YouTube",
+      "category.instagram": "Instagram",
+      "category.tiktok": "TikTok",
+      "category.custom": "Custom",
+      "orientation": "Orientation",
+      "orientation.portrait": "Portrait",
+      "orientation.landscape": "Landscape"
     }
   },
   "import": {
@@ -116,7 +124,23 @@
     "scopeLayer": "Selected Layer Only",
     "success.title": "Export successful",
     "success": "Exported to %1",
-    "error.title": "Export failed"
+    "error.title": "Export failed",
+    "preset.original": "Original",
+    "preset.ytThumb": "YouTube Thumbnail (1280x720)",
+    "preset.igPost": "Instagram Post (1080x1080)",
+    "preset.story": "Story / TikTok (1080x1920)",
+    "preset.xBanner": "Twitter/X Banner (1500x500)",
+    "format.png": "PNG",
+    "format.jpeg": "JPEG",
+    "format.webp": "WebP",
+    "scale.50": "50%",
+    "scale.100": "100%",
+    "scale.150": "150%",
+    "scale.200": "200%",
+    "dimension": "%1 x %2 px",
+    "fileSizeKB": "Est: ~%1 KB",
+    "fileSizeMB": "Est: ~%1 MB",
+    "fileSizeUnknown": "~ -- KB"
   },
   "tools": {
     "title": "Tools",
@@ -253,7 +277,8 @@
     "cutLevel": "Cut level:",
     "removeSpecks": "Clean specks",
     "refineTitle": "Cutout Refinement:",
-    "refineNote": "Applied live over the AI cutout (brush edits are redone)."
+    "refineNote": "Applied live over the AI cutout (brush edits are redone).",
+    "more": "More actions"
   },
   "canvas": {
     "context.aiDialog": "✨ Remove Background with AI...",
