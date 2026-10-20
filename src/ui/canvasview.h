@@ -26,6 +26,10 @@ class PaintTool;
 class MagicWandTool;
 class CloneStampTool;
 class FloodFillTool;
+class MarqueeTool;
+class GradientTool;
+class RetouchTool;
+class HealingTool;
 
 /// Interactive document viewport: pan, zoom, selection with transform
 /// handles, gestures, inline text editing, software rendering, and raster tools.
@@ -62,6 +66,24 @@ public:
     MagicWandTool* wandTool() const { return m_wandTool.get(); }
     CloneStampTool* cloneTool() const { return m_cloneTool.get(); }
     FloodFillTool* floodTool() const { return m_floodTool.get(); }
+    MarqueeTool* marqueeTool() const;
+    GradientTool* gradientTool() const;
+    RetouchTool* retouchTool() const;
+    HealingTool* healingTool() const;
+
+    // Opções das ferramentas novas
+    void setMarqueeEllipse(bool ellipse);
+    void setMarqueeFeather(int feather);
+    void setGradientRadial(bool radial);
+    void setGradientStartColor(const QColor& color);
+    void setGradientEndColor(const QColor& color);
+    void setGradientOpacity(qreal opacity);
+    void setRetouchMode(int mode);
+    void setRetouchSize(int size);
+    void setRetouchStrength(qreal strength);
+    void setHealingMode(int mode);
+    void setHealingRadius(int radius);
+    void setHealingStrength(qreal strength);
 
     // Configurações do Corte (Crop)
     void setCropAspectRatio(double ratio);
@@ -221,6 +243,9 @@ private:
     QList<GuideLine> m_activeGuides;
     QPoint m_lastMousePos;
     bool m_needsFit = true;
+    /// Modo "ajustar à janela": enquanto true, um resize re-ajusta o zoom.
+    /// Qualquer zoom/pan manual desliga e o resize preserva o zoom.
+    bool m_autoFit = true;
 
     LayerId m_selectedId;
     Gesture m_gesture = Gesture::None;
@@ -267,6 +292,10 @@ private:
     std::unique_ptr<MagicWandTool> m_wandTool;
     std::unique_ptr<CloneStampTool> m_cloneTool;
     std::unique_ptr<FloodFillTool> m_floodTool;
+    std::unique_ptr<MarqueeTool> m_marqueeTool;
+    std::unique_ptr<GradientTool> m_gradientTool;
+    std::unique_ptr<RetouchTool> m_retouchTool;
+    std::unique_ptr<HealingTool> m_healingTool;
     ICanvasTool* m_activeTool = nullptr;
 
     // AI Quick Background Removal cancel flag and thread tracking

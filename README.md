@@ -61,7 +61,7 @@ Most photo editing tools are either overly basic web canvas tools or intimidatin
 - **Alpha Masking**: Non-destructive persistent layer masks saved directly inside project files with render-caching for instant movement.
 
 ### ✂️ Centralized Selection & Cut Suite
-- **Selection Tools**: Polygonal Scissors tool and Magic Wand with adjustable color tolerance.
+- **Selection Tools**: Rectangular/Elliptical Marquee (Shift adds, Alt subtracts, feather), Polygonal Scissors, and Magic Wand with adjustable color tolerance.
 - **Smart Operations**: Invert selection, clean contour visualization, Copy to new layer, and Cut (creates isolated layer and hides original cleanly).
 
 ### ✍️ Typography & Graphic Styling
@@ -71,6 +71,14 @@ Most photo editing tools are either overly basic web canvas tools or intimidatin
 - Selection & Transform (shear, rotate, scale, flip).
 - Crop tool with standard aspect presets.
 - Raster Brush, Pencil, Airbrush, Eraser, Clone Stamp, and Flood Fill.
+- **Gradient** — linear/radial, two colors with alpha, respects the active pixel selection.
+- **Retouch brush** — Blur, Sharpen, Smudge, Dodge, Burn and Sponge with size/strength controls.
+- **Spot Healing & Red Eye** — automatic nearby-source repair, one undo step per stroke.
+- Grouped toolbar with flyout-free organization: selection, cut, paint, retouch, utility and create groups.
+
+### 🖥️ Responsive Layout
+- Breakpoint-driven chrome (620 / 980 / 1440 px): the vertical tool rail turns into a compact horizontal bar on narrow or short windows, tool options compact themselves, and inspectors auto-hide with their previous visibility restored.
+- Canvas keeps `auto-fit` until you zoom/pan manually; after that, resizing preserves your zoom instead of resetting it.
 
 ### 💾 Document Lifecycle & Safety
 - **DocumentController**: Centralized engine synchronizing canvas, layers, inspectors, history, and background services.
@@ -87,7 +95,7 @@ Most photo editing tools are either overly basic web canvas tools or intimidatin
 ```
 CreatorCanvas Architecture
  ├── cc_core          → Document, Layers, History, Serialization, SelectionOps, SnapEngine
- ├── cc_tools         → Modular ICanvasTool suite (Select, Crop, Paint, Scissors, Wand)
+ ├── cc_tools         → Modular ICanvasTool suite (Select, Marquee, Crop, Paint, Gradient, Retouch, Healing, Scissors, Wand)
  ├── cc_rendering     → Software QPainter compositor, effects & layer filters
  ├── cc_services      → DocumentController, Autosave, Settings, PresetStore, Logging
  ├── cc_localization  → Dynamic JSON-based i18n service (en, pt-BR)
@@ -155,7 +163,7 @@ build\windows-release\bin\Release\CreatorCanvas.exe
 
 Every commit passes a comprehensive verification pipeline:
 
-- **Unit Test Suites**: 20/20 test executables passing (`test_document`, `test_layers`, `test_tools`, `test_serialization`, `test_effects`, etc.).
+- **Unit Test Suites**: 24/24 test executables passing (`test_document`, `test_layers`, `test_tools`, `test_serialization`, `test_effects`, etc.).
 - **Self-Diagnostic Smoke Test**:
   ```bash
   ./build/linux-debug/bin/CreatorCanvas --smoke-test

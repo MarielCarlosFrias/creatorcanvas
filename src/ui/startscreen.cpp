@@ -66,6 +66,7 @@ void StartScreen::buildUi()
     auto* content = new QWidget;
     content->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
     auto* mainLayout = new QVBoxLayout(content);
+    m_contentLayout = mainLayout;
     mainLayout->setContentsMargins(60, 32, 60, 32);
     mainLayout->setSpacing(18);
 
@@ -433,12 +434,14 @@ void StartScreen::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
 
-    // Keep useful margins on large windows without wasting most of a small
-    // laptop display on empty space.
+    // Margens no layout do CONTEÚDO (não no layout externo): antes o
+    // ajuste somava 16..60px externos aos 60px fixos do conteúdo e
+    // desperdiçava metade da largura em telas pequenas.
     const int horizontalMargin = qBound(16, width() / 20, 60);
-    if (auto* mainLayout = qobject_cast<QVBoxLayout*>(layout()))
-        mainLayout->setContentsMargins(horizontalMargin, 20,
-                                       horizontalMargin, 20);
+    const int verticalMargin = width() < Design::BreakSM ? 16 : 28;
+    if (m_contentLayout)
+        m_contentLayout->setContentsMargins(horizontalMargin, verticalMargin,
+                                            horizontalMargin, verticalMargin);
     relayoutCards();
 }
 

@@ -5,6 +5,8 @@
 #include <QHash>
 #include "core/document/NewDocumentSpec.h"
 
+class QVBoxLayout;
+
 class QLabel;
 class QBoxLayout;
 class QListWidget;
@@ -93,6 +95,7 @@ private:
     QHash<int, QPixmap> m_templatePreviewCache;
     QVector<QLabel*> m_templateTitleLabels;
     QVector<QLabel*> m_templatePlatformLabels;
+    QVBoxLayout* m_contentLayout = nullptr;
 };
 
 } // namespace cc

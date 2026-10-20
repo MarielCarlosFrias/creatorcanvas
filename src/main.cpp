@@ -60,6 +60,14 @@ int main(int argc, char *argv[])
     );
     parser.addOption(smokeTestOption);
 
+    // Ferramenta de desenvolvimento: grava capturas da janela em vários
+    // tamanhos para inspecionar o layout responsivo (não aparece na UI).
+    QCommandLineOption uiSnapshotOption(
+        QStringLiteral("ui-snapshot"),
+        QStringLiteral("Capture the UI at several window sizes into <dir> (dev tool)."),
+        QStringLiteral("dir"));
+    parser.addOption(uiSnapshotOption);
+
     parser.addPositionalArgument(QStringLiteral("file"), QStringLiteral("Project file to open (.creatorcanvas)"), QStringLiteral("[file]"));
 
     parser.process(app);
@@ -162,6 +170,45 @@ int main(int argc, char *argv[])
         qInfo() << "[SmokeTest] MainWindow initialized and project opened successfully.";
 
         qInfo() << "[SmokeTest] ALL CHECKS PASSED (100% HEALTHY).";
+        cc::LogService::shutdown();
+        return 0;
+    }
+
+    if (parser.isSet(uiSnapshotOption)) {
+        const QString outDir = parser.value(uiSnapshotOption);
+        QDir().mkpath(outDir);
+
+        cc::MainWindow window(&settings, &i18n);
+        // Documento demo para o canvas não ficar vazio na captura.
+        window.createDemoDocumentForSnapshot();
+        window.show();
+
+        const QList<QSize> sizes = {
+            QSize(1600, 1000), QSize(1280, 800), QSize(1024, 700),
+            QSize(900, 620), QSize(800, 520),
+        };
+        const QStringList tools = {
+            QStringLiteral("select"), QStringLiteral("marquee"),
+            QStringLiteral("gradient"), QStringLiteral("retouch"),
+            QStringLiteral("healing"),
+        };
+        for (const QSize& size : sizes) {
+            window.resize(size);
+            for (const QString& tool : tools) {
+                // Seleciona a ferramenta via menu Ferramentas (mesmo path
+                // que o usuário usa), sem depender de atalhos.
+                window.selectToolByName(tool);
+                QApplication::processEvents();
+                QApplication::processEvents();
+                const QString path = QDir(outDir).filePath(
+                    QStringLiteral("ui_%1x%2_%3.png")
+                        .arg(size.width()).arg(size.height()).arg(tool));
+                const QPixmap shot = window.grab();
+                if (!shot.save(path))
+                    qWarning() << "[UISnapshot] failed to save" << path;
+                qInfo() << "[UISnapshot]" << path << shot.size();
+            }
+        }
         cc::LogService::shutdown();
         return 0;
     }

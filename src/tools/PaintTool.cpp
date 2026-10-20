@@ -116,6 +116,7 @@ void PaintTool::mouseMove(QMouseEvent* event, const QPointF& docPos, const ToolC
 {
     Q_UNUSED(event);
     m_currentDocPos = docPos;
+    m_hoverValid = true;
 
     if (m_isPainting && ctx.document && !m_activeLayerId.isNull()) {
         Layer* layer = ctx.document->findLayer(m_activeLayerId);
@@ -182,6 +183,8 @@ void PaintTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const To
 
 void PaintTool::drawOverlay(QPainter* painter, const ToolContext& ctx)
 {
+    if (!m_hoverValid)
+        return;
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing, true);
 

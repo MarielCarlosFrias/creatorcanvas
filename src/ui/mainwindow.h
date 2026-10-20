@@ -49,6 +49,20 @@ public:
     explicit MainWindow(SettingsService* settings,
                         I18nService* i18n,
                         QWidget* parent = nullptr);
+    ~MainWindow() override;
+
+    /// Ferramenta de desenvolvimento (--ui-snapshot): seleciona a
+    /// ferramenta pelo nome usando a mesma action da UI.
+    void selectToolByName(const QString& name);
+
+    /// Ferramenta de desenvolvimento (--ui-snapshot): cria um documento demo
+    /// para o canvas não ficar vazio nas capturas.
+    void createDemoDocumentForSnapshot();
+
+    /// Em janelas estreitas, esconde rótulos longos e encolhe sliders para
+    /// a barra de opções não ficar cortada (o conteúdo é rolável, mas
+    /// esconder os rótulos evita rolagem na maioria dos casos).
+    void applyToolOptionsCompact(bool compact);
 
     void openFromPath(const QString& path);
 
@@ -222,6 +236,8 @@ private:
     // Ferramentas da barra de ferramentas e opções de ferramentas
     QToolBar* m_quickToolBar = nullptr;
     QToolBar* m_toolsBar = nullptr;
+    /// Barra horizontal compacta (mesmas actions) usada em janelas estreitas.
+    QToolBar* m_toolsBarCompact = nullptr;
     QToolBar* m_toolOptionsBar = nullptr;
     QActionGroup* m_toolGroup = nullptr;
     QAction* m_toolSelectAction = nullptr;
@@ -232,6 +248,10 @@ private:
     QAction* m_toolPaintAction = nullptr;
     QAction* m_toolFloodAction = nullptr;
     QAction* m_toolEyedropperAction = nullptr;
+    QAction* m_toolMarqueeAction = nullptr;
+    QAction* m_toolGradientAction = nullptr;
+    QAction* m_toolRetouchAction = nullptr;
+    QAction* m_toolHealingAction = nullptr;
     QMenu* m_toolsMenu = nullptr;
     QMenu* m_selectionToolsMenu = nullptr;
     QMenu* m_retouchToolsMenu = nullptr;
@@ -286,6 +306,44 @@ private:
     QLabel* m_floodTolValueLabel = nullptr;
     QPushButton* m_floodColorBtn = nullptr;
 
+    // --- Seleção retangular/elíptica (Marquee) ---
+    QLabel* m_marqueeShapeLabel = nullptr;
+    QComboBox* m_marqueeShapeCombo = nullptr;
+    QLabel* m_marqueeFeatherLabel = nullptr;
+    QSlider* m_marqueeFeatherSlider = nullptr;
+    QLabel* m_marqueeFeatherValueLabel = nullptr;
+
+    // --- Gradiente (Gradient) ---
+    QLabel* m_gradientTypeLabel = nullptr;
+    QComboBox* m_gradientTypeCombo = nullptr;
+    QPushButton* m_gradientStartColorBtn = nullptr;
+    QPushButton* m_gradientEndColorBtn = nullptr;
+    QLabel* m_gradientOpacityLabel = nullptr;
+    QSlider* m_gradientOpacitySlider = nullptr;
+    QLabel* m_gradientOpacityValueLabel = nullptr;
+    QColor m_gradientStartColor{61, 126, 255};
+    QColor m_gradientEndColor{0, 0, 0, 0};
+
+    // --- Retoque (Retouch) ---
+    QLabel* m_retouchModeLabel = nullptr;
+    QComboBox* m_retouchModeCombo = nullptr;
+    QLabel* m_retouchSizeLabel = nullptr;
+    QSlider* m_retouchSizeSlider = nullptr;
+    QLabel* m_retouchSizeValueLabel = nullptr;
+    QLabel* m_retouchStrengthLabel = nullptr;
+    QSlider* m_retouchStrengthSlider = nullptr;
+    QLabel* m_retouchStrengthValueLabel = nullptr;
+
+    // --- Reparo (Healing) ---
+    QLabel* m_healingModeLabel = nullptr;
+    QComboBox* m_healingModeCombo = nullptr;
+    QLabel* m_healingRadiusLabel = nullptr;
+    QSlider* m_healingRadiusSlider = nullptr;
+    QLabel* m_healingRadiusValueLabel = nullptr;
+    QLabel* m_healingStrengthLabel = nullptr;
+    QSlider* m_healingStrengthSlider = nullptr;
+    QLabel* m_healingStrengthValueLabel = nullptr;
+
     QLabel* m_zoomLabel = nullptr;
     QLabel* m_positionLabel = nullptr;
     QLabel* m_versionLabel = nullptr;
@@ -293,6 +351,11 @@ private:
 
     double m_currentZoom = 1.0;
     QPointF m_lastCursorPos;
+
+    // Responsividade: docks auto-ocultados em janelas estreitas, com o
+    // estado escolhido pelo usuário guardado para ser restaurado.
+    bool m_docksAutoHidden = false;
+    QList<QPair<QDockWidget*, bool>> m_savedDockVisibility;
 };
 
 } // namespace cc

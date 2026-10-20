@@ -1206,4 +1206,72 @@ QIcon ThemeIcons::actionCancel(const QColor& color)
     });
 }
 
+QIcon ThemeIcons::toolMarquee(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setPen(QPen(color, 1.6 * scale, Qt::DashLine));
+        p.setBrush(Qt::NoBrush);
+        p.drawRect(QRectF(4 * scale, 5 * scale, 16 * scale, 14 * scale));
+        // Alças dos cantos
+        p.setPen(Qt::NoPen);
+        p.setBrush(color);
+        for (const QPointF& c : {QPointF(4, 5), QPointF(20, 5), QPointF(4, 19), QPointF(20, 19)})
+            p.drawRect(QRectF((c.x() - 1.4) * scale, (c.y() - 1.4) * scale,
+                              2.8 * scale, 2.8 * scale));
+    });
+}
+
+QIcon ThemeIcons::toolGradient(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        QLinearGradient g(QPointF(4 * scale, 0), QPointF(20 * scale, 0));
+        QColor tint = color;
+        g.setColorAt(0.0, tint);
+        tint.setAlpha(25);
+        g.setColorAt(1.0, tint);
+        p.setPen(QPen(QColor(color.red(), color.green(), color.blue(), 160), 1.0 * scale));
+        p.setBrush(QBrush(g));
+        p.drawRect(QRectF(4 * scale, 5 * scale, 16 * scale, 14 * scale));
+        // Seta de direção
+        p.setPen(QPen(color, 1.6 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(8 * scale, 19.5 * scale), QPointF(16 * scale, 19.5 * scale));
+        p.drawLine(QPointF(16 * scale, 19.5 * scale), QPointF(13.5 * scale, 17.5 * scale));
+        p.drawLine(QPointF(16 * scale, 19.5 * scale), QPointF(13.5 * scale, 21.5 * scale));
+    });
+}
+
+QIcon ThemeIcons::toolRetouch(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        p.setBrush(Qt::NoBrush);
+        for (int i = 0; i < 3; ++i) {
+            QColor c = color;
+            c.setAlpha(i == 0 ? 230 : (i == 1 ? 150 : 90));
+            p.setPen(QPen(c, 1.6 * scale));
+            p.drawEllipse(QPointF(12 * scale, 12 * scale),
+                          (4 + i * 3.2) * scale, (4 + i * 3.2) * scale);
+        }
+        p.setPen(Qt::NoPen);
+        p.setBrush(color);
+        p.drawEllipse(QPointF(12 * scale, 12 * scale), 1.6 * scale, 1.6 * scale);
+    });
+}
+
+QIcon ThemeIcons::toolHealing(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        // Círculo de reparo + cruz
+        p.setPen(QPen(color, 1.6 * scale));
+        p.setBrush(Qt::NoBrush);
+        p.drawEllipse(QPointF(12 * scale, 12 * scale), 8 * scale, 8 * scale);
+        p.setPen(QPen(color, 2.4 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(12 * scale, 7.5 * scale), QPointF(12 * scale, 16.5 * scale));
+        p.drawLine(QPointF(7.5 * scale, 12 * scale), QPointF(16.5 * scale, 12 * scale));
+    });
+}
+
 } // namespace cc

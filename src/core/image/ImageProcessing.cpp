@@ -1,7 +1,10 @@
 #include "ImageProcessing.h"
 
+#include <QLinearGradient>
+#include <QLineF>
 #include <QPainter>
 #include <QPainterPath>
+#include <QRadialGradient>
 
 #include <algorithm>
 #include <cmath>
@@ -888,6 +891,412 @@ QImage ImageProcessing::colorToAlpha(const QImage& source, const QColor& keyColo
     }
 
     return result;
+}
+
+// ============================================================================
+// Ferramentas de preenchimento, seleção e retoque (Photoshop-like)
+// ============================================================================
+
+namespace {
+
+// Blur separável de caixa sobre Alpha8 (feather de seleção). Determinístico.
+void boxBlurAlpha8(QImage& alpha, int radius)
+{
+    if (alpha.isNull() || radius <= 0)
+        return;
+    alpha = alpha.convertToFormat(QImage::Format_Alpha8);
+    const int w = alpha.width();
+    const int h = alpha.height();
+    const int r = std::min({radius, w / 2, h / 2});
+    if (r <= 0)
+        return;
+
+    std::vector<quint16> tmp(static_cast<size_t>(w) * h);
+    // Horizontal
+    for (int y = 0; y < h; ++y) {
+        const uchar* row = alpha.constScanLine(y);
+        for (int x = 0; x < w; ++x) {
+            int sum = 0, count = 0;
+            const int x0 = std::max(0, x - r);
+            const int x1 = std::min(w - 1, x + r);
+            for (int sx = x0; sx <= x1; ++sx) { sum += row[sx]; ++count; }
+            tmp[static_cast<size_t>(y) * w + x] = static_cast<quint16>(sum / std::max(1, count));
+        }
+    }
+    // Vertical
+    for (int y = 0; y < h; ++y) {
+        uchar* row = alpha.scanLine(y);
+        for (int x = 0; x < w; ++x) {
+            int sum = 0, count = 0;
+            const int y0 = std::max(0, y - r);
+            const int y1 = std::min(h - 1, y + r);
+            for (int sy = y0; sy <= y1; ++sy) { sum += tmp[static_cast<size_t>(sy) * w + x]; ++count; }
+            row[x] = static_cast<uchar>(sum / std::max(1, count));
+        }
+    }
+}
+
+inline qreal falloff(qreal dist, qreal radius)
+{
+    if (radius <= 0.0)
+        return 0.0;
+    const qreal t = std::clamp(1.0 - dist / radius, 0.0, 1.0);
+    return t * t * (3.0 - 2.0 * t); // smoothstep
+}
+
+inline int clampByte(qreal v)
+{
+    return std::clamp(static_cast<int>(std::lround(v)), 0, 255);
+}
+
+inline QColor unpremul(const QImage& img, int x, int y)
+{
+    return QColor::fromRgba(qUnpremultiply(img.pixel(x, y)));
+}
+
+inline void writeColor(QImage& img, int x, int y, qreal r, qreal g, qreal b, int a)
+{
+    QRgb* row = reinterpret_cast<QRgb*>(img.scanLine(y));
+    row[x] = qPremultiply(qRgba(clampByte(r), clampByte(g), clampByte(b),
+                                std::clamp(a, 0, 255)));
+}
+
+} // namespace
+
+QImage ImageProcessing::makeShapeSelection(const QSize& size, const QRectF& rect,
+                                           bool ellipse, int feather)
+{
+    if (size.isEmpty())
+        return {};
+    QImage selection(size, QImage::Format_Alpha8);
+    selection.fill(0);
+    const QRectF area = rect.normalized().intersected(
+        QRectF(QPointF(0, 0), QSizeF(size)));
+    if (area.isEmpty() || area.width() < 0.5 || area.height() < 0.5)
+        return selection;
+
+    {
+        QPainter p(&selection);
+        p.setRenderHint(QPainter::Antialiasing, true);
+        p.setPen(Qt::NoPen);
+        p.setBrush(Qt::white);
+        if (ellipse)
+            p.drawEllipse(area);
+        else
+            p.fillRect(area, Qt::white);
+    }
+    if (feather > 0)
+        boxBlurAlpha8(selection, feather);
+    return selection;
+}
+
+QImage ImageProcessing::combineSelections(const QImage& base, const QImage& overlay,
+                                          bool subtract)
+{
+    if (base.isNull())
+        return overlay;
+    if (overlay.isNull())
+        return base;
+    if (base.size() != overlay.size())
+        return base.convertToFormat(QImage::Format_Alpha8);
+
+    QImage out = base.convertToFormat(QImage::Format_Alpha8);
+    const QImage ov = overlay.convertToFormat(QImage::Format_Alpha8);
+    for (int y = 0; y < out.height(); ++y) {
+        uchar* dst = out.scanLine(y);
+        const uchar* src = ov.constScanLine(y);
+        for (int x = 0; x < out.width(); ++x) {
+            if (subtract)
+                dst[x] = static_cast<uchar>(std::max(0, int(dst[x]) - int(src[x])));
+            else
+                dst[x] = std::max(dst[x], src[x]);
+        }
+    }
+    return out;
+}
+
+QImage ImageProcessing::paintGradient(const QImage& target, const QPointF& start,
+                                      const QPointF& end, const QColor& startColor,
+                                      const QColor& endColor, bool radial,
+                                      qreal opacity, const QImage& mask)
+{
+    if (target.isNull() || opacity <= 0.0)
+        return target;
+
+    QImage gradient(target.size(), QImage::Format_ARGB32_Premultiplied);
+    gradient.fill(Qt::transparent);
+    {
+        QPainter gp(&gradient);
+        gp.setRenderHint(QPainter::Antialiasing, true);
+        gp.setPen(Qt::NoPen);
+        if (radial) {
+            const qreal radius = std::max<qreal>(1.0, QLineF(start, end).length());
+            QRadialGradient g(start, radius);
+            g.setColorAt(0.0, startColor);
+            g.setColorAt(1.0, endColor);
+            gp.setBrush(QBrush(g));
+        } else {
+            QPointF s = start, e = end;
+            if (QLineF(s, e).length() < 0.5)
+                e = s + QPointF(1.0, 0.0);
+            QLinearGradient g(s, e);
+            g.setColorAt(0.0, startColor);
+            g.setColorAt(1.0, endColor);
+            gp.setBrush(QBrush(g));
+        }
+        gp.drawRect(gradient.rect());
+    }
+
+    if (!mask.isNull() && mask.size() == gradient.size()) {
+        const QImage alpha = mask.convertToFormat(QImage::Format_Alpha8);
+        for (int y = 0; y < gradient.height(); ++y) {
+            QRgb* row = reinterpret_cast<QRgb*>(gradient.scanLine(y));
+            const uchar* mrow = alpha.constScanLine(y);
+            for (int x = 0; x < gradient.width(); ++x) {
+                if (mrow[x] >= 255)
+                    continue;
+                const QRgb plain = qUnpremultiply(row[x]);
+                const int a = qAlpha(plain) * mrow[x] / 255;
+                row[x] = qPremultiply(qRgba(qRed(plain), qGreen(plain), qBlue(plain), a));
+            }
+        }
+    }
+
+    QImage result = target.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    QPainter p(&result);
+    p.setOpacity(std::clamp(opacity, 0.0, 1.0));
+    p.drawImage(0, 0, gradient);
+    p.end();
+    return result;
+}
+
+QImage ImageProcessing::retouchStroke(const QImage& target, const QPointF& prevPoint,
+                                      const QPointF& curPoint, RetouchMode mode,
+                                      int size, qreal strength)
+{
+    if (target.isNull() || size <= 0)
+        return target;
+
+    const qreal radius = std::max<qreal>(0.5, size / 2.0);
+    const qreal blend = std::clamp(strength, 0.01, 1.0);
+
+    QImage result = target.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    const QImage snapshot = result; // estabiliza leituras do próprio traço
+
+    const QPointF delta = curPoint - prevPoint;
+    const qreal distance = std::hypot(delta.x(), delta.y());
+    const qreal stepPx = std::max<qreal>(1.0, radius * 0.35);
+    const int steps = std::max(1, static_cast<int>(std::ceil(distance / stepPx)));
+
+    const int w = result.width();
+    const int h = result.height();
+    const int iradius = static_cast<int>(std::ceil(radius));
+    // Para Smudge, a origem é o ponto anterior deslocado.
+    const QPointF smudgeOffset = prevPoint - curPoint;
+
+    for (int s = 1; s <= steps; ++s) {
+        const QPointF center = prevPoint + delta * (static_cast<qreal>(s) / steps);
+        const int cx = static_cast<int>(std::floor(center.x()));
+        const int cy = static_cast<int>(std::floor(center.y()));
+        const int x0 = std::max(0, cx - iradius);
+        const int y0 = std::max(0, cy - iradius);
+        const int x1 = std::min(w - 1, cx + iradius);
+        const int y1 = std::min(h - 1, cy + iradius);
+        if (x0 > x1 || y0 > y1)
+            continue;
+
+        for (int y = y0; y <= y1; ++y) {
+            QRgb* row = reinterpret_cast<QRgb*>(result.scanLine(y));
+            for (int x = x0; x <= x1; ++x) {
+                const qreal d = std::hypot(qreal(x) + 0.5 - center.x(),
+                                           qreal(y) + 0.5 - center.y());
+                const qreal wgt = falloff(d, radius);
+                if (wgt <= 0.001)
+                    continue;
+                const qreal t = wgt * blend;
+
+                const QRgb dpx = qUnpremultiply(row[x]);
+                qreal dr = qRed(dpx), dg = qGreen(dpx), db = qBlue(dpx);
+                const int da = qAlpha(dpx);
+
+                qreal tr = dr, tg = dg, tb = db;
+                switch (mode) {
+                case RetouchMode::Blur: {
+                    // média de 8 vizinhos distantes (aproxima gaussiana)
+                    const int off = std::max(1, iradius / 3);
+                    qreal sr = 0, sg = 0, sb = 0; int n = 0;
+                    for (int dy = -1; dy <= 1; ++dy) {
+                        for (int dx = -1; dx <= 1; ++dx) {
+                            const int sx = std::clamp(x + dx * off, 0, w - 1);
+                            const int sy = std::clamp(y + dy * off, 0, h - 1);
+                            if (sx == x && sy == y) continue;
+                            const QRgb sp = qUnpremultiply(snapshot.pixel(sx, sy));
+                            sr += qRed(sp); sg += qGreen(sp); sb += qBlue(sp); ++n;
+                        }
+                    }
+                    if (n > 0) { tr = sr / n; tg = sg / n; tb = sb / n; }
+                    break;
+                }
+                case RetouchMode::Sharpen: {
+                    const int off = std::max(1, iradius / 3);
+                    qreal sr = 0, sg = 0, sb = 0; int n = 0;
+                    for (int dy = -1; dy <= 1; ++dy) {
+                        for (int dx = -1; dx <= 1; ++dx) {
+                            const int sx = std::clamp(x + dx * off, 0, w - 1);
+                            const int sy = std::clamp(y + dy * off, 0, h - 1);
+                            if (sx == x && sy == y) continue;
+                            const QRgb sp = qUnpremultiply(snapshot.pixel(sx, sy));
+                            sr += qRed(sp); sg += qGreen(sp); sb += qBlue(sp); ++n;
+                        }
+                    }
+                    if (n > 0) {
+                        const qreal amount = 1.2;
+                        tr = std::clamp(dr + (dr - sr / n) * amount, 0.0, 255.0);
+                        tg = std::clamp(dg + (dg - sg / n) * amount, 0.0, 255.0);
+                        tb = std::clamp(db + (db - sb / n) * amount, 0.0, 255.0);
+                    }
+                    break;
+                }
+                case RetouchMode::Smudge: {
+                    const int sx = std::clamp(static_cast<int>(std::lround(x + smudgeOffset.x())), 0, w - 1);
+                    const int sy = std::clamp(static_cast<int>(std::lround(y + smudgeOffset.y())), 0, h - 1);
+                    const QRgb sp = qUnpremultiply(snapshot.pixel(sx, sy));
+                    tr = qRed(sp); tg = qGreen(sp); tb = qBlue(sp);
+                    break;
+                }
+                case RetouchMode::Dodge: {
+                    const qreal k = std::min<qreal>(1.0, t * 1.6);
+                    tr = dr + (255.0 - dr) * k;
+                    tg = dg + (255.0 - dg) * k;
+                    tb = db + (255.0 - db) * k;
+                    break;
+                }
+                case RetouchMode::Burn: {
+                    const qreal k = std::min<qreal>(1.0, t * 1.4);
+                    tr = dr * (1.0 - k);
+                    tg = dg * (1.0 - k);
+                    tb = db * (1.0 - k);
+                    break;
+                }
+                case RetouchMode::Sponge: {
+                    const qreal lum = 0.299 * dr + 0.587 * dg + 0.114 * db;
+                    tr = dr + (lum - dr) * t;
+                    tg = dg + (lum - dg) * t;
+                    tb = db + (lum - db) * t;
+                    break;
+                }
+                }
+
+                // Mistura final (fonte = tr/tg/tb, alpha = dst alpha)
+                row[x] = qPremultiply(qRgba(
+                    clampByte(dr + (tr - dr) * t),
+                    clampByte(dg + (tg - dg) * t),
+                    clampByte(db + (tb - db) * t),
+                    da));
+            }
+        }
+    }
+    return result.convertToFormat(target.format());
+}
+
+QImage ImageProcessing::spotHeal(const QImage& target, const QPoint& targetPoint,
+                                 const QPoint& sourcePoint, int radius,
+                                 qreal strength)
+{
+    if (target.isNull() || radius <= 0)
+        return target;
+
+    const int w = target.width(), h = target.height();
+    const int iradius = std::max(1, radius);
+    const qreal blend = std::clamp(strength, 0.05, 1.0);
+
+    QImage result = target.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    const QImage snapshot = result;
+
+    const int x0 = std::max(0, targetPoint.x() - iradius);
+    const int y0 = std::max(0, targetPoint.y() - iradius);
+    const int x1 = std::min(w - 1, targetPoint.x() + iradius);
+    const int y1 = std::min(h - 1, targetPoint.y() + iradius);
+    if (x0 > x1 || y0 > y1)
+        return target;
+
+    // Transferência de cor: compara médias da origem e do destino na região
+    // para o patch não destoar do entorno (look de "healing").
+    qreal dR = 0, dG = 0, dB = 0, sR = 0, sG = 0, sB = 0;
+    int count = 0;
+    for (int y = y0; y <= y1; y += 2) {
+        for (int x = x0; x <= x1; x += 2) {
+            const QRgb dst = qUnpremultiply(snapshot.pixel(x, y));
+            const int sx = std::clamp(x + (sourcePoint.x() - targetPoint.x()), 0, w - 1);
+            const int sy = std::clamp(y + (sourcePoint.y() - targetPoint.y()), 0, h - 1);
+            const QRgb src = qUnpremultiply(snapshot.pixel(sx, sy));
+            dR += qRed(dst); dG += qGreen(dst); dB += qBlue(dst);
+            sR += qRed(src); sG += qGreen(src); sB += qBlue(src);
+            ++count;
+        }
+    }
+    const qreal offR = count ? (dR - sR) / count : 0.0;
+    const qreal offG = count ? (dG - sG) / count : 0.0;
+    const qreal offB = count ? (dB - sB) / count : 0.0;
+
+    for (int y = y0; y <= y1; ++y) {
+        QRgb* row = reinterpret_cast<QRgb*>(result.scanLine(y));
+        for (int x = x0; x <= x1; ++x) {
+            const qreal d = std::hypot(qreal(x - targetPoint.x()),
+                                       qreal(y - targetPoint.y()));
+            const qreal wgt = falloff(d, iradius) * blend;
+            if (wgt <= 0.001)
+                continue;
+            const int sx = std::clamp(x + (sourcePoint.x() - targetPoint.x()), 0, w - 1);
+            const int sy = std::clamp(y + (sourcePoint.y() - targetPoint.y()), 0, h - 1);
+            const QRgb src = qUnpremultiply(snapshot.pixel(sx, sy));
+            const QRgb dst = qUnpremultiply(row[x]);
+            const qreal sr = std::clamp(qRed(src) + offR, 0.0, 255.0);
+            const qreal sg = std::clamp(qGreen(src) + offG, 0.0, 255.0);
+            const qreal sb = std::clamp(qBlue(src) + offB, 0.0, 255.0);
+            row[x] = qPremultiply(qRgba(
+                clampByte(qRed(dst) + (sr - qRed(dst)) * wgt),
+                clampByte(qGreen(dst) + (sg - qGreen(dst)) * wgt),
+                clampByte(qBlue(dst) + (sb - qBlue(dst)) * wgt),
+                qAlpha(dst)));
+        }
+    }
+    return result.convertToFormat(target.format());
+}
+
+QImage ImageProcessing::redEyeRemove(const QImage& target, const QPoint& center, int radius)
+{
+    if (target.isNull() || radius <= 0)
+        return target;
+
+    QImage result = target.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    const int w = result.width(), h = result.height();
+    const int x0 = std::max(0, center.x() - radius);
+    const int y0 = std::max(0, center.y() - radius);
+    const int x1 = std::min(w - 1, center.x() + radius);
+    const int y1 = std::min(h - 1, center.y() + radius);
+    if (x0 > x1 || y0 > y1)
+        return target;
+
+    for (int y = y0; y <= y1; ++y) {
+        QRgb* row = reinterpret_cast<QRgb*>(result.scanLine(y));
+        for (int x = x0; x <= x1; ++x) {
+            const qreal d = std::hypot(qreal(x - center.x()), qreal(y - center.y()));
+            const qreal wgt = falloff(d, radius);
+            if (wgt <= 0.001)
+                continue;
+            const QRgb dst = qUnpremultiply(row[x]);
+            const int r = qRed(dst), g = qGreen(dst), b = qBlue(dst);
+            // Pixels claramente "avermelhados" (flash de olho vermelho)
+            const bool reddish = r > 90 && r > g * 1.35 + 10 && r > b * 1.35 + 10;
+            if (!reddish)
+                continue;
+            const qreal neutral = (g + b) * 0.5;
+            const qreal nr = r + (neutral - r) * wgt;
+            row[x] = qPremultiply(qRgba(clampByte(nr), g, b, qAlpha(dst)));
+        }
+    }
+    return result.convertToFormat(target.format());
 }
 
 } // namespace cc

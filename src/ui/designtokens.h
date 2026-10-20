@@ -18,6 +18,11 @@ constexpr int DockMin = 240, DockMax = 360, DockIdeal = 280;
 constexpr int ToolbarH = 40, ToolOptionsH = 38, StatusH = 26;
 constexpr int CanvasPadding = 32;
 constexpr int BreakXS = 620, BreakSM = 980, BreakMD = 1440;
+/// Largura mínima da janela do editor e limite para mostrar dicas longas.
+constexpr int EditorMinWidth = 800;
+constexpr int HintBreakWidth = 1380;
+/// Abaixo disto os docks são auto-ocultados (layout ultra-compacto).
+constexpr int UltraCompactWidth = 840;
 
 inline int responsiveMargin(int width) { return qBound(16, width / 20, 60); }
 inline int dockWidth(int width) { return qBound(DockMin, width / 5, DockMax); }

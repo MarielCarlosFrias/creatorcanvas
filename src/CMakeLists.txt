@@ -118,6 +118,11 @@ add_library(cc_tools STATIC
     tools/ScissorsTool.cpp
     tools/RasterTools.h
     tools/RasterTools.cpp
+    tools/ToolCommit.h
+    tools/MarqueeTool.h
+    tools/MarqueeTool.cpp
+    tools/PaintExtras.h
+    tools/PaintExtras.cpp
 )
 target_link_libraries(cc_tools PUBLIC Qt6::Core Qt6::Gui cc_core cc_localization)
 target_include_directories(cc_tools PUBLIC ${PROJECT_SOURCE_DIR}/src)

@@ -75,6 +75,52 @@ static const NewShapeDef kNewShapeDefs[] = {
 constexpr int kNewShapeCount = sizeof(kNewShapeDefs) / sizeof(kNewShapeDefs[0]);
 
 
+/// Índice da página de opções de cada ferramenta. Explícito de propósito:
+/// antes o índice vinha de static_cast<int>(tool) — adicionar ferramentas
+/// na ordem errada mostrava a página errada e confundia o usuário.
+int toolOptionsPageIndex(CanvasTool tool)
+{
+    switch (tool) {
+    case CanvasTool::Select:     return 0;
+    case CanvasTool::Crop:       return 1;
+    case CanvasTool::Scissors:   return 2;
+    case CanvasTool::MagicWand:  return 3;
+    case CanvasTool::CloneStamp: return 4;
+    case CanvasTool::Paint:      return 5;
+    case CanvasTool::FloodFill:  return 6;
+    case CanvasTool::Eyedropper: return 7;
+    case CanvasTool::Marquee:    return 8;
+    case CanvasTool::Gradient:   return 9;
+    case CanvasTool::Retouch:    return 10;
+    case CanvasTool::Healing:    return 11;
+    }
+    return 0;
+}
+
+/// Diagnóstico: atalhos duplicados no mesmo QMainWindow viram atalhos
+/// AMBÍGUOS e nenhum dos dois dispara. Foi exatamente o caso de "R"
+/// (Retângulo) × Retoque e Ctrl+E (Export) × Merge Selected.
+void warnDuplicateShortcuts(const QWidget* window)
+{
+    if (!window)
+        return;
+    QHash<QString, QAction*> seen;
+    for (QAction* action : window->findChildren<QAction*>()) {
+        if (!action || action->shortcut().isEmpty())
+            continue;
+        const QString key = action->shortcut().toString(QKeySequence::PortableText);
+        if (key.isEmpty())
+            continue;
+        if (seen.contains(key) && seen.value(key) != action) {
+            qWarning() << "[Shortcuts] atalho ambíguo" << key
+                       << "em" << seen.value(key)->text()
+                       << "e" << action->text();
+        } else {
+            seen.insert(key, action);
+        }
+    }
+}
+
 QImage generateThumbnail(const Document& doc)
 {
     if (doc.width() <= 0 || doc.height() <= 0)
@@ -104,6 +150,23 @@ QImage generateThumbnail(const Document& doc)
 }
 
 } // namespace
+
+MainWindow::~MainWindow()
+{
+    // Docks emitem visibilityChanged ao serem destruídos/ocultados; as
+    // lambdas capturam "this" cru e acessariam membros já destruídos
+    // (UBSan: "mainwindow.cpp: member access ... does not point to an
+    // object of type 'MainWindow'"). Desconectar aqui é o ponto seguro.
+    for (QDockWidget* dock : {m_layersDock, m_textDock, m_shapeDock,
+                              m_imageDock, m_historyDock}) {
+        if (dock)
+            dock->disconnect(this);
+    }
+    if (m_canvas)
+        m_canvas->disconnect(this);
+    if (m_startScreen)
+        m_startScreen->disconnect(this);
+}
 
 MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
                        QWidget* parent)
@@ -212,7 +275,7 @@ void MainWindow::resizeEvent(QResizeEvent* event)
     const bool compact = width() < Design::BreakSM;
     // The application minimum window width is 800 px, so the XS breakpoint
     // is not reachable in practice. Treat the 800 px layout as compact too.
-    const bool ultraCompact = width() <= 840;
+    const bool ultraCompact = width() <= Design::UltraCompactWidth;
     const int dock = Design::dockWidth(width());
     for (QDockWidget* panel : {m_layersDock, m_textDock, m_shapeDock,
                                m_imageDock, m_historyDock}) {
@@ -226,11 +289,33 @@ void MainWindow::resizeEvent(QResizeEvent* event)
     if (ultraCompact) {
         if (m_layersDock)
             m_layersDock->setVisible(true);
+        if (!m_docksAutoHidden) {
+            // Guarda o estado escolhido pelo usuário para devolver ao
+            // alargar a janela (antes os docks sumiam de vez e o usuário
+            // tinha que reabrir tudo pelo menu Window > Panels).
+            m_savedDockVisibility.clear();
+            for (QDockWidget* panel : {m_textDock, m_shapeDock, m_imageDock,
+                                       m_historyDock}) {
+                // !isHidden() (e não isVisible()): durante a construção a
+                // janela ainda não foi mostrada e isVisible() é sempre
+                // false — guardar isso esconderia os docks para sempre.
+                if (panel)
+                    m_savedDockVisibility.append({panel, !panel->isHidden()});
+            }
+            m_docksAutoHidden = true;
+        }
         for (QDockWidget* panel : {m_textDock, m_shapeDock, m_imageDock,
                                    m_historyDock}) {
-            if (panel)
+            if (panel && panel->isVisible())
                 panel->hide();
         }
+    } else if (m_docksAutoHidden) {
+        for (const auto& entry : m_savedDockVisibility) {
+            if (entry.first)
+                entry.first->setVisible(entry.second);
+        }
+        m_savedDockVisibility.clear();
+        m_docksAutoHidden = false;
     }
 
     if (m_languageLabel)
@@ -239,21 +324,29 @@ void MainWindow::resizeEvent(QResizeEvent* event)
         m_versionLabel->setVisible(!compact);
 
     if (m_toolsBar) {
-        // Em janelas pequenas a lista vertical não cabe inteira. Colocamos
-        // as ferramentas numa segunda linha superior, separada por uma
-        // quebra explícita, para não sobrepor QuickAccess ou ToolOptions.
-        const Qt::Orientation desired = width() < Design::BreakSM
-            ? Qt::Horizontal : Qt::Vertical;
-        if (m_toolsBar->orientation() != desired) {
-            if (desired == Qt::Horizontal)
-                addToolBarBreak(Qt::TopToolBarArea);
-            m_toolsBar->setOrientation(desired);
-            addToolBar(desired == Qt::Horizontal ? Qt::TopToolBarArea
-                                                 : Qt::LeftToolBarArea,
-                       m_toolsBar);
-        }
-        m_toolsBar->setIconSize(QSize(Design::iconSize(width()),
-                                      Design::iconSize(width())));
+        // Em janelas pequenas a barra lateral some e uma barra horizontal
+        // compacta (mesmas actions) aparece no topo. Antes a própria barra
+        // era movida com addToolBarBreak a cada mudança de breakpoint, o
+        // que acumulava quebras e deixava faixas vazias após redimensionar.
+        // Também troca quando a ALTURA não comporta 14 ferramentas na
+        // vertical (ex.: 1024x700 cortava as últimas e o usuário não via
+        // gradiente/reparo).
+        const bool narrow = width() < Design::BreakSM
+                            || (height() < 760 && width() < 1300);
+        const bool toolsEnabled = !m_toggleToolsBarAction
+                                  || m_toggleToolsBarAction->isChecked();
+        m_toolsBar->setVisible(!narrow && toolsEnabled);
+        if (m_toolsBarCompact)
+            m_toolsBarCompact->setVisible(narrow && toolsEnabled);
+        // Ícone um pouco menor quando a altura é limitada, para as 14
+        // ferramentas caberem sem corte/scroll.
+        const int verticalIcon = height() < 800
+                                     ? qBound(16, height() / 40, 20)
+                                     : Design::iconSize(width());
+        m_toolsBar->setIconSize(QSize(verticalIcon, verticalIcon));
+        if (m_toolsBarCompact)
+            m_toolsBarCompact->setIconSize(QSize(qBound(18, Design::iconSize(width()) - 2, 24),
+                                                 qBound(18, Design::iconSize(width()) - 2, 24)));
     }
     if (m_quickToolBar) {
         const int quickIcon = qBound(18, Design::iconSize(width()), 24);
@@ -262,21 +355,21 @@ void MainWindow::resizeEvent(QResizeEvent* event)
 
     // Dicas das barras de opcao somem primeiro — sem isso os botoes da
     // tesoura/varinha ficavam cortados em janelas <= 1380px.
-    const bool wideEnoughForHints = width() >= 1380;
+    const bool wideEnoughForHints = width() >= Design::HintBreakWidth;
     for (QLabel* hint : {m_selectHintLabel, m_scissorsHintLabel,
                          m_wandHintLabel, m_cloneHintLabel}) {
         if (hint)
             hint->setVisible(wideEnoughForHints);
     }
 
+    applyToolOptionsCompact(width() < 1100);
     if (m_toolOptionsBar)
-        m_toolOptionsBar->setVisible(width() >= 800
+        m_toolOptionsBar->setVisible(width() >= Design::EditorMinWidth
                                      && m_toolOptionsStack
                                      && m_toolOptionsStack->currentIndex() != 0);
-
-    QTimer::singleShot(0, this, [this] {
-        if (m_canvas) m_canvas->fitToViewport();
-    });
+    // NOTA: o CanvasView cuida do próprio resize (re-ajusta em modo fit,
+    // preserva o zoom manual). Antes um fitToViewport() aqui zerava o zoom
+    // do usuário a cada redimensionamento de janela.
 }
 
 void MainWindow::attachDocument(std::unique_ptr<Document> doc, const QString& filePath)
@@ -512,12 +605,11 @@ void MainWindow::buildCentralWidget()
     connect(m_canvas, &CanvasView::toolChanged, this,
             [this](CanvasTool tool) {
                 if (m_toolOptionsStack)
-                    m_toolOptionsStack->setCurrentIndex(static_cast<int>(tool));
+                    m_toolOptionsStack->setCurrentIndex(toolOptionsPageIndex(tool));
                 if (m_toolOptionsBar)
                     m_toolOptionsBar->setVisible(tool != CanvasTool::Select);
-                QTimer::singleShot(150, this, [this] {
-                    if (m_canvas) m_canvas->fitToViewport();
-                });
+                // Trocar de ferramenta NÃO deve mexer no zoom do canvas
+                // (era um dos comportamentos mais confusos do app).
                 if (m_toolGroup) {
                     switch (tool) {
                     case CanvasTool::Select:
@@ -543,6 +635,18 @@ void MainWindow::buildCentralWidget()
                         break;
                     case CanvasTool::Eyedropper:
                         if (m_toolEyedropperAction) m_toolEyedropperAction->setChecked(true);
+                        break;
+                    case CanvasTool::Marquee:
+                        if (m_toolMarqueeAction) m_toolMarqueeAction->setChecked(true);
+                        break;
+                    case CanvasTool::Gradient:
+                        if (m_toolGradientAction) m_toolGradientAction->setChecked(true);
+                        break;
+                    case CanvasTool::Retouch:
+                        if (m_toolRetouchAction) m_toolRetouchAction->setChecked(true);
+                        break;
+                    case CanvasTool::Healing:
+                        if (m_toolHealingAction) m_toolHealingAction->setChecked(true);
                         break;
                     }
                 }
@@ -581,18 +685,22 @@ void MainWindow::buildCentralWidget()
                     }
                 } else if (layer->type() == LayerType::Image) {
                     if (m_imageInspector) {
+                        // Passa a cor para o Chroma Key, mas NÃO troca de
+                        // ferramenta sozinho: mudar de ferramenta sem o
+                        // usuário pedir era desorientador.
                         m_imageInspector->setChromaKeyColor(color);
-                        // Restaura automaticamente a ferramenta Seleção para facilitar a navegação
-                        if (m_canvas && m_canvas->currentTool() == CanvasTool::Eyedropper) {
-                            m_canvas->setTool(CanvasTool::Select);
-                            if (m_toolSelectAction) m_toolSelectAction->setChecked(true);
-                        }
                     }
                 }
             }
         }
 
-        statusBar()->showMessage(QStringLiteral("Cor capturada: %1 (R:%2 G:%3 B:%4)").arg(color.name()).arg(color.red()).arg(color.green()).arg(color.blue()), 3000);
+        const QString msg = m_i18n
+            ? m_i18n->t("editor", "canvas.status.colorPicked",
+                        {color.name(), color.red(), color.green(), color.blue()})
+            : QStringLiteral("Color picked: %1 (R:%2 G:%3 B:%4)")
+                  .arg(color.name()).arg(color.red())
+                  .arg(color.green()).arg(color.blue());
+        statusBar()->showMessage(msg, 3000);
     });
 
     setCentralWidget(m_centralStack);
@@ -709,24 +817,10 @@ void MainWindow::buildLayersDock()
         tabs->setElideMode(Qt::ElideRight);
     }
 
-    // Recalculate the canvas zoom after a dock changes visibility.  Without
-    // this, opening an inspector can leave the document partly underneath
-    // the right panel until the user presses Fit or resizes the window.
-    const auto refitCanvas = [this](bool) {
-        if (!m_canvas)
-            return;
-        // Allow Qt to finish laying out/animating the dock before measuring
-        // the available viewport; an immediate fit can use stale dimensions.
-        QTimer::singleShot(150, m_canvas, [this] {
-            if (m_canvas)
-                m_canvas->fitToViewport();
-        });
-    };
-    connect(m_layersDock, &QDockWidget::visibilityChanged, this, refitCanvas);
-    connect(m_textDock, &QDockWidget::visibilityChanged, this, refitCanvas);
-    connect(m_shapeDock, &QDockWidget::visibilityChanged, this, refitCanvas);
-    connect(m_imageDock, &QDockWidget::visibilityChanged, this, refitCanvas);
-    connect(m_historyDock, &QDockWidget::visibilityChanged, this, refitCanvas);
+    // O CanvasView cuida do próprio resize (re-ajusta em modo fit,
+    // preserva o zoom manual). Antes um timer de 150 ms refazia o fit a
+    // cada mudança de visibilidade de dock — isso zerava o zoom de quem
+    // tinha dado zoom manual e disparava callbacks durante o teardown.
 
     connect(m_layersDock, &QDockWidget::visibilityChanged, this, [this](bool visible) {
         if (m_toggleLayersDockAction && m_toggleLayersDockAction->isChecked() != visible)
@@ -961,8 +1055,9 @@ void MainWindow::buildActions()
 
     m_mergeSelectedAction = new QAction(this);
     m_mergeSelectedAction->setEnabled(false);
-    m_mergeSelectedAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+E")));
-    m_mergeSelectedAction->setShortcuts({QKeySequence(QStringLiteral("Ctrl+E")), QKeySequence(QStringLiteral("Ctrl+Shift+E"))});
+    // Ctrl+E é o Export. Antes o Merge Selected usava o MESMO atalho e o
+    // Qt tratava como atalho ambíguo (nenhum disparava).
+    m_mergeSelectedAction->setShortcuts({QKeySequence(QStringLiteral("Ctrl+Shift+E"))});
     connect(m_mergeSelectedAction, &QAction::triggered,
             this, &MainWindow::mergeSelectedLayers);
 
@@ -1012,7 +1107,9 @@ void MainWindow::buildActions()
     m_toggleToolsBarAction->setChecked(true);
     m_toggleToolsBarAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_B));
     connect(m_toggleToolsBarAction, &QAction::triggered, this, [this](bool checked) {
-        if (m_toolsBar) m_toolsBar->setVisible(checked);
+        const bool narrow = width() < Design::BreakSM;
+        if (m_toolsBar) m_toolsBar->setVisible(checked && !narrow);
+        if (m_toolsBarCompact) m_toolsBarCompact->setVisible(checked && narrow);
         if (m_toolOptionsBar)
             m_toolOptionsBar->setVisible(checked && m_toolOptionsStack
                                          && m_toolOptionsStack->currentIndex() != 0);
@@ -1145,7 +1242,8 @@ void MainWindow::buildActions()
     m_toolSelectAction->setCheckable(true);
     m_toolSelectAction->setChecked(true);
     m_toolSelectAction->setShortcut(QKeySequence(QStringLiteral("V")));
-    m_toolSelectAction->setToolTip(QStringLiteral("Selecionar / Mover (V)"));
+    m_toolSelectAction->setToolTip((m_i18n ? m_i18n->t("editor", "tools.select")
+                                          : QStringLiteral("Select / Move")) + QStringLiteral(" (V)"));
     m_toolGroup->addAction(m_toolSelectAction);
     connect(m_toolSelectAction, &QAction::triggered, this, [this] {
         if (m_canvas) m_canvas->setTool(CanvasTool::Select);
@@ -1154,7 +1252,8 @@ void MainWindow::buildActions()
     m_toolCropAction = new QAction(this);
     m_toolCropAction->setCheckable(true);
     m_toolCropAction->setShortcut(QKeySequence(QStringLiteral("C")));
-    m_toolCropAction->setToolTip(QStringLiteral("Cortar (C)"));
+    m_toolCropAction->setToolTip((m_i18n ? m_i18n->t("editor", "tools.crop")
+                                        : QStringLiteral("Crop")) + QStringLiteral(" (C)"));
     m_toolGroup->addAction(m_toolCropAction);
     connect(m_toolCropAction, &QAction::triggered, this, [this] {
         if (m_canvas) m_canvas->setTool(CanvasTool::Crop);
@@ -1163,7 +1262,8 @@ void MainWindow::buildActions()
     m_toolScissorsAction = new QAction(this);
     m_toolScissorsAction->setCheckable(true);
     m_toolScissorsAction->setShortcut(QKeySequence(QStringLiteral("X")));
-    m_toolScissorsAction->setToolTip(QStringLiteral("Recortar seleção (X)"));
+    m_toolScissorsAction->setToolTip((m_i18n ? m_i18n->t("editor", "tools.scissors")
+                                            : QStringLiteral("Scissors Selection")) + QStringLiteral(" (X)"));
     m_toolGroup->addAction(m_toolScissorsAction);
     connect(m_toolScissorsAction, &QAction::triggered, this, [this] {
         if (m_canvas) m_canvas->setTool(CanvasTool::Scissors);
@@ -1172,7 +1272,8 @@ void MainWindow::buildActions()
     m_toolWandAction = new QAction(this);
     m_toolWandAction->setCheckable(true);
     m_toolWandAction->setShortcut(QKeySequence(QStringLiteral("W")));
-    m_toolWandAction->setToolTip(QStringLiteral("Varinha mágica (W)"));
+    m_toolWandAction->setToolTip((m_i18n ? m_i18n->t("editor", "tools.wand")
+                                        : QStringLiteral("Magic Wand")) + QStringLiteral(" (W)"));
     m_toolGroup->addAction(m_toolWandAction);
     connect(m_toolWandAction, &QAction::triggered, this, [this] {
         if (m_canvas) m_canvas->setTool(CanvasTool::MagicWand);
@@ -1181,7 +1282,8 @@ void MainWindow::buildActions()
     m_toolCloneAction = new QAction(this);
     m_toolCloneAction->setCheckable(true);
     m_toolCloneAction->setShortcut(QKeySequence(QStringLiteral("S")));
-    m_toolCloneAction->setToolTip(QStringLiteral("Carimbo de clonagem (S)"));
+    m_toolCloneAction->setToolTip((m_i18n ? m_i18n->t("editor", "tools.clone")
+                                         : QStringLiteral("Clone Stamp")) + QStringLiteral(" (S)"));
     m_toolGroup->addAction(m_toolCloneAction);
     connect(m_toolCloneAction, &QAction::triggered, this, [this] {
         if (m_canvas) m_canvas->setTool(CanvasTool::CloneStamp);
@@ -1190,7 +1292,8 @@ void MainWindow::buildActions()
     m_toolPaintAction = new QAction(this);
     m_toolPaintAction->setCheckable(true);
     m_toolPaintAction->setShortcut(QKeySequence(QStringLiteral("B")));
-    m_toolPaintAction->setToolTip(QStringLiteral("Pincel (B)"));
+    m_toolPaintAction->setToolTip((m_i18n ? m_i18n->t("editor", "tools.paint")
+                                         : QStringLiteral("Brush")) + QStringLiteral(" (B)"));
     m_toolGroup->addAction(m_toolPaintAction);
     connect(m_toolPaintAction, &QAction::triggered, this, [this] {
         if (m_canvas) m_canvas->setTool(CanvasTool::Paint);
@@ -1198,8 +1301,10 @@ void MainWindow::buildActions()
 
     m_toolFloodAction = new QAction(this);
     m_toolFloodAction->setCheckable(true);
-    m_toolFloodAction->setShortcut(QKeySequence(QStringLiteral("G")));
-    m_toolFloodAction->setToolTip(QStringLiteral("Balde de tinta (G)"));
+    // G agora é o Gradiente (grupo Photoshop: G / Shift+G = balde).
+    m_toolFloodAction->setShortcut(QKeySequence(QStringLiteral("Shift+G")));
+    m_toolFloodAction->setToolTip((m_i18n ? m_i18n->t("editor", "tools.flood")
+                                         : QStringLiteral("Paint Bucket")) + QStringLiteral(" (Shift+G)"));
     m_toolGroup->addAction(m_toolFloodAction);
     connect(m_toolFloodAction, &QAction::triggered, this, [this] {
         if (m_canvas) m_canvas->setTool(CanvasTool::FloodFill);
@@ -1208,10 +1313,55 @@ void MainWindow::buildActions()
     m_toolEyedropperAction = new QAction(this);
     m_toolEyedropperAction->setCheckable(true);
     m_toolEyedropperAction->setShortcut(QKeySequence(QStringLiteral("I")));
-    m_toolEyedropperAction->setToolTip(QStringLiteral("Pipeta (I)"));
+    m_toolEyedropperAction->setToolTip((m_i18n ? m_i18n->t("editor", "tools.eyedropper")
+                                              : QStringLiteral("Eyedropper")) + QStringLiteral(" (I)"));
     m_toolGroup->addAction(m_toolEyedropperAction);
     connect(m_toolEyedropperAction, &QAction::triggered, this, [this] {
         if (m_canvas) m_canvas->setTool(CanvasTool::Eyedropper);
+    });
+
+    // --- Ferramentas estilo PhotoCraft adicionadas ---
+    m_toolMarqueeAction = new QAction(this);
+    m_toolMarqueeAction->setCheckable(true);
+    m_toolMarqueeAction->setShortcut(QKeySequence(QStringLiteral("M")));
+    m_toolMarqueeAction->setToolTip((m_i18n ? m_i18n->t("editor", "tools.marquee")
+                                           : QStringLiteral("Marquee Selection")) + QStringLiteral(" (M)"));
+    m_toolGroup->addAction(m_toolMarqueeAction);
+    connect(m_toolMarqueeAction, &QAction::triggered, this, [this] {
+        if (m_canvas) m_canvas->setTool(CanvasTool::Marquee);
+    });
+
+    m_toolGradientAction = new QAction(this);
+    m_toolGradientAction->setCheckable(true);
+    m_toolGradientAction->setShortcut(QKeySequence(QStringLiteral("G")));
+    m_toolGradientAction->setToolTip((m_i18n ? m_i18n->t("editor", "tools.gradient")
+                                            : QStringLiteral("Gradient")) + QStringLiteral(" (G)"));
+    m_toolGroup->addAction(m_toolGradientAction);
+    connect(m_toolGradientAction, &QAction::triggered, this, [this] {
+        if (m_canvas) m_canvas->setTool(CanvasTool::Gradient);
+    });
+
+    m_toolRetouchAction = new QAction(this);
+    m_toolRetouchAction->setCheckable(true);
+    // "R" já é o atalho do retângulo de forma — atalho duplicado no mesmo
+    // QActionGroup/QActionWindow deixa AMBÍGUO e nenhum dos dois dispara.
+    // "U" é a convenção do grupo de retoque no Photoshop.
+    m_toolRetouchAction->setShortcut(QKeySequence(QStringLiteral("U")));
+    m_toolRetouchAction->setToolTip((m_i18n ? m_i18n->t("editor", "tools.retouch")
+                                           : QStringLiteral("Retouch Brush")) + QStringLiteral(" (U)"));
+    m_toolGroup->addAction(m_toolRetouchAction);
+    connect(m_toolRetouchAction, &QAction::triggered, this, [this] {
+        if (m_canvas) m_canvas->setTool(CanvasTool::Retouch);
+    });
+
+    m_toolHealingAction = new QAction(this);
+    m_toolHealingAction->setCheckable(true);
+    m_toolHealingAction->setShortcut(QKeySequence(QStringLiteral("J")));
+    m_toolHealingAction->setToolTip((m_i18n ? m_i18n->t("editor", "tools.healing")
+                                           : QStringLiteral("Spot Healing / Red Eye")) + QStringLiteral(" (J)"));
+    m_toolGroup->addAction(m_toolHealingAction);
+    connect(m_toolHealingAction, &QAction::triggered, this, [this] {
+        if (m_canvas) m_canvas->setTool(CanvasTool::Healing);
     });
 }
 
@@ -1228,26 +1378,40 @@ void MainWindow::buildToolBars()
     addToolBar(Qt::LeftToolBarArea, m_toolsBar);
 
     m_toolSelectAction->setIcon(ThemeIcons::toolSelect());
+    m_toolMarqueeAction->setIcon(ThemeIcons::toolMarquee());
     m_toolCropAction->setIcon(ThemeIcons::toolCrop());
     m_toolScissorsAction->setIcon(ThemeIcons::toolScissors());
     m_toolWandAction->setIcon(ThemeIcons::toolWand());
     m_toolCloneAction->setIcon(ThemeIcons::toolClone());
+    m_toolRetouchAction->setIcon(ThemeIcons::toolRetouch());
+    m_toolHealingAction->setIcon(ThemeIcons::toolHealing());
     m_toolPaintAction->setIcon(ThemeIcons::toolPaint());
+    m_toolGradientAction->setIcon(ThemeIcons::toolGradient());
     m_toolFloodAction->setIcon(ThemeIcons::toolFlood());
     m_toolEyedropperAction->setIcon(ThemeIcons::toolEyedropper());
     m_addTextAction->setIcon(ThemeIcons::toolText());
     m_addRectAction->setIcon(ThemeIcons::toolShape());
 
-    m_toolsBar->addAction(m_toolSelectAction);
-    m_toolsBar->addAction(m_toolCropAction);
-    m_toolsBar->addAction(m_toolScissorsAction);
-    m_toolsBar->addAction(m_toolWandAction);
-    m_toolsBar->addAction(m_toolCloneAction);
-    m_toolsBar->addAction(m_toolPaintAction);
-    m_toolsBar->addAction(m_toolFloodAction);
-    m_toolsBar->addAction(m_toolEyedropperAction);
+    // Agrupadas por função, com separadores — 12 botões idênticos em fila
+    // sem agrupamento era o principal ponto de confusão da barra.
+    m_toolsBar->addAction(m_toolSelectAction);   // seleção/mover
+    m_toolsBar->addAction(m_toolMarqueeAction);  // seleção retangular/elíptica
+    m_toolsBar->addAction(m_toolScissorsAction); // seleção à mão livre
+    m_toolsBar->addAction(m_toolWandAction);     // seleção por cor
     m_toolsBar->addSeparator();
-    m_toolsBar->addAction(m_addTextAction);
+    m_toolsBar->addAction(m_toolCropAction);     // corte
+    m_toolsBar->addSeparator();
+    m_toolsBar->addAction(m_toolPaintAction);    // pintura
+    m_toolsBar->addAction(m_toolGradientAction); // gradiente
+    m_toolsBar->addAction(m_toolFloodAction);    // balde
+    m_toolsBar->addSeparator();
+    m_toolsBar->addAction(m_toolCloneAction);    // retoque
+    m_toolsBar->addAction(m_toolRetouchAction);
+    m_toolsBar->addAction(m_toolHealingAction);
+    m_toolsBar->addSeparator();
+    m_toolsBar->addAction(m_toolEyedropperAction); // util
+    m_toolsBar->addSeparator();
+    m_toolsBar->addAction(m_addTextAction);        // criação
     m_toolsBar->addAction(m_addRectAction);
 
     // Barra Superior de Ações Rápidas (Novo, Abrir, Salvar, Exportar, Desfazer, Zoom, Grade)
@@ -1275,10 +1439,42 @@ void MainWindow::buildToolBars()
     m_quickToolBar->addAction(m_toggleSnapAction);
 
     // Barra Superior de Opções de Ferramentas (Tool Options Bar)
+    // Barra compacta (horizontal) para janelas estreitas: as MESMAS actions,
+    // então o estado "checked" fica sincronizado automaticamente.
+    m_toolsBarCompact = new QToolBar(QStringLiteral("ToolsCompact"), this);
+    m_toolsBarCompact->setObjectName(QStringLiteral("ToolsCompactToolBar"));
+    m_toolsBarCompact->setMovable(false);
+    m_toolsBarCompact->setFloatable(false);
+    m_toolsBarCompact->setOrientation(Qt::Horizontal);
+    m_toolsBarCompact->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    m_toolsBarCompact->setIconSize(QSize(20, 20));
+    for (QAction* a : {m_toolSelectAction, m_toolMarqueeAction,
+                       m_toolScissorsAction, m_toolWandAction,
+                       m_toolCropAction, m_toolPaintAction,
+                       m_toolGradientAction, m_toolFloodAction,
+                       m_toolCloneAction, m_toolRetouchAction,
+                       m_toolHealingAction, m_toolEyedropperAction,
+                       static_cast<QAction*>(nullptr), m_addTextAction,
+                       m_addRectAction}) {
+        if (!a)
+            m_toolsBarCompact->addSeparator();
+        else
+            m_toolsBarCompact->addAction(a);
+    }
+    // Compartilha a linha do QuickAccess: em janelas estreitas as duas
+    // cabem juntas (≈330px + ≈360px) e isso evita uma terceira faixa de
+    // chrome vertical. A barra de opções ganha a linha de baixo.
+    addToolBar(Qt::TopToolBarArea, m_toolsBarCompact);
+    m_toolsBarCompact->hide();
+
     m_toolOptionsBar = new QToolBar(QStringLiteral("ToolOptions"), this);
     m_toolOptionsBar->setObjectName(QStringLiteral("ToolOptionsBar"));
     m_toolOptionsBar->setMovable(false);
     m_toolOptionsBar->setFloatable(false);
+    // Linha própria para as opções: sem esta quebra, em janelas estreitas a
+    // barra de opções era anexada ao fim da barra compacta e o conteúdo
+    // (slider/valor) ficava cortado na borda direita.
+    addToolBarBreak(Qt::TopToolBarArea);
     addToolBar(Qt::TopToolBarArea, m_toolOptionsBar);
 
     m_toolOptionsStack = new QStackedWidget(this);
@@ -1602,6 +1798,276 @@ void MainWindow::buildToolBars()
     eyedropperLayout->addStretch();
     m_toolOptionsStack->addWidget(eyedropperPage);
 
+    // --- Página 8: Seleção retangular/elíptica (Marquee) ---
+    QWidget* marqueePage = new QWidget(this);
+    auto* marqueeLayout = new QHBoxLayout(marqueePage);
+    marqueeLayout->setContentsMargins(8, 2, 8, 2);
+    marqueeLayout->setSpacing(8);
+
+    m_marqueeShapeLabel = new QLabel(m_i18n ? m_i18n->t("editor", "tools.marquee.shape")
+                                            : QStringLiteral("Shape"), this);
+    m_marqueeShapeCombo = new QComboBox(this);
+    m_marqueeShapeCombo->addItem(m_i18n ? m_i18n->t("editor", "tools.marquee.rect")
+                                        : QStringLiteral("Rectangle"), 0);
+    m_marqueeShapeCombo->addItem(m_i18n ? m_i18n->t("editor", "tools.marquee.ellipse")
+                                        : QStringLiteral("Ellipse"), 1);
+    connect(m_marqueeShapeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, [this](int index) {
+                if (m_canvas) m_canvas->setMarqueeEllipse(index == 1);
+            });
+
+    m_marqueeFeatherLabel = new QLabel(m_i18n ? m_i18n->t("editor", "tools.marquee.feather")
+                                              : QStringLiteral("Feather"), this);
+    m_marqueeFeatherSlider = new QSlider(Qt::Horizontal, this);
+    m_marqueeFeatherSlider->setRange(0, 40);
+    m_marqueeFeatherSlider->setValue(0);
+    m_marqueeFeatherSlider->setMinimumWidth(90);
+    m_marqueeFeatherValueLabel = new QLabel(QStringLiteral("0 px"), this);
+    m_marqueeFeatherValueLabel->setMinimumWidth(44);
+    connect(m_marqueeFeatherSlider, &QSlider::valueChanged, this, [this](int value) {
+        if (m_marqueeFeatherValueLabel)
+            m_marqueeFeatherValueLabel->setText(QStringLiteral("%1 px").arg(value));
+        if (m_canvas) m_canvas->setMarqueeFeather(value);
+    });
+
+    marqueeLayout->addWidget(m_marqueeShapeLabel);
+    marqueeLayout->addWidget(m_marqueeShapeCombo);
+    marqueeLayout->addWidget(m_marqueeFeatherLabel);
+    marqueeLayout->addWidget(m_marqueeFeatherSlider);
+    marqueeLayout->addWidget(m_marqueeFeatherValueLabel);
+    marqueeLayout->addStretch();
+    m_toolOptionsStack->addWidget(marqueePage);
+
+    // --- Página 9: Gradiente (Gradient) ---
+    QWidget* gradientPage = new QWidget(this);
+    auto* gradientLayout = new QHBoxLayout(gradientPage);
+    gradientLayout->setContentsMargins(8, 2, 8, 2);
+    gradientLayout->setSpacing(8);
+
+    m_gradientTypeLabel = new QLabel(m_i18n ? m_i18n->t("editor", "tools.gradient.type")
+                                            : QStringLiteral("Type"), this);
+    m_gradientTypeCombo = new QComboBox(this);
+    m_gradientTypeCombo->addItem(m_i18n ? m_i18n->t("editor", "tools.gradient.linear")
+                                        : QStringLiteral("Linear"), 0);
+    m_gradientTypeCombo->addItem(m_i18n ? m_i18n->t("editor", "tools.gradient.radial")
+                                        : QStringLiteral("Radial"), 1);
+    connect(m_gradientTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, [this](int index) {
+                if (m_canvas) m_canvas->setGradientRadial(index == 1);
+            });
+
+    m_gradientStartColorBtn = new QPushButton(this);
+    m_gradientStartColorBtn->setFixedSize(34, 24);
+    m_gradientStartColorBtn->setToolTip(m_i18n ? m_i18n->t("editor", "tools.gradient.start")
+                                               : QStringLiteral("Start color"));
+    m_gradientStartColorBtn->setStyleSheet(
+        QStringLiteral("background-color: %1; border: 1px solid #555; border-radius: 3px;")
+            .arg(m_gradientStartColor.name()));
+    connect(m_gradientStartColorBtn, &QPushButton::clicked, this, [this] {
+        const QColor chosen = QColorDialog::getColor(
+            m_gradientStartColor, this,
+            m_i18n ? m_i18n->t("editor", "tools.gradient.start")
+                   : QStringLiteral("Start color"),
+            QColorDialog::ShowAlphaChannel);
+        if (!chosen.isValid())
+            return;
+        m_gradientStartColor = chosen;
+        m_gradientStartColorBtn->setStyleSheet(
+            QStringLiteral("background-color: %1; border: 1px solid #555; border-radius: 3px;")
+                .arg(chosen.name()));
+        if (m_canvas) m_canvas->setGradientStartColor(chosen);
+    });
+
+    m_gradientEndColorBtn = new QPushButton(this);
+    m_gradientEndColorBtn->setFixedSize(34, 24);
+    m_gradientEndColorBtn->setToolTip(m_i18n ? m_i18n->t("editor", "tools.gradient.end")
+                                             : QStringLiteral("End color"));
+    {
+        QColor end = m_gradientEndColor;
+        end.setAlpha(255);
+        m_gradientEndColorBtn->setStyleSheet(
+            QStringLiteral("background-color: %1; border: 1px dashed #555; border-radius: 3px;")
+                .arg(end.name()));
+    }
+    connect(m_gradientEndColorBtn, &QPushButton::clicked, this, [this] {
+        const QColor chosen = QColorDialog::getColor(
+            m_gradientEndColor, this,
+            m_i18n ? m_i18n->t("editor", "tools.gradient.end")
+                   : QStringLiteral("End color"),
+            QColorDialog::ShowAlphaChannel);
+        if (!chosen.isValid())
+            return;
+        m_gradientEndColor = chosen;
+        m_gradientEndColorBtn->setStyleSheet(
+            (chosen.alpha() < 255
+                 ? QStringLiteral("background-color: %1; border: 1px dashed #555; border-radius: 3px;")
+                 : QStringLiteral("background-color: %1; border: 1px solid #555; border-radius: 3px;"))
+                .arg(chosen.name()));
+        if (m_canvas) m_canvas->setGradientEndColor(chosen);
+    });
+
+    m_gradientOpacityLabel = new QLabel(m_i18n ? m_i18n->t("editor", "tools.gradient.opacity")
+                                               : QStringLiteral("Opacity"), this);
+    m_gradientOpacitySlider = new QSlider(Qt::Horizontal, this);
+    m_gradientOpacitySlider->setRange(10, 100);
+    m_gradientOpacitySlider->setValue(100);
+    m_gradientOpacitySlider->setMinimumWidth(90);
+    m_gradientOpacityValueLabel = new QLabel(QStringLiteral("100%"), this);
+    m_gradientOpacityValueLabel->setMinimumWidth(44);
+    connect(m_gradientOpacitySlider, &QSlider::valueChanged, this, [this](int value) {
+        if (m_gradientOpacityValueLabel)
+            m_gradientOpacityValueLabel->setText(QStringLiteral("%1%").arg(value));
+        if (m_canvas) m_canvas->setGradientOpacity(value / 100.0);
+    });
+
+    gradientLayout->addWidget(m_gradientTypeLabel);
+    gradientLayout->addWidget(m_gradientTypeCombo);
+    gradientLayout->addWidget(m_gradientStartColorBtn);
+    gradientLayout->addWidget(m_gradientEndColorBtn);
+    gradientLayout->addWidget(m_gradientOpacityLabel);
+    gradientLayout->addWidget(m_gradientOpacitySlider);
+    gradientLayout->addWidget(m_gradientOpacityValueLabel);
+    gradientLayout->addStretch();
+    m_toolOptionsStack->addWidget(gradientPage);
+
+    // --- Página 10: Retoque (Retouch) ---
+    QWidget* retouchPage = new QWidget(this);
+    auto* retouchLayout = new QHBoxLayout(retouchPage);
+    retouchLayout->setContentsMargins(8, 2, 8, 2);
+    retouchLayout->setSpacing(8);
+
+    m_retouchModeLabel = new QLabel(m_i18n ? m_i18n->t("editor", "tools.retouch.mode")
+                                           : QStringLiteral("Mode"), this);
+    m_retouchModeCombo = new QComboBox(this);
+    m_retouchModeCombo->addItem(m_i18n ? m_i18n->t("editor", "tools.retouch.blur")
+                                       : QStringLiteral("Blur"), 0);
+    m_retouchModeCombo->addItem(m_i18n ? m_i18n->t("editor", "tools.retouch.sharpen")
+                                       : QStringLiteral("Sharpen"), 1);
+    m_retouchModeCombo->addItem(m_i18n ? m_i18n->t("editor", "tools.retouch.smudge")
+                                       : QStringLiteral("Smudge"), 2);
+    m_retouchModeCombo->addItem(m_i18n ? m_i18n->t("editor", "tools.retouch.dodge")
+                                       : QStringLiteral("Dodge (lighten)"), 3);
+    m_retouchModeCombo->addItem(m_i18n ? m_i18n->t("editor", "tools.retouch.burn")
+                                       : QStringLiteral("Burn (darken)"), 4);
+    m_retouchModeCombo->addItem(m_i18n ? m_i18n->t("editor", "tools.retouch.sponge")
+                                       : QStringLiteral("Sponge (desaturate)"), 5);
+    connect(m_retouchModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, [this](int index) {
+                if (m_canvas) m_canvas->setRetouchMode(index);
+            });
+
+    m_retouchSizeLabel = new QLabel(m_i18n ? m_i18n->t("editor", "tools.retouch.size")
+                                           : QStringLiteral("Size"), this);
+    m_retouchSizeSlider = new QSlider(Qt::Horizontal, this);
+    m_retouchSizeSlider->setRange(4, 200);
+    m_retouchSizeSlider->setValue(40);
+    m_retouchSizeSlider->setMinimumWidth(90);
+    m_retouchSizeValueLabel = new QLabel(QStringLiteral("40 px"), this);
+    m_retouchSizeValueLabel->setMinimumWidth(52);
+    connect(m_retouchSizeSlider, &QSlider::valueChanged, this, [this](int value) {
+        if (m_retouchSizeValueLabel)
+            m_retouchSizeValueLabel->setText(QStringLiteral("%1 px").arg(value));
+        if (m_canvas) m_canvas->setRetouchSize(value);
+    });
+
+    m_retouchStrengthLabel = new QLabel(m_i18n ? m_i18n->t("editor", "tools.retouch.strength")
+                                               : QStringLiteral("Strength"), this);
+    m_retouchStrengthSlider = new QSlider(Qt::Horizontal, this);
+    m_retouchStrengthSlider->setRange(5, 100);
+    m_retouchStrengthSlider->setValue(40);
+    m_retouchStrengthSlider->setMinimumWidth(90);
+    m_retouchStrengthValueLabel = new QLabel(QStringLiteral("40%"), this);
+    m_retouchStrengthValueLabel->setMinimumWidth(44);
+    connect(m_retouchStrengthSlider, &QSlider::valueChanged, this, [this](int value) {
+        if (m_retouchStrengthValueLabel)
+            m_retouchStrengthValueLabel->setText(QStringLiteral("%1%").arg(value));
+        if (m_canvas) m_canvas->setRetouchStrength(value / 100.0);
+    });
+
+    retouchLayout->addWidget(m_retouchModeLabel);
+    retouchLayout->addWidget(m_retouchModeCombo);
+    retouchLayout->addWidget(m_retouchSizeLabel);
+    retouchLayout->addWidget(m_retouchSizeSlider);
+    retouchLayout->addWidget(m_retouchSizeValueLabel);
+    retouchLayout->addWidget(m_retouchStrengthLabel);
+    retouchLayout->addWidget(m_retouchStrengthSlider);
+    retouchLayout->addWidget(m_retouchStrengthValueLabel);
+    retouchLayout->addStretch();
+    m_toolOptionsStack->addWidget(retouchPage);
+
+    // --- Página 11: Reparo (Healing) ---
+    QWidget* healingPage = new QWidget(this);
+    auto* healingLayout = new QHBoxLayout(healingPage);
+    healingLayout->setContentsMargins(8, 2, 8, 2);
+    healingLayout->setSpacing(8);
+
+    m_healingModeLabel = new QLabel(m_i18n ? m_i18n->t("editor", "tools.healing.mode")
+                                           : QStringLiteral("Mode"), this);
+    m_healingModeCombo = new QComboBox(this);
+    m_healingModeCombo->addItem(m_i18n ? m_i18n->t("editor", "tools.healing.spot")
+                                       : QStringLiteral("Spot Healing"), 0);
+    m_healingModeCombo->addItem(m_i18n ? m_i18n->t("editor", "tools.healing.redEye")
+                                       : QStringLiteral("Red Eye"), 1);
+    connect(m_healingModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, [this](int index) {
+                if (m_canvas) m_canvas->setHealingMode(index);
+            });
+
+    m_healingRadiusLabel = new QLabel(m_i18n ? m_i18n->t("editor", "tools.healing.radius")
+                                             : QStringLiteral("Radius"), this);
+    m_healingRadiusSlider = new QSlider(Qt::Horizontal, this);
+    m_healingRadiusSlider->setRange(4, 120);
+    m_healingRadiusSlider->setValue(24);
+    m_healingRadiusSlider->setMinimumWidth(90);
+    m_healingRadiusValueLabel = new QLabel(QStringLiteral("24 px"), this);
+    m_healingRadiusValueLabel->setMinimumWidth(52);
+    connect(m_healingRadiusSlider, &QSlider::valueChanged, this, [this](int value) {
+        if (m_healingRadiusValueLabel)
+            m_healingRadiusValueLabel->setText(QStringLiteral("%1 px").arg(value));
+        if (m_canvas) m_canvas->setHealingRadius(value);
+    });
+
+    m_healingStrengthLabel = new QLabel(m_i18n ? m_i18n->t("editor", "tools.healing.strength")
+                                               : QStringLiteral("Strength"), this);
+    m_healingStrengthSlider = new QSlider(Qt::Horizontal, this);
+    m_healingStrengthSlider->setRange(5, 100);
+    m_healingStrengthSlider->setValue(85);
+    m_healingStrengthSlider->setMinimumWidth(90);
+    m_healingStrengthValueLabel = new QLabel(QStringLiteral("85%"), this);
+    m_healingStrengthValueLabel->setMinimumWidth(44);
+    connect(m_healingStrengthSlider, &QSlider::valueChanged, this, [this](int value) {
+        if (m_healingStrengthValueLabel)
+            m_healingStrengthValueLabel->setText(QStringLiteral("%1%").arg(value));
+        if (m_canvas) m_canvas->setHealingStrength(value / 100.0);
+    });
+
+    healingLayout->addWidget(m_healingModeLabel);
+    healingLayout->addWidget(m_healingModeCombo);
+    healingLayout->addWidget(m_healingRadiusLabel);
+    healingLayout->addWidget(m_healingRadiusSlider);
+    healingLayout->addWidget(m_healingRadiusValueLabel);
+    healingLayout->addWidget(m_healingStrengthLabel);
+    healingLayout->addWidget(m_healingStrengthSlider);
+    healingLayout->addWidget(m_healingStrengthValueLabel);
+    healingLayout->addStretch();
+    m_toolOptionsStack->addWidget(healingPage);
+
+    // Empurra os valores iniciais para as ferramentas (fonte única de verdade).
+    if (m_canvas) {
+        m_canvas->setMarqueeEllipse(false);
+        m_canvas->setMarqueeFeather(0);
+        m_canvas->setGradientRadial(false);
+        m_canvas->setGradientStartColor(m_gradientStartColor);
+        m_canvas->setGradientEndColor(m_gradientEndColor);
+        m_canvas->setGradientOpacity(1.0);
+        m_canvas->setRetouchMode(0);
+        m_canvas->setRetouchSize(40);
+        m_canvas->setRetouchStrength(0.4);
+        m_canvas->setHealingMode(0);
+        m_canvas->setHealingRadius(24);
+        m_canvas->setHealingStrength(0.85);
+    }
+
     // Tool option pages contain several controls and can be wider than the
     // available window.  Keep their natural width and let the toolbar scroll
     // horizontally instead of shrinking sliders and labels into unusable
@@ -1859,13 +2325,20 @@ void MainWindow::buildMenus()
     m_windowMenu->addAction(m_toggleHistoryAction);
     m_selectionToolsMenu = m_toolsMenu->addMenu(m_i18n ? m_i18n->t("common", "menu.tools.selection") : QStringLiteral("Select & Cut"));
     m_selectionToolsMenu->addAction(m_toolSelectAction);
-    m_selectionToolsMenu->addAction(m_toolCropAction);
+    m_selectionToolsMenu->addAction(m_toolMarqueeAction);
     m_selectionToolsMenu->addAction(m_toolScissorsAction);
     m_selectionToolsMenu->addAction(m_toolWandAction);
+    m_selectionToolsMenu->addAction(m_toolCropAction);
     m_retouchToolsMenu = m_toolsMenu->addMenu(m_i18n ? m_i18n->t("common", "menu.tools.retouch") : QStringLiteral("Retouch & Paint"));
-    m_retouchToolsMenu->addAction(m_toolCloneAction);
     m_retouchToolsMenu->addAction(m_toolPaintAction);
+    m_retouchToolsMenu->addAction(m_toolGradientAction);
     m_retouchToolsMenu->addAction(m_toolFloodAction);
+    m_retouchToolsMenu->addSeparator();
+    m_retouchToolsMenu->addAction(m_toolCloneAction);
+    m_retouchToolsMenu->addAction(m_toolRetouchAction);
+    m_retouchToolsMenu->addAction(m_toolHealingAction);
+    m_retouchToolsMenu->addSeparator();
+    m_retouchToolsMenu->addAction(m_toolEyedropperAction);
     m_createToolsMenu = m_toolsMenu->addMenu(m_i18n ? m_i18n->t("common", "menu.tools.create") : QStringLiteral("Create"));
     m_createToolsMenu->addAction(m_addTextAction);
     m_createToolsMenu->addSeparator();
@@ -1882,6 +2355,58 @@ void MainWindow::buildMenus()
     m_helpMenu = menuBar()->addMenu(QString());
     m_helpMenu->addAction(m_aboutAction);
     m_helpMenu->addAction(m_aboutQtAction);
+
+    warnDuplicateShortcuts(this);
+}
+
+void MainWindow::createDemoDocumentForSnapshot()
+{
+    createDefaultDocument();
+    enterEditor();
+}
+
+void MainWindow::selectToolByName(const QString& name)
+{
+    QAction* target = nullptr;
+    if (name == QLatin1String("select"))          target = m_toolSelectAction;
+    else if (name == QLatin1String("marquee"))    target = m_toolMarqueeAction;
+    else if (name == QLatin1String("crop"))       target = m_toolCropAction;
+    else if (name == QLatin1String("scissors"))   target = m_toolScissorsAction;
+    else if (name == QLatin1String("wand"))       target = m_toolWandAction;
+    else if (name == QLatin1String("clone"))      target = m_toolCloneAction;
+    else if (name == QLatin1String("paint"))      target = m_toolPaintAction;
+    else if (name == QLatin1String("gradient"))   target = m_toolGradientAction;
+    else if (name == QLatin1String("flood"))      target = m_toolFloodAction;
+    else if (name == QLatin1String("retouch"))    target = m_toolRetouchAction;
+    else if (name == QLatin1String("healing"))    target = m_toolHealingAction;
+    else if (name == QLatin1String("eyedropper")) target = m_toolEyedropperAction;
+    if (target)
+        target->trigger();
+}
+
+void MainWindow::applyToolOptionsCompact(bool compact)
+{
+    const int sliderMin = compact ? 64 : 90;
+    for (QLabel* label : {m_cropAspectLabel, m_scissorsModeLabel, m_wandTolLabel,
+                          m_cloneRadiusLabel, m_cloneHardnessLabel, m_cloneOpacityLabel,
+                          m_paintSizeLabel, m_paintOpacityLabel, m_floodTolLabel,
+                          m_marqueeShapeLabel, m_marqueeFeatherLabel,
+                          m_gradientTypeLabel, m_gradientOpacityLabel,
+                          m_retouchModeLabel, m_retouchSizeLabel, m_retouchStrengthLabel,
+                          m_healingModeLabel, m_healingRadiusLabel,
+                          m_healingStrengthLabel}) {
+        if (label)
+            label->setVisible(!compact);
+    }
+    for (QSlider* slider : {m_paintSizeSlider, m_paintOpacitySlider, m_floodTolSlider,
+                            m_wandTolSlider, m_cloneRadiusSlider, m_cloneHardnessSlider,
+                            m_cloneOpacitySlider, m_marqueeFeatherSlider,
+                            m_gradientOpacitySlider, m_retouchSizeSlider,
+                            m_retouchStrengthSlider, m_healingRadiusSlider,
+                            m_healingStrengthSlider}) {
+        if (slider)
+            slider->setMinimumWidth(sliderMin);
+    }
 }
 
 void MainWindow::buildStatusBar()
@@ -1906,6 +2431,7 @@ void MainWindow::showStartScreen()
     if (m_historyDock) m_historyDock->hide();
     if (m_quickToolBar) m_quickToolBar->hide();
     if (m_toolsBar) m_toolsBar->hide();
+    if (m_toolsBarCompact) m_toolsBarCompact->hide();
     if (m_toolOptionsBar) m_toolOptionsBar->hide();
     if (m_startScreen) m_startScreen->refreshRecents();
 }
@@ -1920,7 +2446,10 @@ void MainWindow::enterEditor()
     if (m_historyDock) m_historyDock->show();
     if (m_toggleHistoryAction) m_toggleHistoryAction->setChecked(true);
     if (m_quickToolBar) m_quickToolBar->show();
-    if (m_toolsBar) m_toolsBar->show();
+    // Barra vertical ou compacta conforme a largura atual.
+    const bool narrow = width() < Design::BreakSM;
+    if (m_toolsBar) m_toolsBar->setVisible(!narrow);
+    if (m_toolsBarCompact) m_toolsBarCompact->setVisible(narrow);
     // Selection has no contextual controls, so keep this row hidden until a
     // tool that needs options is selected.
     if (m_toolOptionsBar) m_toolOptionsBar->hide();
@@ -3514,6 +4043,56 @@ void MainWindow::retranslateUi()
         m_paintOpacityLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Opacidade:") : QStringLiteral("Opacity:"));
     if (m_floodTolLabel)
         m_floodTolLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Tolerância:") : QStringLiteral("Tolerance:"));
+
+    // Páginas das ferramentas novas (seleção retangular, gradiente,
+    // retoque e reparo) — também re-traduzem ao trocar de idioma.
+    if (m_marqueeShapeLabel)
+        m_marqueeShapeLabel->setText(m_i18n->t("editor", "tools.marquee.shape") + QStringLiteral(":"));
+    if (m_marqueeShapeCombo && m_marqueeShapeCombo->count() >= 2) {
+        m_marqueeShapeCombo->setItemText(0, m_i18n->t("editor", "tools.marquee.rect"));
+        m_marqueeShapeCombo->setItemText(1, m_i18n->t("editor", "tools.marquee.ellipse"));
+    }
+    if (m_marqueeFeatherLabel)
+        m_marqueeFeatherLabel->setText(m_i18n->t("editor", "tools.marquee.feather") + QStringLiteral(":"));
+
+    if (m_gradientTypeLabel)
+        m_gradientTypeLabel->setText(m_i18n->t("editor", "tools.gradient.type") + QStringLiteral(":"));
+    if (m_gradientTypeCombo && m_gradientTypeCombo->count() >= 2) {
+        m_gradientTypeCombo->setItemText(0, m_i18n->t("editor", "tools.gradient.linear"));
+        m_gradientTypeCombo->setItemText(1, m_i18n->t("editor", "tools.gradient.radial"));
+    }
+    if (m_gradientStartColorBtn)
+        m_gradientStartColorBtn->setToolTip(m_i18n->t("editor", "tools.gradient.start"));
+    if (m_gradientEndColorBtn)
+        m_gradientEndColorBtn->setToolTip(m_i18n->t("editor", "tools.gradient.end"));
+    if (m_gradientOpacityLabel)
+        m_gradientOpacityLabel->setText(m_i18n->t("editor", "tools.gradient.opacity") + QStringLiteral(":"));
+
+    if (m_retouchModeLabel)
+        m_retouchModeLabel->setText(m_i18n->t("editor", "tools.retouch.mode") + QStringLiteral(":"));
+    if (m_retouchModeCombo && m_retouchModeCombo->count() >= 6) {
+        m_retouchModeCombo->setItemText(0, m_i18n->t("editor", "tools.retouch.blur"));
+        m_retouchModeCombo->setItemText(1, m_i18n->t("editor", "tools.retouch.sharpen"));
+        m_retouchModeCombo->setItemText(2, m_i18n->t("editor", "tools.retouch.smudge"));
+        m_retouchModeCombo->setItemText(3, m_i18n->t("editor", "tools.retouch.dodge"));
+        m_retouchModeCombo->setItemText(4, m_i18n->t("editor", "tools.retouch.burn"));
+        m_retouchModeCombo->setItemText(5, m_i18n->t("editor", "tools.retouch.sponge"));
+    }
+    if (m_retouchSizeLabel)
+        m_retouchSizeLabel->setText(m_i18n->t("editor", "tools.retouch.size") + QStringLiteral(":"));
+    if (m_retouchStrengthLabel)
+        m_retouchStrengthLabel->setText(m_i18n->t("editor", "tools.retouch.strength") + QStringLiteral(":"));
+
+    if (m_healingModeLabel)
+        m_healingModeLabel->setText(m_i18n->t("editor", "tools.healing.mode") + QStringLiteral(":"));
+    if (m_healingModeCombo && m_healingModeCombo->count() >= 2) {
+        m_healingModeCombo->setItemText(0, m_i18n->t("editor", "tools.healing.spot"));
+        m_healingModeCombo->setItemText(1, m_i18n->t("editor", "tools.healing.redEye"));
+    }
+    if (m_healingRadiusLabel)
+        m_healingRadiusLabel->setText(m_i18n->t("editor", "tools.healing.radius") + QStringLiteral(":"));
+    if (m_healingStrengthLabel)
+        m_healingStrengthLabel->setText(m_i18n->t("editor", "tools.healing.strength") + QStringLiteral(":"));
 
     updateZoomLabel();
     updatePositionLabel(m_lastCursorPos);

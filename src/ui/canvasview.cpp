@@ -8,6 +8,8 @@
 #include "core/history/CommandStack.h"
 #include "rendering/CanvasRenderer.h"
 #include "tools/SelectTool.h"
+#include "tools/MarqueeTool.h"
+#include "tools/PaintExtras.h"
 #include "tools/CropTool.h"
 #include "tools/ScissorsTool.h"
 #include "tools/PaintTool.h"
@@ -105,6 +107,10 @@ CanvasView::CanvasView(QWidget* parent)
     m_wandTool = std::make_unique<MagicWandTool>();
     m_cloneTool = std::make_unique<CloneStampTool>();
     m_floodTool = std::make_unique<FloodFillTool>();
+    m_marqueeTool = std::make_unique<MarqueeTool>();
+    m_gradientTool = std::make_unique<GradientTool>();
+    m_retouchTool = std::make_unique<RetouchTool>();
+    m_healingTool = std::make_unique<HealingTool>();
     m_activeTool = m_selectTool.get();
 }
 
@@ -444,6 +450,7 @@ void CanvasView::fitToViewport()
         (width() - m_document->width() * m_zoom) / 2.0,
         (height() - m_document->height() * m_zoom) / 2.0);
     m_needsFit = false;
+    m_autoFit = true;
 
     update();
     emitZoomChanged();
@@ -467,6 +474,9 @@ void CanvasView::zoomAt(const QPointF& widgetPos, double factor)
     const double newZoom = std::clamp(m_zoom * factor, kMinZoom, kMaxZoom);
     if (qFuzzyCompare(newZoom, m_zoom))
         return;
+
+    // Zoom manual: o usuário assumiu o controle — resize não refaz o fit.
+    m_autoFit = false;
 
     const double effective = newZoom / m_zoom;
     m_panOffset = widgetPos - (widgetPos - m_panOffset) * effective;
@@ -811,6 +821,7 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
     if (event->button() == Qt::MiddleButton
         || (event->button() == Qt::LeftButton && m_spacePanning)) {
         m_panning = true;
+        m_autoFit = false;
         m_lastMousePos = event->pos();
         setCursor(Qt::ClosedHandCursor);
         event->accept();
@@ -1578,8 +1589,23 @@ void CanvasView::keyReleaseEvent(QKeyEvent* event)
 void CanvasView::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
-    if (m_needsFit)
-        update();
+
+    if (!m_document)
+        return;
+
+    // Modo "ajustado à janela": continua ajustando ao redimensionar.
+    if (m_autoFit) {
+        fitToViewport();
+        return;
+    }
+
+    // Zoom manual: preserva o zoom e mantém o conteúdo centralizado.
+    // Antes, todo resize refazia o fit e o usuário perdia o zoom.
+    if (event->oldSize().isValid()) {
+        const QSize delta = event->size() - event->oldSize();
+        m_panOffset += QPointF(delta.width() / 2.0, delta.height() / 2.0);
+    }
+    update();
 }
 
 void CanvasView::leaveEvent(QEvent* event)
@@ -1658,6 +1684,18 @@ void CanvasView::setTool(CanvasTool tool)
     case CanvasTool::Eyedropper:
         m_activeTool = nullptr;
         setCursor(Qt::CrossCursor);
+        break;
+    case CanvasTool::Marquee:
+        m_activeTool = m_marqueeTool.get();
+        break;
+    case CanvasTool::Gradient:
+        m_activeTool = m_gradientTool.get();
+        break;
+    case CanvasTool::Retouch:
+        m_activeTool = m_retouchTool.get();
+        break;
+    case CanvasTool::Healing:
+        m_activeTool = m_healingTool.get();
         break;
     }
 
@@ -1893,6 +1931,86 @@ void CanvasView::setPaintOpacity(qreal opacity)
     if (m_paintTool)
         m_paintTool->setOpacity(opacity);
     update();
+}
+
+MarqueeTool* CanvasView::marqueeTool() const
+{
+    return m_marqueeTool.get();
+}
+
+GradientTool* CanvasView::gradientTool() const
+{
+    return m_gradientTool.get();
+}
+
+RetouchTool* CanvasView::retouchTool() const
+{
+    return m_retouchTool.get();
+}
+
+HealingTool* CanvasView::healingTool() const
+{
+    return m_healingTool.get();
+}
+
+void CanvasView::setMarqueeEllipse(bool ellipse)
+{
+    if (m_marqueeTool) m_marqueeTool->setEllipse(ellipse);
+}
+
+void CanvasView::setMarqueeFeather(int feather)
+{
+    if (m_marqueeTool) m_marqueeTool->setFeather(feather);
+}
+
+void CanvasView::setGradientRadial(bool radial)
+{
+    if (m_gradientTool) m_gradientTool->setRadial(radial);
+}
+
+void CanvasView::setGradientStartColor(const QColor& color)
+{
+    if (m_gradientTool) m_gradientTool->setStartColor(color);
+}
+
+void CanvasView::setGradientEndColor(const QColor& color)
+{
+    if (m_gradientTool) m_gradientTool->setEndColor(color);
+}
+
+void CanvasView::setGradientOpacity(qreal opacity)
+{
+    if (m_gradientTool) m_gradientTool->setOpacity(opacity);
+}
+
+void CanvasView::setRetouchMode(int mode)
+{
+    if (m_retouchTool) m_retouchTool->setMode(mode);
+}
+
+void CanvasView::setRetouchSize(int size)
+{
+    if (m_retouchTool) m_retouchTool->setSize(size);
+}
+
+void CanvasView::setRetouchStrength(qreal strength)
+{
+    if (m_retouchTool) m_retouchTool->setStrength(strength);
+}
+
+void CanvasView::setHealingMode(int mode)
+{
+    if (m_healingTool) m_healingTool->setMode(mode);
+}
+
+void CanvasView::setHealingRadius(int radius)
+{
+    if (m_healingTool) m_healingTool->setRadius(radius);
+}
+
+void CanvasView::setHealingStrength(qreal strength)
+{
+    if (m_healingTool) m_healingTool->setStrength(strength);
 }
 
 void CanvasView::openAiBackgroundRemoval(const LayerId& id)

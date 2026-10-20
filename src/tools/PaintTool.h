@@ -42,6 +42,7 @@ private:
     qreal m_opacity = 1.0;
 
     bool m_isPainting = false;
+    bool m_hoverValid = false;
     QPointF m_prevPointLocal;
     QPointF m_currentDocPos;
     QImage m_workingImage;

@@ -24,6 +24,10 @@ public:
     static QIcon toolFlood(const QColor& color = QColor(220, 220, 220));
     static QIcon toolEyedropper(const QColor& color = QColor(220, 220, 220));
     static QIcon toolText(const QColor& color = QColor(220, 220, 220));
+    static QIcon toolMarquee(const QColor& color = QColor(220, 220, 220));
+    static QIcon toolGradient(const QColor& color = QColor(220, 220, 220));
+    static QIcon toolRetouch(const QColor& color = QColor(220, 220, 220));
+    static QIcon toolHealing(const QColor& color = QColor(220, 220, 220));
     static QIcon toolShape(const QColor& color = QColor(220, 220, 220));
 
     // --- Layer Controls ---

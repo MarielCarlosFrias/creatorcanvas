@@ -26,7 +26,12 @@ enum class CanvasTool {
     CloneStamp,
     Paint,
     FloodFill,
-    Eyedropper
+    Eyedropper,
+    // Ferramentas PhotosCraft/Photoshop-like adicionadas
+    Marquee,   // seleção retangular/elíptica
+    Gradient,  // preenchimento com gradiente
+    Retouch,   // blur/sharpen/smudge/dodge/burn/sponge
+    Healing    // spot healing / red eye
 };
 
 using CanvasToolType = CanvasTool;

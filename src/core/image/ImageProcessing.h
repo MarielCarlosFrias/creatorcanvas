@@ -120,6 +120,49 @@ public:
     static QImage colorToAlpha(const QImage& source, const QColor& keyColor,
                                double transparency = 0.0, double opacityThreshold = 1.0,
                                double tolerance = 0.0);
+
+    // ===== Ferramentas de preenchimento e seleção (Photoshop-like) =====
+
+    /// Preenche com um gradiente entre dois pontos. `mask` (Alpha8, opcional)
+    /// limita o preenchimento a uma seleção. radial: gradiente radial.
+    /// startColor com alfa 0 produz fade para transparente.
+    static QImage paintGradient(const QImage& target, const QPointF& start,
+                                const QPointF& end, const QColor& startColor,
+                                const QColor& endColor, bool radial = false,
+                                qreal opacity = 1.0, const QImage& mask = {});
+
+    /// Cria uma seleção (Alpha8) de retângulo e/ou elipse já normalizada.
+    static QImage makeShapeSelection(const QSize& size, const QRectF& rect,
+                                     bool ellipse, int feather = 0);
+
+    /// Combina duas seleções Alpha8: add = união (max), sub = diferença.
+    static QImage combineSelections(const QImage& base, const QImage& overlay,
+                                    bool subtract);
+
+    /// Modos de retoque por pincel.
+    enum class RetouchMode {
+        Blur,    // Desfocar (Blur)
+        Sharpen, // Nitidez (Sharpen)
+        Smudge,  // Borrão / arrastar pixels (Smudge)
+        Dodge,   // Clarear (Dodge)
+        Burn,    // Escurecer (Burn)
+        Sponge   // Saturar/desaturar (Sponge)
+    };
+
+    /// Aplica um traço de retoque contínuo entre dois pontos.
+    /// size: diâmetro do pincel em px; strength: 0..1.
+    static QImage retouchStroke(const QImage& target, const QPointF& prevPoint,
+                                const QPointF& curPoint, RetouchMode mode,
+                                int size, qreal strength = 0.4);
+
+    /// Pincel de reparo: copia uma área da imagem para o ponto alvo com borda
+    /// suave (Spot Healing). sourcePoint é a origem amostrada.
+    static QImage spotHeal(const QImage& target, const QPoint& targetPoint,
+                           const QPoint& sourcePoint, int radius,
+                           qreal strength = 0.85);
+
+    /// Remove olho vermelho: dessatura pixels avermelhados num raio.
+    static QImage redEyeRemove(const QImage& target, const QPoint& center, int radius);
 };
 
 } // namespace cc

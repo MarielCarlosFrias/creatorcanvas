@@ -60,6 +60,7 @@ CreatorCanvas is a layer-based image editor aimed at digital content creators. T
 | `m20-ai-removal` | ONNX `u2netp` (and custom models), cooperative cancellation, `--smoke-test` |
 | `m21-composer` | Multi-select, align/distribute/group, grid, safe zones, templates, crop/scissors/wand/clone |
 | `m22-tools-dnd` | Modular tool system (`ICanvasTool`, `ToolContext`, `cc_tools` library) & Photoshop-style layer drag-and-drop with undo/redo |
+| `m23-photocraft-tools` | Marquee selection (rect/ellipse, Shift add/Alt subtract, feather), Gradient (linear/radial, selection mask), Retouch brush (blur/sharpen/smudge/dodge/burn/sponge), Spot Healing + Red Eye, tool grouping and responsive toolbars |
 
 ## 3. Architecture
 
@@ -197,6 +198,10 @@ The renderer header still documents **full recomposition every call** — there 
 | `scissorsCut` | Keep or punch a polygon; optional crop to bounds |
 | `removeBackground` | Magic-wand style color tolerance (not ONNX) |
 | `cloneStamp` | Circular clone with hardness/opacity |
+| `paintGradient` | Linear/radial gradient between two colors, optional alpha and selection mask |
+| `makeShapeSelection` / `combineSelections` | Rectangle/ellipse pixel selections (Alpha8), feather blur, add/subtract union |
+| `retouchStroke` | Local brush retouch: Blur, Sharpen, Smudge, Dodge, Burn, Sponge |
+| `spotHeal` / `redEyeRemove` | Auto-source healing brush with color transfer; red-pupil neutralization |
 | `adjustColors` | Brightness, contrast, saturation, temperature |
 | `applyBlur` / `applySharpen` | Spatial filters |
 | `applyPresetFilter` | Grayscale, Sepia, Vintage, High Contrast |
@@ -220,7 +225,11 @@ Image Inspector live preview writes a temporary asset via `Document::setImageLay
   - `ICanvasTool` lifecycle: `activate(ctx)`, `deactivate(ctx)`, `drawOverlay(painter, ctx)`, `cursor()`.
   - Input event dispatch: `mousePress`, `mouseMove`, `mouseRelease`, `mouseDoubleClick`, `keyPress`.
   - `ToolContext` encapsulates references to `Document`, `CommandStack`, viewport zoom/pan transforms, selection, and active tool settings.
-  - Tools implemented: `SelectTool`, `CropTool`, `PaintTool`, `ScissorsTool`, `MagicWandTool`, `CloneStampTool`, `FloodFillTool`.
+  - Tools implemented: `SelectTool`, `CropTool`, `PaintTool`, `ScissorsTool`, `MagicWandTool`, `CloneStampTool`, `FloodFillTool`, `MarqueeTool` (rect/ellipse), `GradientTool`, `RetouchTool` (6 modes), `HealingTool` (spot heal / red eye).
+  - Every raster tool previews through `ToolContext::setLayerPreview` and commits **one** undo step (`ModifyImageLayerCommand`, via `tools/ToolCommit.h`); without a `CommandStack` the edit is applied directly so it can never be lost.
+  - Selection convention: the pixel selection (`Document::pixelSelection`) lives in the **active layer bitmap space** (same as wand/scissors), so masking/`applyMask` stays consistent; with no image layer selected the marquee uses document space.
+  - Shortcuts: `V` select, `M` marquee, `X` scissors, `W` wand, `C` crop, `B` brush, `G` gradient, `Shift+G` bucket, `S` clone, `U` retouch, `J` healing, `I` eyedropper.
+  - Tool groups are separated in the toolbar (selection / cut / paint / retouch / utility / create) and mirrored in the **Tools** menu.
   - Viewport delegates mouse and paint events to `m_activeTool` before legacy fallback handlers.
 - **Photoshop-style Layer Drag & Drop:**
   - `LayerRowWidget` captures mouse drag exceeding `QApplication::startDragDistance()`, generates a semi-transparent drag pixmap of the row, and sets MIME data `application/x-creatorcanvas-layer-id`.
@@ -228,6 +237,17 @@ Image Inspector live preview writes a temporary asset via `Document::setImageLay
   - Layer reordering executes through `ReorderLayerCommand` on the `CommandStack`, preserving non-destructive undo/redo history.
 
 `MainWindow` wires menus, docks, tool option bars, align/distribute/group, and start-screen templates.
+
+### Responsive layout
+
+Breakpoints and tokens live in `src/ui/designtokens.h` (`BreakXS` 620, `BreakSM` 980, `BreakMD` 1440, `UltraCompactWidth` 840, `EditorMinWidth` 800, `HintBreakWidth` 1380).
+
+- **Toolbars:** below `BreakSM`, or when the window height cannot fit the 14 vertical tools (`< 760px` and width `< 1300`), the left toolbar is replaced by a horizontal compact toolbar that shares the *same* `QAction`s. The tool options bar always gets its own row.
+- **Tool options:** under 1100 px the option labels are hidden and sliders shrink to 64 px, so controls are not clipped; the bar is horizontally scrollable as a last resort.
+- **Docks:** at `<= UltraCompactWidth` all inspectors except Layers are auto-hidden, with the user's previous visibility saved and restored when the window grows (Window ▸ Panels still works).
+- **Canvas zoom:** `CanvasView` keeps a `m_autoFit` mode. While fit, a resize re-fits the document; after any manual zoom/pan a resize preserves the zoom and keeps the content centered. Changing tools never resets zoom.
+- **Dialogs/inspectors:** text/shape inspectors are scrollable; New Document/Export/Settings are resizable within screen-aware maximums.
+- **Verification:** `--ui-snapshot <dir>` renders the editor at 1600×1000, 1280×800, 1024×700, 900×620 and 800×520 for each of select/marquee/gradient/retouch/healing, so layout regressions are checkable headlessly.
 
 ## 7. AI Background Removal
 
@@ -373,6 +393,9 @@ Logs live under the OS application data directory used by `LogService` / `Settin
 - **Image adjustments are destructive** — inspector preview is live, but the stored document holds a new raster asset, not an adjustment stack (`ImageAdjustments` does not exist as a type).
 - **Public `Layer` fields** — UI or tests can mutate `visible` / `transform` / etc. without a `Command`. That bypasses undo.
 - **UI concentration** — most interaction lives in `canvasview.cpp` and `mainwindow.cpp`.
+- **Marquee + transformed layers** — the marquee is mapped through the layer inverse transform and collapsed to a bounding rectangle, so a rotated layer gets an axis-aligned selection in its own bitmap space.
+- **Retouch/Healing run on the UI thread** — the brush patch is small, but each stroke event still converts/duplicates the full layer bitmap; multi-megapixel layers can feel heavy.
+- **Spot Healing auto-source** — the source is sampled from a fixed offset to the right (clamped to bounds); there is no Alt-click source picking or patch-match synthesis.
 - **Blend/gradient surface smaller than older README copy** — 7 blends, linear+radial two-stop gradients, no conical.
 - **No `platform/` isolation** — Windows vs Unix still appears in CMake and isolated `#ifdef`s (e.g. ONNX).
 - **`Q_OBJECT` + `unique_ptr`** — incomplete type in the header still breaks the generated destructor; include the full type.
