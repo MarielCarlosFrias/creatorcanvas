@@ -85,6 +85,33 @@ private:
     QSlider* m_opacitySlider = nullptr;
     QSpinBox* m_opacitySpin = nullptr;
 
+    // Fill Opacity + Clipped + Locks granulares (Photocraft/Photoshop)
+    QLabel* m_fillOpacityLabel = nullptr;
+    QSlider* m_fillOpacitySlider = nullptr;
+    QSpinBox* m_fillOpacitySpin = nullptr;
+    QToolButton* m_lockTransparencyBtn = nullptr;
+    QToolButton* m_lockPixelsBtn = nullptr;
+    QToolButton* m_lockPositionBtn = nullptr;
+    QToolButton* m_lockAllBtn = nullptr;
+    QToolButton* m_clippedBtn = nullptr;
+    QWidget* m_lockRow = nullptr;
+    float m_fillOpacityBeforeSlide = 1.0f;
+    bool m_clippedBefore = false;
+
+    // Parâmetros de Adjustment Layer (contextual: só visível com ajuste
+    // selecionado — como o painel Properties do Photoshop)
+    QWidget* m_adjustParamsWidget = nullptr;
+    QSlider* m_adjustParam1Slider = nullptr;
+    QSpinBox* m_adjustParam1Spin = nullptr;
+    QLabel* m_adjustParam1Label = nullptr;
+    QSlider* m_adjustParam2Slider = nullptr;
+    QSpinBox* m_adjustParam2Spin = nullptr;
+    QLabel* m_adjustParam2Label = nullptr;
+    QString m_adjustParam1Key;
+    QString m_adjustParam2Key;
+    double m_adjustParam1Before = 0.0;
+    double m_adjustParam2Before = 0.0;
+
     // Barra de ações inferior
     QToolButton* m_addLayerBtn = nullptr;
     QToolButton* m_duplicateBtn = nullptr;

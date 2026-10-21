@@ -173,5 +173,11 @@
   "panel.history.layerColor": "Cor da Camada",
   "menu.view.history": "Painel de &Histórico",
   "layer.typeAdjustment": "Camada de Ajuste",
-  "layer.typeFill": "Camada de Preenchimento"
+  "layer.typeFill": "Camada de Preenchimento",
+  "panel.fillOpacity": "Preench.",
+  "panel.lockTransparency": "Trancar pixels transparentes",
+  "panel.lockPixels": "Trancar pixels da imagem",
+  "panel.lockPosition": "Trancar posição",
+  "panel.lockAll": "Trancar tudo",
+  "panel.clipped": "Máscara de recorte: recortar pela camada de baixo"
 }

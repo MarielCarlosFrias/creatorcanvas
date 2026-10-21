@@ -313,6 +313,84 @@ void LayersPanel::buildUi()
     opacityRow->addWidget(m_opacitySpin);
     controlsLayout->addLayout(opacityRow);
 
+    // Linha 3: Fill Opacity (Photoshop: afeta o conteúdo, não os efeitos)
+    auto* fillRow = new QHBoxLayout;
+    m_fillOpacityLabel = new QLabel(controlsFrame);
+    m_fillOpacitySlider = new QSlider(Qt::Horizontal, controlsFrame);
+    m_fillOpacitySlider->setRange(0, 100);
+    m_fillOpacitySlider->setValue(100);
+    m_fillOpacitySpin = new QSpinBox(controlsFrame);
+    m_fillOpacitySpin->setRange(0, 100);
+    m_fillOpacitySpin->setValue(100);
+    m_fillOpacitySpin->setSuffix(QStringLiteral("%"));
+    m_fillOpacitySpin->setFixedWidth(64);
+    fillRow->addWidget(m_fillOpacityLabel);
+    fillRow->addWidget(m_fillOpacitySlider);
+    fillRow->addWidget(m_fillOpacitySpin);
+    controlsLayout->addLayout(fillRow);
+
+    // Linha 4: Locks granulares + Clipped (Photocraft/Photoshop)
+    m_lockRow = new QWidget(controlsFrame);
+    auto* lockRowLayout = new QHBoxLayout(m_lockRow);
+    lockRowLayout->setContentsMargins(0, 0, 0, 0);
+    lockRowLayout->setSpacing(2);
+
+    auto makeLockBtn = [controlsFrame](const QString& objectName) {
+        auto* btn = new QToolButton(controlsFrame);
+        btn->setObjectName(objectName);
+        btn->setCheckable(true);
+        btn->setAutoRaise(true);
+        btn->setFixedSize(26, 22);
+        return btn;
+    };
+    m_lockTransparencyBtn = makeLockBtn(QStringLiteral("LockTransparencyBtn"));
+    m_lockPixelsBtn = makeLockBtn(QStringLiteral("LockPixelsBtn"));
+    m_lockPositionBtn = makeLockBtn(QStringLiteral("LockPositionBtn"));
+    m_lockAllBtn = makeLockBtn(QStringLiteral("LockAllBtn"));
+    m_clippedBtn = makeLockBtn(QStringLiteral("ClippedBtn"));
+    m_clippedBtn->setText(QStringLiteral("\u2193")); // seta para baixo = clip
+    m_clippedBtn->setFixedSize(30, 22);
+
+    lockRowLayout->addWidget(m_clippedBtn);
+    lockRowLayout->addStretch();
+    lockRowLayout->addWidget(m_lockTransparencyBtn);
+    lockRowLayout->addWidget(m_lockPixelsBtn);
+    lockRowLayout->addWidget(m_lockPositionBtn);
+    lockRowLayout->addWidget(m_lockAllBtn);
+    controlsLayout->addWidget(m_lockRow);
+
+    // Linha 5: Parâmetros da camada de ajuste (contextual)
+    m_adjustParamsWidget = new QWidget(controlsFrame);
+    auto* adjLayout = new QVBoxLayout(m_adjustParamsWidget);
+    adjLayout->setContentsMargins(0, 0, 0, 0);
+    adjLayout->setSpacing(2);
+
+    auto* adjRow1 = new QHBoxLayout;
+    m_adjustParam1Label = new QLabel(m_adjustParamsWidget);
+    m_adjustParam1Slider = new QSlider(Qt::Horizontal, m_adjustParamsWidget);
+    m_adjustParam1Slider->setRange(-100, 100);
+    m_adjustParam1Spin = new QSpinBox(m_adjustParamsWidget);
+    m_adjustParam1Spin->setRange(-100, 100);
+    m_adjustParam1Spin->setFixedWidth(64);
+    adjRow1->addWidget(m_adjustParam1Label);
+    adjRow1->addWidget(m_adjustParam1Slider);
+    adjRow1->addWidget(m_adjustParam1Spin);
+    adjLayout->addLayout(adjRow1);
+
+    auto* adjRow2 = new QHBoxLayout;
+    m_adjustParam2Label = new QLabel(m_adjustParamsWidget);
+    m_adjustParam2Slider = new QSlider(Qt::Horizontal, m_adjustParamsWidget);
+    m_adjustParam2Slider->setRange(-100, 100);
+    m_adjustParam2Spin = new QSpinBox(m_adjustParamsWidget);
+    m_adjustParam2Spin->setRange(-100, 100);
+    m_adjustParam2Spin->setFixedWidth(64);
+    adjRow2->addWidget(m_adjustParam2Label);
+    adjRow2->addWidget(m_adjustParam2Slider);
+    adjRow2->addWidget(m_adjustParam2Spin);
+    adjLayout->addLayout(adjRow2);
+
+    m_adjustParamsWidget->hide(); // só aparece com adjustment layer selecionada
+    controlsLayout->addWidget(m_adjustParamsWidget);
 
     layout->addWidget(controlsFrame);
 
@@ -553,6 +631,179 @@ void LayersPanel::buildUi()
         }
     });
 
+    // ===== Fill Opacity (mesmo padrão de slider: live + 1 undo no release) =====
+    connect(m_fillOpacitySlider, &QSlider::sliderPressed, this, [this] {
+        if (!m_document || m_selectedId.isNull())
+            return;
+        if (const Layer* l = m_document->findLayer(m_selectedId))
+            m_fillOpacityBeforeSlide = l->fillOpacity();
+    });
+    connect(m_fillOpacitySlider, &QSlider::valueChanged, this, [this](int value) {
+        if (m_updating || !m_document || m_selectedId.isNull())
+            return;
+        const bool prev = m_fillOpacitySpin->blockSignals(true);
+        m_fillOpacitySpin->setValue(value);
+        m_fillOpacitySpin->blockSignals(prev);
+        // Live: aplica sem histórico durante o arraste.
+        if (Layer* l = m_document->findLayer(m_selectedId))
+            l->setFillOpacity(static_cast<float>(value) / 100.0f);
+    });
+    connect(m_fillOpacitySlider, &QSlider::sliderReleased, this, [this] {
+        if (!m_document || m_selectedId.isNull() || !m_history)
+            return;
+        Layer* l = m_document->findLayer(m_selectedId);
+        if (!l)
+            return;
+        const float newFill = l->fillOpacity();
+        if (!qFuzzyCompare(m_fillOpacityBeforeSlide, newFill)) {
+            l->setFillOpacity(m_fillOpacityBeforeSlide);
+            m_history->execute(std::make_unique<LayerFillOpacityCommand>(
+                *m_document, m_selectedId, QStringLiteral("layer.fillOpacity"),
+                &Document::setLayerFillOpacity, m_fillOpacityBeforeSlide, newFill));
+        }
+    });
+    connect(m_fillOpacitySpin, qOverload<int>(&QSpinBox::valueChanged), this,
+            [this](int value) {
+        if (m_updating || !m_document || m_selectedId.isNull())
+            return;
+        const bool prev = m_fillOpacitySlider->blockSignals(true);
+        m_fillOpacitySlider->setValue(value);
+        m_fillOpacitySlider->blockSignals(prev);
+        Layer* l = m_document->findLayer(m_selectedId);
+        if (!l)
+            return;
+        const float oldFill = l->fillOpacity();
+        const float newFill = static_cast<float>(value) / 100.0f;
+        if (qFuzzyCompare(oldFill, newFill))
+            return;
+        if (m_history) {
+            m_history->execute(std::make_unique<LayerFillOpacityCommand>(
+                *m_document, m_selectedId, QStringLiteral("layer.fillOpacity"),
+                &Document::setLayerFillOpacity, oldFill, newFill));
+        } else {
+            m_document->setLayerFillOpacity(m_selectedId, newFill);
+        }
+    });
+
+    // ===== Locks granulares (Photocraft: toggle individual com undo) =====
+    using LockMember = bool LayerLocks::*;
+    auto connectLock = [this](QToolButton* btn, LockMember memberPtr) {
+        connect(btn, &QToolButton::toggled, this, [this, memberPtr](bool on) {
+            if (m_updating || m_document.isNull() || m_selectedId.isNull())
+                return;
+            Layer* l = m_document->findLayer(m_selectedId);
+            if (!l)
+                return;
+            LayerLocks locks = l->locks;
+            locks.*memberPtr = on;
+            if (m_history) {
+                m_history->execute(std::make_unique<LayerLocksCommand>(
+                    *m_document, m_selectedId, QStringLiteral("layer.locks"),
+                    &Document::setLayerLocks, l->locks, locks));
+            } else {
+                m_document->setLayerLocks(m_selectedId, locks);
+            }
+        });
+    };
+    connectLock(m_lockTransparencyBtn, &LayerLocks::transparency);
+    connectLock(m_lockPixelsBtn, &LayerLocks::pixels);
+    connectLock(m_lockPositionBtn, &LayerLocks::position);
+    connectLock(m_lockAllBtn, &LayerLocks::all);
+
+    // ===== Clipped (clipping mask toggle) =====
+    connect(m_clippedBtn, &QToolButton::toggled, this, [this](bool on) {
+        if (m_updating || !m_document || m_selectedId.isNull())
+            return;
+        Layer* l = m_document->findLayer(m_selectedId);
+        if (!l || l->clipped == on)
+            return;
+        if (m_history) {
+            m_history->execute(std::make_unique<LayerClippedCommand>(
+                *m_document, m_selectedId, QStringLiteral("layer.clipped"),
+                &Document::setLayerClipped, l->clipped, on));
+        } else {
+            m_document->setLayerClipped(m_selectedId, on);
+        }
+    });
+
+    // ===== Parâmetros da camada de ajuste (undoable) =====
+    auto connectAdjustParam = [this](QSlider* slider, QSpinBox* spin,
+                                     QLabel* label, QString& key,
+                                     double& before) {
+        connect(slider, &QSlider::sliderPressed, this, [this, &key, &before] {
+            if (!m_document || m_selectedId.isNull())
+                return;
+            if (Layer* l = m_document->findLayer(m_selectedId))
+                if (l->type() == LayerType::Adjustment)
+                    for (const auto& [k, v] :
+                         static_cast<AdjustmentLayer*>(l)->parameters)
+                        if (k == key)
+                            before = v;
+        });
+        connect(slider, &QSlider::valueChanged, this,
+                [this, slider, spin, label, &key](int value) {
+            if (m_updating || !m_document || m_selectedId.isNull())
+                return;
+            const bool prev = spin->blockSignals(true);
+            spin->setValue(value);
+            spin->blockSignals(prev);
+            // Live update sem histórico.
+            if (Layer* l = m_document->findLayer(m_selectedId))
+                if (l->type() == LayerType::Adjustment) {
+                    auto* adj = static_cast<AdjustmentLayer*>(l);
+                    bool found = false;
+                    for (auto& [k, v] : adj->parameters)
+                        if (k == key) { v = double(value); found = true; }
+                    if (!found)
+                        adj->parameters.emplace_back(key, double(value));
+                    m_document->touchLayer(m_selectedId);
+                }
+        });
+        connect(slider, &QSlider::sliderReleased, this,
+                [this, &key, &before] {
+            if (!m_document || m_selectedId.isNull() || !m_history)
+                return;
+            Layer* l = m_document->findLayer(m_selectedId);
+            if (!l || l->type() != LayerType::Adjustment)
+                return;
+            auto* adj = static_cast<AdjustmentLayer*>(l);
+            double now = 0.0;
+            for (const auto& [k, v] : adj->parameters)
+                if (k == key)
+                    now = v;
+            if (now == before)
+                return;
+            // Restaura e aplica via comando (1 undo).
+            for (auto& [k, v] : adj->parameters)
+                if (k == key)
+                    v = before;
+            // CompoundCommand: old params -> new params (deep copies).
+            auto oldParams = adj->parameters;
+            for (auto& [k, v] : adj->parameters)
+                if (k == key)
+                    v = now;
+            auto newParams = adj->parameters;
+            m_history->execute(std::make_unique<LayerPropertyCommand<
+                std::vector<std::pair<QString, double>>>>(
+                *m_document, m_selectedId, QStringLiteral("layer.adjustParams"),
+                &Document::setAdjustmentParameters,
+                std::move(oldParams), std::move(newParams)));
+        });
+        connect(spin, qOverload<int>(&QSpinBox::valueChanged), this,
+                [this, slider, &key](int value) {
+            const bool prev = slider->blockSignals(true);
+            slider->setValue(value);
+            slider->blockSignals(prev);
+            slider->sliderReleased(); // dispara o mesmo commit do slider
+        });
+    };
+    connectAdjustParam(m_adjustParam1Slider, m_adjustParam1Spin,
+                       m_adjustParam1Label, m_adjustParam1Key,
+                       m_adjustParam1Before);
+    connectAdjustParam(m_adjustParam2Slider, m_adjustParam2Spin,
+                       m_adjustParam2Label, m_adjustParam2Key,
+                       m_adjustParam2Before);
+
     updateControlsForSelection();
 }
 
@@ -639,6 +890,26 @@ void LayersPanel::updateControlsForSelection()
         m_applyMaskBtn->setEnabled(canMask);
     }
 
+    // Fill opacity + locks + clipped: habilitados para qualquer camada
+    // (não só image — o Photoshop permite fill/lock em texto/forma também).
+    if (m_fillOpacityLabel) m_fillOpacityLabel->setEnabled(hasSelection);
+    if (m_fillOpacitySlider) m_fillOpacitySlider->setEnabled(hasSelection);
+    if (m_fillOpacitySpin) m_fillOpacitySpin->setEnabled(hasSelection);
+    if (m_lockRow) m_lockRow->setEnabled(hasSelection);
+    if (m_clippedBtn) {
+        // Clipped só faz sentido em camadas de conteúdo.
+        const bool canClip = hasSelection
+            && layer->type() != LayerType::Background
+            && layer->type() != LayerType::Group;
+        m_clippedBtn->setEnabled(canClip);
+    }
+
+    // Painel de parâmetros de ajuste: só com AdjustmentLayer selecionada.
+    const bool isAdjustment = hasSelection && layer
+        && layer->type() == LayerType::Adjustment;
+    if (m_adjustParamsWidget)
+        m_adjustParamsWidget->setVisible(isAdjustment);
+
     if (hasSelection && layer) {
         const bool prevUpdating = m_updating;
         m_updating = true;
@@ -646,6 +917,83 @@ void LayersPanel::updateControlsForSelection()
         const int opInt = qBound(0, qRound(layer->opacity() * 100.0f), 100);
         m_opacitySlider->setValue(opInt);
         m_opacitySpin->setValue(opInt);
+
+        const int fillInt = qBound(0, qRound(layer->fillOpacity() * 100.0f), 100);
+        if (m_fillOpacitySlider) m_fillOpacitySlider->setValue(fillInt);
+        if (m_fillOpacitySpin) m_fillOpacitySpin->setValue(fillInt);
+
+        if (m_lockTransparencyBtn)
+            m_lockTransparencyBtn->setChecked(layer->locks.transparency);
+        if (m_lockPixelsBtn)
+            m_lockPixelsBtn->setChecked(layer->locks.pixels);
+        if (m_lockPositionBtn)
+            m_lockPositionBtn->setChecked(layer->locks.position);
+        if (m_lockAllBtn)
+            m_lockAllBtn->setChecked(layer->locks.all);
+        if (m_clippedBtn)
+            m_clippedBtn->setChecked(layer->clipped);
+
+        // Parâmetros do ajuste: mapeia tipo → chaves/labels do painel.
+        if (isAdjustment) {
+            auto* adj = static_cast<AdjustmentLayer*>(layer);
+            auto get = [&adj](const QString& key, double def) {
+                for (const auto& [k, v] : adj->parameters)
+                    if (k == key) return v;
+                return def;
+            };
+            const bool pt = m_i18n
+                ? m_i18n->currentLanguage() == QStringLiteral("pt-BR")
+                : false;
+            switch (adj->kind) {
+            case AdjustmentType::BrightnessContrast:
+                m_adjustParam1Key = QStringLiteral("brightness");
+                m_adjustParam2Key = QStringLiteral("contrast");
+                m_adjustParam1Label->setText(pt ? QStringLiteral("Brilho:")
+                                                : QStringLiteral("Brightness:"));
+                m_adjustParam2Label->setText(pt ? QStringLiteral("Contraste:")
+                                                : QStringLiteral("Contrast:"));
+                break;
+            case AdjustmentType::HueSaturation:
+                m_adjustParam1Key = QStringLiteral("hue");
+                m_adjustParam2Key = QStringLiteral("saturation");
+                m_adjustParam1Label->setText(pt ? QStringLiteral("Matiz:")
+                                                : QStringLiteral("Hue:"));
+                m_adjustParam2Label->setText(pt ? QStringLiteral("Saturação:")
+                                                : QStringLiteral("Saturation:"));
+                break;
+            case AdjustmentType::ColorBalance:
+            case AdjustmentType::PhotoFilter:
+                m_adjustParam1Key = QStringLiteral("temperature");
+                m_adjustParam2Key = QString();
+                m_adjustParam1Label->setText(pt ? QStringLiteral("Temperatura:")
+                                                : QStringLiteral("Temperature:"));
+                m_adjustParam2Label->setText(QString());
+                break;
+            default:
+                m_adjustParam1Key = QString();
+                m_adjustParam2Key = QString();
+                break;
+            }
+            if (!m_adjustParam1Key.isEmpty()) {
+                const double v1 = get(m_adjustParam1Key, 0.0);
+                m_adjustParam1Slider->setValue(int(v1));
+                m_adjustParam1Spin->setValue(int(v1));
+                m_adjustParam1Before = v1;
+            }
+            if (!m_adjustParam2Key.isEmpty()) {
+                const double v2 = get(m_adjustParam2Key, 0.0);
+                m_adjustParam2Slider->setValue(int(v2));
+                m_adjustParam2Spin->setValue(int(v2));
+                m_adjustParam2Before = v2;
+                m_adjustParam2Slider->setVisible(true);
+                m_adjustParam2Spin->setVisible(true);
+                m_adjustParam2Label->setVisible(true);
+            } else {
+                m_adjustParam2Slider->hide();
+                m_adjustParam2Spin->hide();
+                m_adjustParam2Label->hide();
+            }
+        }
         m_updating = prevUpdating;
     }
 }
@@ -1208,6 +1556,25 @@ void LayersPanel::retranslateUi()
 
     m_blendLabel->setText(m_i18n->t("common", "panel.blendMode"));
     m_opacityLabel->setText(m_i18n->t("common", "panel.opacity"));
+
+    // Novos controles: Fill, Locks, Clipped (tooltips estilo Photoshop)
+    if (m_fillOpacityLabel)
+        m_fillOpacityLabel->setText(m_i18n->t("common", "panel.fillOpacity"));
+    if (m_lockTransparencyBtn)
+        m_lockTransparencyBtn->setToolTip(
+            m_i18n->t("common", "panel.lockTransparency"));
+    if (m_lockPixelsBtn)
+        m_lockPixelsBtn->setToolTip(
+            m_i18n->t("common", "panel.lockPixels"));
+    if (m_lockPositionBtn)
+        m_lockPositionBtn->setToolTip(
+            m_i18n->t("common", "panel.lockPosition"));
+    if (m_lockAllBtn)
+        m_lockAllBtn->setToolTip(
+            m_i18n->t("common", "panel.lockAll"));
+    if (m_clippedBtn)
+        m_clippedBtn->setToolTip(
+            m_i18n->t("common", "panel.clipped"));
 
     if (m_addLayerBtn) m_addLayerBtn->setToolTip(m_i18n->t("common", "panel.addLayer"));
     if (m_duplicateBtn) m_duplicateBtn->setToolTip(m_i18n->t("common", "panel.duplicate"));

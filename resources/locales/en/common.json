@@ -173,5 +173,11 @@
   "panel.history.layerColor": "Layer Color",
   "menu.view.history": "&History Panel",
   "layer.typeAdjustment": "Adjustment Layer",
-  "layer.typeFill": "Fill Layer"
+  "layer.typeFill": "Fill Layer",
+  "panel.fillOpacity": "Fill",
+  "panel.lockTransparency": "Lock transparent pixels",
+  "panel.lockPixels": "Lock image pixels",
+  "panel.lockPosition": "Lock position",
+  "panel.lockAll": "Lock all",
+  "panel.clipped": "Clipping mask: clip to layer below"
 }

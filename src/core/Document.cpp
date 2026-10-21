@@ -321,6 +321,21 @@ bool Document::setLayerLinkGroup(const LayerId& id, std::optional<qint64> linkGr
     return true;
 }
 
+bool Document::setAdjustmentParameters(
+    const LayerId& id, std::vector<std::pair<QString, double>> parameters)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Adjustment)
+        return false;
+    auto* adj = static_cast<AdjustmentLayer*>(layer);
+    if (adj->parameters == parameters)
+        return true;
+    adj->parameters = std::move(parameters);
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
 bool Document::setLayerVectorMask(const LayerId& id, QImage mask)
 {
     Layer* layer = findLayer(id);
@@ -355,7 +370,7 @@ LayerLocks Document::effectiveLocks(const LayerId& id) const
     return result;
 }
 
-bool Document::setLayerLocks(const LayerId& id, const LayerLocks& locks)
+bool Document::setLayerLocks(const LayerId& id, LayerLocks locks)
 {
     Layer* layer = findLayer(id);
     if (!layer || layer->locks == locks)

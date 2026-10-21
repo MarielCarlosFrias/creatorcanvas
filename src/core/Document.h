@@ -69,7 +69,12 @@ public:
     bool setLayerClipped(const LayerId& id, bool clipped);
     bool setLayerLinkGroup(const LayerId& id, std::optional<qint64> linkGroup);
     bool setLayerVectorMask(const LayerId& id, QImage mask);
-    bool setLayerLocks(const LayerId& id, const LayerLocks& locks);
+    /// Parâmetros de uma camada de ajuste (chave → valor). Usado pelo
+    /// LayerPropertyCommand para undo/redo dos sliders do painel.
+    bool setAdjustmentParameters(
+        const LayerId& id,
+        std::vector<std::pair<QString, double>> parameters);
+    bool setLayerLocks(const LayerId& id, LayerLocks locks);
     /// Locks efetivos: os da camada UNIDOS aos de todos os grupos
     /// ancestrais (Photocraft locks_at: trancar um grupo tranca o
     /// conteúdo). O booleano legacy `locked` também entra na união.
