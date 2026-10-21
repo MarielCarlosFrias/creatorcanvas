@@ -1128,14 +1128,99 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
 
 namespace {
 
-/// Alguma camada visível na raiz está recortada (clipped)?
-bool hasClippedLayer(const GroupLayer* root)
+/// Precisa do caminho de composição com buffer? Sim quando há camada
+/// recortada (clipped) OU camada de ajuste visível na raiz — ambas exigem
+/// acesso ao acumulado das camadas abaixo.
+bool needsCompositing(const GroupLayer* root)
 {
     for (const auto& child : root->children) {
-        if (child->visible && child->clipped)
+        if (!child->visible)
+            continue;
+        if (child->clipped)
+            return true;
+        if (child->type() == LayerType::Adjustment)
             return true;
     }
     return false;
+}
+
+/// Busca parâmetro da camada de ajuste por chave (com default).
+double adjParam(const AdjustmentLayer& adj, const QString& key, double def)
+{
+    for (const auto& [k, v] : adj.parameters) {
+        if (k == key)
+            return v;
+    }
+    return def;
+}
+
+/// Aplica o efeito da camada de ajuste ao acumulado (Photocraft: a camada
+/// de ajuste processa tudo abaixo dela na pilha). A opacidade da camada
+/// modula a força do efeito (Photoshop: 100% = efeito total, 0% = nada).
+QImage applyAdjustment(const QImage& acc, const AdjustmentLayer& adj)
+{
+    auto param = [&](const char* key, double def) {
+        return adjParam(adj, QString::fromLatin1(key), def);
+    };
+
+    QImage adjusted = acc;
+    switch (adj.kind) {
+    case AdjustmentType::BrightnessContrast:
+        adjusted = ImageProcessing::adjustColors(
+            acc, param("brightness", 10.0), param("contrast", 10.0), 0, 0);
+        break;
+    case AdjustmentType::HueSaturation:
+        adjusted = ImageProcessing::adjustColors(
+            acc, 0, 0, param("saturation", 0.0), 0, param("hue", 0.0));
+        break;
+    case AdjustmentType::ColorBalance:
+    case AdjustmentType::PhotoFilter:
+        adjusted = ImageProcessing::adjustColors(
+            acc, 0, 0, 0, param("temperature", 20.0));
+        break;
+    case AdjustmentType::Invert:
+        adjusted = ImageProcessing::applyPresetFilter(
+            acc, ImageProcessing::PresetFilter::Invert);
+        break;
+    case AdjustmentType::Posterize:
+        adjusted = ImageProcessing::applyPresetFilter(
+            acc, ImageProcessing::PresetFilter::Posterize);
+        break;
+    case AdjustmentType::Threshold:
+        adjusted = ImageProcessing::applyPresetFilter(
+            acc, ImageProcessing::PresetFilter::Threshold);
+        break;
+    case AdjustmentType::GradientMap:
+        adjusted = ImageProcessing::applyGradientMap(
+            acc, Qt::black, Qt::white);
+        break;
+    case AdjustmentType::ChannelMixer:
+    case AdjustmentType::Curves:
+    case AdjustmentType::Levels:
+        // Ainda não implementados no engine: passam direto (a camada
+        // existe e serializa, mas não altera o render).
+        break;
+    }
+
+    // Garante o formato do buffer de volta.
+    if (adjusted.format() != acc.format())
+        adjusted = adjusted.convertToFormat(acc.format());
+    if (adjusted.size() != acc.size())
+        adjusted = adjusted.scaled(acc.size());
+
+    // Opacidade da camada = força do efeito (lerp original→ajustado).
+    const float strength = std::clamp(adj.opacity(), 0.0f, 1.0f);
+    if (strength >= 1.0f)
+        return adjusted;
+
+    QImage blended(acc.size(), acc.format());
+    blended.fill(Qt::transparent);
+    QPainter bp(&blended);
+    bp.drawImage(0, 0, acc);
+    bp.setOpacity(strength);
+    bp.drawImage(0, 0, adjusted);
+    bp.end();
+    return blended;
 }
 
 } // namespace
@@ -1151,7 +1236,7 @@ void renderDocument(const Document& doc, QPainter* painter,
 
     const GroupLayer* root = doc.rootGroup();
 
-    if (!hasClippedLayer(root)) {
+    if (!needsCompositing(root)) {
         // Caminho rápido (sem camadas recortadas): desenha direto no painter,
         // como sempre funcionou.
         painter->save();
@@ -1184,7 +1269,21 @@ void renderDocument(const Document& doc, QPainter* painter,
             for (const auto& child : root->children) {
                 if (!child->visible)
                     continue;
-                if (child->clipped) {
+                if (child->type() == LayerType::Adjustment) {
+                    // Camada de ajuste: processa o ACUMULADO (tudo abaixo
+                    // dela na pilha), como o engine do PhotoCraft. O
+                    // painter precisa ser encerrado antes de substituir o
+                    // buffer — QPainter segura os bits da QImage antiga.
+                    accPainter.end();
+                    acc = applyAdjustment(
+                        acc, static_cast<const AdjustmentLayer&>(*child));
+                    accPainter.begin(&acc);
+                    accPainter.setRenderHint(QPainter::Antialiasing, true);
+                    accPainter.setRenderHint(QPainter::TextAntialiasing, true);
+                    if (!options.interactive)
+                        accPainter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+                    accPainter.setClipRect(canvasRect);
+                } else if (child->clipped) {
                     // Renderiza a camada isolada e recorta com o alfa do
                     // acumulado (tudo o que está abaixo dela).
                     QImage temp(doc.width(), doc.height(),

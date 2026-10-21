@@ -1,4 +1,5 @@
 #include "PaintTool.h"
+#include "ToolCommit.h"
 #include <QMouseEvent>
 #include <QPainter>
 #include "core/layers/Layer.h"
@@ -29,6 +30,13 @@ void PaintTool::mousePress(QMouseEvent* event, const QPointF& docPos, const Tool
         return;
 
     m_currentDocPos = docPos;
+    // Photocraft: locks granulares — pixels trancados bloqueiam a edição.
+    if (effectiveLocksOf(ctx).pixels) {
+        reportPixelsLocked(ctx);
+        event->accept();
+        return;
+    }
+
 
     Layer* layer = nullptr;
     if (!ctx.selectedLayerId.isNull())

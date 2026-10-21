@@ -137,7 +137,8 @@ void ScissorsTool::applyCut(const ToolContext& ctx)
 
     // Scissors creates an active selection. The user chooses the operation
     // afterwards (mask, delete, copy, cut, invert or cancel).
-    ctx.document->setPixelSelection(selection);
+    executeSetPixelSelection(*ctx.document, ctx.history, selection,
+                             QStringLiteral("selection.scissors"));
     m_polygon.clear();
     m_isDrawing = false;
     if (ctx.requestStatusMessage)

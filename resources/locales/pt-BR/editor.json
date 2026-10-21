@@ -326,7 +326,8 @@
     "status.cropHelp": "Cortar: arraste as alças e pressione Enter para aplicar ou Esc para cancelar.",
     "status.fillHelp": "Preenchimento: clique em uma região para preencher com a cor atual.",
     "status.paintHelp": "Pintura: arraste para pintar. Escolha pincel, tamanho e opacidade acima.",
-    "status.scissorsHelp": "Tesoura: clique ou arraste para contornar; dê dois cliques ou Enter para cortar."
+    "status.scissorsHelp": "Tesoura: clique ou arraste para contornar; dê dois cliques ou Enter para cortar.",
+    "status.layerLocked": "A camada está trancada (pixels da imagem)."
   },
   "filters": {
     "title": "Filtro",

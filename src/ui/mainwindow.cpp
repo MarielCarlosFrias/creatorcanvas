@@ -2285,7 +2285,8 @@ void MainWindow::buildMenus()
         if (m_document) {
             QImage full(m_document->width(), m_document->height(), QImage::Format_Alpha8);
             full.fill(255);
-            m_document->setPixelSelection(full);
+            executeSetPixelSelection(*m_document, m_history.get(), full,
+                                     QStringLiteral("selection.selectAll"));
         }
     });
     m_deselectAction = m_selectMenu->addAction(
@@ -2306,10 +2307,13 @@ void MainWindow::buildMenus()
             uchar* row = mask.scanLine(y);
             for (int x = 0; x < mask.width(); ++x) row[x] = 255 - row[x];
         }
-        m_document->setPixelSelection(mask);
+        executeSetPixelSelection(*m_document, m_history.get(), mask,
+                                 QStringLiteral("selection.invert"));
     });
     connect(m_deselectAction, &QAction::triggered, this, [this] {
-        if (m_document) m_document->clearPixelSelection();
+        if (m_document && !m_document->pixelSelection().isNull())
+            executeSetPixelSelection(*m_document, m_history.get(), QImage(),
+                                     QStringLiteral("selection.deselect"));
     });
     connect(m_selectionOpsAction, &QAction::triggered, this, [this] {
         if (m_canvas) m_canvas->openSelectionActionsMenu();
@@ -2322,10 +2326,8 @@ void MainWindow::buildMenus()
             return;
         const QImage current = m_document->pixelSelection();
         const QImage modified = op(current);
-        if (modified.isNull())
-            m_document->clearPixelSelection();
-        else
-            m_document->setPixelSelection(modified);
+        executeSetPixelSelection(*m_document, m_history.get(), modified,
+                                 QStringLiteral("selection.modify"));
     };
     auto askRadius = [this](const QString& title, double def) -> double {
         bool ok = false;
@@ -2424,8 +2426,8 @@ void MainWindow::buildMenus()
 
         const QImage mask = SelectionEngine::colorRange(
             bitmap, bitmap.rect(), target, float(fuzziness));
-        if (!mask.isNull())
-            m_document->setPixelSelection(mask);
+        executeSetPixelSelection(*m_document, m_history.get(), mask,
+                                 QStringLiteral("selection.colorRange"));
     });
 
     m_layerMenu = menuBar()->addMenu(QString());
@@ -2485,6 +2487,24 @@ void MainWindow::buildMenus()
                     ? m_i18n->t("editor", QString::fromLatin1(def.key))
                     : QString::fromLatin1(def.fallback);
                 layer->kind = def.type;
+                // Parâmetros padrão por tipo (o efeito é visível de cara;
+                // PhotoCraft usa os mesmos defaults de cada diálogo).
+                switch (def.type) {
+                case AdjustmentType::BrightnessContrast:
+                    layer->parameters = {{QStringLiteral("brightness"), 10.0},
+                                         {QStringLiteral("contrast"), 10.0}};
+                    break;
+                case AdjustmentType::HueSaturation:
+                    layer->parameters = {{QStringLiteral("hue"), 0.0},
+                                         {QStringLiteral("saturation"), 0.0}};
+                    break;
+                case AdjustmentType::PhotoFilter:
+                case AdjustmentType::ColorBalance:
+                    layer->parameters = {{QStringLiteral("temperature"), 20.0}};
+                    break;
+                default:
+                    break;
+                }
                 if (m_history) {
                     m_history->execute(std::make_unique<AddLayerCommand>(
                         *m_document, std::move(layer), m_document->rootGroup(), -1));

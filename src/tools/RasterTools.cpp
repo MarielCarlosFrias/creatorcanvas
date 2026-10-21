@@ -67,9 +67,12 @@ void MagicWandTool::mousePress(QMouseEvent* event, const QPointF& docPos, const 
                     for (int x = 0; x < rgba.width(); ++x)
                         dst[x] = 255 - src[x * 4 + 3];
                 }
-                // Keep the result as an active selection. Applying a mask,
-                // deleting, copying or cutting is an explicit layer action.
-                ctx.document->setPixelSelection(newMask);
+                // Keep the result as an active selection (undoable —
+                // Photocraft: seleção é passo de histórico). Applying a
+                // mask, deleting, copying or cutting stays an explicit
+                // layer action.
+                executeSetPixelSelection(*ctx.document, ctx.history, newMask,
+                                         QStringLiteral("selection.magicWand"));
 
                 if (ctx.requestStatusMessage) {
                     const QString msg = ctx.i18n ? ctx.i18n->t("editor", "canvas.status.wandSuccess").arg(m_tolerance)

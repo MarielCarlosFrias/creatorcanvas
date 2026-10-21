@@ -71,6 +71,13 @@ void GradientTool::mousePress(QMouseEvent* event, const QPointF& docPos, const T
     if (event->button() != Qt::LeftButton || !ctx.document)
         return;
 
+    // Photocraft: locks granulares — pixels trancados bloqueiam a edição.
+    if (effectiveLocksOf(ctx).pixels) {
+        reportPixelsLocked(ctx);
+        event->accept();
+        return;
+    }
+
     ImageLayer* img = activeImageLayer(ctx);
     if (!img) {
         if (ctx.requestStatusMessage) {
@@ -250,6 +257,13 @@ void RetouchTool::mousePress(QMouseEvent* event, const QPointF& docPos, const To
 {
     if (event->button() != Qt::LeftButton || !ctx.document)
         return;
+    // Photocraft: locks granulares — pixels trancados bloqueiam a edição.
+    if (effectiveLocksOf(ctx).pixels) {
+        reportPixelsLocked(ctx);
+        event->accept();
+        return;
+    }
+
     ImageLayer* img = activeImageLayer(ctx);
     if (!img) {
         if (ctx.requestStatusMessage) {
@@ -376,6 +390,13 @@ void HealingTool::mousePress(QMouseEvent* event, const QPointF& docPos, const To
 {
     if (event->button() != Qt::LeftButton || !ctx.document)
         return;
+    // Photocraft: locks granulares — pixels trancados bloqueiam a edição.
+    if (effectiveLocksOf(ctx).pixels) {
+        reportPixelsLocked(ctx);
+        event->accept();
+        return;
+    }
+
     ImageLayer* img = activeImageLayer(ctx);
     if (!img) {
         if (ctx.requestStatusMessage) {

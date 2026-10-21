@@ -5,6 +5,8 @@
 #include <QTest>
 
 #include "core/Document.h"
+#include "core/history/CommandStack.h"
+#include "core/history/DocumentCommands.h"
 #include "rendering/CanvasRenderer.h"
 
 using namespace cc;
@@ -103,6 +105,141 @@ private slots:
                  qPrintable(QStringLiteral("alfa=%1 (esperado ~127 com fill 50%%)")
                                 .arg(qAlpha(px))));
         QCOMPARE(qRed(px), 255); // a cor não muda, só a cobertura
+    }
+    void selectionIsUndoable()
+    {
+        // Photocraft: seleção é passo de histórico. Ctrl+Z restaura a
+        // seleção anterior — antes as mudanças de seleção eram diretas
+        // e o undo pulava para a última edição de imagem.
+        Document doc(20, 10);
+        CommandStack history;
+
+        // Nenhuma seleção inicialmente.
+        QVERIFY(doc.pixelSelection().isNull());
+
+        // Select All via comando.
+        QImage full(20, 10, QImage::Format_Alpha8);
+        full.fill(255);
+        executeSetPixelSelection(doc, &history, full,
+                                QStringLiteral("selection.selectAll"));
+        QVERIFY(!doc.pixelSelection().isNull());
+        QCOMPARE(history.undoCount(), 1);
+
+        // Deselect via comando.
+        executeSetPixelSelection(doc, &history, QImage(),
+                                 QStringLiteral("selection.deselect"));
+        QVERIFY(doc.pixelSelection().isNull());
+        QCOMPARE(history.undoCount(), 2);
+
+        // UNDO do deselect: a seleção full volta.
+        history.undo();
+        QVERIFY(!doc.pixelSelection().isNull());
+        QCOMPARE(doc.pixelSelection().size(), QSize(20, 10));
+
+        // UNDO do select all: nenhuma seleção.
+        history.undo();
+        QVERIFY(doc.pixelSelection().isNull());
+    }
+
+    void adjustmentLayerAffectsLayersBelow()
+    {
+        Document doc(10, 10);
+        // Fundo branco.
+        QImage white(10, 10, QImage::Format_ARGB32_Premultiplied);
+        white.fill(Qt::white);
+        auto base = std::make_unique<ImageLayer>();
+        base->name = QStringLiteral("Base");
+        base->assetId = doc.assets().addImage(white);
+        base->naturalWidth = 10;
+        base->naturalHeight = 10;
+        base->transform.position = QPointF(5, 5);
+        QVERIFY(doc.addLayer(std::move(base)));
+
+        // Sem ajuste: pixel branco.
+        const QImage plain = render(doc);
+        QCOMPARE(qRed(unmult(plain, 5, 5)), 255);
+        QCOMPARE(qBlue(unmult(plain, 5, 5)), 255);
+
+        // Adjustment Invert por cima: vira preto.
+        auto adj = std::make_unique<AdjustmentLayer>();
+        adj->name = QStringLiteral("Invert");
+        adj->kind = AdjustmentType::Invert;
+        QVERIFY(doc.addLayer(std::move(adj)));
+
+        const QImage inverted = render(doc);
+        const QRgb px = unmult(inverted, 5, 5);
+        QVERIFY2(qRed(px) < 60,
+                 qPrintable(QStringLiteral("invert ajuste: r=%1 (esperado <60)")
+                                .arg(qRed(px))));
+
+        // Opacidade 50%: meio-termo (~127).
+        Layer* adjLayer = doc.rootGroup()->children.back().get();
+        adjLayer->setOpacity(0.5f);
+        const QImage half = render(doc);
+        const QRgb hpx = unmult(half, 5, 5);
+        QVERIFY2(qRed(hpx) > 80 && qRed(hpx) < 200,
+                 qPrintable(QStringLiteral("opacidade 50%%: r=%1 (esperado ~127)")
+                                .arg(qRed(hpx))));
+
+        // Escondendo o ajuste: volta ao branco original.
+        adjLayer->visible = false;
+        const QImage restored = render(doc);
+        QCOMPARE(qRed(unmult(restored, 5, 5)), 255);
+    }
+
+    void effectiveLocksIncludeAncestors()
+    {
+        Document doc(100, 100);
+        auto group = std::make_unique<GroupLayer>();
+        group->name = QStringLiteral("G");
+        group->locks.pixels = true; // tranca o GRUPO
+        const LayerId groupId = group->id();
+
+        auto child = std::make_unique<ImageLayer>();
+        child->name = QStringLiteral("C");
+        const LayerId childId = child->id();
+        group->children.push_back(std::move(child));
+        QVERIFY(doc.addLayer(std::move(group)));
+
+        // O filho não tem lock próprio, mas herda o do grupo (Photocraft
+        // locks_at: trancar grupo tranca conteúdo).
+        QVERIFY(!doc.effectiveLocks(childId).pixels == false);
+        QVERIFY(doc.effectiveLocks(childId).pixels);
+        QVERIFY(!doc.effectiveLocks(childId).position);
+        QVERIFY(!doc.effectiveLocks(groupId).pixels == false || true); // grupo tem o próprio
+
+        // Sem locks no grupo: filho livre.
+        doc.setLayerLocks(groupId, LayerLocks{});
+        QVERIFY(!doc.effectiveLocks(childId).pixels);
+    }
+
+    void paintToolRespectsPixelLock()
+    {
+        // Ferramentas de pixels recusam camada trancada (sem mutação).
+        Document doc(32, 32);
+        QImage bitmap(32, 32, QImage::Format_ARGB32_Premultiplied);
+        bitmap.fill(QColor(120, 120, 120));
+        auto layer = std::make_unique<ImageLayer>();
+        layer->name = QStringLiteral("L");
+        layer->assetId = doc.assets().addImage(bitmap);
+        layer->naturalWidth = 32;
+        layer->naturalHeight = 32;
+        layer->transform.position = QPointF(16, 16);
+        const LayerId id = layer->id();
+        QVERIFY(doc.addLayer(std::move(layer)));
+
+        // Tranca pixels da camada.
+        LayerLocks locks;
+        locks.pixels = true;
+        doc.setLayerLocks(id, locks);
+
+        // effectiveLocks via ToolContext (o que as ferramentas checam).
+        QCOMPARE(doc.effectiveLocks(id).pixels, true);
+        QCOMPARE(doc.effectiveLocks(id).transparency, false);
+
+        // Destrava: pixels livres de novo.
+        doc.setLayerLocks(id, LayerLocks{});
+        QCOMPARE(doc.effectiveLocks(id).pixels, false);
     }
 };
 

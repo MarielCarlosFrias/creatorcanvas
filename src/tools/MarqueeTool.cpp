@@ -4,6 +4,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 
+#include "core/history/DocumentCommands.h"
 #include "core/image/ImageProcessing.h"
 #include "localization/i18nservice.h"
 
@@ -106,7 +107,8 @@ void MarqueeTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const 
         selection = ImageProcessing::combineSelections(current, selection, m_subtracting);
     }
 
-    ctx.document->setPixelSelection(selection);
+    executeSetPixelSelection(*ctx.document, ctx.history, selection,
+                             QStringLiteral("selection.marquee"));
 
     if (ctx.requestStatusMessage) {
         const QString msg = ctx.i18n

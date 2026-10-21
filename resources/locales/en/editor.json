@@ -326,7 +326,8 @@
     "status.cropHelp": "Crop: drag the handles, then Enter to apply or Esc to cancel.",
     "status.fillHelp": "Fill: click a region to fill it with the current color.",
     "status.paintHelp": "Paint: drag to paint. Choose brush, size and opacity above.",
-    "status.scissorsHelp": "Scissors: click or drag to outline; double-click or Enter to cut."
+    "status.scissorsHelp": "Scissors: click or drag to outline; double-click or Enter to cut.",
+    "status.layerLocked": "The layer is locked (image pixels)."
   },
   "filters": {
     "title": "Filter",

@@ -334,6 +334,27 @@ bool Document::setLayerVectorMask(const LayerId& id, QImage mask)
     return true;
 }
 
+LayerLocks Document::effectiveLocks(const LayerId& id) const
+{
+    LayerLocks result;
+    for (Layer* layer = findLayer(id); layer; ) {
+        if (layer->locked)
+            result.all = true; // legacy single lock actives everything
+        const LayerLocks& l = layer->locks;
+        result.transparency = result.transparency || l.transparency;
+        result.pixels = result.pixels || l.pixels;
+        result.position = result.position || l.position;
+        result.all = result.all || l.all;
+        if (layer->id() == m_root->id())
+            break;
+        layer = parentOf(layer->id());
+        // parentOf pode retornar nullptr (raiz): findLayer é estável.
+        if (!layer)
+            break;
+    }
+    return result;
+}
+
 bool Document::setLayerLocks(const LayerId& id, const LayerLocks& locks)
 {
     Layer* layer = findLayer(id);

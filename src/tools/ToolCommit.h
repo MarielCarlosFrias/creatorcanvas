@@ -4,10 +4,31 @@
 #include "core/history/CommandStack.h"
 #include "core/history/DocumentCommands.h"
 #include "core/layers/Layer.h"
+#include "localization/i18nservice.h"
 #include <QImage>
 #include <QString>
 
 namespace cc {
+
+/// Locks efetivos da camada ativa (união com grupos ancestrais — Photocraft
+/// locks_at: trancar um grupo tranca todo o conteúdo). Usado pelas
+/// ferramentas antes de qualquer mutação de pixels.
+inline LayerLocks effectiveLocksOf(const ToolContext& ctx)
+{
+    if (!ctx.document || ctx.selectedLayerId.isNull())
+        return {};
+    return ctx.document->effectiveLocks(ctx.selectedLayerId);
+}
+
+/// Mensagem padrão quando a camada está trancada para pixels.
+inline void reportPixelsLocked(const ToolContext& ctx)
+{
+    if (ctx.requestStatusMessage) {
+        ctx.requestStatusMessage(
+            ctx.i18n ? ctx.i18n->t("editor", "canvas.status.layerLocked")
+                     : QStringLiteral("The layer is locked (image pixels)."));
+    }
+}
 
 /// Commita um bitmap editado de volta na camada de imagem ativa:
 /// cria o asset, limpa a prévia de overlay e registra UM passo de undo

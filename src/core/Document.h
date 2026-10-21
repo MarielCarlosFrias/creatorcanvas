@@ -70,6 +70,10 @@ public:
     bool setLayerLinkGroup(const LayerId& id, std::optional<qint64> linkGroup);
     bool setLayerVectorMask(const LayerId& id, QImage mask);
     bool setLayerLocks(const LayerId& id, const LayerLocks& locks);
+    /// Locks efetivos: os da camada UNIDOS aos de todos os grupos
+    /// ancestrais (Photocraft locks_at: trancar um grupo tranca o
+    /// conteúdo). O booleano legacy `locked` também entra na união.
+    LayerLocks effectiveLocks(const LayerId& id) const;
     bool setLayerTransform(const LayerId& id, const AffineTransform& transform);
     bool setLayerTextBox(const LayerId& id, const QSizeF& box);
     bool setLayerTextEffects(const LayerId& id, const TextEffects& effects);
