@@ -124,6 +124,7 @@ private:
     void updateWindowTitle();
     void retranslateUi();
     void restoreWindowLayout();
+    void updateSelectionMenuEnabled();
     bool windowFitsOnScreen() const;
     void updateZoomLabel();
     void updatePositionLabel(const QPointF& documentPos);

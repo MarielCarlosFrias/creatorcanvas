@@ -1,6 +1,7 @@
 #include "core/selection/SelectionEngine.h"
 
 #include <QColor>
+#include <QElapsedTimer>
 #include <QtTest>
 
 using namespace cc;
@@ -293,6 +294,33 @@ private slots:
         rgb.fill(Qt::white);
         const QImage norm = SelectionEngine::normalize(rgb);
         QCOMPARE(norm.format(), QImage::Format_Alpha8);
+    }
+
+    void morphologyIsFastForLargeRadius()
+    {
+        // Regressão do congelamento: a versão antiga era O(w·h·r²) e
+        // travava o app por minutos (raio 200 ≈ 320 bilhões de operações),
+        // fazendo o gerenciador de janelas escurecer a janela ("cinza").
+        // Com van Herk separável é O(w·h): deve terminar em < 2 segundos.
+        QImage big = squareSelection(1920, 1080, 400, 200, 1200, 800);
+
+        QElapsedTimer timer;
+        timer.start();
+        const QImage expanded = SelectionEngine::expand(big, 200.0f);
+        const qint64 ms = timer.elapsed();
+
+        QVERIFY(!expanded.isNull());
+        // Limite generoso: a versão O(r²) antiga levava MINUTOS aqui
+        // (320G de operações); o ASan instrumentado adiciona ~3-4x.
+        QVERIFY2(ms < 30000,
+                 qPrintable(QStringLiteral("expand r=200 levou %1 ms (max 30000)")
+                                .arg(ms)));
+
+        // Corretude com raio grande: quadrado x=400..1199 expandido por 200
+        // tem borda esquerda em x=200 — dentro é 255, fora é 0.
+        const QImage e = SelectionEngine::normalize(expanded);
+        QVERIFY(e.constScanLine(500)[201] == uchar(255)); // dentro da nova borda
+        QVERIFY(e.constScanLine(500)[199] == uchar(0));   // fora da nova borda
     }
 };
 

@@ -477,6 +477,7 @@ void MainWindow::connectDocumentSignals()
                 }
                 if (m_canvas)
                     m_canvas->pruneSelection();
+                updateSelectionMenuEnabled();
             });
     connect(m_document, &Document::layerPropertyChanged,
             m_canvas, qOverload<>(&QWidget::update), Qt::UniqueConnection);
@@ -2707,6 +2708,29 @@ void MainWindow::applyToolOptionsCompact(bool compact)
         if (combo)
             combo->setMinimumWidth(hideLabels ? 56 : 80);
     }
+}
+
+void MainWindow::updateSelectionMenuEnabled()
+{
+    // Menu Selecionar: Modify/Color Range só fazem sentido com uma seleção
+    // ativa (antes ficavam habilitados e eram no-op silencioso — confuso).
+    const bool hasSelection = m_document && !m_document->pixelSelection().isNull();
+    const bool hasImageLayer = m_selectedId.isNull() ? false : [&] {
+        Layer* l = m_document ? m_document->findLayer(m_selectedId) : nullptr;
+        return l && l->type() == LayerType::Image;
+    }();
+    for (QAction* act : m_modifyActions) {
+        if (act)
+            act->setEnabled(hasSelection);
+    }
+    if (m_deselectAction)
+        m_deselectAction->setEnabled(hasSelection);
+    if (m_invertSelectionAction)
+        m_invertSelectionAction->setEnabled(hasSelection);
+    if (m_selectionOpsAction)
+        m_selectionOpsAction->setEnabled(hasSelection);
+    if (m_colorRangeAction)
+        m_colorRangeAction->setEnabled(hasImageLayer);
 }
 
 void MainWindow::buildStatusBar()

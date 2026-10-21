@@ -51,12 +51,18 @@ cc_add_test(test_ui_phase1 unit/test_ui_phase1.cpp
 )
 cc_add_test(test_photocraft unit/test_photocraft.cpp)
 cc_add_test(test_selection_engine unit/test_selection_engine.cpp)
+cc_add_test(test_layer_render unit/test_layer_render.cpp)
 cc_add_test(test_hit_alpha unit/test_hit_alpha.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasview.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/aibackgrounddialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/maskeditcanvas.cpp
 )
 cc_add_test(test_canvas_zoom unit/test_canvas_zoom.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvasview.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/aibackgrounddialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/maskeditcanvas.cpp
+)
+cc_add_test(test_undo_render unit/test_undo_render.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasview.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/aibackgrounddialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/maskeditcanvas.cpp

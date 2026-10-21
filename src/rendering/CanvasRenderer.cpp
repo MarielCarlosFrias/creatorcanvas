@@ -1103,7 +1103,14 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
                 applyImageInnerShadow(maskedPixels, image.effects.innerShadow);
             }
 
-            painter->drawImage(targetRect, maskedPixels);
+            // Fill Opacity: o conteúdo é desenhado com o fator de
+            // preenchimento; os efeitos acima usaram a opacidade total.
+            {
+                const qreal prevOpacity = painter->opacity();
+                painter->setOpacity(prevOpacity * std::clamp(image.fillOpacity(), 0.0f, 1.0f));
+                painter->drawImage(targetRect, maskedPixels);
+                painter->setOpacity(prevOpacity);
+            }
         } else {
             // Placeholder while the asset has no decoded pixels.
             painter->fillRect(
@@ -1119,6 +1126,20 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
 
 } // namespace
 
+namespace {
+
+/// Alguma camada visível na raiz está recortada (clipped)?
+bool hasClippedLayer(const GroupLayer* root)
+{
+    for (const auto& child : root->children) {
+        if (child->visible && child->clipped)
+            return true;
+    }
+    return false;
+}
+
+} // namespace
+
 void renderDocument(const Document& doc, QPainter* painter,
                     const QTransform& docToDevice, const RenderOptions& options)
 {
@@ -1128,19 +1149,71 @@ void renderDocument(const Document& doc, QPainter* painter,
     if (options.drawCheckerboard)
         drawCheckerboard(painter, canvasOnDevice, options);
 
-    painter->save();
-    painter->setTransform(docToDevice);
-    painter->setRenderHint(QPainter::Antialiasing, true);
-    painter->setRenderHint(QPainter::TextAntialiasing, true);
-    if (!options.interactive) {
-        painter->setRenderHint(QPainter::SmoothPixmapTransform, true);
-    }
-    painter->setClipRect(canvasRect); // layers never draw outside the canvas
-
     const GroupLayer* root = doc.rootGroup();
-    for (const auto& child : root->children)
-        drawLayer(painter, *child, doc, canvasRect, 1.0f, options);
-    painter->restore();
+
+    if (!hasClippedLayer(root)) {
+        // Caminho rápido (sem camadas recortadas): desenha direto no painter,
+        // como sempre funcionou.
+        painter->save();
+        painter->setTransform(docToDevice);
+        painter->setRenderHint(QPainter::Antialiasing, true);
+        painter->setRenderHint(QPainter::TextAntialiasing, true);
+        if (!options.interactive)
+            painter->setRenderHint(QPainter::SmoothPixmapTransform, true);
+        painter->setClipRect(canvasRect);
+        for (const auto& child : root->children)
+            drawLayer(painter, *child, doc, canvasRect, 1.0f, options);
+        painter->restore();
+    } else {
+        // Caminho de composição (Photoshop clipping mask): uma camada com
+        // clipped=true só aparece onde as camadas ABAIXO dela têm alfa.
+        // Acumulamos tudo num buffer em coordenadas de documento e
+        // recortamos cada camada clipped com DestinationIn contra o
+        // acumulado (o PhotoCraft faz o mesmo no engine).
+        QImage acc(doc.width(), doc.height(),
+                   QImage::Format_ARGB32_Premultiplied);
+        acc.fill(Qt::transparent);
+        {
+            QPainter accPainter(&acc);
+            accPainter.setRenderHint(QPainter::Antialiasing, true);
+            accPainter.setRenderHint(QPainter::TextAntialiasing, true);
+            if (!options.interactive)
+                accPainter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+            accPainter.setClipRect(canvasRect);
+
+            for (const auto& child : root->children) {
+                if (!child->visible)
+                    continue;
+                if (child->clipped) {
+                    // Renderiza a camada isolada e recorta com o alfa do
+                    // acumulado (tudo o que está abaixo dela).
+                    QImage temp(doc.width(), doc.height(),
+                                QImage::Format_ARGB32_Premultiplied);
+                    temp.fill(Qt::transparent);
+                    {
+                        QPainter tp(&temp);
+                        tp.setRenderHint(QPainter::Antialiasing, true);
+                        tp.setRenderHint(QPainter::TextAntialiasing, true);
+                        drawLayer(&tp, *child, doc, canvasRect, 1.0f, options);
+                    }
+                    QPainter masker(&temp);
+                    masker.setCompositionMode(
+                        QPainter::CompositionMode_DestinationIn);
+                    masker.drawImage(0, 0, acc);
+                    masker.end();
+                    accPainter.drawImage(0, 0, temp);
+                } else {
+                    drawLayer(&accPainter, *child, doc, canvasRect, 1.0f, options);
+                }
+            }
+        }
+        painter->save();
+        painter->setTransform(docToDevice);
+        painter->setClipRect(canvasRect);
+        painter->setRenderHint(QPainter::SmoothPixmapTransform, !options.interactive);
+        painter->drawImage(0, 0, acc);
+        painter->restore();
+    }
 
     painter->save();
     painter->resetTransform();

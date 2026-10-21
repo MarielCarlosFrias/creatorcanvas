@@ -132,34 +132,86 @@ void boxBlur(std::vector<float>& m, int w, int h, int r)
     }
 }
 
-/// Distância Chebyshev por pixel até a borda mais próxima de valor oposto
-/// (usada por expand/contract). Implementação simples por erosão/dilatação
-/// iterativa — suficiente para raios pequenos de seleção.
-/// direction > 0 dilata (expand), < 0 erode (contract), sobre valores float.
+/// Filtro 1D de máximo/mínimo com janela [i-r, i+r] em O(n) independente do
+/// raio (estratégia van Herk / Gil-Werman). Bloco de tamanho b = 2r+1 (a
+/// própria largura da janela): blocos adjacentes cobrem a janela EXATAMENTE
+/// via suf[lo] ∪ pref[hi]; janela clamped dentro de um bloco é recomputada
+/// direto (só acontece nas bordas do array).
+/// direction > 0 = máximo (dilata), < 0 = mínimo (erode).
+void vanHerkPass(const float* src, float* dst, int n, int r, int direction)
+{
+    if (n <= 0)
+        return;
+    r = std::min(r, std::max(1, n - 1));
+    const int b = 2 * r + 1; // largura da janela = tamanho do bloco
+    const int blocks = (n + b - 1) / b;
+
+    // pref[i] = max/min do início do bloco de i até i.
+    // suf[i] = max/min de i até o fim do bloco de i.
+    std::vector<float> pref(n), suf(n);
+    for (int blk = 0; blk < blocks; ++blk) {
+        const int start = blk * b;
+        const int end = std::min(start + b, n);
+        if (start >= end)
+            break;
+        float acc = src[start];
+        pref[start] = acc;
+        for (int i = start + 1; i < end; ++i) {
+            acc = direction > 0 ? std::max(acc, src[i]) : std::min(acc, src[i]);
+            pref[i] = acc;
+        }
+        acc = src[end - 1];
+        suf[end - 1] = acc;
+        for (int i = end - 2; i >= start; --i) {
+            acc = direction > 0 ? std::max(acc, src[i]) : std::min(acc, src[i]);
+            suf[i] = acc;
+        }
+    }
+
+    for (int i = 0; i < n; ++i) {
+        const int lo = std::max(0, i - r);
+        const int hi = std::min(n - 1, i + r);
+        if (lo / b == hi / b) {
+            // Janela clamped dentro de um bloco (bordas do array): direto.
+            float acc = src[lo];
+            for (int j = lo + 1; j <= hi; ++j)
+                acc = direction > 0 ? std::max(acc, src[j]) : std::min(acc, src[j]);
+            dst[i] = acc;
+        } else {
+            // Blocos adjacentes: suf[lo] cobre [lo, fim_bloco(lo)] e
+            // pref[hi] cobre [início_bloco(hi), hi]; a união é a janela
+            // exata porque fim_bloco(lo)+1 == início_bloco(hi).
+            dst[i] = direction > 0 ? std::max(suf[lo], pref[hi])
+                                    : std::min(suf[lo], pref[hi]);
+        }
+    }
+}
+
+/// Dilatação (direction > 0) / erosão (direction < 0) morfológica separável:
+/// uma passada horizontal + uma vertical, cada uma O(w·h) — o elemento
+/// estrutural é um quadrado (distância Chebyshev), como o do Photocraft.
+/// A versão anterior era O(w·h·r²) e congelava o app por minutos com
+/// raios grandes (raio 200 numa seleção 1920×1080 ≈ 320 bilhões de
+/// operações), fazendo o gerenciador de janelas escurecer a janela.
 void morphology(std::vector<float>& m, int w, int h, float radius, int direction)
 {
     if (radius <= 0.0f || w <= 0 || h <= 0)
         return;
     const int r = std::max(1, static_cast<int>(std::round(radius)));
-    const std::vector<float> src = m;
 
-    for (int y = 0; y < h; ++y) {
-        for (int x = 0; x < w; ++x) {
-            const int i = y * w + x;
-            float out = src[i];
-            for (int dy = -r; dy <= r && (direction > 0 ? out < 1.0f : out > 0.0f); ++dy) {
-                const int yy = std::clamp(y + dy, 0, h - 1);
-                for (int dx = -r; dx <= r; ++dx) {
-                    const int xx = std::clamp(x + dx, 0, w - 1);
-                    const float v = src[yy * w + xx];
-                    if (direction > 0)
-                        out = std::max(out, v);      // dilata
-                    else
-                        out = std::min(out, v);      // erode
-                }
-            }
-            m[i] = out;
-        }
+    // Passada horizontal.
+    std::vector<float> tmp(m.size());
+    for (int y = 0; y < h; ++y)
+        vanHerkPass(m.data() + y * w, tmp.data() + y * w, w, r, direction);
+
+    // Passada vertical (colunas como arrays contíguos).
+    std::vector<float> col(h), colOut(h);
+    for (int x = 0; x < w; ++x) {
+        for (int y = 0; y < h; ++y)
+            col[y] = tmp[y * w + x];
+        vanHerkPass(col.data(), colOut.data(), h, r, direction);
+        for (int y = 0; y < h; ++y)
+            m[y * w + x] = colOut[y];
     }
 }
 
