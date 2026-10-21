@@ -6,6 +6,73 @@
 
 namespace cc {
 
+bool SelectionOperations::canEditPixels(const Document& doc,
+                                         const LayerId& id,
+                                         QString* whyNot)
+{
+    const Layer* layer = doc.findLayer(id);
+    if (!layer) {
+        if (whyNot)
+            *whyNot = QStringLiteral("Layer not found.");
+        return false;
+    }
+    const LayerLocks locks = doc.effectiveLocks(id);
+    if (locks.pixels || locks.all) {
+        if (whyNot)
+            *whyNot = QStringLiteral("The layer is locked (image pixels).");
+        return false;
+    }
+    return true;
+}
+
+QImage SelectionOperations::applySelectionMask(const QImage& original,
+                                               const QImage& modified,
+                                               const QImage& selection)
+{
+    if (selection.isNull() || original.isNull() || modified.isNull())
+        return modified;
+    if (selection.size() != original.size() || selection.size() != modified.size())
+        return modified; // selection in a different space: don't guess
+    if (original.size() != modified.size())
+        return modified; // operation resized (crop etc.): can't mask
+
+    const QImage sel = selection.convertToFormat(QImage::Format_Alpha8);
+    // Fast path: fully selected (all 255) = just return modified.
+    bool allSelected = true;
+    for (int y = 0; y < sel.height() && allSelected; ++y) {
+        const uchar* row = sel.constScanLine(y);
+        for (int x = 0; x < sel.width(); ++x) {
+            if (row[x] != 255) { allSelected = false; break; }
+        }
+    }
+    if (allSelected)
+        return modified;
+
+    QImage out = original.convertToFormat(QImage::Format_ARGB32);
+    const QImage mod = modified.convertToFormat(QImage::Format_ARGB32);
+    for (int y = 0; y < out.height(); ++y) {
+        QRgb* dst = reinterpret_cast<QRgb*>(out.scanLine(y));
+        const QRgb* src = reinterpret_cast<const QRgb*>(mod.constScanLine(y));
+        const uchar* mask = sel.constScanLine(y);
+        for (int x = 0; x < out.width(); ++x) {
+            if (mask[x] == 255)
+                dst[x] = src[x];              // fully selected: modified
+            else if (mask[x] == 0)
+                continue;                      // not selected: keep original
+            else {
+                // Partial: lerp per channel (including alpha).
+                const int m = mask[x];
+                dst[x] = qRgba(
+                    qRed(dst[x]) +   (qRed(src[x])   - qRed(dst[x]))   * m / 255,
+                    qGreen(dst[x]) + (qGreen(src[x]) - qGreen(dst[x])) * m / 255,
+                    qBlue(dst[x]) +  (qBlue(src[x])  - qBlue(dst[x]))  * m / 255,
+                    qAlpha(dst[x]) + (qAlpha(src[x]) - qAlpha(dst[x])) * m / 255);
+            }
+        }
+    }
+    return out;
+}
+
 QImage SelectionOperations::inverted(const QImage& selection)
 {
     QImage result = selection.convertToFormat(QImage::Format_Alpha8);

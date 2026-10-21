@@ -2055,6 +2055,17 @@ void CanvasView::removeBackgroundAiQuick(const LayerId& id)
     if (!layer || layer->type() != LayerType::Image)
         return;
 
+    // Photocraft: locks bloqueiam a remoção de fundo por IA também.
+    if (!m_document->effectiveLocks(id).pixels
+        && !m_document->effectiveLocks(id).all) {
+        // ok, sem locks
+    } else {
+        emit statusMessageRequested(
+            m_i18n ? m_i18n->t("editor", "canvas.status.layerLocked")
+                   : QStringLiteral("The layer is locked (image pixels)."));
+        return;
+    }
+
     auto* imgLayer = static_cast<ImageLayer*>(layer);
     const QImage srcImg = m_document->assets().decodedImage(imgLayer->assetId);
     if (srcImg.isNull())

@@ -4,6 +4,7 @@
 #include "core/history/CommandStack.h"
 #include "core/history/DocumentCommands.h"
 #include "core/image/ImageProcessing.h"
+#include "core/selection/SelectionOperations.h"
 #include "localization/i18nservice.h"
 
 #include <QCheckBox>
@@ -27,6 +28,7 @@
 #include <QTabBar>
 #include <QScrollArea>
 #include <QStyle>
+#include <QMessageBox>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPolygonF>
@@ -992,14 +994,25 @@ void ImageInspector::buildUi()
         if (!editingLayer(&layer) || !m_document || m_originalAssetId.isNull())
             return;
 
+        // Photocraft: locks bloqueiam chroma key também.
+        if (!SelectionOperations::canEditPixels(*m_document, m_id)) {
+            QMessageBox::warning(this, QStringLiteral("CreatorCanvas"),
+                QStringLiteral("The layer is locked (image pixels)."));
+            return;
+        }
+
         const QImage current = m_document->assets().decodedImage(layer->assetId);
         if (current.isNull()) return;
 
         const double tol = m_chromaToleranceSlider->value() / 100.0;
         const double t = m_chromaTranspSlider->value() / 100.0;
         const double o = m_chromaOpacitySlider->value() / 100.0;
-        const QImage processed = ImageProcessing::colorToAlpha(current, m_chromaKeyColor, t, o, tol);
+        QImage processed = ImageProcessing::colorToAlpha(current, m_chromaKeyColor, t, o, tol);
         if (processed.isNull()) return;
+        // Seleção ativa restringe o chroma key à área selecionada.
+        if (!m_document->pixelSelection().isNull())
+            processed = SelectionOperations::applySelectionMask(
+                current, processed, m_document->pixelSelection());
 
         const LayerId origAssetId = layer->assetId;
         const LayerId newAssetId = m_document->assets().addImage(processed);
@@ -1328,17 +1341,44 @@ void ImageInspector::applyAdjustments()
     if (!editingLayer(&layer) || !m_document || m_originalAssetId.isNull())
         return;
 
+    // Photocraft/Photoshop: locks bloqueiam qualquer edição de pixels —
+    // incluindo ajustes do inspector (antes: filtro aplicava mesmo trancado).
+    QString whyNot;
+    if (!SelectionOperations::canEditPixels(*m_document, m_id, &whyNot)) {
+        QMessageBox::warning(this, QStringLiteral("CreatorCanvas"), whyNot);
+        // Reseta a prévia: os sliders voltam ao neutro sem aplicar nada.
+        m_latestPreviewImage = QImage();
+        m_currentPreviewAssetId = LayerId();
+        if (!m_originalAssetId.isNull() && m_document) {
+            m_document->setImageLayerAsset(m_id, m_originalAssetId,
+                layer->naturalWidth, layer->naturalHeight);
+        }
+        emit imagePreviewCleared();
+        return;
+    }
+
     if (m_latestPreviewImage.isNull() && (m_currentPreviewAssetId.isNull() || m_currentPreviewAssetId == m_originalAssetId))
         return;
 
     if (m_currentPreviewAssetId.isNull() && !m_latestPreviewImage.isNull())
         m_currentPreviewAssetId = m_document->assets().addImage(m_latestPreviewImage);
 
-    const QImage finalImg = m_latestPreviewImage.isNull()
+    QImage finalImg = m_latestPreviewImage.isNull()
         ? m_document->assets().decodedImage(m_currentPreviewAssetId)
         : m_latestPreviewImage;
     if (finalImg.isNull())
         return;
+
+    // Photocraft/Photoshop: a seleção ativa restringe o ajuste à área
+    // selecionada (antes: aplicava na imagem INTEIRA mesmo com seleção).
+    if (!m_document->pixelSelection().isNull()) {
+        const QImage originalImg =
+            m_document->assets().decodedImage(m_originalAssetId);
+        finalImg = SelectionOperations::applySelectionMask(
+            originalImg, finalImg, m_document->pixelSelection());
+        // Re-register the masked result as the final asset.
+        m_currentPreviewAssetId = m_document->assets().addImage(finalImg);
+    }
 
     const LayerId finalAssetId = m_currentPreviewAssetId;
     const LayerId origAssetId = m_originalAssetId;
@@ -1440,12 +1480,21 @@ void ImageInspector::applyPreset(int presetIndex)
     case 10: { // Threshold
         ImageLayer* layer = nullptr;
         if (editingLayer(&layer) && m_document) {
+            // Photocraft: locks + seleção restringem filtros predefinidos.
+            if (!SelectionOperations::canEditPixels(*m_document, m_id)) {
+                QMessageBox::warning(this, QStringLiteral("CreatorCanvas"),
+                    QStringLiteral("The layer is locked (image pixels)."));
+                return;
+            }
             const QImage base = m_document->assets().decodedImage(layer->assetId);
             if (!base.isNull()) {
                 ImageProcessing::PresetFilter filter = ImageProcessing::PresetFilter::Invert;
                 if (presetIndex == 9) filter = ImageProcessing::PresetFilter::Posterize;
                 else if (presetIndex == 10) filter = ImageProcessing::PresetFilter::Threshold;
-                const QImage filtered = ImageProcessing::applyPresetFilter(base, filter);
+                QImage filtered = ImageProcessing::applyPresetFilter(base, filter);
+                if (!m_document->pixelSelection().isNull())
+                    filtered = SelectionOperations::applySelectionMask(
+                        base, filtered, m_document->pixelSelection());
                 const LayerId newAsset = m_document->assets().addImage(filtered, QStringLiteral("png"));
                 // A4: antes mutava sem comando — "Inverter cores" era
                 // impossível de desfazer. O asset antigo fica no store e o

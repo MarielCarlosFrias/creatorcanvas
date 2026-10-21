@@ -7,6 +7,7 @@
 #include "core/Document.h"
 #include "core/history/CommandStack.h"
 #include "core/history/DocumentCommands.h"
+#include "core/selection/SelectionOperations.h"
 #include "rendering/CanvasRenderer.h"
 
 using namespace cc;
@@ -240,6 +241,81 @@ private slots:
         // Destrava: pixels livres de novo.
         doc.setLayerLocks(id, LayerLocks{});
         QCOMPARE(doc.effectiveLocks(id).pixels, false);
+    }
+    void selectionMaskRestrictsFilterToSelectedArea()
+    {
+        // O comportamento central do PhotoCraft: com uma seleção ativa,
+        // um filtro/ajuste só afeta a ÁREA SELECIONADA — o resto fica
+        // intacto. Antes: aplicava na imagem completa.
+        QImage original(10, 10, QImage::Format_ARGB32_Premultiplied);
+        original.fill(QColor(200, 200, 200));
+
+        QImage modified(10, 10, QImage::Format_ARGB32_Premultiplied);
+        modified.fill(QColor(0, 0, 0));
+
+        // Seleção: apenas a metade esquerda (x < 5) selecionada.
+        QImage selection(10, 10, QImage::Format_Alpha8);
+        selection.fill(0);
+        for (int y = 0; y < 10; ++y)
+            for (int x = 0; x < 5; ++x)
+                selection.scanLine(y)[x] = 255;
+
+        const QImage masked = SelectionOperations::applySelectionMask(
+            original, modified, selection);
+
+        // Esquerda (selecionada): modificado (preto).
+        QCOMPARE(qRed(unmult(masked, 2, 5)), 0);
+        // Direita (não selecionada): original (cinza claro).
+        QCOMPARE(qRed(unmult(masked, 7, 5)), 200);
+
+        // Sem seleção: modificado completo.
+        const QImage unmasked = SelectionOperations::applySelectionMask(
+            original, modified, QImage());
+        QCOMPARE(qRed(unmult(unmasked, 7, 5)), 0);
+
+        // Seleção parcial (feather): valor intermediário.
+        QImage partial(10, 10, QImage::Format_Alpha8);
+        partial.fill(0);
+        partial.scanLine(5)[5] = 128; // 50% em (5,5)
+        const QImage feathered = SelectionOperations::applySelectionMask(
+            original, modified, partial);
+        const int mid = qRed(unmult(feathered, 5, 5));
+        QVERIFY2(mid > 50 && mid < 150,
+                 qPrintable(QStringLiteral("feather=%1 (esperado ~100)")
+                                .arg(mid)));
+    }
+
+    void canEditPixelsRespectsLocks()
+    {
+        Document doc(32, 32);
+        QImage bitmap(32, 32, QImage::Format_ARGB32_Premultiplied);
+        bitmap.fill(QColor(100, 100, 100));
+        auto layer = std::make_unique<ImageLayer>();
+        layer->assetId = doc.assets().addImage(bitmap);
+        layer->naturalWidth = 32;
+        layer->naturalHeight = 32;
+        layer->transform.position = QPointF(16, 16);
+        const LayerId id = layer->id();
+        QVERIFY(doc.addLayer(std::move(layer)));
+
+        // Sem locks: pode editar.
+        QVERIFY(SelectionOperations::canEditPixels(doc, id));
+
+        // Tranca pixels: não pode.
+        LayerLocks locks;
+        locks.pixels = true;
+        doc.setLayerLocks(id, locks);
+        QVERIFY(!SelectionOperations::canEditPixels(doc, id));
+
+        // Destrava: pode de novo.
+        doc.setLayerLocks(id, LayerLocks{});
+        QVERIFY(SelectionOperations::canEditPixels(doc, id));
+
+        // Tranca ALL: não pode.
+        LayerLocks allLocks;
+        allLocks.all = true;
+        doc.setLayerLocks(id, allLocks);
+        QVERIFY(!SelectionOperations::canEditPixels(doc, id));
     }
 };
 

@@ -5,6 +5,7 @@
 #include "core/history/DocumentCommands.h"
 #include "core/history/CommandStack.h"
 #include "core/image/ImageProcessing.h"
+#include "ToolCommit.h"
 #include "localization/i18nservice.h"
 
 namespace cc {
@@ -111,6 +112,13 @@ void CloneStampTool::deactivate(const ToolContext& ctx)
 void CloneStampTool::mousePress(QMouseEvent* event, const QPointF& docPos, const ToolContext& ctx)
 {
     if (!ctx.document) return;
+
+    // Photocraft: pixels trancados bloqueiam o clone stamp.
+    if (effectiveLocksOf(ctx).pixels) {
+        reportPixelsLocked(ctx);
+        event->accept();
+        return;
+    }
 
     // Setting origin with Right Button or Alt/Shift+LeftClick
     const bool isOriginSet = (event->button() == Qt::RightButton)
@@ -325,6 +333,13 @@ void FloodFillTool::activate(const ToolContext& ctx)
 
 void FloodFillTool::mousePress(QMouseEvent* event, const QPointF& docPos, const ToolContext& ctx)
 {
+    // Photocraft: pixels trancados bloqueiam o balde de tinta.
+    if (effectiveLocksOf(ctx).pixels) {
+        reportPixelsLocked(ctx);
+        event->accept();
+        return;
+    }
+
     if (!ctx.document || event->button() != Qt::LeftButton) return;
 
     Layer* layer = nullptr;
