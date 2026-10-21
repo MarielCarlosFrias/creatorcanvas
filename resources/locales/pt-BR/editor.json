@@ -348,7 +348,16 @@
     "deselect": "Desmarcar Seleção",
     "invert": "Inverter Seleção",
     "operations": "Operações de Seleção (Copiar / Cortar / Mascarar)...",
-    "operationsTooltip": "Abre o menu de operações com a seleção ativa"
+    "operationsTooltip": "Abre o menu de operações com a seleção ativa",
+    "modify.title": "Modificar Seleção",
+    "modify.expand": "Expandir Seleção",
+    "modify.contract": "Contrair Seleção",
+    "modify.border": "Bordar Seleção",
+    "modify.smooth": "Suavizar Seleção",
+    "modify.feather": "Seleção com Feather",
+    "modify.radius": "Raio (px):",
+    "colorRange.title": "Faixa de Cor",
+    "colorRange.fuzziness": "Imprecisão (Fuzziness):"
   },
   "layer": {
     "group": "Agrupar"

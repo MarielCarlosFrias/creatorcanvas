@@ -348,7 +348,16 @@
     "deselect": "Deselect",
     "invert": "Invert Selection",
     "operations": "Selection Operations (Copy / Cut / Mask)...",
-    "operationsTooltip": "Opens the operations menu with the active selection"
+    "operationsTooltip": "Opens the operations menu with the active selection",
+    "modify.title": "Modify Selection",
+    "modify.expand": "Expand Selection",
+    "modify.contract": "Contract Selection",
+    "modify.border": "Border Selection",
+    "modify.smooth": "Smooth Selection",
+    "modify.feather": "Feather Selection",
+    "modify.radius": "Radius (px):",
+    "colorRange.title": "Color Range",
+    "colorRange.fuzziness": "Fuzziness:"
   },
   "layer": {
     "group": "Group"

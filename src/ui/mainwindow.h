@@ -267,6 +267,9 @@ private:
     // Ações do menu Seleção (re-traduzidas em retranslateUi)
     QAction* m_deselectAction = nullptr;
     QAction* m_invertSelectionAction = nullptr;
+    QMenu* m_modifyMenu = nullptr;
+    QList<QAction*> m_modifyActions;
+    QAction* m_colorRangeAction = nullptr;
     QAction* m_selectionOpsAction = nullptr;
     QMenu* m_selectionToolsMenu = nullptr;
     QMenu* m_retouchToolsMenu = nullptr;

@@ -2,6 +2,7 @@
 
 #include "core/document/NewDocumentSpec.h"
 #include "core/DocumentController.h"
+#include "core/selection/SelectionEngine.h"
 #include "core/templates/TemplateFactory.h"
 #include "core/history/DocumentCommands.h"
 #include "core/layers/Layer.h"
@@ -38,6 +39,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QKeySequence>
 #include <QLabel>
 #include <QMenu>
@@ -56,6 +58,8 @@
 #include <QScrollArea>
 #include <QTabWidget>
 #include <QTabBar>
+
+#include <functional>
 
 namespace cc {
 namespace {
@@ -2304,6 +2308,119 @@ void MainWindow::buildMenus()
         if (m_canvas) m_canvas->openSelectionActionsMenu();
     });
 
+    // --- Select > Modify: operações morfológicas na seleção ativa ---
+    // (Photocraft: expand/contract/border/smooth/feather sobre a máscara)
+    auto modifySelection = [this](const std::function<QImage(const QImage&)>& op) {
+        if (!m_document || m_document->pixelSelection().isNull())
+            return;
+        const QImage current = m_document->pixelSelection();
+        const QImage modified = op(current);
+        if (modified.isNull())
+            m_document->clearPixelSelection();
+        else
+            m_document->setPixelSelection(modified);
+    };
+    auto askRadius = [this](const QString& title, double def) -> double {
+        bool ok = false;
+        const double v = QInputDialog::getDouble(
+            this, title,
+            m_i18n ? m_i18n->t("editor", "selection.modify.radius")
+                   : QStringLiteral("Radius (px):"),
+            def, 1.0, 200.0, 1, &ok);
+        return ok ? v : -1.0;
+    };
+
+    m_modifyMenu = m_selectMenu->addMenu(QString());
+    auto* expandAct = m_modifyMenu->addAction(QString());
+    m_modifyActions.append(expandAct);
+    connect(expandAct, &QAction::triggered, this, [modifySelection, askRadius, this] {
+        const double r = askRadius(
+            m_i18n ? m_i18n->t("editor", "selection.modify.expand")
+                   : QStringLiteral("Expand Selection"), 2.0);
+        if (r > 0)
+            modifySelection([r](const QImage& s) {
+                return SelectionEngine::expand(s, float(r));
+            });
+    });
+    auto* contractAct = m_modifyMenu->addAction(QString());
+    m_modifyActions.append(contractAct);
+    connect(contractAct, &QAction::triggered, this, [modifySelection, askRadius, this] {
+        const double r = askRadius(
+            m_i18n ? m_i18n->t("editor", "selection.modify.contract")
+                   : QStringLiteral("Contract Selection"), 2.0);
+        if (r > 0)
+            modifySelection([r](const QImage& s) {
+                return SelectionEngine::contract(s, float(r));
+            });
+    });
+    auto* borderAct = m_modifyMenu->addAction(QString());
+    m_modifyActions.append(borderAct);
+    connect(borderAct, &QAction::triggered, this, [modifySelection, askRadius, this] {
+        const double r = askRadius(
+            m_i18n ? m_i18n->t("editor", "selection.modify.border")
+                   : QStringLiteral("Border Selection"), 4.0);
+        if (r > 0)
+            modifySelection([r](const QImage& s) {
+                return SelectionEngine::border(s, float(r));
+            });
+    });
+    auto* smoothAct = m_modifyMenu->addAction(QString());
+    m_modifyActions.append(smoothAct);
+    connect(smoothAct, &QAction::triggered, this, [modifySelection, askRadius, this] {
+        const double r = askRadius(
+            m_i18n ? m_i18n->t("editor", "selection.modify.smooth")
+                   : QStringLiteral("Smooth Selection"), 2.0);
+        if (r > 0)
+            modifySelection([r](const QImage& s) {
+                return SelectionEngine::smooth(s, float(r));
+            });
+    });
+    auto* featherAct = m_modifyMenu->addAction(QString());
+    m_modifyActions.append(featherAct);
+    connect(featherAct, &QAction::triggered, this, [modifySelection, askRadius, this] {
+        const double r = askRadius(
+            m_i18n ? m_i18n->t("editor", "selection.modify.feather")
+                   : QStringLiteral("Feather Selection"), 5.0);
+        if (r > 0)
+            modifySelection([r](const QImage& s) {
+                return SelectionEngine::feather(s, float(r));
+            });
+    });
+
+    // --- Select > Color Range: seleção por faixa de cor ---
+    m_colorRangeAction = m_selectMenu->addAction(QString());
+    auto* colorRangeAct = m_colorRangeAction;
+    connect(colorRangeAct, &QAction::triggered, this, [this] {
+        if (!m_document || m_selectedId.isNull())
+            return;
+        Layer* layer = m_document->findLayer(m_selectedId);
+        if (!layer || layer->type() != LayerType::Image)
+            return;
+
+        bool ok = false;
+        const double fuzziness = QInputDialog::getDouble(
+            this,
+            m_i18n ? m_i18n->t("editor", "selection.colorRange.title")
+                   : QStringLiteral("Color Range"),
+            m_i18n ? m_i18n->t("editor", "selection.colorRange.fuzziness")
+                   : QStringLiteral("Fuzziness:"),
+            40.0, 0.0, 200.0, 1, &ok);
+        if (!ok)
+            return;
+
+        // Usa a cor atual do pincel como alvo da amostra.
+        const QColor target = m_currentPaintColor;
+        const QImage bitmap = m_document->assets().decodedImage(
+            static_cast<ImageLayer*>(layer)->assetId);
+        if (bitmap.isNull())
+            return;
+
+        const QImage mask = SelectionEngine::colorRange(
+            bitmap, bitmap.rect(), target, float(fuzziness));
+        if (!mask.isNull())
+            m_document->setPixelSelection(mask);
+    });
+
     m_layerMenu = menuBar()->addMenu(QString());
     m_layerMenu->addAction(m_addTextAction);
 
@@ -3983,6 +4100,24 @@ void MainWindow::retranslateUi()
         m_selectionOpsAction->setToolTip(
             m_i18n->t("editor", "selection.operationsTooltip"));
     }
+    // Select > Modify e Color Range (mesma ordem de m_modifyActions)
+    if (m_modifyMenu)
+        m_modifyMenu->setTitle(m_i18n->t("editor", "selection.modify.title"));
+    {
+        static const char* const modifyKeys[] = {
+            "selection.modify.expand", "selection.modify.contract",
+            "selection.modify.border", "selection.modify.smooth",
+            "selection.modify.feather",
+        };
+        const int keyCount = int(sizeof(modifyKeys) / sizeof(modifyKeys[0]));
+        for (int i = 0; i < m_modifyActions.size() && i < keyCount; ++i) {
+            if (m_modifyActions[i])
+                m_modifyActions[i]->setText(
+                    m_i18n->t("editor", QString::fromLatin1(modifyKeys[i])));
+        }
+    }
+    if (m_colorRangeAction)
+        m_colorRangeAction->setText(m_i18n->t("editor", "selection.colorRange.title"));
     if (m_eyedropperHintLabel)
         m_eyedropperHintLabel->setText(m_i18n->t("editor", "tools.eyedropper.hint"));
     if (m_paintBrushCombo && m_paintBrushCombo->count() >= 5) {

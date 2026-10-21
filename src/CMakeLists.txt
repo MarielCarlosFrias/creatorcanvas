@@ -51,6 +51,8 @@ add_library(cc_core STATIC
     core/history/DocumentCommands.h
     core/selection/SelectionOperations.h
     core/selection/SelectionOperations.cpp
+    core/selection/SelectionEngine.h
+    core/selection/SelectionEngine.cpp
     core/snap/SnapEngine.h
     core/snap/SnapEngine.cpp
     core/serialization/ProjectFile.h
