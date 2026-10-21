@@ -35,6 +35,7 @@
 #include <QCloseEvent>
 #include <QColorDialog>
 #include <QComboBox>
+#include <QCursor>
 #include <QDockWidget>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -769,6 +770,7 @@ void MainWindow::buildLayersDock()
 {
     m_layersPanel = new LayersPanel(m_i18n, m_history.get(), this);
     m_layersDock = new QDockWidget(QString(), this);
+    m_layersDock->setObjectName(QStringLiteral("LayersDock"));
     m_layersDock->setMinimumWidth(Design::dockWidth(width()));
     m_layersDock->setWidget(m_layersPanel);
     m_layersDock->setFeatures(QDockWidget::DockWidgetMovable
@@ -808,6 +810,7 @@ void MainWindow::buildLayersDock()
 
     m_textInspector = new TextInspector(m_i18n, m_document, m_history.get(), this);
     m_textDock = new QDockWidget(QString(), this);
+    m_textDock->setObjectName(QStringLiteral("TextDock"));
     m_textDock->setMinimumWidth(Design::dockWidth(width()));
     m_textDock->setWidget(m_textInspector);
     m_textDock->setFeatures(QDockWidget::DockWidgetMovable
@@ -818,6 +821,7 @@ void MainWindow::buildLayersDock()
     // Cria o inspetor de formas e tabifica junto ao inspetor de texto na barra lateral direita
     m_shapeInspector = new ShapeInspector(m_i18n, m_document, m_history.get(), this);
     m_shapeDock = new QDockWidget(QString(), this);
+    m_shapeDock->setObjectName(QStringLiteral("ShapeDock"));
     m_shapeDock->setMinimumWidth(Design::dockWidth(width()));
     m_shapeDock->setWidget(m_shapeInspector);
     m_shapeDock->setFeatures(QDockWidget::DockWidgetMovable
@@ -828,6 +832,7 @@ void MainWindow::buildLayersDock()
     // Cria o inspetor de imagens e tabifica junto aos outros inspetores na barra lateral direita
     m_imageInspector = new ImageInspector(m_i18n, m_document, m_history.get(), this);
     m_imageDock = new QDockWidget(QString(), this);
+    m_imageDock->setObjectName(QStringLiteral("ImageDock"));
     m_imageDock->setMinimumWidth(Design::dockWidth(width()));
     m_imageDock->setWidget(m_imageInspector);
     m_imageDock->setFeatures(QDockWidget::DockWidgetMovable
@@ -854,6 +859,7 @@ void MainWindow::buildLayersDock()
     // Cria o painel de Histórico (Undo/Redo visual estilo Photoshop)
     m_historyPanel = new HistoryPanel(m_i18n, m_history.get(), this);
     m_historyDock = new QDockWidget(QString(), this);
+    m_historyDock->setObjectName(QStringLiteral("HistoryDock"));
     m_historyDock->setMinimumWidth(Design::dockWidth(width()));
     m_historyDock->setWidget(m_historyPanel);
     m_historyDock->setFeatures(QDockWidget::DockWidgetMovable
@@ -2423,6 +2429,73 @@ void MainWindow::buildMenus()
 
     m_layerMenu = menuBar()->addMenu(QString());
     m_layerMenu->addAction(m_addTextAction);
+
+    // --- Nova Camada de Preenchimento (Fill Layer, estilo Photoshop) ---
+    m_addFillLayerAction = m_layerMenu->addAction(QString());
+    m_addFillLayerAction->setIcon(ThemeIcons::toolGradient());
+    connect(m_addFillLayerAction, &QAction::triggered, this, [this] {
+        if (!m_document)
+            return;
+        // Diálogo de cor para o preenchimento sólido.
+        const QColor chosen = QColorDialog::getColor(
+            QColor(61, 126, 255), this,
+            m_i18n ? m_i18n->t("editor", "layer.newFillLayer.colorTitle")
+                   : QStringLiteral("Fill Layer Color"));
+        if (!chosen.isValid())
+            return;
+        auto layer = std::make_unique<FillLayer>();
+        layer->name = m_i18n ? m_i18n->t("editor", "layer.newFillLayer.name")
+                             : QStringLiteral("Fill Layer");
+        layer->kind = FillType::Solid;
+        layer->color = chosen;
+        if (m_history) {
+            m_history->execute(std::make_unique<AddLayerCommand>(
+                *m_document, std::move(layer), m_document->rootGroup(), -1));
+        } else {
+            m_document->addLayer(std::move(layer));
+        }
+    });
+
+    // --- Nova Camada de Ajuste (Adjustment Layer, estilo Photoshop) ---
+    m_addAdjustmentLayerAction = m_layerMenu->addAction(QString());
+    m_addAdjustmentLayerAction->setIcon(ThemeIcons::actionHistory());
+    connect(m_addAdjustmentLayerAction, &QAction::triggered, this, [this] {
+        if (!m_document)
+            return;
+        // Menu com os tipos de ajuste disponíveis.
+        QMenu menu(this);
+        static const struct { AdjustmentType type; const char* key; const char* fallback; } kAdjustKinds[] = {
+            { AdjustmentType::BrightnessContrast, "layer.adjust.brightnessContrast", "Brightness / Contrast" },
+            { AdjustmentType::HueSaturation,      "layer.adjust.hueSaturation",      "Hue / Saturation" },
+            { AdjustmentType::ColorBalance,       "layer.adjust.colorBalance",       "Color Balance" },
+            { AdjustmentType::PhotoFilter,        "layer.adjust.photoFilter",        "Photo Filter" },
+            { AdjustmentType::Invert,             "layer.adjust.invert",             "Invert" },
+            { AdjustmentType::Posterize,          "layer.adjust.posterize",          "Posterize" },
+            { AdjustmentType::Threshold,          "layer.adjust.threshold",          "Threshold" },
+            { AdjustmentType::GradientMap,        "layer.adjust.gradientMap",        "Gradient Map" },
+        };
+        for (const auto& def : kAdjustKinds) {
+            QAction* act = menu.addAction(m_i18n
+                ? m_i18n->t("editor", QString::fromLatin1(def.key))
+                : QString::fromLatin1(def.fallback));
+            connect(act, &QAction::triggered, this, [this, def] {
+                auto layer = std::make_unique<AdjustmentLayer>();
+                layer->name = m_i18n
+                    ? m_i18n->t("editor", QString::fromLatin1(def.key))
+                    : QString::fromLatin1(def.fallback);
+                layer->kind = def.type;
+                if (m_history) {
+                    m_history->execute(std::make_unique<AddLayerCommand>(
+                        *m_document, std::move(layer), m_document->rootGroup(), -1));
+                } else {
+                    m_document->addLayer(std::move(layer));
+                }
+            });
+        }
+        menu.exec(QCursor::pos());
+    });
+
+    m_layerMenu->addSeparator();
 
     // Submenu para adicionar diferentes tipos de formas geométricas
     m_addShapeMenu = m_layerMenu->addMenu(QString());
@@ -4210,6 +4283,10 @@ void MainWindow::retranslateUi()
     if (m_filterMenu) m_filterMenu->setTitle(pt ? QStringLiteral("Filtro") : QStringLiteral("Filter"));
     if (m_windowMenu) m_windowMenu->setTitle(pt ? QStringLiteral("Janela") : QStringLiteral("Window"));
     m_layerMenu->setTitle(m_i18n->t("common", "menu.layer"));
+    if (m_addFillLayerAction)
+        m_addFillLayerAction->setText(m_i18n->t("editor", "layer.newFillLayer"));
+    if (m_addAdjustmentLayerAction)
+        m_addAdjustmentLayerAction->setText(m_i18n->t("editor", "layer.newAdjustmentLayer"));
     m_settingsMenu->setTitle(m_i18n->t("common", "menu.settings"));
     m_helpMenu->setTitle(m_i18n->t("common", "menu.help"));
 

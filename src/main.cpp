@@ -12,10 +12,13 @@
 #include "ui/themeicons.h"
 
 #include <QApplication>
+#include <QAction>
 #include <QCommandLineParser>
 #include <QDir>
 #include <QFile>
 #include <QImageWriter>
+#include <QMenu>
+#include <QMenuBar>
 #include <QPixmap>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -212,6 +215,28 @@ int main(int argc, char *argv[])
                 if (!shot.save(path))
                     qWarning() << "[UISnapshot] failed to save" << path;
                 qInfo() << "[UISnapshot]" << path << shot.size();
+            }
+        }
+
+        // Verificação da estrutura de menus: registra cada ação dos menus
+        // críticos (Selecionar, Camada) para confirmar que os itens novos
+        // (Modificar Seleção, Faixa de Cor, Fill/Adjustment) estão visíveis.
+        for (QMenu* menu : window.menuBar()->findChildren<QMenu*>(
+                 QString(), Qt::FindDirectChildrenOnly)) {
+            for (QAction* act : menu->actions()) {
+                if (act->text().isEmpty() || act->isSeparator())
+                    continue;
+                qInfo() << "[UISnapshot] menu"
+                        << menu->title() << "->" << act->text()
+                        << (act->menu() ? "(submenu)" : "");
+                if (act->menu()) {
+                    for (QAction* sub : act->menu()->actions()) {
+                        if (!sub->text().isEmpty() && !sub->isSeparator())
+                            qInfo() << "[UISnapshot]   sub"
+                                    << menu->title() << ">"
+                                    << act->text() << ">" << sub->text();
+                    }
+                }
             }
         }
 

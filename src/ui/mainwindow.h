@@ -168,6 +168,8 @@ private:
     QAction* m_undoAction = nullptr;
     QAction* m_redoAction = nullptr;
     QAction* m_addTextAction = nullptr;
+    QAction* m_addFillLayerAction = nullptr;
+    QAction* m_addAdjustmentLayerAction = nullptr;
     QMenu* m_addShapeMenu = nullptr;
     QMenu* m_imageMenu = nullptr;
     QMenu* m_selectMenu = nullptr;

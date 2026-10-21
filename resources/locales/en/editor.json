@@ -360,6 +360,18 @@
     "colorRange.fuzziness": "Fuzziness:"
   },
   "layer": {
-    "group": "Group"
+    "group": "Group",
+    "newFillLayer": "New Fill Layer...",
+    "newFillLayer.name": "Fill Layer",
+    "newFillLayer.colorTitle": "Fill Layer Color",
+    "newAdjustmentLayer": "New Adjustment Layer...",
+    "adjust.brightnessContrast": "Brightness / Contrast",
+    "adjust.hueSaturation": "Hue / Saturation",
+    "adjust.colorBalance": "Color Balance",
+    "adjust.photoFilter": "Photo Filter",
+    "adjust.invert": "Invert",
+    "adjust.posterize": "Posterize",
+    "adjust.threshold": "Threshold",
+    "adjust.gradientMap": "Gradient Map"
   }
 }

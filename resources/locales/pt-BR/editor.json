@@ -360,6 +360,18 @@
     "colorRange.fuzziness": "Imprecisão (Fuzziness):"
   },
   "layer": {
-    "group": "Agrupar"
+    "group": "Agrupar",
+    "newFillLayer": "Nova Camada de Preenchimento...",
+    "newFillLayer.name": "Camada de Preenchimento",
+    "newFillLayer.colorTitle": "Cor da Camada de Preenchimento",
+    "newAdjustmentLayer": "Nova Camada de Ajuste...",
+    "adjust.brightnessContrast": "Brilho / Contraste",
+    "adjust.hueSaturation": "Matiz / Saturação",
+    "adjust.colorBalance": "Balanço de Cores",
+    "adjust.photoFilter": "Filtro Fotográfico",
+    "adjust.invert": "Inverter",
+    "adjust.posterize": "Posterizar",
+    "adjust.threshold": "Limiar",
+    "adjust.gradientMap": "Mapa de Gradiente"
   }
 }
