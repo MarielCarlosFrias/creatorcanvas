@@ -3814,6 +3814,9 @@ void MainWindow::rotateLayer(double degrees)
 {
     if (!m_document || m_selectedId.isNull())
         return;
+    const auto locks = m_document->effectiveLocks(m_selectedId);
+    if (locks.position || locks.all)
+        return;
     Layer* layer = m_document->findLayer(m_selectedId);
     if (!layer)
         return;
@@ -3828,6 +3831,8 @@ void MainWindow::rotateLayer(double degrees)
 void MainWindow::deleteSelectedLayer()
 {
     if (m_selectedId.isNull() || !m_document || !m_history)
+        return;
+    if (m_document->effectiveLocks(m_selectedId).all)
         return;
     // A1: seleção pendurada após undo de grupo/adição/remoção — sem este
     // guard o comando dereferenciava um pai nulo e crashava no Delete.

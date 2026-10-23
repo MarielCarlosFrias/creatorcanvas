@@ -49,6 +49,13 @@ add_library(cc_core STATIC
     core/history/CommandStack.h
     core/history/CommandStack.cpp
     core/history/DocumentCommands.h
+    core/commands/BaseCommands.h
+    core/commands/BaseCommands.cpp
+    core/commands/LayerStructureCommands.h
+    core/commands/LayerTransformCommands.h
+    core/commands/LayerPropertyCommands.h
+    core/commands/RasterCommands.h
+    core/commands/SelectionCommands.h
     core/selection/SelectionOperations.h
     core/selection/SelectionOperations.cpp
     core/selection/SelectionEngine.h

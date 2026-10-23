@@ -120,6 +120,8 @@ std::unique_ptr<Layer> Document::takeLayer(const LayerId& id)
 
 bool Document::removeLayer(const LayerId& id)
 {
+    if (effectiveLocks(id).all)
+        return false;
     return takeLayer(id) != nullptr;
 }
 
@@ -147,9 +149,13 @@ bool Document::reorderLayer(const LayerId& id, GroupLayer* newParent, int newInd
     Layer* layer = findLayer(id);
     if (!layer || id == m_root->id())
         return false;
+    if (effectiveLocks(id).all)
+        return false;
     if (!newParent)
         newParent = m_root.get();
     if (findLayer(newParent->id()) != newParent)
+        return false;
+    if (effectiveLocks(newParent->id()).all)
         return false;
 
     for (GroupLayer* p = newParent; p; p = parentOf(p->id())) {
@@ -196,6 +202,8 @@ bool Document::setLayerName(const LayerId& id, QString name)
     Layer* layer = findLayer(id);
     if (!layer || layer->name == name)
         return layer != nullptr;
+    if (effectiveLocks(id).all)
+        return false;
     layer->name = std::move(name);
     bumpRevision();
     emit layerPropertyChanged(id);
@@ -243,6 +251,8 @@ bool Document::setLayerColorTag(const LayerId& id, LayerColorTag tag)
     Layer* layer = findLayer(id);
     if (!layer || layer->colorTag == tag)
         return layer != nullptr;
+    if (effectiveLocks(id).all)
+        return false;
     layer->colorTag = tag;
     bumpRevision();
     emit layerPropertyChanged(id);
@@ -253,6 +263,8 @@ bool Document::setLayerOpacity(const LayerId& id, float opacity)
 {
     Layer* layer = findLayer(id);
     if (!layer)
+        return false;
+    if (effectiveLocks(id).all)
         return false;
     const float old = layer->opacity();
     layer->setOpacity(opacity);
@@ -268,6 +280,8 @@ bool Document::setLayerBlendMode(const LayerId& id, BlendMode mode)
     Layer* layer = findLayer(id);
     if (!layer || layer->blendMode == mode)
         return layer != nullptr;
+    if (effectiveLocks(id).all)
+        return false;
     layer->blendMode = mode;
     bumpRevision();
     emit layerPropertyChanged(id);
@@ -279,6 +293,8 @@ bool Document::setLayerBlendIf(const LayerId& id, BlendIf blendIf)
     Layer* layer = findLayer(id);
     if (!layer || layer->blendIf == blendIf)
         return layer != nullptr;
+    if (effectiveLocks(id).all)
+        return false;
     layer->blendIf = std::move(blendIf);
     bumpRevision();
     emit layerPropertyChanged(id);
@@ -289,6 +305,8 @@ bool Document::setLayerFillOpacity(const LayerId& id, float fillOpacity)
 {
     Layer* layer = findLayer(id);
     if (!layer)
+        return false;
+    if (effectiveLocks(id).all)
         return false;
     const float old = layer->fillOpacity();
     layer->setFillOpacity(fillOpacity);
@@ -304,6 +322,8 @@ bool Document::setLayerClipped(const LayerId& id, bool clipped)
     Layer* layer = findLayer(id);
     if (!layer || layer->clipped == clipped)
         return layer != nullptr;
+    if (effectiveLocks(id).all)
+        return false;
     layer->clipped = clipped;
     bumpRevision();
     emit layerPropertyChanged(id);
@@ -315,6 +335,8 @@ bool Document::setLayerLinkGroup(const LayerId& id, std::optional<qint64> linkGr
     Layer* layer = findLayer(id);
     if (!layer || layer->linkGroup == linkGroup)
         return layer != nullptr;
+    if (effectiveLocks(id).all)
+        return false;
     layer->linkGroup = linkGroup;
     bumpRevision();
     emit layerPropertyChanged(id);
@@ -326,6 +348,8 @@ bool Document::setAdjustmentParameters(
 {
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Adjustment)
+        return false;
+    if (effectiveLocks(id).all)
         return false;
     auto* adj = static_cast<AdjustmentLayer*>(layer);
     if (adj->parameters == parameters)
@@ -340,6 +364,8 @@ bool Document::setLayerVectorMask(const LayerId& id, QImage mask)
 {
     Layer* layer = findLayer(id);
     if (!layer)
+        return false;
+    if (effectiveLocks(id).all)
         return false;
     static_cast<void>(layer); // mask stored on specific layer types; ImageLayer/TextLayer/ShapeLayer handle it
     // For now, vector mask is stored on the base Layer class directly.
@@ -386,6 +412,9 @@ bool Document::setLayerTransform(const LayerId& id, const AffineTransform& trans
     Layer* layer = findLayer(id);
     if (!layer || layer->transform == transform)
         return layer != nullptr;
+    const auto locks = effectiveLocks(id);
+    if (locks.position || locks.all)
+        return false;
     layer->transform = transform;
     bumpRevision();
     emit layerPropertyChanged(id);
@@ -396,6 +425,9 @@ bool Document::setLayerTextBox(const LayerId& id, const QSizeF& box)
 {
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Text)
+        return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.position || locks.all)
         return false;
     auto* text = static_cast<TextLayer*>(layer);
     if (text->box == box)
@@ -411,6 +443,9 @@ bool Document::setLayerTextEffects(const LayerId& id, const TextEffects& effects
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Text)
         return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
+        return false;
     auto* text = static_cast<TextLayer*>(layer);
     if (text->effects == effects)
         return true;
@@ -424,6 +459,9 @@ bool Document::setLayerImageEffects(const LayerId& id, const ImageEffects& effec
 {
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Image)
+        return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
         return false;
     auto* img = static_cast<ImageLayer*>(layer);
     if (img->effects == effects)
@@ -439,6 +477,9 @@ bool Document::setLayerTextContent(const LayerId& id, QString content)
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Text)
         return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
+        return false;
     auto* text = static_cast<TextLayer*>(layer);
     if (text->content == content)
         return true;
@@ -452,6 +493,9 @@ bool Document::setLayerFontFamily(const LayerId& id, QString family)
 {
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Text)
+        return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
         return false;
     auto* text = static_cast<TextLayer*>(layer);
     if (text->fontFamily == family)
@@ -467,6 +511,9 @@ bool Document::setLayerTextSize(const LayerId& id, double sizePt)
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Text)
         return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
+        return false;
     auto* text = static_cast<TextLayer*>(layer);
     if (qFuzzyCompare(text->sizePt, sizePt))
         return true;
@@ -480,6 +527,9 @@ bool Document::setLayerTextBold(const LayerId& id, bool bold)
 {
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Text)
+        return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
         return false;
     auto* text = static_cast<TextLayer*>(layer);
     if (text->bold == bold)
@@ -495,6 +545,9 @@ bool Document::setLayerTextItalic(const LayerId& id, bool italic)
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Text)
         return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
+        return false;
     auto* text = static_cast<TextLayer*>(layer);
     if (text->italic == italic)
         return true;
@@ -508,6 +561,9 @@ bool Document::setLayerTextUnderline(const LayerId& id, bool underline)
 {
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Text)
+        return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
         return false;
     auto* text = static_cast<TextLayer*>(layer);
     if (text->underline == underline)
@@ -523,6 +579,9 @@ bool Document::setLayerTextColor(const LayerId& id, QColor color)
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Text)
         return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
+        return false;
     auto* text = static_cast<TextLayer*>(layer);
     if (text->color == color)
         return true;
@@ -536,6 +595,9 @@ bool Document::setLayerTextAlign(const LayerId& id, TextAlignment align)
 {
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Text)
+        return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
         return false;
     auto* text = static_cast<TextLayer*>(layer);
     if (text->align == align)
@@ -551,6 +613,9 @@ bool Document::setLayerLetterSpacing(const LayerId& id, double letterSpacingPx)
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Text)
         return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
+        return false;
     auto* text = static_cast<TextLayer*>(layer);
     if (qFuzzyCompare(text->letterSpacingPx, letterSpacingPx))
         return true;
@@ -564,6 +629,9 @@ bool Document::setLayerLineHeight(const LayerId& id, double lineHeightMult)
 {
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Text)
+        return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
         return false;
     auto* text = static_cast<TextLayer*>(layer);
     if (qFuzzyCompare(text->lineHeightMult, lineHeightMult))
@@ -588,6 +656,9 @@ bool Document::setShapeFill(const LayerId& id, QColor fill)
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Shape)
         return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
+        return false;
     auto* shape = static_cast<ShapeLayer*>(layer);
     if (shape->fill == fill)
         return true; // Sem alteração, evita notificações redundantes
@@ -601,6 +672,9 @@ bool Document::setShapeGradient(const LayerId& id, Gradient gradient)
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Shape)
         return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
+        return false;
     static_cast<ShapeLayer*>(layer)->gradient = std::move(gradient);
     bumpRevision();
     emit layerPropertyChanged(id);
@@ -611,6 +685,9 @@ bool Document::setShapeStarPoints(const LayerId& id, int points)
 {
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Shape)
+        return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
         return false;
     auto* shape = static_cast<ShapeLayer*>(layer);
     const int next = qBound(3, points, 16);
@@ -627,6 +704,9 @@ bool Document::setShapeStarInnerRatio(const LayerId& id, double ratio)
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Shape)
         return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
+        return false;
     auto* shape = static_cast<ShapeLayer*>(layer);
     const double next = qBound(0.1, ratio, 0.9);
     if (shape->starInnerRatio == next)
@@ -641,6 +721,9 @@ bool Document::setShapeStrokeDashRatio(const LayerId& id, double ratio)
 {
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Shape)
+        return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
         return false;
     auto* shape = static_cast<ShapeLayer*>(layer);
     const double next = qBound(0.0, ratio, 10.0);
@@ -657,6 +740,9 @@ bool Document::setShapeShadow(const LayerId& id, ShapeShadow shadow)
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Shape)
         return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
+        return false;
     auto* shape = static_cast<ShapeLayer*>(layer);
     if (shape->shadow == shadow)
         return true;
@@ -671,6 +757,9 @@ bool Document::setBackgroundGradient(const LayerId& id, Gradient gradient)
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Background)
         return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
+        return false;
     static_cast<BackgroundLayer*>(layer)->gradient = std::move(gradient);
     bumpRevision();
     emit layerPropertyChanged(id);
@@ -682,6 +771,9 @@ bool Document::setShapeStroke(const LayerId& id, QColor stroke)
 {
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Shape)
+        return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
         return false;
     auto* shape = static_cast<ShapeLayer*>(layer);
     if (shape->stroke == stroke)
@@ -697,6 +789,9 @@ bool Document::setShapeStrokeWidth(const LayerId& id, double width)
 {
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Shape)
+        return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
         return false;
     auto* shape = static_cast<ShapeLayer*>(layer);
     const double clamped = std::max(0.0, width);
@@ -714,6 +809,9 @@ bool Document::setShapeCornerRadius(const LayerId& id, double radius)
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Shape)
         return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
+        return false;
     auto* shape = static_cast<ShapeLayer*>(layer);
     const double clamped = std::max(0.0, radius);
     if (qFuzzyCompare(shape->cornerRadius, clamped))
@@ -728,6 +826,9 @@ bool Document::setShapeKind(const LayerId& id, ShapeKind kind)
 {
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Shape)
+        return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
         return false;
     auto* shape = static_cast<ShapeLayer*>(layer);
     if (shape->kind == kind)
@@ -744,6 +845,9 @@ bool Document::setImageLayerAsset(const LayerId& id, const LayerId& newAssetId, 
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Image)
         return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
+        return false;
     auto* img = static_cast<ImageLayer*>(layer);
     img->assetId = newAssetId;
     img->naturalWidth = naturalWidth;
@@ -758,6 +862,9 @@ bool Document::setLayerAlphaMask(const LayerId& id, QImage mask)
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Image)
         return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
+        return false;
     static_cast<ImageLayer*>(layer)->alphaMask = std::move(mask);
     bumpRevision();
     emit layerPropertyChanged(id);
@@ -768,6 +875,9 @@ bool Document::invertLayerAlphaMask(const LayerId& id)
 {
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Image)
+        return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
         return false;
     auto* img = static_cast<ImageLayer*>(layer);
     if (img->alphaMask.isNull())
@@ -785,6 +895,9 @@ bool Document::removeLayerAlphaMask(const LayerId& id)
 {
     Layer* layer = findLayer(id);
     if (!layer || layer->type() != LayerType::Image)
+        return false;
+    const auto locks = effectiveLocks(id);
+    if (locks.pixels || locks.all)
         return false;
     auto* img = static_cast<ImageLayer*>(layer);
     if (img->alphaMask.isNull())

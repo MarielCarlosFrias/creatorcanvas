@@ -68,3 +68,4 @@ cc_add_test(test_undo_render unit/test_undo_render.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/maskeditcanvas.cpp
 )
 cc_add_test(test_template_textfit unit/test_template_textfit.cpp)
+cc_add_test(test_command_locks    unit/test_command_locks.cpp)

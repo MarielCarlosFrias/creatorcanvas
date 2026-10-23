@@ -1371,7 +1371,9 @@ void CanvasView::keyPressEvent(QKeyEvent* event)
 
     if ((event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace)
         && !m_selectedId.isNull()) {
-        emit deleteRequested(m_selectedId);
+        if (!m_document || !m_document->effectiveLocks(m_selectedId).all) {
+            emit deleteRequested(m_selectedId);
+        }
         event->accept();
         return;
     }
@@ -1381,7 +1383,8 @@ void CanvasView::keyPressEvent(QKeyEvent* event)
         (event->key() == Qt::Key_Left || event->key() == Qt::Key_Right ||
          event->key() == Qt::Key_Up || event->key() == Qt::Key_Down)) {
         Layer* layer = m_document->findLayer(m_selectedId);
-        if (layer && !layer->locked && layer->type() != LayerType::Background) {
+        const auto locks = m_document->effectiveLocks(m_selectedId);
+        if (layer && !locks.position && !locks.all && layer->type() != LayerType::Background) {
             const double step = (event->modifiers() & Qt::ShiftModifier) ? 10.0 : 1.0;
             const AffineTransform oldT = layer->transform;
             AffineTransform newT = oldT;
