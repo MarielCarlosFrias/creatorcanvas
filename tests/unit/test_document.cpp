@@ -365,14 +365,22 @@ private slots:
         QVERIFY(doc.setLayerLocked(id, true));
         QCOMPARE(spy.count(), 4);
 
-        // 7. BlendMode: deve emitir
-        QVERIFY(doc.setLayerBlendMode(id, BlendMode::Multiply));
+        // Bloqueado: setLayerBlendMode não deve alterar nem emitir
+        QVERIFY(!doc.setLayerBlendMode(id, BlendMode::Multiply));
+        QCOMPARE(spy.count(), 4);
+
+        // Desbloquear: deve emitir
+        QVERIFY(doc.setLayerLocked(id, false));
         QCOMPARE(spy.count(), 5);
+
+        // 7. BlendMode: agora que está desbloqueado, deve emitir
+        QVERIFY(doc.setLayerBlendMode(id, BlendMode::Multiply));
+        QCOMPARE(spy.count(), 6);
 
         // Unknown ids: não devem emitir
         QVERIFY(!doc.setLayerVisible(newLayerId(), true));
         QVERIFY(!doc.setLayerName(newLayerId(), QStringLiteral("x")));
-        QCOMPARE(spy.count(), 5);
+        QCOMPARE(spy.count(), 6);
     }
 
     void structureChangedSignalPerOperation()

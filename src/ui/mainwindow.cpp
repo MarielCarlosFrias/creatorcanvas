@@ -2925,6 +2925,15 @@ void MainWindow::importImage(const QString& filePath)
         return;
     }
 
+    if (!m_document) {
+        if (m_autosave)
+            m_autosave->discardRecovery();
+        auto doc = std::make_unique<Document>(result.image.width(), result.image.height());
+        attachDocument(std::move(doc));
+        updateWindowTitle();
+        enterEditor();
+    }
+
     const LayerId assetId = m_document->assets().add(result.encoded, result.format);
     if (assetId.isNull()) {
         if (m_i18n)

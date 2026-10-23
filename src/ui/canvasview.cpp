@@ -704,8 +704,8 @@ void CanvasView::paintEvent(QPaintEvent*)
     options.previewLayerId = m_previewLayerId;
     options.previewImage = m_previewImage;
     options.interactive = (m_gesture != Gesture::None) || m_panning;
-    options.checkerLight = dark ? Design::Base3() : QColor(0xe5, 0xe9, 0xef);
-    options.checkerDark = dark ? Design::Base2() : QColor(0xff, 0xff, 0xff);
+    options.checkerLight = dark ? QColor(0x38, 0x3b, 0x44) : QColor(0xe5, 0xe9, 0xef);
+    options.checkerDark = dark ? QColor(0x24, 0x26, 0x2c) : QColor(0xff, 0xff, 0xff);
     options.canvasBorder = dark ? Design::DBorder() : Design::LBorder();
     renderDocument(*m_document, &painter, docToDevice(), options);
 
