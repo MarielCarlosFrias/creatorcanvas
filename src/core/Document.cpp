@@ -144,6 +144,20 @@ QSet<LayerId> Document::referencedAssetIds(bool includeTransient) const
     return ids;
 }
 
+int Document::purgeUnreferencedAssets(const QSet<LayerId>& extraKeepIds)
+{
+    const QSet<LayerId> referenced = referencedAssetIds(true);
+    int removed = 0;
+    const auto list = m_assets.assets();
+    for (const auto& a : list) {
+        if (!referenced.contains(a.id) && !extraKeepIds.contains(a.id)) {
+            if (m_assets.remove(a.id))
+                ++removed;
+        }
+    }
+    return removed;
+}
+
 bool Document::reorderLayer(const LayerId& id, GroupLayer* newParent, int newIndex)
 {
     Layer* layer = findLayer(id);

@@ -504,6 +504,28 @@ private slots:
         QVERIFY(!doc.setShapeFill(newLayerId(), QColor(Qt::green)));
         QCOMPARE(spy.count(), 6);
     }
+
+    void purgeUnreferencedAssetsCleansOrphans()
+    {
+        Document doc(200, 200);
+        QImage img(50, 50, QImage::Format_ARGB32_Premultiplied);
+        img.fill(Qt::blue);
+        const LayerId asset1 = doc.assets().addImage(img);
+        const LayerId asset2 = doc.assets().addImage(img);
+        QCOMPARE(doc.assets().assets().size(), 2);
+
+        auto imageLayer = std::make_unique<ImageLayer>();
+        imageLayer->assetId = asset1;
+        imageLayer->naturalWidth = 50;
+        imageLayer->naturalHeight = 50;
+        doc.addLayer(std::move(imageLayer));
+
+        const int removed = doc.purgeUnreferencedAssets();
+        QCOMPARE(removed, 1);
+        QCOMPARE(doc.assets().assets().size(), 1);
+        QVERIFY(doc.assets().find(asset1) != nullptr);
+        QVERIFY(doc.assets().find(asset2) == nullptr);
+    }
 };
 
 QTEST_GUILESS_MAIN(TestDocument)

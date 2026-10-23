@@ -3861,6 +3861,8 @@ bool MainWindow::saveDocument()
         return saveDocumentAs();
 
     QString error;
+    if (m_document)
+        m_document->purgeUnreferencedAssets();
     const QImage thumb = generateThumbnail(*m_document);
     if (!cc::saveDocument(*m_document, m_currentFilePath, &error, &thumb)) {
         if (m_i18n)
@@ -3897,6 +3899,8 @@ bool MainWindow::saveDocumentAs()
         path += QLatin1String(".creatorcanvas");
 
     QString error;
+    if (m_document)
+        m_document->purgeUnreferencedAssets();
     const QImage thumb = generateThumbnail(*m_document);
     if (!cc::saveDocument(*m_document, path, &error, &thumb)) {
         QMessageBox::warning(this,

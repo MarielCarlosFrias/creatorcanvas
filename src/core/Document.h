@@ -56,6 +56,9 @@ public:
     /// includeTransient=false exclui camadas de prévia (mockup) — usado
     /// pelo writer para não gravar assets órfãos no arquivo.
     QSet<LayerId> referencedAssetIds(bool includeTransient = true) const;
+    /// Remove assets não referenciados por nenhuma camada (e que não estejam em extraKeepIds).
+    /// Retorna a quantidade de assets expurgados da memória.
+    int purgeUnreferencedAssets(const QSet<LayerId>& extraKeepIds = {});
 
     bool setLayerName(const LayerId& id, QString name);
     bool setLayerVisible(const LayerId& id, bool visible);
