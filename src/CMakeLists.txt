@@ -178,6 +178,8 @@ add_executable(creatorcanvas
     ui/themeicons.cpp
     ui/collapsiblesection.h
     ui/collapsiblesection.cpp
+    ui/tooloptionsbar.h
+    ui/tooloptionsbar.cpp
     ui/recoverydialog.h
     ui/recoverydialog.cpp
 )
