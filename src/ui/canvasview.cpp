@@ -636,9 +636,14 @@ void CanvasView::drawSelectionOverlay(QPainter* painter)
 
     painter->save();
     painter->resetTransform();
-    const QColor accent = Design::Accent();
+    const auto locks = m_document->effectiveLocks(m_selectedId);
+    const bool isLocked = (locks.position || locks.all);
+    const QColor accent = isLocked ? QColor(0xe7, 0x4c, 0x3c) : Design::Accent();
 
-    painter->setPen(QPen(accent, 1.0));
+    QPen pen(accent, 1.0);
+    if (isLocked)
+        pen.setStyle(Qt::DashLine);
+    painter->setPen(pen);
     painter->setBrush(Qt::NoBrush);
     QPolygonF box;
     box << set.points[0] << set.points[1] << set.points[2] << set.points[3];
@@ -647,11 +652,13 @@ void CanvasView::drawSelectionOverlay(QPainter* painter)
     painter->setPen(QPen(accent, 1.0));
     for (int i = 0; i < 8; ++i) {
         const QRectF rect(set.points[i] - QPointF(3, 3), QSizeF(6, 6));
-        painter->setBrush(Qt::white);
+        painter->setBrush(isLocked ? QColor(0xff, 0xdd, 0xdd) : Qt::white);
         painter->drawRoundedRect(rect, 2.0, 2.0);
     }
-    painter->setBrush(accent);
-    painter->drawEllipse(set.points[8], 4, 4);
+    if (!isLocked) {
+        painter->setBrush(accent);
+        painter->drawEllipse(set.points[8], 4, 4);
+    }
     painter->restore();
 }
 
@@ -674,7 +681,18 @@ void CanvasView::updateCursor(const QPointF& widgetPos)
     }
 
     const int handle = handleAt(widgetPos);
-    setCursor(handle >= 0 ? handleCursor(handle) : Qt::ArrowCursor);
+    if (handle >= 0) {
+        if (m_document && !m_selectedId.isNull()) {
+            const auto locks = m_document->effectiveLocks(m_selectedId);
+            if (locks.position || locks.all) {
+                setCursor(Qt::ForbiddenCursor);
+                return;
+            }
+        }
+        setCursor(handleCursor(handle));
+        return;
+    }
+    setCursor(Qt::ArrowCursor);
 }
 
 void CanvasView::paintEvent(QPaintEvent*)
@@ -858,7 +876,10 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
         return;
     }
 
-    if (m_tool != CanvasTool::Select) {
+    const bool tempSelect = (m_tool != CanvasTool::Select
+                             && (event->modifiers() & Qt::ControlModifier)
+                             && m_tool != CanvasTool::Crop);
+    if (m_tool != CanvasTool::Select && !tempSelect) {
         if (m_activeTool) {
             m_activeTool->mousePress(event, docPos, makeToolContext());
         }
@@ -869,6 +890,15 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
         const int handle = handleAt(event->pos());
         if (handle >= 0) {
             if (Layer* layer = m_document->findLayer(m_selectedId)) {
+                const auto locks = m_document->effectiveLocks(m_selectedId);
+                if (locks.position || locks.all) {
+                    const QString msg = m_i18n ? m_i18n->t("editor", "canvas.status.layerLocked")
+                                               : QStringLiteral("Camada bloqueada para edição ou movimento.");
+                    emit statusMessageRequested(msg);
+                    setCursor(Qt::ForbiddenCursor);
+                    event->accept();
+                    return;
+                }
                 m_gestureStart = layer->transform;
                 m_gestureBounds = layer->contentBounds();
                 if (layer->type() == LayerType::Text)
@@ -921,6 +951,17 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
                 m_multiSelection.clear();
                 selectLayer(layer->id());
             }
+
+            const auto locks = m_document->effectiveLocks(layer->id());
+            if (locks.position || locks.all) {
+                const QString msg = m_i18n ? m_i18n->t("editor", "canvas.status.layerLocked")
+                                           : QStringLiteral("Camada bloqueada para edição ou movimento.");
+                emit statusMessageRequested(msg);
+                setCursor(Qt::ForbiddenCursor);
+                event->accept();
+                return;
+            }
+
             m_gestureStart = layer->transform;
             m_gestureStartDoc = docPos;
             if (m_multiSelection.size() > 1) {
@@ -1057,7 +1098,7 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event)
 
     const QPointF docPos = deviceToDoc().map(QPointF(event->pos()));
 
-    if (m_tool != CanvasTool::Select) {
+    if (m_tool != CanvasTool::Select && m_gesture == Gesture::None && !m_rubberBanding) {
         if (m_activeTool) {
             m_activeTool->mouseMove(event, docPos, makeToolContext());
         }
@@ -1217,7 +1258,7 @@ void CanvasView::mouseReleaseEvent(QMouseEvent* event)
 
     const QPointF docPos = deviceToDoc().map(QPointF(event->pos()));
 
-    if (m_tool != CanvasTool::Select) {
+    if (m_tool != CanvasTool::Select && m_gesture == Gesture::None && !m_rubberBanding) {
         if (m_activeTool) {
             m_activeTool->mouseRelease(event, docPos, makeToolContext());
         }

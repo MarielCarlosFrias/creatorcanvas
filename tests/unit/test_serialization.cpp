@@ -543,6 +543,31 @@ private slots:
                  QStringLiteral("Hi"));
     }
 
+    void legacyFormatMigratesSuccessfully()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath("legacy.creatorcanvas");
+
+        const QByteArray json = R"({
+            "formatVersion": 1,
+            "document": {"width": 1024, "height": 768},
+            "layers": [
+                {"type": "text", "id": "11111111-2222-3333-4444-555555555555", "name": "LegacyText",
+                 "content": "Legacy Works"}
+            ]
+        })";
+        QVERIFY(craftZip(path, "project.json", json));
+
+        QString error;
+        auto doc = loadDocument(path, &error);
+        QVERIFY2(doc != nullptr, qPrintable(error));
+        QCOMPARE(doc->width(), 1024);
+        QCOMPARE(doc->height(), 768);
+        QCOMPARE(doc->dpi(), 96);
+        QCOMPARE(doc->rootGroup()->children.size(), std::size_t(1));
+    }
+
     void saveToEmptyPathFails()
     {
         Document doc(100, 100);

@@ -793,6 +793,31 @@ std::unique_ptr<Document> loadFail(QString* out, const QString& message,
     return nullptr;
 }
 
+bool migrateProjectJson(QJsonObject& root, int fromVersion, int targetVersion, QString* error)
+{
+    Q_UNUSED(error);
+    for (int v = fromVersion; v < targetVersion; ++v) {
+        switch (v) {
+        case 0:
+            if (!root.contains(QLatin1String(kDocumentKey))) {
+                QJsonObject docObj;
+                docObj.insert(QStringLiteral("width"), 1920);
+                docObj.insert(QStringLiteral("height"), 1080);
+                docObj.insert(QStringLiteral("dpi"), 96);
+                root.insert(QLatin1String(kDocumentKey), docObj);
+            }
+            if (!root.contains(QLatin1String(kLayersKey))) {
+                root.insert(QLatin1String(kLayersKey), QJsonArray());
+            }
+            break;
+        default:
+            break;
+        }
+    }
+    root.insert(QLatin1String(kFormatKey), targetVersion);
+    return true;
+}
+
 } // namespace
 
 // Defined at cc scope (NOT the anonymous namespace): Layer declares this
@@ -817,6 +842,11 @@ public:
         }
 
         const int version = format.toInt();
+        if (version < 1) {
+            *error = QStringLiteral(
+                "This file has an invalid project format version.");
+            return nullptr;
+        }
         if (version > kProjectFormatVersion) {
             *error = QStringLiteral(
                 "This project was saved by a newer version of CreatorCanvas "
@@ -824,10 +854,9 @@ public:
             return nullptr;
         }
         if (version < kProjectFormatVersion) {
-            *error = QStringLiteral(
-                "This project uses an older file format that this version "
-                "cannot read.");
-            return nullptr;
+            if (!migrateProjectJson(m_root, version, kProjectFormatVersion, error)) {
+                return nullptr;
+            }
         }
 
         const QJsonObject document =
