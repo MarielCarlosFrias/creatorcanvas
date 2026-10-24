@@ -227,6 +227,77 @@ private slots:
         QVERIFY(doc.setLayerLocks(id, LayerLocks()));
         QVERIFY(!doc.effectiveLocks(id).all);
     }
+
+    void lockAndUnlockViaCommandStack()
+    {
+        Document doc(800, 600);
+        CommandStack stack;
+
+        auto layer = std::make_unique<TextLayer>();
+        const LayerId id = layer->id();
+        doc.addLayer(std::move(layer));
+
+        // 1. Lock layer via LayerLockCommand (name: "layer.lock")
+        auto lockCmd = std::make_unique<LayerLockCommand>(
+            doc, id, QStringLiteral("layer.lock"),
+            &Document::setLayerLocked, false, true);
+        QVERIFY(lockCmd->canExecute());
+        stack.execute(std::move(lockCmd));
+
+        QVERIFY(doc.findLayer(id)->locked);
+        QVERIFY(doc.findLayer(id)->locks.all);
+        QVERIFY(doc.effectiveLocks(id).all);
+
+        // 2. Unlock layer via LayerLockCommand - MUST be allowed to execute!
+        auto unlockCmd = std::make_unique<LayerLockCommand>(
+            doc, id, QStringLiteral("layer.lock"),
+            &Document::setLayerLocked, true, false);
+        QVERIFY(unlockCmd->canExecute());
+        stack.execute(std::move(unlockCmd));
+
+        QVERIFY(!doc.findLayer(id)->locked);
+        QVERIFY(!doc.findLayer(id)->locks.all);
+        QVERIFY(!doc.effectiveLocks(id).all);
+
+        // 3. Test Undo (locks again)
+        stack.undo();
+        QVERIFY(doc.findLayer(id)->locked);
+        QVERIFY(doc.effectiveLocks(id).all);
+
+        // 4. Test Redo (unlocks again)
+        stack.redo();
+        QVERIFY(!doc.findLayer(id)->locked);
+        QVERIFY(!doc.effectiveLocks(id).all);
+    }
+
+    void synchronizeLockedAndLocksAll()
+    {
+        Document doc(800, 600);
+
+        auto layer = std::make_unique<TextLayer>();
+        const LayerId id = layer->id();
+        doc.addLayer(std::move(layer));
+
+        // Boolean setter synchronizes locks.all
+        doc.setLayerLocked(id, true);
+        QVERIFY(doc.findLayer(id)->locked);
+        QVERIFY(doc.findLayer(id)->locks.all);
+
+        doc.setLayerLocked(id, false);
+        QVERIFY(!doc.findLayer(id)->locked);
+        QVERIFY(!doc.findLayer(id)->locks.all);
+
+        // LayerLocks setter synchronizes boolean locked
+        LayerLocks fullLock;
+        fullLock.all = true;
+        doc.setLayerLocks(id, fullLock);
+        QVERIFY(doc.findLayer(id)->locked);
+        QVERIFY(doc.findLayer(id)->locks.all);
+
+        doc.setLayerLocks(id, LayerLocks());
+        QVERIFY(!doc.findLayer(id)->locked);
+        QVERIFY(!doc.findLayer(id)->locks.all);
+    }
 };
 
 QTEST_MAIN(TestCommandLocks)

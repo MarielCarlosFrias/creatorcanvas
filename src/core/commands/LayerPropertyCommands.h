@@ -32,7 +32,7 @@ public:
 
     static LockRequirement determineLockReq(const QString& name)
     {
-        if (name == QStringLiteral("layer.locked") || name == QStringLiteral("layer.locks"))
+        if (name.startsWith(QStringLiteral("layer.lock")))
             return LockRequirement::None;
         if (name.startsWith(QStringLiteral("text.")) || name.startsWith(QStringLiteral("shape.")) ||
             name == QStringLiteral("layer.text"))

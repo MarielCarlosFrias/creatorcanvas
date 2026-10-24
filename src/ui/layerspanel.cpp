@@ -1018,9 +1018,32 @@ void LayersPanel::refresh()
 
 void LayersPanel::refreshProperties()
 {
-    // Atualiza somente os controles de opacidade/blend sem reconstruir a lista.
-    // Isso evita reconstrução cara do painel durante arraste de camadas no canvas.
+    // Atualiza controles de opacidade/blend/locks da camada selecionada
     updateControlsForSelection();
+
+    // Atualiza ícones de lock e estilos das linhas sem reconstruir a lista inteira
+    if (m_document && m_list) {
+        for (int i = 0; i < m_list->count(); ++i) {
+            QListWidgetItem* item = m_list->item(i);
+            if (!item) continue;
+            const LayerId id = item->data(Qt::UserRole).value<LayerId>();
+            Layer* layer = m_document->findLayer(id);
+            if (!layer) continue;
+            QWidget* rowWidget = m_list->itemWidget(item);
+            if (!rowWidget) continue;
+            const bool isLocked = layer->locked || layer->locks.all;
+            if (auto* lockBtn = rowWidget->findChild<QToolButton*>(QStringLiteral("rowLockBtn"))) {
+                lockBtn->setIcon(ThemeIcons::layerLock(isLocked));
+            }
+            if (auto* nameLabel = rowWidget->findChild<QLabel*>(QStringLiteral("rowNameLabel"))) {
+                QFont f = nameLabel->font();
+                if (f.italic() != isLocked) {
+                    f.setItalic(isLocked);
+                    nameLabel->setFont(f);
+                }
+            }
+        }
+    }
 }
 
 void LayersPanel::rebuild()
@@ -1148,12 +1171,15 @@ void LayersPanel::rebuild()
                     : QStringLiteral("color: #0369a1; font-size: 9px; font-weight: 700; background: transparent;"));
             }
 
+            const bool isCurrentlyLocked = layer->locked || layer->locks.all;
+
             // Layer Name Label
             auto* nameLabel = new QLabel(fallbackName(*layer, m_i18n), rowWidget);
+            nameLabel->setObjectName(QStringLiteral("rowNameLabel"));
             nameLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
             nameLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
             QFont nf = nameLabel->font();
-            if (layer->locked) {
+            if (isCurrentlyLocked) {
                 nf.setItalic(true);
                 nameLabel->setStyleSheet(darkUi
                     ? QStringLiteral("color: #7b889b; background: transparent;")
@@ -1175,18 +1201,20 @@ void LayersPanel::rebuild()
 
             // Lock Toggle Button
             auto* lockBtn = new QToolButton(rowWidget);
-            lockBtn->setIcon(ThemeIcons::layerLock(layer->locked));
+            lockBtn->setObjectName(QStringLiteral("rowLockBtn"));
+            lockBtn->setIcon(ThemeIcons::layerLock(isCurrentlyLocked));
             lockBtn->setIconSize(QSize(22, 22));
             lockBtn->setFixedSize(30, 30);
             lockBtn->setStyleSheet(QStringLiteral("border: none; background: transparent;"));
             lockBtn->setToolTip(m_i18n ? m_i18n->t("common", "panel.lockToggle") : QStringLiteral("Toggle Lock"));
             connect(lockBtn, &QToolButton::clicked, this, [this, layerId, layer] {
                 if (!m_document) return;
-                const bool newLock = !layer->locked;
+                const bool current = layer->locked || layer->locks.all;
+                const bool newLock = !current;
                 if (m_history) {
                     m_history->execute(std::make_unique<LayerLockCommand>(
                         *m_document, layerId, QStringLiteral("layer.lock"),
-                        &Document::setLayerLocked, layer->locked, newLock));
+                        &Document::setLayerLocked, current, newLock));
                 } else {
                     m_document->setLayerLocked(layerId, newLock);
                 }
@@ -1224,11 +1252,9 @@ LayerId LayersPanel::layerIdFromRow(int row) const
 {
     if (row < 0 || row >= m_list->count() || !m_document)
         return {};
-    const int index = docIndexFromRow(row);
-    const auto& children = m_document->rootGroup()->children;
-    if (index < 0 || index >= static_cast<int>(children.size()))
-        return {};
-    return children[static_cast<std::size_t>(index)]->id();
+    if (auto* item = m_list->item(row))
+        return item->data(Qt::UserRole).value<LayerId>();
+    return {};
 }
 
 void LayersPanel::setSelectedLayer(const LayerId& id)
@@ -1432,7 +1458,8 @@ void LayersPanel::showContextMenu(const QPoint& pos)
         return;
 
     QMenu menu(this);
-    QAction* lockAction = menu.addAction(layer->locked
+    const bool isCurrentlyLocked = layer->locked || layer->locks.all;
+    QAction* lockAction = menu.addAction(isCurrentlyLocked
         ? m_i18n->t("common", "panel.unlock")
         : m_i18n->t("common", "panel.lock"));
     menu.addSeparator();
@@ -1474,11 +1501,12 @@ void LayersPanel::showContextMenu(const QPoint& pos)
 
     QAction* chosen = menu.exec(m_list->mapToGlobal(pos));
     if (chosen == lockAction) {
-        const bool newLock = !layer->locked;
+        const bool current = layer->locked || layer->locks.all;
+        const bool newLock = !current;
         if (m_history) {
             m_history->execute(std::make_unique<LayerLockCommand>(
                 *m_document, id, QStringLiteral("layer.lock"),
-                &Document::setLayerLocked, layer->locked, newLock));
+                &Document::setLayerLocked, current, newLock));
         } else {
             m_document->setLayerLocked(id, newLock);
         }

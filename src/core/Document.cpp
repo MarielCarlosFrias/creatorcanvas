@@ -238,9 +238,10 @@ bool Document::setLayerVisible(const LayerId& id, bool visible)
 bool Document::setLayerLocked(const LayerId& id, bool locked)
 {
     Layer* layer = findLayer(id);
-    if (!layer || layer->locked == locked)
+    if (!layer || (layer->locked == locked && layer->locks.all == locked))
         return layer != nullptr;
     layer->locked = locked;
+    layer->locks.all = locked;
     bumpRevision();
     emit layerPropertyChanged(id);
     return true;
@@ -413,9 +414,10 @@ LayerLocks Document::effectiveLocks(const LayerId& id) const
 bool Document::setLayerLocks(const LayerId& id, LayerLocks locks)
 {
     Layer* layer = findLayer(id);
-    if (!layer || layer->locks == locks)
+    if (!layer || (layer->locks == locks && layer->locked == locks.all))
         return layer != nullptr;
     layer->locks = locks;
+    layer->locked = locks.all;
     bumpRevision();
     emit layerPropertyChanged(id);
     return true;

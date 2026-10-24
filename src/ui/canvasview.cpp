@@ -544,11 +544,14 @@ bool CanvasView::imagePixelTransparent(const ImageLayer& image,
 // clique e menu de contexto. Grupos não interceptam cliques por si — só os
 // filhos visíveis.
 Layer* CanvasView::hitTestChildrenRecursive(const GroupLayer& group,
-                                            const QPointF& docPos) const
+                                            const QPointF& docPos,
+                                            bool includeLocked) const
 {
     for (auto it = group.children.rbegin(); it != group.children.rend(); ++it) {
         Layer* layer = it->get();
-        if (!layer->visible || layer->locked)
+        if (!layer->visible)
+            continue;
+        if (!includeLocked && (layer->locked || layer->locks.all))
             continue;
         if (layer->opacity() <= 0.01f)
             continue; // invisível de fato não captura cliques
@@ -556,7 +559,7 @@ Layer* CanvasView::hitTestChildrenRecursive(const GroupLayer& group,
             continue;
         if (layer->type() == LayerType::Group) {
             if (Layer* child = hitTestChildrenRecursive(
-                    static_cast<const GroupLayer&>(*layer), docPos))
+                    static_cast<const GroupLayer&>(*layer), docPos, includeLocked))
                 return child;
             continue; // clicou fora dos filhos: o grupo não captura
         }
@@ -579,11 +582,11 @@ Layer* CanvasView::hitTestChildrenRecursive(const GroupLayer& group,
     return nullptr;
 }
 
-Layer* CanvasView::hitTestLayer(const QPointF& docPos) const
+Layer* CanvasView::hitTestLayer(const QPointF& docPos, bool includeLocked) const
 {
     if (!m_document)
         return nullptr;
-    return hitTestChildrenRecursive(*m_document->rootGroup(), docPos);
+    return hitTestChildrenRecursive(*m_document->rootGroup(), docPos, includeLocked);
 }
 
 CanvasView::HandleSet CanvasView::handlePositions(const Layer& layer) const
@@ -882,7 +885,8 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
             }
         }
 
-        if (Layer* layer = hitTestLayer(docPos)) {
+        const bool allowLocked = (event->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier));
+        if (Layer* layer = hitTestLayer(docPos, allowLocked)) {
             // Shift OU Ctrl adicionam/alternam a seleção (padrão de editores)
             if (event->modifiers() & (Qt::ShiftModifier | Qt::ControlModifier)) {
                 if (m_multiSelection.contains(layer->id()))
@@ -1357,7 +1361,7 @@ void CanvasView::contextMenuEvent(QContextMenuEvent* event)
     }
 
     const QPointF docPos = deviceToDoc().map(QPointF(event->pos()));
-    Layer* layer = hitTestLayer(docPos);
+    Layer* layer = hitTestLayer(docPos, true);
     if (!layer && !m_selectedId.isNull())
         layer = m_document->findLayer(m_selectedId);
     if (!layer || layer->type() == LayerType::Background)
@@ -1375,7 +1379,8 @@ void CanvasView::contextMenuEvent(QContextMenuEvent* event)
     const QString flipHText = m_i18n ? m_i18n->t("common", "menu.layer.flipH") : QStringLiteral("Flip Horizontal");
     const QString flipVText = m_i18n ? m_i18n->t("common", "menu.layer.flipV") : QStringLiteral("Flip Vertical");
     const QString centerText = m_i18n ? m_i18n->t("common", "menu.layer.align.centerBoth") : QStringLiteral("Center on Canvas");
-    const QString lockText = layer->locked
+    const bool isCurrentlyLocked = layer->locked || layer->locks.all;
+    const QString lockText = isCurrentlyLocked
         ? (m_i18n ? m_i18n->t("common", "panel.unlock") : QStringLiteral("Unlock"))
         : (m_i18n ? m_i18n->t("common", "panel.lock") : QStringLiteral("Lock"));
 
@@ -1491,12 +1496,14 @@ void CanvasView::contextMenuEvent(QContextMenuEvent* event)
     } else if (chosen == lockAction) {
         // A4: mesmo comando do painel de camadas — antes era mutação
         // silenciosa, sem passo no undo.
+        const bool current = layer->locked || layer->locks.all;
+        const bool newLock = !current;
         if (m_history) {
             m_history->execute(std::make_unique<LayerLockCommand>(
                 *m_document, id, QStringLiteral("layer.lock"),
-                &Document::setLayerLocked, layer->locked, !layer->locked));
+                &Document::setLayerLocked, current, newLock));
         } else {
-            m_document->setLayerLocked(id, !layer->locked);
+            m_document->setLayerLocked(id, newLock);
         }
     }
 }
