@@ -10,6 +10,7 @@
 #include "core/serialization/ProjectFile.h"
 #include "imageio/ImageImporter.h"
 #include "imageio/DocumentExporter.h"
+#include "core/operations/LayerOperations.h"
 #include "rendering/CanvasRenderer.h"
 #include "localization/i18nservice.h"
 #include "ui/canvasview.h"
@@ -1982,251 +1983,70 @@ void MainWindow::groupSelectedLayers()
     if (!m_document || !m_canvas)
         return;
     const QList<LayerId> rawIds = m_canvas->selectedLayers();
-    if (rawIds.size() < 2)
-        return;
-
-    // Filter out background layer and layers whose ancestors are already selected
-    QList<LayerId> ids;
-    for (const auto& id : rawIds) {
-        Layer* layer = m_document->findLayer(id);
-        if (!layer || layer->type() == LayerType::Background)
-            continue;
-
-        bool hasSelectedAncestor = false;
-        GroupLayer* p = m_document->parentOf(id);
-        while (p && p != m_document->rootGroup()) {
-            if (rawIds.contains(p->id())) {
-                hasSelectedAncestor = true;
-                break;
-            }
-            p = m_document->parentOf(p->id());
-        }
-        if (!hasSelectedAncestor && !ids.contains(id)) {
-            ids.append(id);
-        }
-    }
-
-    if (ids.size() < 2)
-        return;
-
     const QString groupName = m_i18n ? m_i18n->t("editor", "layer.group") : QStringLiteral("Group");
-
-    if (m_history) {
-        auto cmd = std::make_unique<GroupLayersCommand>(*m_document, ids, groupName);
-        const LayerId groupId = cmd->groupId();
-        m_history->execute(std::move(cmd));
+    const LayerId groupId = LayerOperations::groupSelected(*m_document, m_history.get(), rawIds, groupName);
+    if (!groupId.isNull()) {
         m_canvas->setSelectedLayer(groupId);
-    } else {
-        auto group = std::make_unique<GroupLayer>();
-        group->name = groupName;
-        const LayerId groupId = group->id();
-
-        for (const auto& lid : ids) {
-            if (auto taken = m_document->takeLayer(lid))
-                group->children.push_back(std::move(taken));
-        }
-
-        m_document->addLayer(std::move(group));
-        m_canvas->setSelectedLayer(groupId);
+        m_canvas->update();
+        if (m_layersPanel)
+            m_layersPanel->refresh();
     }
-
-    m_canvas->update();
-    if (m_layersPanel)
-        m_layersPanel->refresh();
 }
 
 void MainWindow::ungroupSelectedLayer()
 {
     if (!m_document || !m_canvas)
         return;
-    const LayerId id = m_selectedId;
-    Layer* layer = m_document->findLayer(id);
-    if (!layer || layer->type() != LayerType::Group)
-        return;
-
-    auto* group = static_cast<GroupLayer*>(layer);
-    if (group->children.empty())
-        return;
-    const LayerId nextSelection = group->children.back()->id();
-    if (m_history)
-        m_history->execute(std::make_unique<UngroupLayersCommand>(*m_document, id));
-    else {
-        GroupLayer* parent = m_document->parentOf(id);
-        const int insertion = m_document->indexOf(id);
-        auto holder = m_document->takeLayer(id);
-        auto* heldGroup = static_cast<GroupLayer*>(holder.get());
-        int index = insertion;
-        while (!heldGroup->children.empty()) {
-            auto child = std::move(heldGroup->children.front());
-            heldGroup->children.erase(heldGroup->children.begin());
-            m_document->addLayer(std::move(child), parent, index++);
-        }
+    const LayerId nextSelection = LayerOperations::ungroup(*m_document, m_history.get(), m_selectedId);
+    if (!nextSelection.isNull()) {
+        m_canvas->setSelectedLayer(nextSelection);
+        m_canvas->update();
+        if (m_layersPanel)
+            m_layersPanel->refresh();
     }
-    m_canvas->setSelectedLayer(nextSelection);
-    m_canvas->update();
-    if (m_layersPanel)
-        m_layersPanel->refresh();
 }
-
-namespace {
-
-std::unique_ptr<ImageLayer> rasterLayerFor(Document& document,
-                                           const QList<LayerId>& layerIds,
-                                           const QString& name)
-{
-    QImage raster(document.width(), document.height(), QImage::Format_ARGB32_Premultiplied);
-    raster.fill(Qt::transparent);
-    {
-        QPainter painter(&raster);
-        RenderOptions options;
-        options.drawCheckerboard = false;
-        options.canvasBorder = Qt::transparent;
-        renderSiblingLayers(document, layerIds, &painter, options);
-    }
-
-    const LayerId assetId = document.assets().addImage(raster);
-    if (assetId.isNull())
-        return {};
-
-    auto layer = std::make_unique<ImageLayer>();
-    layer->name = name;
-    layer->assetId = assetId;
-    layer->naturalWidth = document.width();
-    layer->naturalHeight = document.height();
-    layer->transform.position = QPointF(document.width() / 2.0, document.height() / 2.0);
-    return layer;
-}
-
-bool areMergeableSiblings(const Document& document, const QList<LayerId>& ids)
-{
-    if (ids.size() < 2)
-        return false;
-    const GroupLayer* parent = document.parentOf(ids.first());
-    if (!parent)
-        return false;
-    for (const LayerId& id : ids) {
-        const Layer* layer = document.findLayer(id);
-        if (!layer || layer->type() == LayerType::Background || document.parentOf(id) != parent)
-            return false;
-    }
-    return true;
-}
-
-} // namespace
 
 void MainWindow::mergeSelectedLayers()
 {
     if (!m_document || !m_canvas)
         return;
-    QList<LayerId> ids = m_canvas->selectedLayers();
-    if (ids.size() == 1) {
-        // Merge Down: merge with the layer directly below it
-        const LayerId id = ids.first();
-        GroupLayer* parent = m_document->parentOf(id);
-        if (parent) {
-            const int idx = m_document->indexOf(id);
-            if (idx > 0 && idx < static_cast<int>(parent->children.size())) {
-                const Layer* below = parent->children[static_cast<std::size_t>(idx - 1)].get();
-                if (below && below->type() != LayerType::Background) {
-                    ids = {below->id(), id}; // in bottom-to-top order
-                }
-            }
-        }
-    }
-
-    if (!areMergeableSiblings(*m_document, ids)) {
+    const QList<LayerId> ids = m_canvas->selectedLayers();
+    const LayerId mergedId = LayerOperations::mergeSelected(*m_document, m_history.get(), ids, tr("Merged layers"));
+    if (mergedId.isNull()) {
         statusBar()->showMessage(tr("Select two or more layers in the same group, or a layer above another, to merge."), 3500);
         return;
     }
-    auto raster = rasterLayerFor(*m_document, ids, tr("Merged layers"));
-    if (!raster || !m_history)
-        return;
-    const LayerId mergedId = raster->id();
-    m_history->execute(std::make_unique<ReplaceLayersWithRasterCommand>(
-        *m_document, ids, std::move(raster), QStringLiteral("layer.mergeSelected")));
     m_canvas->setSelectedLayer(mergedId);
-    if (m_layersPanel) m_layersPanel->refresh();
+    if (m_layersPanel)
+        m_layersPanel->refresh();
 }
 
 void MainWindow::mergeVisibleLayers()
 {
     if (!m_document || !m_canvas)
         return;
-    QList<LayerId> ids;
-    for (const auto& child : m_document->rootGroup()->children) {
-        // Camadas bloqueadas não participam — ficam intactas por cima
-        if (child->visible && !child->locked
-            && child->type() != LayerType::Background)
-            ids.append(child->id());
-    }
-    if (ids.size() < 2) {
+    const LayerId mergedId = LayerOperations::mergeVisible(*m_document, m_history.get(), tr("Visible merge"));
+    if (mergedId.isNull()) {
         statusBar()->showMessage(tr("At least two visible unlocked layers are required."), 3500);
         return;
     }
-    auto raster = rasterLayerFor(*m_document, ids, tr("Visible merge"));
-    if (!raster || !m_history)
-        return;
-    const LayerId mergedId = raster->id();
-    m_history->execute(std::make_unique<ReplaceLayersWithRasterCommand>(
-        *m_document, ids, std::move(raster), QStringLiteral("layer.mergeVisible")));
     m_canvas->setSelectedLayer(mergedId);
-    if (m_layersPanel) m_layersPanel->refresh();
+    if (m_layersPanel)
+        m_layersPanel->refresh();
 }
 
 void MainWindow::flattenDocument()
 {
     if (!m_document || !m_canvas || !m_history)
         return;
-    QList<LayerId> ids;       // desbloqueadas — serão achatadas na imagem
-    QList<Layer*> kept;       // bloqueadas — preservadas no lugar
-    for (const auto& child : m_document->rootGroup()->children) {
-        if (child->locked)
-            kept.append(child.get());
-        else
-            ids.append(child->id());
-    }
-    if (ids.isEmpty()) {
+    const LayerId flatId = LayerOperations::flatten(*m_document, m_history.get(), tr("Flattened image"));
+    if (flatId.isNull()) {
         statusBar()->showMessage(tr("All layers are locked — nothing to flatten."), 3500);
         return;
     }
-
-    // Rasterizar SOMENTE as camadas desbloqueadas: esconde as bloqueadas
-    // durante o render (o renderer lê `visible` direto) e devolve o estado
-    // EXATO de antes — antes, uma camada travada que estava oculta era
-    // reexibida involuntariamente após o flatten.
-    QVector<QPair<Layer*, bool>> hiddenForRender;
-    hiddenForRender.reserve(kept.size());
-    for (Layer* lockedLayer : kept) {
-        if (lockedLayer->visible) {
-            lockedLayer->visible = false;
-            hiddenForRender.append({lockedLayer, true});
-        }
-    }
-    QImage raster(m_document->width(), m_document->height(), QImage::Format_ARGB32_Premultiplied);
-    raster.fill(Qt::transparent);
-    {
-        QPainter painter(&raster);
-        RenderOptions options;
-        options.drawCheckerboard = false;
-        options.canvasBorder = Qt::transparent;
-        renderDocument(*m_document, &painter, QTransform(), options);
-    }
-    for (const auto& [layer, wasVisible] : hiddenForRender)
-        layer->visible = wasVisible;
-    const LayerId assetId = m_document->assets().addImage(raster);
-    if (assetId.isNull())
-        return;
-    auto flat = std::make_unique<ImageLayer>();
-    flat->name = tr("Flattened image");
-    flat->assetId = assetId;
-    flat->naturalWidth = m_document->width();
-    flat->naturalHeight = m_document->height();
-    flat->transform.position = QPointF(m_document->width() / 2.0, m_document->height() / 2.0);
-    const LayerId flatId = flat->id();
-    m_history->execute(std::make_unique<ReplaceLayersWithRasterCommand>(
-        *m_document, ids, std::move(flat), QStringLiteral("layer.flatten")));
     m_canvas->setSelectedLayer(flatId);
-    if (m_layersPanel) m_layersPanel->refresh();
+    if (m_layersPanel)
+        m_layersPanel->refresh();
 }
 
 void MainWindow::textBehindSubject()
@@ -2245,12 +2065,7 @@ void MainWindow::textBehindSubject()
         if (layer->type() == LayerType::Text) textId = id;
         if (layer->type() == LayerType::Image) subjectId = id;
     }
-    if (textId.isNull() || subjectId.isNull()
-        || m_document->parentOf(textId) != m_document->parentOf(subjectId))
-        return;
-
-    m_history->execute(std::make_unique<TextBehindSubjectCommand>(
-        *m_document, textId, subjectId));
+    LayerOperations::textBehindSubject(*m_document, m_history.get(), textId, subjectId);
 }
 
 
@@ -2387,56 +2202,28 @@ void MainWindow::flipLayer(bool horizontal)
 {
     if (!m_document || m_selectedId.isNull())
         return;
-    Layer* layer = m_document->findLayer(m_selectedId);
-    if (!layer)
-        return;
-
-    const AffineTransform oldT = layer->transform;
-    AffineTransform newT = oldT;
-    if (horizontal)
-        newT.scaleX = -newT.scaleX;
-    else
-        newT.scaleY = -newT.scaleY;
-
-    if (m_history)
-        m_history->execute(std::make_unique<SetLayerTransformCommand>(
-            *m_document, m_selectedId, oldT, newT));
+    LayerOperations::flip(*m_document, m_history.get(), m_selectedId, horizontal);
 }
 
 void MainWindow::rotateLayer(double degrees)
 {
     if (!m_document || m_selectedId.isNull())
         return;
-    const auto locks = m_document->effectiveLocks(m_selectedId);
-    if (locks.position || locks.all)
-        return;
-    Layer* layer = m_document->findLayer(m_selectedId);
-    if (!layer)
-        return;
-    const AffineTransform oldT = layer->transform;
-    AffineTransform newT = oldT;
-    newT.rotationDeg += degrees;
-    if (m_history)
-        m_history->execute(std::make_unique<SetLayerTransformCommand>(
-            *m_document, m_selectedId, oldT, newT));
+    LayerOperations::rotate(*m_document, m_history.get(), m_selectedId, degrees);
 }
 
 void MainWindow::deleteSelectedLayer()
 {
     if (m_selectedId.isNull() || !m_document || !m_history)
         return;
-    if (m_document->effectiveLocks(m_selectedId).all)
-        return;
-    // A1: seleção pendurada após undo de grupo/adição/remoção — sem este
-    // guard o comando dereferenciava um pai nulo e crashava no Delete.
-    if (!m_document->findLayer(m_selectedId)) {
-        m_selectedId = LayerId();
+    if (LayerOperations::deleteLayer(*m_document, m_history.get(), m_selectedId)) {
         m_canvas->clearSelection();
-        return;
+    } else {
+        if (!m_document->findLayer(m_selectedId)) {
+            m_selectedId = LayerId();
+            m_canvas->clearSelection();
+        }
     }
-    m_history->execute(
-        std::make_unique<RemoveLayerCommand>(*m_document, m_selectedId));
-    m_canvas->clearSelection();
 }
 
 bool MainWindow::saveDocument()

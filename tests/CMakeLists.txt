@@ -74,4 +74,6 @@ cc_add_test(test_undo_render unit/test_undo_render.cpp
 cc_add_test(test_template_textfit unit/test_template_textfit.cpp)
 cc_add_test(test_command_locks    unit/test_command_locks.cpp)
 cc_add_test(test_alignment        unit/test_alignment.cpp)
+cc_add_test(test_layer_operations unit/test_layer_operations.cpp)
+
 

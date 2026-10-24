@@ -88,6 +88,8 @@ cc_enable_warnings(cc_core)
 add_library(cc_rendering STATIC
     rendering/CanvasRenderer.h
     rendering/CanvasRenderer.cpp
+    core/operations/LayerOperations.h
+    core/operations/LayerOperations.cpp
 )
 target_link_libraries(cc_rendering PUBLIC Qt6::Gui cc_core)
 target_include_directories(cc_rendering PUBLIC ${PROJECT_SOURCE_DIR}/src)
