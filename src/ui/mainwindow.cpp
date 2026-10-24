@@ -5,6 +5,7 @@
 #include "core/selection/SelectionEngine.h"
 #include "core/templates/TemplateFactory.h"
 #include "core/history/DocumentCommands.h"
+#include "core/commands/LayerPropertyCommands.h"
 #include "core/layers/Layer.h"
 #include "core/serialization/ProjectFile.h"
 #include "imageio/ImageImporter.h"
@@ -28,6 +29,8 @@
 #include "ui/recoverydialog.h"
 #include "ui/themeicons.h"
 #include "ui/tooloptionsbar.h"
+#include "ui/actionmanager.h"
+#include "ui/menubuilder.h"
 
 #include <QActionGroup>
 #include <QApplication>
@@ -67,19 +70,7 @@ namespace cc {
 namespace {
 
 
-// Formas do Shape Power Pack (menu Inserir > Forma): kind + chave i18n + fallback PT
-struct NewShapeDef { ShapeKind kind; const char* key; const char* fallback; };
-static const NewShapeDef kNewShapeDefs[] = {
-    {ShapeKind::Triangle,   "triangle",   QT_TRANSLATE_NOOP("editor", "Triângulo")},
-    {ShapeKind::Diamond,    "diamond",    "Losango"},
-    {ShapeKind::Pentagon,   "pentagon",   "Pentágono"},
-    {ShapeKind::Hexagon,    "hexagon",    "Hexágono"},
-    {ShapeKind::Cross,      "cross",      "Cruz"},
-    {ShapeKind::Checkmark,  "checkmark",  "Marca de verificação"},
-    {ShapeKind::Cloud,      "cloud",      "Nuvem"},
-    {ShapeKind::Explosion,  "explosion",  "Explosão (Burst)"},
-};
-constexpr int kNewShapeCount = sizeof(kNewShapeDefs) / sizeof(kNewShapeDefs[0]);
+
 
 /// Diagnóstico: atalhos duplicados no mesmo QMainWindow viram atalhos
 /// AMBÍGUOS e nenhum dos dois dispara. Foi exatamente o caso de "R"
@@ -879,265 +870,135 @@ void MainWindow::buildLayersDock()
 
 void MainWindow::buildActions()
 {
-    m_newAction = new QAction(this);
-    m_newAction->setIcon(ThemeIcons::actionNewDocument());
-    m_newAction->setShortcut(QKeySequence::New);
+    m_actions = new ActionManager(this);
+    m_actions->createActions(m_i18n);
+
+    m_newAction = m_actions->newAction;
+    m_openAction = m_actions->openAction;
+    m_saveAction = m_actions->saveAction;
+    m_saveAsAction = m_actions->saveAsAction;
+    m_importAction = m_actions->importAction;
+    m_exportAction = m_actions->exportAction;
+    m_quitAction = m_actions->quitAction;
+    m_undoAction = m_actions->undoAction;
+    m_redoAction = m_actions->redoAction;
+    m_zoomInAction = m_actions->zoomInAction;
+    m_zoomOutAction = m_actions->zoomOutAction;
+    m_zoomFitAction = m_actions->zoomFitAction;
+    m_toggleGridAction = m_actions->toggleGridAction;
+    m_toggleSnapAction = m_actions->toggleSnapAction;
+    m_toggleHistoryAction = m_actions->toggleHistoryAction;
+    m_toggleToolsBarAction = m_actions->toggleToolsBarAction;
+    m_toggleRightPanelAction = m_actions->toggleRightPanelAction;
+    m_toggleLayersDockAction = m_actions->toggleLayersDockAction;
+    m_toggleTextDockAction = m_actions->toggleTextDockAction;
+    m_toggleShapeDockAction = m_actions->toggleShapeDockAction;
+    m_toggleImageDockAction = m_actions->toggleImageDockAction;
+    m_safeNoneAction = m_actions->safeNoneAction;
+    m_safeYouTubeAction = m_actions->safeYouTubeAction;
+    m_safeInstagramAction = m_actions->safeInstagramAction;
+    m_safeTikTokAction = m_actions->safeTikTokAction;
+    m_addTextAction = m_actions->addTextAction;
+    m_addFillLayerAction = m_actions->addFillLayerAction;
+    m_addAdjustmentLayerAction = m_actions->addAdjustmentLayerAction;
+    m_addRectAction = m_actions->addRectAction;
+    m_addRoundedRectAction = m_actions->addRoundedRectAction;
+    m_addEllipseAction = m_actions->addEllipseAction;
+    m_addLineAction = m_actions->addLineAction;
+    m_addArrowRightAction = m_actions->addArrowRightAction;
+    m_addArrowCurvedAction = m_actions->addArrowCurvedAction;
+    m_addStarAction = m_actions->addStarAction;
+    m_addBadgeAction = m_actions->addBadgeAction;
+    m_addSpeechBubbleAction = m_actions->addSpeechBubbleAction;
+    m_addHeartAction = m_actions->addHeartAction;
+    m_addNewShapeActions = m_actions->addNewShapeActions;
+    m_alignLeftAction = m_actions->alignLeftAction;
+    m_alignCenterXAction = m_actions->alignCenterXAction;
+    m_alignRightAction = m_actions->alignRightAction;
+    m_alignTopAction = m_actions->alignTopAction;
+    m_alignCenterYAction = m_actions->alignCenterYAction;
+    m_alignBottomAction = m_actions->alignBottomAction;
+    m_alignCenterBothAction = m_actions->alignCenterBothAction;
+    m_distributeHAction = m_actions->distributeHAction;
+    m_distributeVAction = m_actions->distributeVAction;
+    m_groupAction = m_actions->groupAction;
+    m_ungroupAction = m_actions->ungroupAction;
+    m_mergeSelectedAction = m_actions->mergeSelectedAction;
+    m_mergeVisibleAction = m_actions->mergeVisibleAction;
+    m_flattenAction = m_actions->flattenAction;
+    m_textBehindSubjectAction = m_actions->textBehindSubjectAction;
+    m_flipHAction = m_actions->flipHAction;
+    m_flipVAction = m_actions->flipVAction;
+    m_rotateLeftAction = m_actions->rotateLeftAction;
+    m_rotateRightAction = m_actions->rotateRightAction;
+    m_deleteAction = m_actions->deleteAction;
+    m_lockLayerAction = m_actions->lockLayerAction;
+    m_selectAllAction = m_actions->selectAllAction;
+    m_deselectAction = m_actions->deselectAction;
+    m_invertSelectionAction = m_actions->invertSelectionAction;
+    m_selectionOpsAction = m_actions->selectionOpsAction;
+    m_colorRangeAction = m_actions->colorRangeAction;
+    m_modifyActions = m_actions->modifyActions;
+    m_toolGroup = m_actions->toolGroup;
+    m_toolSelectAction = m_actions->toolSelectAction;
+    m_toolCropAction = m_actions->toolCropAction;
+    m_toolScissorsAction = m_actions->toolScissorsAction;
+    m_toolWandAction = m_actions->toolWandAction;
+    m_toolCloneAction = m_actions->toolCloneAction;
+    m_toolPaintAction = m_actions->toolPaintAction;
+    m_toolFloodAction = m_actions->toolFloodAction;
+    m_toolEyedropperAction = m_actions->toolEyedropperAction;
+    m_toolMarqueeAction = m_actions->toolMarqueeAction;
+    m_toolGradientAction = m_actions->toolGradientAction;
+    m_toolRetouchAction = m_actions->toolRetouchAction;
+    m_toolHealingAction = m_actions->toolHealingAction;
+    m_removeBgAiAction = m_actions->removeBgAiAction;
+    m_removeBgAiQuickAction = m_actions->removeBgAiQuickAction;
+    m_mockupAction = m_actions->mockupAction;
+    m_filterActions = m_actions->filterActions;
+    m_settingsAction = m_actions->settingsAction;
+    m_startScreenAction = m_actions->startScreenAction;
+    m_aboutAction = m_actions->aboutAction;
+    m_aboutQtAction = m_actions->aboutQtAction;
+
+    connectActionSignals();
+}
+
+void MainWindow::connectActionSignals()
+{
+    // --- Arquivo ---
     connect(m_newAction, &QAction::triggered, this, &MainWindow::newDocument);
-
-    m_openAction = new QAction(this);
-    m_openAction->setIcon(ThemeIcons::actionOpenFolder());
-    m_openAction->setShortcut(QKeySequence::Open);
     connect(m_openAction, &QAction::triggered, this, &MainWindow::openDocument);
-
-    m_saveAction = new QAction(this);
-    m_saveAction->setIcon(ThemeIcons::actionSave());
-    m_saveAction->setShortcut(QKeySequence::Save);
     connect(m_saveAction, &QAction::triggered, this, &MainWindow::saveDocument);
-
-    m_saveAsAction = new QAction(this);
-    m_saveAsAction->setIcon(ThemeIcons::actionSaveAs());
-    m_saveAsAction->setShortcut(QKeySequence::SaveAs);
     connect(m_saveAsAction, &QAction::triggered, this, &MainWindow::saveDocumentAs);
-
-    m_importAction = new QAction(this);
-    m_importAction->setIcon(ThemeIcons::actionImport());
-    m_importAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+I")));
-    connect(m_importAction, &QAction::triggered,
-            this, &MainWindow::importImageViaDialog);
-
-    m_exportAction = new QAction(this);
-    m_exportAction->setIcon(ThemeIcons::actionExport());
-    m_exportAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+E")));
-    connect(m_exportAction, &QAction::triggered,
-            this, &MainWindow::exportImage);
-
-    m_quitAction = new QAction(this);
-    m_quitAction->setIcon(ThemeIcons::actionQuit());
+    connect(m_importAction, &QAction::triggered, this, &MainWindow::importImageViaDialog);
+    connect(m_exportAction, &QAction::triggered, this, &MainWindow::exportImage);
     connect(m_quitAction, &QAction::triggered, this, &MainWindow::close);
 
-    m_undoAction = new QAction(this);
-    m_undoAction->setIcon(ThemeIcons::actionUndo());
-    m_undoAction->setShortcut(QKeySequence::Undo);
-    m_undoAction->setEnabled(false);
-    connect(m_undoAction, &QAction::triggered,
-            this, [this] { m_history->undo(); });
+    // --- Edição & Histórico ---
+    connect(m_undoAction, &QAction::triggered, this, [this] { if (m_history) m_history->undo(); });
+    connect(m_redoAction, &QAction::triggered, this, [this] { if (m_history) m_history->redo(); });
+    if (m_history) {
+        connect(m_history.get(), &CommandStack::canUndoChanged, m_undoAction, &QAction::setEnabled);
+        connect(m_history.get(), &CommandStack::canRedoChanged, m_redoAction, &QAction::setEnabled);
+    }
 
-    m_redoAction = new QAction(this);
-    m_redoAction->setIcon(ThemeIcons::actionRedo());
-    m_redoAction->setShortcut(QKeySequence::Redo);
-    m_redoAction->setEnabled(false);
-    connect(m_redoAction, &QAction::triggered,
-            this, [this] { m_history->redo(); });
-
-    connect(m_history.get(), &CommandStack::canUndoChanged,
-            m_undoAction, &QAction::setEnabled);
-    connect(m_history.get(), &CommandStack::canRedoChanged,
-            m_redoAction, &QAction::setEnabled);
-
-    m_zoomInAction = new QAction(this);
-    m_zoomInAction->setIcon(ThemeIcons::actionZoomIn());
-    m_zoomInAction->setShortcut(QKeySequence::ZoomIn);
-    connect(m_zoomInAction, &QAction::triggered, this, [this] {
-        if (m_canvas) m_canvas->zoomIn();
-    });
-
-    m_zoomOutAction = new QAction(this);
-    m_zoomOutAction->setIcon(ThemeIcons::actionZoomOut());
-    m_zoomOutAction->setShortcut(QKeySequence::ZoomOut);
-    connect(m_zoomOutAction, &QAction::triggered, this, [this] {
-        if (m_canvas) m_canvas->zoomOut();
-    });
-
-    m_zoomFitAction = new QAction(this);
-    m_zoomFitAction->setIcon(ThemeIcons::actionZoomFit());
-    m_zoomFitAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+0")));
-    connect(m_zoomFitAction, &QAction::triggered, this, [this] {
-        if (m_canvas) m_canvas->fitToViewport();
-    });
-
-    m_addTextAction = new QAction(this);
-    m_addTextAction->setIcon(ThemeIcons::toolText());
-    m_addTextAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+T")));
-    connect(m_addTextAction, &QAction::triggered, this, &MainWindow::addText);
-
-    // Ações para adicionar formas geométricas com atalhos padrão
-    m_addRectAction = new QAction(this);
-    m_addRectAction->setIcon(ThemeIcons::toolShape());
-    m_addRectAction->setShortcut(QKeySequence(QStringLiteral("R")));
-    connect(m_addRectAction, &QAction::triggered, this, [this] {
-        addShape(ShapeKind::Rectangle);
-    });
-
-    m_addRoundedRectAction = new QAction(this);
-    m_addRoundedRectAction->setIcon(ThemeIcons::toolShape());
-    connect(m_addRoundedRectAction, &QAction::triggered, this, [this] {
-        addShape(ShapeKind::RoundedRect);
-    });
-
-    m_addEllipseAction = new QAction(this);
-    m_addEllipseAction->setIcon(ThemeIcons::toolShape());
-    m_addEllipseAction->setShortcut(QKeySequence(QStringLiteral("O")));
-    connect(m_addEllipseAction, &QAction::triggered, this, [this] {
-        addShape(ShapeKind::Ellipse);
-    });
-
-    m_addLineAction = new QAction(this);
-    m_addLineAction->setIcon(ThemeIcons::toolShape());
-    m_addLineAction->setShortcut(QKeySequence(QStringLiteral("L")));
-    connect(m_addLineAction, &QAction::triggered, this, [this] {
-        addShape(ShapeKind::Line);
-    });
-
-    m_addArrowRightAction = new QAction(this);
-    m_addArrowRightAction->setIcon(ThemeIcons::toolShape());
-    connect(m_addArrowRightAction, &QAction::triggered, this, [this] {
-        addShape(ShapeKind::ArrowRight);
-    });
-
-    m_addArrowCurvedAction = new QAction(this);
-    m_addArrowCurvedAction->setIcon(ThemeIcons::toolShape());
-    connect(m_addArrowCurvedAction, &QAction::triggered, this, [this] {
-        addShape(ShapeKind::ArrowCurved);
-    });
-
-    m_addStarAction = new QAction(this);
-    m_addStarAction->setIcon(ThemeIcons::toolShape());
-    connect(m_addStarAction, &QAction::triggered, this, [this] {
-        addShape(ShapeKind::Star);
-    });
-
-    m_addBadgeAction = new QAction(this);
-    m_addBadgeAction->setIcon(ThemeIcons::toolShape());
-    connect(m_addBadgeAction, &QAction::triggered, this, [this] {
-        addShape(ShapeKind::Badge);
-    });
-
-    m_addSpeechBubbleAction = new QAction(this);
-    m_addSpeechBubbleAction->setIcon(ThemeIcons::toolShape());
-    connect(m_addSpeechBubbleAction, &QAction::triggered, this, [this] {
-        addShape(ShapeKind::SpeechBubble);
-    });
-
-    m_addHeartAction = new QAction(this);
-    m_addHeartAction->setIcon(ThemeIcons::toolShape());
-    connect(m_addHeartAction, &QAction::triggered, this, [this] {
-        addShape(ShapeKind::Heart);
-    });
-
-    // Ações para alinhamento rápido da camada selecionada na tela
-    m_alignLeftAction = new QAction(this);
-    m_alignLeftAction->setIcon(ThemeIcons::actionAlignLeft());
-    connect(m_alignLeftAction, &QAction::triggered, this, [this] {
-        alignSelectedLayer(AlignTarget::Left);
-    });
-
-    m_alignCenterXAction = new QAction(this);
-    m_alignCenterXAction->setIcon(ThemeIcons::actionAlignCenter());
-    connect(m_alignCenterXAction, &QAction::triggered, this, [this] {
-        alignSelectedLayer(AlignTarget::CenterX);
-    });
-
-    m_alignRightAction = new QAction(this);
-    m_alignRightAction->setIcon(ThemeIcons::actionAlignRight());
-    connect(m_alignRightAction, &QAction::triggered, this, [this] {
-        alignSelectedLayer(AlignTarget::Right);
-    });
-
-    m_alignTopAction = new QAction(this);
-    m_alignTopAction->setIcon(ThemeIcons::actionAlignTop());
-    connect(m_alignTopAction, &QAction::triggered, this, [this] {
-        alignSelectedLayer(AlignTarget::Top);
-    });
-
-    m_alignCenterYAction = new QAction(this);
-    m_alignCenterYAction->setIcon(ThemeIcons::actionAlignMiddle());
-    connect(m_alignCenterYAction, &QAction::triggered, this, [this] {
-        alignSelectedLayer(AlignTarget::CenterY);
-    });
-
-    m_alignBottomAction = new QAction(this);
-    m_alignBottomAction->setIcon(ThemeIcons::actionAlignBottom());
-    connect(m_alignBottomAction, &QAction::triggered, this, [this] {
-        alignSelectedLayer(AlignTarget::Bottom);
-    });
-
-    m_alignCenterBothAction = new QAction(this);
-    m_alignCenterBothAction->setIcon(ThemeIcons::actionAlignCenter());
-    connect(m_alignCenterBothAction, &QAction::triggered, this, [this] {
-        alignSelectedLayer(AlignTarget::CenterBoth);
-    });
-
-    m_distributeHAction = new QAction(this);
-    m_distributeHAction->setIcon(ThemeIcons::actionDistributeH());
-    connect(m_distributeHAction, &QAction::triggered, this, &MainWindow::distributeHorizontally);
-
-    m_distributeVAction = new QAction(this);
-    m_distributeVAction->setIcon(ThemeIcons::actionDistributeV());
-    connect(m_distributeVAction, &QAction::triggered, this, &MainWindow::distributeVertically);
-
-    m_groupAction = new QAction(this);
-    m_groupAction->setIcon(ThemeIcons::layerTypeGroup());
-    m_groupAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_G));
-    connect(m_groupAction, &QAction::triggered, this, &MainWindow::groupSelectedLayers);
-
-    m_ungroupAction = new QAction(this);
-    m_ungroupAction->setIcon(ThemeIcons::layerTypeGroup());
-    m_ungroupAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_G));
-    connect(m_ungroupAction, &QAction::triggered, this, &MainWindow::ungroupSelectedLayer);
-
-    m_mergeSelectedAction = new QAction(this);
-    m_mergeSelectedAction->setEnabled(false);
-    // Ctrl+E é o Export. Antes o Merge Selected usava o MESMO atalho e o
-    // Qt tratava como atalho ambíguo (nenhum disparava).
-    m_mergeSelectedAction->setShortcuts({QKeySequence(QStringLiteral("Ctrl+Shift+E"))});
-    connect(m_mergeSelectedAction, &QAction::triggered,
-            this, &MainWindow::mergeSelectedLayers);
-
-    m_mergeVisibleAction = new QAction(this);
-    m_mergeVisibleAction->setEnabled(false);
-    connect(m_mergeVisibleAction, &QAction::triggered,
-            this, &MainWindow::mergeVisibleLayers);
-
-    m_flattenAction = new QAction(this);
-    m_flattenAction->setEnabled(false);
-    connect(m_flattenAction, &QAction::triggered,
-            this, &MainWindow::flattenDocument);
-
-    m_textBehindSubjectAction = new QAction(this);
-    m_textBehindSubjectAction->setEnabled(false);
-    connect(m_textBehindSubjectAction, &QAction::triggered,
-            this, &MainWindow::textBehindSubject);
-
-    m_toggleGridAction = new QAction(this);
-    m_toggleGridAction->setIcon(ThemeIcons::actionGrid());
-    m_toggleGridAction->setCheckable(true);
-    m_toggleGridAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Apostrophe));
+    // --- Zoom & Visualização ---
+    connect(m_zoomInAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->zoomIn(); });
+    connect(m_zoomOutAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->zoomOut(); });
+    connect(m_zoomFitAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->fitToViewport(); });
     connect(m_toggleGridAction, &QAction::triggered, this, [this](bool checked) {
         if (m_canvas) m_canvas->setShowGrid(checked);
     });
-
-    m_toggleSnapAction = new QAction(this);
-    m_toggleSnapAction->setIcon(ThemeIcons::actionSnap());
-    m_toggleSnapAction->setCheckable(true);
     connect(m_toggleSnapAction, &QAction::triggered, this, [this](bool checked) {
         if (m_canvas) m_canvas->setSnapToGrid(checked);
     });
-
-    m_toggleHistoryAction = new QAction(this);
-    m_toggleHistoryAction->setIcon(ThemeIcons::actionHistory());
-    m_toggleHistoryAction->setCheckable(true);
-    m_toggleHistoryAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_H));
     connect(m_toggleHistoryAction, &QAction::triggered, this, [this](bool checked) {
         if (m_historyDock) {
             m_historyDock->setVisible(checked);
             if (checked) m_historyDock->raise();
         }
     });
-
-    m_toggleToolsBarAction = new QAction(this);
-    m_toggleToolsBarAction->setCheckable(true);
-    m_toggleToolsBarAction->setChecked(true);
-    m_toggleToolsBarAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_B));
     connect(m_toggleToolsBarAction, &QAction::triggered, this, [this](bool checked) {
         const bool narrow = width() < Design::BreakSM;
         if (m_toolsBar) m_toolsBar->setVisible(checked && !narrow);
@@ -1147,11 +1008,6 @@ void MainWindow::buildActions()
                                          && m_toolOptionsBarWidget->currentToolIndex() != 0);
         QTimer::singleShot(150, this, [this] { if (m_canvas) m_canvas->fitToViewport(); });
     });
-
-    m_toggleRightPanelAction = new QAction(this);
-    m_toggleRightPanelAction->setCheckable(true);
-    m_toggleRightPanelAction->setChecked(true);
-    m_toggleRightPanelAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_J));
     connect(m_toggleRightPanelAction, &QAction::triggered, this, [this](bool checked) {
         const QList<QDockWidget*> panels = {m_layersDock, m_textDock, m_shapeDock,
                                             m_imageDock, m_historyDock};
@@ -1159,40 +1015,24 @@ void MainWindow::buildActions()
             if (panel) panel->setVisible(checked);
         QTimer::singleShot(150, this, [this] { if (m_canvas) m_canvas->fitToViewport(); });
     });
-
-    m_toggleLayersDockAction = new QAction(this);
-    m_toggleLayersDockAction->setCheckable(true);
-    m_toggleLayersDockAction->setChecked(true);
     connect(m_toggleLayersDockAction, &QAction::triggered, this, [this](bool checked) {
         if (m_layersDock) {
             m_layersDock->setVisible(checked);
             if (checked) m_layersDock->raise();
         }
     });
-
-    m_toggleTextDockAction = new QAction(this);
-    m_toggleTextDockAction->setCheckable(true);
-    m_toggleTextDockAction->setChecked(true);
     connect(m_toggleTextDockAction, &QAction::triggered, this, [this](bool checked) {
         if (m_textDock) {
             m_textDock->setVisible(checked);
             if (checked) m_textDock->raise();
         }
     });
-
-    m_toggleShapeDockAction = new QAction(this);
-    m_toggleShapeDockAction->setCheckable(true);
-    m_toggleShapeDockAction->setChecked(true);
     connect(m_toggleShapeDockAction, &QAction::triggered, this, [this](bool checked) {
         if (m_shapeDock) {
             m_shapeDock->setVisible(checked);
             if (checked) m_shapeDock->raise();
         }
     });
-
-    m_toggleImageDockAction = new QAction(this);
-    m_toggleImageDockAction->setCheckable(true);
-    m_toggleImageDockAction->setChecked(true);
     connect(m_toggleImageDockAction, &QAction::triggered, this, [this](bool checked) {
         if (m_imageDock) {
             m_imageDock->setVisible(checked);
@@ -1200,45 +1040,300 @@ void MainWindow::buildActions()
         }
     });
 
-    m_flipHAction = new QAction(this);
-    m_flipHAction->setIcon(ThemeIcons::actionFlipH());
-    connect(m_flipHAction, &QAction::triggered,
-            this, [this] { flipLayer(true); });
+    // --- Zonas Seguras ---
+    connect(m_safeNoneAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setSafeZoneMode(0); });
+    connect(m_safeYouTubeAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setSafeZoneMode(1); });
+    connect(m_safeInstagramAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setSafeZoneMode(2); });
+    connect(m_safeTikTokAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setSafeZoneMode(3); });
 
-    m_flipVAction = new QAction(this);
-    m_flipVAction->setIcon(ThemeIcons::actionFlipV());
-    connect(m_flipVAction, &QAction::triggered,
-            this, [this] { flipLayer(false); });
-    m_rotateLeftAction = new QAction(this);
-    m_rotateLeftAction->setIcon(ThemeIcons::actionRotateLeft());
+    // --- Camadas: Criação ---
+    connect(m_addTextAction, &QAction::triggered, this, &MainWindow::addText);
+    connect(m_addRectAction, &QAction::triggered, this, [this] { addShape(ShapeKind::Rectangle); });
+    connect(m_addRoundedRectAction, &QAction::triggered, this, [this] { addShape(ShapeKind::RoundedRect); });
+    connect(m_addEllipseAction, &QAction::triggered, this, [this] { addShape(ShapeKind::Ellipse); });
+    connect(m_addLineAction, &QAction::triggered, this, [this] { addShape(ShapeKind::Line); });
+    connect(m_addArrowRightAction, &QAction::triggered, this, [this] { addShape(ShapeKind::ArrowRight); });
+    connect(m_addArrowCurvedAction, &QAction::triggered, this, [this] { addShape(ShapeKind::ArrowCurved); });
+    connect(m_addStarAction, &QAction::triggered, this, [this] { addShape(ShapeKind::Star); });
+    connect(m_addBadgeAction, &QAction::triggered, this, [this] { addShape(ShapeKind::Badge); });
+    connect(m_addSpeechBubbleAction, &QAction::triggered, this, [this] { addShape(ShapeKind::SpeechBubble); });
+    connect(m_addHeartAction, &QAction::triggered, this, [this] { addShape(ShapeKind::Heart); });
+
+    for (int i = 0; i < m_addNewShapeActions.size() && i < kNewShapeCount; ++i) {
+        const ShapeKind kind = kNewShapeDefs[i].kind;
+        connect(m_addNewShapeActions[i], &QAction::triggered, this, [this, kind] { addShape(kind); });
+    }
+
+    // Camada de Preenchimento
+    connect(m_addFillLayerAction, &QAction::triggered, this, [this] {
+        if (!m_document) return;
+        const QColor chosen = QColorDialog::getColor(
+            QColor(61, 126, 255), this,
+            m_i18n ? m_i18n->t("editor", "layer.newFillLayer.colorTitle")
+                   : QStringLiteral("Fill Layer Color"));
+        if (!chosen.isValid()) return;
+        auto layer = std::make_unique<FillLayer>();
+        layer->name = m_i18n ? m_i18n->t("editor", "layer.newFillLayer.name")
+                             : QStringLiteral("Fill Layer");
+        layer->kind = FillType::Solid;
+        layer->color = chosen;
+        if (m_history) {
+            m_history->execute(std::make_unique<AddLayerCommand>(
+                *m_document, std::move(layer), m_document->rootGroup(), -1));
+        } else {
+            m_document->addLayer(std::move(layer));
+        }
+    });
+
+    // Camada de Ajuste
+    connect(m_addAdjustmentLayerAction, &QAction::triggered, this, [this] {
+        if (!m_document) return;
+        QMenu menu(this);
+        static const struct { AdjustmentType type; const char* key; const char* fallback; } kAdjustKinds[] = {
+            { AdjustmentType::BrightnessContrast, "layer.adjust.brightnessContrast", "Brightness / Contrast" },
+            { AdjustmentType::HueSaturation,      "layer.adjust.hueSaturation",      "Hue / Saturation" },
+            { AdjustmentType::ColorBalance,       "layer.adjust.colorBalance",       "Color Balance" },
+            { AdjustmentType::PhotoFilter,        "layer.adjust.photoFilter",        "Photo Filter" },
+            { AdjustmentType::Invert,             "layer.adjust.invert",             "Invert" },
+            { AdjustmentType::Posterize,          "layer.adjust.posterize",          "Posterize" },
+            { AdjustmentType::Threshold,          "layer.adjust.threshold",          "Threshold" },
+            { AdjustmentType::GradientMap,        "layer.adjust.gradientMap",        "Gradient Map" },
+        };
+        for (const auto& def : kAdjustKinds) {
+            QAction* act = menu.addAction(m_i18n
+                ? m_i18n->t("editor", QString::fromLatin1(def.key))
+                : QString::fromLatin1(def.fallback));
+            connect(act, &QAction::triggered, this, [this, def] {
+                auto layer = std::make_unique<AdjustmentLayer>();
+                layer->name = m_i18n
+                    ? m_i18n->t("editor", QString::fromLatin1(def.key))
+                    : QString::fromLatin1(def.fallback);
+                layer->kind = def.type;
+                switch (def.type) {
+                case AdjustmentType::BrightnessContrast:
+                    layer->parameters = {{QStringLiteral("brightness"), 10.0},
+                                         {QStringLiteral("contrast"), 10.0}};
+                    break;
+                case AdjustmentType::HueSaturation:
+                    layer->parameters = {{QStringLiteral("hue"), 0.0},
+                                         {QStringLiteral("saturation"), 0.0}};
+                    break;
+                case AdjustmentType::PhotoFilter:
+                case AdjustmentType::ColorBalance:
+                    layer->parameters = {{QStringLiteral("temperature"), 20.0}};
+                    break;
+                default:
+                    break;
+                }
+                if (m_history) {
+                    m_history->execute(std::make_unique<AddLayerCommand>(
+                        *m_document, std::move(layer), m_document->rootGroup(), -1));
+                } else {
+                    m_document->addLayer(std::move(layer));
+                }
+            });
+        }
+        menu.exec(QCursor::pos());
+    });
+
+    // --- Camadas: Alinhamento & Distribuição ---
+    connect(m_alignLeftAction, &QAction::triggered, this, [this] { alignSelectedLayer(AlignTarget::Left); });
+    connect(m_alignCenterXAction, &QAction::triggered, this, [this] { alignSelectedLayer(AlignTarget::CenterX); });
+    connect(m_alignRightAction, &QAction::triggered, this, [this] { alignSelectedLayer(AlignTarget::Right); });
+    connect(m_alignTopAction, &QAction::triggered, this, [this] { alignSelectedLayer(AlignTarget::Top); });
+    connect(m_alignCenterYAction, &QAction::triggered, this, [this] { alignSelectedLayer(AlignTarget::CenterY); });
+    connect(m_alignBottomAction, &QAction::triggered, this, [this] { alignSelectedLayer(AlignTarget::Bottom); });
+    connect(m_alignCenterBothAction, &QAction::triggered, this, [this] { alignSelectedLayer(AlignTarget::CenterBoth); });
+    connect(m_distributeHAction, &QAction::triggered, this, &MainWindow::distributeHorizontally);
+    connect(m_distributeVAction, &QAction::triggered, this, &MainWindow::distributeVertically);
+
+    // --- Camadas: Operações ---
+    connect(m_groupAction, &QAction::triggered, this, &MainWindow::groupSelectedLayers);
+    connect(m_ungroupAction, &QAction::triggered, this, &MainWindow::ungroupSelectedLayer);
+    connect(m_mergeSelectedAction, &QAction::triggered, this, &MainWindow::mergeSelectedLayers);
+    connect(m_mergeVisibleAction, &QAction::triggered, this, &MainWindow::mergeVisibleLayers);
+    connect(m_flattenAction, &QAction::triggered, this, &MainWindow::flattenDocument);
+    connect(m_textBehindSubjectAction, &QAction::triggered, this, &MainWindow::textBehindSubject);
+    connect(m_flipHAction, &QAction::triggered, this, [this] { flipLayer(true); });
+    connect(m_flipVAction, &QAction::triggered, this, [this] { flipLayer(false); });
     connect(m_rotateLeftAction, &QAction::triggered, this, [this] { rotateLayer(-90.0); });
-    m_rotateRightAction = new QAction(this);
-    m_rotateRightAction->setIcon(ThemeIcons::actionRotateRight());
     connect(m_rotateRightAction, &QAction::triggered, this, [this] { rotateLayer(90.0); });
+    connect(m_deleteAction, &QAction::triggered, this, &MainWindow::deleteSelectedLayer);
+    connect(m_lockLayerAction, &QAction::triggered, this, [this] {
+        if (!m_document || m_selectedId.isNull()) return;
+        Layer* l = m_document->findLayer(m_selectedId);
+        if (!l) return;
+        const bool current = l->locked || l->locks.all;
+        const bool newLock = !current;
+        if (m_history) {
+            m_history->execute(std::make_unique<LayerLockCommand>(
+                *m_document, m_selectedId, QStringLiteral("layer.lock"),
+                &Document::setLayerLocked, current, newLock));
+        } else {
+            m_document->setLayerLocked(m_selectedId, newLock);
+        }
+    });
 
-    m_deleteAction = new QAction(this);
-    m_deleteAction->setIcon(ThemeIcons::actionDelete());
-    m_deleteAction->setShortcut(QKeySequence::Delete);
-    connect(m_deleteAction, &QAction::triggered,
-            this, &MainWindow::deleteSelectedLayer);
+    // --- Seleção de Pixels ---
+    connect(m_selectAllAction, &QAction::triggered, this, [this] {
+        if (m_document) {
+            QImage full(m_document->width(), m_document->height(), QImage::Format_Alpha8);
+            full.fill(255);
+            executeSetPixelSelection(*m_document, m_history.get(), full,
+                                     QStringLiteral("selection.selectAll"));
+        }
+    });
+    connect(m_deselectAction, &QAction::triggered, this, [this] {
+        if (m_document && !m_document->pixelSelection().isNull())
+            executeSetPixelSelection(*m_document, m_history.get(), QImage(),
+                                     QStringLiteral("selection.deselect"));
+    });
+    connect(m_invertSelectionAction, &QAction::triggered, this, [this] {
+        if (!m_document || m_document->pixelSelection().isNull()) return;
+        QImage mask = m_document->pixelSelection().convertToFormat(QImage::Format_Alpha8);
+        for (int y = 0; y < mask.height(); ++y) {
+            uchar* row = mask.scanLine(y);
+            for (int x = 0; x < mask.width(); ++x) row[x] = 255 - row[x];
+        }
+        executeSetPixelSelection(*m_document, m_history.get(), mask,
+                                 QStringLiteral("selection.invert"));
+    });
+    connect(m_selectionOpsAction, &QAction::triggered, this, [this] {
+        if (m_canvas) m_canvas->openSelectionActionsMenu();
+    });
 
-    m_settingsAction = new QAction(this);
-    m_settingsAction->setIcon(ThemeIcons::actionSettings());
-    m_settingsAction->setShortcut(QKeySequence::Preferences);
+    auto modifySelection = [this](const std::function<QImage(const QImage&)>& op) {
+        if (!m_document || m_document->pixelSelection().isNull())
+            return;
+        const QImage current = m_document->pixelSelection();
+        const QImage modified = op(current);
+        executeSetPixelSelection(*m_document, m_history.get(), modified,
+                                 QStringLiteral("selection.modify"));
+    };
+    auto askRadius = [this](const QString& title, double def) -> double {
+        bool ok = false;
+        const double v = QInputDialog::getDouble(
+            this, title,
+            m_i18n ? m_i18n->t("editor", "selection.modify.radius")
+                   : QStringLiteral("Radius (px):"),
+            def, 1.0, 200.0, 1, &ok);
+        return ok ? v : -1.0;
+    };
+    if (m_modifyActions.size() >= 5) {
+        connect(m_modifyActions[0], &QAction::triggered, this, [modifySelection, askRadius, this] {
+            const double r = askRadius(
+                m_i18n ? m_i18n->t("editor", "selection.modify.expand")
+                       : QStringLiteral("Expand Selection"), 2.0);
+            if (r > 0)
+                modifySelection([r](const QImage& s) { return SelectionEngine::expand(s, float(r)); });
+        });
+        connect(m_modifyActions[1], &QAction::triggered, this, [modifySelection, askRadius, this] {
+            const double r = askRadius(
+                m_i18n ? m_i18n->t("editor", "selection.modify.contract")
+                       : QStringLiteral("Contract Selection"), 2.0);
+            if (r > 0)
+                modifySelection([r](const QImage& s) { return SelectionEngine::contract(s, float(r)); });
+        });
+        connect(m_modifyActions[2], &QAction::triggered, this, [modifySelection, askRadius, this] {
+            const double r = askRadius(
+                m_i18n ? m_i18n->t("editor", "selection.modify.border")
+                       : QStringLiteral("Border Selection"), 4.0);
+            if (r > 0)
+                modifySelection([r](const QImage& s) { return SelectionEngine::border(s, float(r)); });
+        });
+        connect(m_modifyActions[3], &QAction::triggered, this, [modifySelection, askRadius, this] {
+            const double r = askRadius(
+                m_i18n ? m_i18n->t("editor", "selection.modify.smooth")
+                       : QStringLiteral("Smooth Selection"), 2.0);
+            if (r > 0)
+                modifySelection([r](const QImage& s) { return SelectionEngine::smooth(s, float(r)); });
+        });
+        connect(m_modifyActions[4], &QAction::triggered, this, [modifySelection, askRadius, this] {
+            const double r = askRadius(
+                m_i18n ? m_i18n->t("editor", "selection.modify.feather")
+                       : QStringLiteral("Feather Selection"), 5.0);
+            if (r > 0)
+                modifySelection([r](const QImage& s) { return SelectionEngine::feather(s, float(r)); });
+        });
+    }
+
+    connect(m_colorRangeAction, &QAction::triggered, this, [this] {
+        if (!m_document || m_selectedId.isNull())
+            return;
+        Layer* layer = m_document->findLayer(m_selectedId);
+        if (!layer || layer->type() != LayerType::Image)
+            return;
+
+        bool ok = false;
+        const double fuzziness = QInputDialog::getDouble(
+            this,
+            m_i18n ? m_i18n->t("editor", "selection.colorRange.title")
+                   : QStringLiteral("Color Range"),
+            m_i18n ? m_i18n->t("editor", "selection.colorRange.fuzziness")
+                   : QStringLiteral("Fuzziness:"),
+            40.0, 0.0, 200.0, 1, &ok);
+        if (!ok)
+            return;
+
+        const QColor target = m_toolOptionsBarWidget
+                                  ? m_toolOptionsBarWidget->currentPaintColor()
+                                  : QColor(230, 50, 50);
+        const QImage bitmap = m_document->assets().decodedImage(
+            static_cast<ImageLayer*>(layer)->assetId);
+        if (bitmap.isNull())
+            return;
+
+        const QImage mask = SelectionEngine::colorRange(
+            bitmap, bitmap.rect(), target, float(fuzziness));
+        executeSetPixelSelection(*m_document, m_history.get(), mask,
+                                 QStringLiteral("selection.colorRange"));
+    });
+
+    // --- Ferramentas da Barra ---
+    connect(m_toolSelectAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::Select); });
+    connect(m_toolCropAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::Crop); });
+    connect(m_toolScissorsAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::Scissors); });
+    connect(m_toolWandAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::MagicWand); });
+    connect(m_toolCloneAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::CloneStamp); });
+    connect(m_toolPaintAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::Paint); });
+    connect(m_toolFloodAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::FloodFill); });
+    connect(m_toolEyedropperAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::Eyedropper); });
+    connect(m_toolMarqueeAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::Marquee); });
+    connect(m_toolGradientAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::Gradient); });
+    connect(m_toolRetouchAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::Retouch); });
+    connect(m_toolHealingAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::Healing); });
+
+    // --- IA & Filtros ---
+    connect(m_removeBgAiAction, &QAction::triggered, this, [this] {
+        if (m_canvas && m_document && !m_selectedId.isNull())
+            m_canvas->openAiBackgroundRemoval(m_selectedId);
+    });
+    connect(m_removeBgAiQuickAction, &QAction::triggered, this, [this] {
+        if (m_canvas && m_document && !m_selectedId.isNull())
+            m_canvas->removeBackgroundAiQuick(m_selectedId);
+    });
+    connect(m_mockupAction, &QAction::triggered, this, [this] {
+        if (m_imageInspector) m_imageInspector->openMockupDialog();
+    });
+
+    for (int i = 0; i < m_filterActions.size(); ++i) {
+        connect(m_filterActions[i], &QAction::triggered, this, [this, i] {
+            if (m_imageInspector) {
+                m_imageInspector->applyPreset(i);
+                if (m_imageDock && m_imageDock->isVisible())
+                    m_imageDock->raise();
+            }
+        });
+    }
+
+    // --- Janela, Ajuda & Preferências ---
     connect(m_settingsAction, &QAction::triggered, this, &MainWindow::openSettings);
-
-    m_startScreenAction = new QAction(this);
-    m_startScreenAction->setIcon(ThemeIcons::actionNewDocument());
     connect(m_startScreenAction, &QAction::triggered, this, [this] {
         if (confirmDiscardUnsavedChanges())
             showStartScreen();
     });
-
-    m_aboutAction = new QAction(this);
-    m_aboutAction->setIcon(ThemeIcons::actionAbout());
     connect(m_aboutAction, &QAction::triggered, this, [this] {
-        if (!m_i18n)
-            return;
+        if (!m_i18n) return;
         QMessageBox::about(
             this,
             m_i18n->t("common", "menu.help.about"),
@@ -1246,154 +1341,8 @@ void MainWindow::buildActions()
                 .arg(QApplication::applicationVersion(),
                      m_i18n->t("common", "app.aboutBody").toHtmlEscaped()));
     });
-
-    m_aboutQtAction = new QAction(this);
     connect(m_aboutQtAction, &QAction::triggered, this, [this] {
         QMessageBox::aboutQt(this);
-    });
-
-    m_removeBgAiAction = new QAction(this);
-    connect(m_removeBgAiAction, &QAction::triggered, this, [this] {
-        if (m_canvas && m_document && !m_selectedId.isNull()) {
-            m_canvas->openAiBackgroundRemoval(m_selectedId);
-        }
-    });
-
-    m_removeBgAiQuickAction = new QAction(this);
-    connect(m_removeBgAiQuickAction, &QAction::triggered, this, [this] {
-        if (m_canvas && m_document && !m_selectedId.isNull()) {
-            m_canvas->removeBackgroundAiQuick(m_selectedId);
-        }
-    });
-
-    // Grupo de ferramentas exclusivas
-    m_toolGroup = new QActionGroup(this);
-    m_toolGroup->setExclusive(true);
-
-    m_toolSelectAction = new QAction(this);
-    m_toolSelectAction->setCheckable(true);
-    m_toolSelectAction->setChecked(true);
-    m_toolSelectAction->setShortcut(QKeySequence(QStringLiteral("V")));
-    m_toolSelectAction->setToolTip((m_i18n ? m_i18n->t("editor", "tools.select")
-                                          : QStringLiteral("Select / Move")) + QStringLiteral(" (V)"));
-    m_toolGroup->addAction(m_toolSelectAction);
-    connect(m_toolSelectAction, &QAction::triggered, this, [this] {
-        if (m_canvas) m_canvas->setTool(CanvasTool::Select);
-    });
-
-    m_toolCropAction = new QAction(this);
-    m_toolCropAction->setCheckable(true);
-    m_toolCropAction->setShortcut(QKeySequence(QStringLiteral("C")));
-    m_toolCropAction->setToolTip((m_i18n ? m_i18n->t("editor", "tools.crop")
-                                        : QStringLiteral("Crop")) + QStringLiteral(" (C)"));
-    m_toolGroup->addAction(m_toolCropAction);
-    connect(m_toolCropAction, &QAction::triggered, this, [this] {
-        if (m_canvas) m_canvas->setTool(CanvasTool::Crop);
-    });
-
-    m_toolScissorsAction = new QAction(this);
-    m_toolScissorsAction->setCheckable(true);
-    m_toolScissorsAction->setShortcut(QKeySequence(QStringLiteral("X")));
-    m_toolScissorsAction->setToolTip((m_i18n ? m_i18n->t("editor", "tools.scissors")
-                                            : QStringLiteral("Scissors Selection")) + QStringLiteral(" (X)"));
-    m_toolGroup->addAction(m_toolScissorsAction);
-    connect(m_toolScissorsAction, &QAction::triggered, this, [this] {
-        if (m_canvas) m_canvas->setTool(CanvasTool::Scissors);
-    });
-
-    m_toolWandAction = new QAction(this);
-    m_toolWandAction->setCheckable(true);
-    m_toolWandAction->setShortcut(QKeySequence(QStringLiteral("W")));
-    m_toolWandAction->setToolTip((m_i18n ? m_i18n->t("editor", "tools.wand")
-                                        : QStringLiteral("Magic Wand")) + QStringLiteral(" (W)"));
-    m_toolGroup->addAction(m_toolWandAction);
-    connect(m_toolWandAction, &QAction::triggered, this, [this] {
-        if (m_canvas) m_canvas->setTool(CanvasTool::MagicWand);
-    });
-
-    m_toolCloneAction = new QAction(this);
-    m_toolCloneAction->setCheckable(true);
-    m_toolCloneAction->setShortcut(QKeySequence(QStringLiteral("S")));
-    m_toolCloneAction->setToolTip((m_i18n ? m_i18n->t("editor", "tools.clone")
-                                         : QStringLiteral("Clone Stamp")) + QStringLiteral(" (S)"));
-    m_toolGroup->addAction(m_toolCloneAction);
-    connect(m_toolCloneAction, &QAction::triggered, this, [this] {
-        if (m_canvas) m_canvas->setTool(CanvasTool::CloneStamp);
-    });
-
-    m_toolPaintAction = new QAction(this);
-    m_toolPaintAction->setCheckable(true);
-    m_toolPaintAction->setShortcut(QKeySequence(QStringLiteral("B")));
-    m_toolPaintAction->setToolTip((m_i18n ? m_i18n->t("editor", "tools.paint")
-                                         : QStringLiteral("Brush")) + QStringLiteral(" (B)"));
-    m_toolGroup->addAction(m_toolPaintAction);
-    connect(m_toolPaintAction, &QAction::triggered, this, [this] {
-        if (m_canvas) m_canvas->setTool(CanvasTool::Paint);
-    });
-
-    m_toolFloodAction = new QAction(this);
-    m_toolFloodAction->setCheckable(true);
-    // G agora é o Gradiente (grupo Photoshop: G / Shift+G = balde).
-    m_toolFloodAction->setShortcut(QKeySequence(QStringLiteral("Shift+G")));
-    m_toolFloodAction->setToolTip((m_i18n ? m_i18n->t("editor", "tools.flood")
-                                         : QStringLiteral("Paint Bucket")) + QStringLiteral(" (Shift+G)"));
-    m_toolGroup->addAction(m_toolFloodAction);
-    connect(m_toolFloodAction, &QAction::triggered, this, [this] {
-        if (m_canvas) m_canvas->setTool(CanvasTool::FloodFill);
-    });
-
-    m_toolEyedropperAction = new QAction(this);
-    m_toolEyedropperAction->setCheckable(true);
-    m_toolEyedropperAction->setShortcut(QKeySequence(QStringLiteral("I")));
-    m_toolEyedropperAction->setToolTip((m_i18n ? m_i18n->t("editor", "tools.eyedropper")
-                                              : QStringLiteral("Eyedropper")) + QStringLiteral(" (I)"));
-    m_toolGroup->addAction(m_toolEyedropperAction);
-    connect(m_toolEyedropperAction, &QAction::triggered, this, [this] {
-        if (m_canvas) m_canvas->setTool(CanvasTool::Eyedropper);
-    });
-
-    // --- Ferramentas estilo PhotoCraft adicionadas ---
-    m_toolMarqueeAction = new QAction(this);
-    m_toolMarqueeAction->setCheckable(true);
-    m_toolMarqueeAction->setShortcut(QKeySequence(QStringLiteral("M")));
-    m_toolMarqueeAction->setToolTip((m_i18n ? m_i18n->t("editor", "tools.marquee")
-                                           : QStringLiteral("Marquee Selection")) + QStringLiteral(" (M)"));
-    m_toolGroup->addAction(m_toolMarqueeAction);
-    connect(m_toolMarqueeAction, &QAction::triggered, this, [this] {
-        if (m_canvas) m_canvas->setTool(CanvasTool::Marquee);
-    });
-
-    m_toolGradientAction = new QAction(this);
-    m_toolGradientAction->setCheckable(true);
-    m_toolGradientAction->setShortcut(QKeySequence(QStringLiteral("G")));
-    m_toolGradientAction->setToolTip((m_i18n ? m_i18n->t("editor", "tools.gradient")
-                                            : QStringLiteral("Gradient")) + QStringLiteral(" (G)"));
-    m_toolGroup->addAction(m_toolGradientAction);
-    connect(m_toolGradientAction, &QAction::triggered, this, [this] {
-        if (m_canvas) m_canvas->setTool(CanvasTool::Gradient);
-    });
-
-    m_toolRetouchAction = new QAction(this);
-    m_toolRetouchAction->setCheckable(true);
-    // "R" já é o atalho do retângulo de forma — atalho duplicado no mesmo
-    // QActionGroup/QActionWindow deixa AMBÍGUO e nenhum dos dois dispara.
-    // "U" é a convenção do grupo de retoque no Photoshop.
-    m_toolRetouchAction->setShortcut(QKeySequence(QStringLiteral("U")));
-    m_toolRetouchAction->setToolTip((m_i18n ? m_i18n->t("editor", "tools.retouch")
-                                           : QStringLiteral("Retouch Brush")) + QStringLiteral(" (U)"));
-    m_toolGroup->addAction(m_toolRetouchAction);
-    connect(m_toolRetouchAction, &QAction::triggered, this, [this] {
-        if (m_canvas) m_canvas->setTool(CanvasTool::Retouch);
-    });
-
-    m_toolHealingAction = new QAction(this);
-    m_toolHealingAction->setCheckable(true);
-    m_toolHealingAction->setShortcut(QKeySequence(QStringLiteral("J")));
-    m_toolHealingAction->setToolTip((m_i18n ? m_i18n->t("editor", "tools.healing")
-                                           : QStringLiteral("Spot Healing / Red Eye")) + QStringLiteral(" (J)"));
-    m_toolGroup->addAction(m_toolHealingAction);
-    connect(m_toolHealingAction, &QAction::triggered, this, [this] {
-        if (m_canvas) m_canvas->setTool(CanvasTool::Healing);
     });
 }
 
@@ -1519,489 +1468,35 @@ void MainWindow::buildToolBars()
 
 void MainWindow::buildMenus()
 {
-    m_fileMenu = menuBar()->addMenu(QString());
-    m_fileMenu->addAction(m_newAction);
-    m_fileMenu->addAction(m_openAction);
-    m_openRecentMenu = m_fileMenu->addMenu(QString());
-    // Lista reconstruida a cada abertura — sempre atualizada
-    connect(m_openRecentMenu, &QMenu::aboutToShow, this, [this] { refreshRecentMenu(); });
-    m_fileMenu->addAction(m_saveAction);
-    m_fileMenu->addAction(m_saveAsAction);
-    m_fileMenu->addSeparator();
-    m_fileMenu->addAction(m_importAction);
-    m_fileMenu->addAction(m_exportAction);
-    m_fileMenu->addSeparator();
-    m_fileMenu->addAction(m_quitAction);
+    m_menuBuilder = new MenuBuilder(menuBar(), m_actions, this);
+    m_menuBuilder->buildMenus(m_i18n);
 
-    m_editMenu = menuBar()->addMenu(QString());
-    m_editMenu->addAction(m_undoAction);
-    m_editMenu->addAction(m_redoAction);
+    m_fileMenu = m_menuBuilder->fileMenu;
+    m_openRecentMenu = m_menuBuilder->openRecentMenu;
+    m_editMenu = m_menuBuilder->editMenu;
+    m_imageMenu = m_menuBuilder->imageMenu;
+    m_filterMenu = m_menuBuilder->filterMenu;
+    m_artisticMenu = m_menuBuilder->artisticMenu;
+    m_toneMenu = m_menuBuilder->toneMenu;
+    m_selectMenu = m_menuBuilder->selectMenu;
+    m_modifyMenu = m_menuBuilder->modifyMenu;
+    m_layerMenu = m_menuBuilder->layerMenu;
+    m_addShapeMenu = m_menuBuilder->addShapeMenu;
+    m_alignMenu = m_menuBuilder->alignMenu;
+    m_viewMenu = m_menuBuilder->viewMenu;
+    m_safeZoneMenu = m_menuBuilder->safeZoneMenu;
+    m_panelsMenu = m_menuBuilder->panelsMenu;
+    m_toolsMenu = m_menuBuilder->toolsMenu;
+    m_selectionToolsMenu = m_menuBuilder->selectionToolsMenu;
+    m_retouchToolsMenu = m_menuBuilder->retouchToolsMenu;
+    m_createToolsMenu = m_menuBuilder->createToolsMenu;
+    m_windowMenu = m_menuBuilder->windowMenu;
+    m_settingsMenu = m_menuBuilder->settingsMenu;
+    m_helpMenu = m_menuBuilder->helpMenu;
 
-    m_imageMenu = menuBar()->addMenu(QStringLiteral("Image"));
-    m_imageMenu->addAction(m_importAction);
-    m_imageMenu->addAction(m_exportAction);
-    m_imageMenu->addSeparator();
-
-    // Rotação & Espelhamento da Imagem/Camada
-    auto* flipHAct = m_imageMenu->addAction(QStringLiteral("Virar Horizontalmente"));
-    flipHAct->setIcon(ThemeIcons::actionFlipH());
-    connect(flipHAct, &QAction::triggered, this, [this] { flipLayer(true); });
-    auto* flipVAct = m_imageMenu->addAction(QStringLiteral("Virar Verticalmente"));
-    flipVAct->setIcon(ThemeIcons::actionFlipV());
-    connect(flipVAct, &QAction::triggered, this, [this] { flipLayer(false); });
-    auto* rotLeftAct = m_imageMenu->addAction(QStringLiteral("Girar 90° para a Esquerda"));
-    rotLeftAct->setIcon(ThemeIcons::actionRotateLeft());
-    connect(rotLeftAct, &QAction::triggered, this, [this] { rotateLayer(-90.0); });
-    auto* rotRightAct = m_imageMenu->addAction(QStringLiteral("Girar 90° para a Direita"));
-    rotRightAct->setIcon(ThemeIcons::actionRotateRight());
-    connect(rotRightAct, &QAction::triggered, this, [this] { rotateLayer(90.0); });
-    m_imageMenu->addSeparator();
-
-    // IA & Ferramentas Inteligentes
-    m_imageMenu->addAction(m_removeBgAiAction);
-    m_imageMenu->addAction(m_removeBgAiQuickAction);
-    m_mockupAction = m_imageMenu->addAction(QStringLiteral("Mockup / Substituir Logo..."));
-    m_mockupAction->setEnabled(false);
-    connect(m_mockupAction, &QAction::triggered, this, [this] {
-        if (m_imageInspector) m_imageInspector->openMockupDialog();
-    });
-    m_imageMenu->addSeparator();
-
-    // Mesclagens do Documento
-    m_imageMenu->addAction(m_mergeSelectedAction);
-    m_imageMenu->addAction(m_mergeVisibleAction);
-    m_imageMenu->addAction(m_flattenAction);
-
-    // --- Menu Filtro (Filtros criativos e de estilo Photocraft) ---
-    m_filterMenu = menuBar()->addMenu(QStringLiteral("Filter"));
-
-    auto addFilterAction = [this](QMenu* menu, const QString& title, int presetIdx) {
-        auto* act = menu->addAction(title);
-        connect(act, &QAction::triggered, this, [this, presetIdx] {
-            if (m_imageInspector) {
-                m_imageInspector->applyPreset(presetIdx);
-                if (m_imageDock && m_imageDock->isVisible())
-                    m_imageDock->raise();
-            }
-        });
-        return act;
-    };
-
-    const auto tr = [this](const char* key, const char* fallback) {
-        return m_i18n ? m_i18n->t("editor", QString::fromLatin1(key))
-                      : QString::fromLatin1(fallback);
-    };
-    m_artisticMenu = m_filterMenu->addMenu(
-        tr("filters.artistic", "Artistic & Color"));
-    m_toneMenu = m_filterMenu->addMenu(
-        tr("filters.tone", "Tone & Special Effects"));
-    // Mesma ordem dos presets (0..10); os textos são re-traduzidos em
-    // retranslateUi, por isso os ponteiros ficam guardados.
-    const QList<QPair<QMenu*, QPair<const char*, const char*>>> filterDefs = {
-        {m_artisticMenu, {"filters.grayscale", "Black & White"}},
-        {m_artisticMenu, {"filters.sepia", "Classic Sepia"}},
-        {m_artisticMenu, {"filters.vintage", "Vintage Look"}},
-        {m_artisticMenu, {"filters.highContrast", "High Contrast"}},
-        {m_artisticMenu, {"filters.vividPop", "Vivid Pop"}},
-        {m_artisticMenu, {"filters.cyberpunk", "Cyberpunk Neon"}},
-        {m_artisticMenu, {"filters.goldenHour", "Golden Hour (Sunset)"}},
-        {m_artisticMenu, {"filters.cinemaNoir", "Cinema Noir"}},
-        {m_toneMenu, {"filters.invert", "Invert Colors"}},
-        {m_toneMenu, {"filters.posterize", "Posterize (4 Levels)"}},
-        {m_toneMenu, {"filters.threshold", "Threshold B&W"}},
-    };
-    for (int i = 0; i < filterDefs.size(); ++i) {
-        QAction* act = addFilterAction(filterDefs[i].first,
-                                       tr(filterDefs[i].second.first,
-                                          filterDefs[i].second.second),
-                                       i);
-        m_filterActions.append(act);
+    if (m_openRecentMenu) {
+        connect(m_openRecentMenu, &QMenu::aboutToShow, this, [this] { refreshRecentMenu(); });
     }
-
-    m_filterMenu->addSeparator();
-    auto* openInspectAct = m_filterMenu->addAction(QStringLiteral("Abrir Painel de Ajustes e Efeitos..."));
-    connect(openInspectAct, &QAction::triggered, this, [this] {
-        if (m_imageDock) {
-            m_imageDock->show();
-            m_imageDock->raise();
-        }
-    });
-
-    m_selectMenu = menuBar()->addMenu(QStringLiteral("Select"));
-    auto* selectAllAct = m_selectMenu->addAction(QStringLiteral("Selecionar Tudo"));
-    selectAllAct->setShortcut(QKeySequence::SelectAll);
-    connect(selectAllAct, &QAction::triggered, this, [this] {
-        if (m_document) {
-            QImage full(m_document->width(), m_document->height(), QImage::Format_Alpha8);
-            full.fill(255);
-            executeSetPixelSelection(*m_document, m_history.get(), full,
-                                     QStringLiteral("selection.selectAll"));
-        }
-    });
-    m_deselectAction = m_selectMenu->addAction(
-        tr("selection.deselect", "Deselect"));
-    m_deselectAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_D));
-    m_invertSelectionAction = m_selectMenu->addAction(
-        tr("selection.invert", "Invert Selection"));
-    m_invertSelectionAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_I));
-    m_selectMenu->addSeparator();
-    m_selectionOpsAction = m_selectMenu->addAction(
-        tr("selection.operations", "Selection Operations (Copy / Cut / Mask)..."));
-    m_selectionOpsAction->setToolTip(
-        tr("selection.operationsTooltip", "Opens the operations menu with the active selection"));
-    connect(m_invertSelectionAction, &QAction::triggered, this, [this] {
-        if (!m_document || m_document->pixelSelection().isNull()) return;
-        QImage mask = m_document->pixelSelection().convertToFormat(QImage::Format_Alpha8);
-        for (int y = 0; y < mask.height(); ++y) {
-            uchar* row = mask.scanLine(y);
-            for (int x = 0; x < mask.width(); ++x) row[x] = 255 - row[x];
-        }
-        executeSetPixelSelection(*m_document, m_history.get(), mask,
-                                 QStringLiteral("selection.invert"));
-    });
-    connect(m_deselectAction, &QAction::triggered, this, [this] {
-        if (m_document && !m_document->pixelSelection().isNull())
-            executeSetPixelSelection(*m_document, m_history.get(), QImage(),
-                                     QStringLiteral("selection.deselect"));
-    });
-    connect(m_selectionOpsAction, &QAction::triggered, this, [this] {
-        if (m_canvas) m_canvas->openSelectionActionsMenu();
-    });
-
-    // --- Select > Modify: operações morfológicas na seleção ativa ---
-    // (Photocraft: expand/contract/border/smooth/feather sobre a máscara)
-    auto modifySelection = [this](const std::function<QImage(const QImage&)>& op) {
-        if (!m_document || m_document->pixelSelection().isNull())
-            return;
-        const QImage current = m_document->pixelSelection();
-        const QImage modified = op(current);
-        executeSetPixelSelection(*m_document, m_history.get(), modified,
-                                 QStringLiteral("selection.modify"));
-    };
-    auto askRadius = [this](const QString& title, double def) -> double {
-        bool ok = false;
-        const double v = QInputDialog::getDouble(
-            this, title,
-            m_i18n ? m_i18n->t("editor", "selection.modify.radius")
-                   : QStringLiteral("Radius (px):"),
-            def, 1.0, 200.0, 1, &ok);
-        return ok ? v : -1.0;
-    };
-
-    m_modifyMenu = m_selectMenu->addMenu(QString());
-    auto* expandAct = m_modifyMenu->addAction(QString());
-    m_modifyActions.append(expandAct);
-    connect(expandAct, &QAction::triggered, this, [modifySelection, askRadius, this] {
-        const double r = askRadius(
-            m_i18n ? m_i18n->t("editor", "selection.modify.expand")
-                   : QStringLiteral("Expand Selection"), 2.0);
-        if (r > 0)
-            modifySelection([r](const QImage& s) {
-                return SelectionEngine::expand(s, float(r));
-            });
-    });
-    auto* contractAct = m_modifyMenu->addAction(QString());
-    m_modifyActions.append(contractAct);
-    connect(contractAct, &QAction::triggered, this, [modifySelection, askRadius, this] {
-        const double r = askRadius(
-            m_i18n ? m_i18n->t("editor", "selection.modify.contract")
-                   : QStringLiteral("Contract Selection"), 2.0);
-        if (r > 0)
-            modifySelection([r](const QImage& s) {
-                return SelectionEngine::contract(s, float(r));
-            });
-    });
-    auto* borderAct = m_modifyMenu->addAction(QString());
-    m_modifyActions.append(borderAct);
-    connect(borderAct, &QAction::triggered, this, [modifySelection, askRadius, this] {
-        const double r = askRadius(
-            m_i18n ? m_i18n->t("editor", "selection.modify.border")
-                   : QStringLiteral("Border Selection"), 4.0);
-        if (r > 0)
-            modifySelection([r](const QImage& s) {
-                return SelectionEngine::border(s, float(r));
-            });
-    });
-    auto* smoothAct = m_modifyMenu->addAction(QString());
-    m_modifyActions.append(smoothAct);
-    connect(smoothAct, &QAction::triggered, this, [modifySelection, askRadius, this] {
-        const double r = askRadius(
-            m_i18n ? m_i18n->t("editor", "selection.modify.smooth")
-                   : QStringLiteral("Smooth Selection"), 2.0);
-        if (r > 0)
-            modifySelection([r](const QImage& s) {
-                return SelectionEngine::smooth(s, float(r));
-            });
-    });
-    auto* featherAct = m_modifyMenu->addAction(QString());
-    m_modifyActions.append(featherAct);
-    connect(featherAct, &QAction::triggered, this, [modifySelection, askRadius, this] {
-        const double r = askRadius(
-            m_i18n ? m_i18n->t("editor", "selection.modify.feather")
-                   : QStringLiteral("Feather Selection"), 5.0);
-        if (r > 0)
-            modifySelection([r](const QImage& s) {
-                return SelectionEngine::feather(s, float(r));
-            });
-    });
-
-    // --- Select > Color Range: seleção por faixa de cor ---
-    m_colorRangeAction = m_selectMenu->addAction(QString());
-    auto* colorRangeAct = m_colorRangeAction;
-    connect(colorRangeAct, &QAction::triggered, this, [this] {
-        if (!m_document || m_selectedId.isNull())
-            return;
-        Layer* layer = m_document->findLayer(m_selectedId);
-        if (!layer || layer->type() != LayerType::Image)
-            return;
-
-        bool ok = false;
-        const double fuzziness = QInputDialog::getDouble(
-            this,
-            m_i18n ? m_i18n->t("editor", "selection.colorRange.title")
-                   : QStringLiteral("Color Range"),
-            m_i18n ? m_i18n->t("editor", "selection.colorRange.fuzziness")
-                   : QStringLiteral("Fuzziness:"),
-            40.0, 0.0, 200.0, 1, &ok);
-        if (!ok)
-            return;
-
-        // Usa a cor atual do pincel como alvo da amostra.
-        const QColor target = m_toolOptionsBarWidget
-                                  ? m_toolOptionsBarWidget->currentPaintColor()
-                                  : QColor(230, 50, 50);
-        const QImage bitmap = m_document->assets().decodedImage(
-            static_cast<ImageLayer*>(layer)->assetId);
-        if (bitmap.isNull())
-            return;
-
-        const QImage mask = SelectionEngine::colorRange(
-            bitmap, bitmap.rect(), target, float(fuzziness));
-        executeSetPixelSelection(*m_document, m_history.get(), mask,
-                                 QStringLiteral("selection.colorRange"));
-    });
-
-    m_layerMenu = menuBar()->addMenu(QString());
-    m_layerMenu->addAction(m_addTextAction);
-
-    // --- Nova Camada de Preenchimento (Fill Layer, estilo Photoshop) ---
-    m_addFillLayerAction = m_layerMenu->addAction(QString());
-    m_addFillLayerAction->setIcon(ThemeIcons::toolGradient());
-    connect(m_addFillLayerAction, &QAction::triggered, this, [this] {
-        if (!m_document)
-            return;
-        // Diálogo de cor para o preenchimento sólido.
-        const QColor chosen = QColorDialog::getColor(
-            QColor(61, 126, 255), this,
-            m_i18n ? m_i18n->t("editor", "layer.newFillLayer.colorTitle")
-                   : QStringLiteral("Fill Layer Color"));
-        if (!chosen.isValid())
-            return;
-        auto layer = std::make_unique<FillLayer>();
-        layer->name = m_i18n ? m_i18n->t("editor", "layer.newFillLayer.name")
-                             : QStringLiteral("Fill Layer");
-        layer->kind = FillType::Solid;
-        layer->color = chosen;
-        if (m_history) {
-            m_history->execute(std::make_unique<AddLayerCommand>(
-                *m_document, std::move(layer), m_document->rootGroup(), -1));
-        } else {
-            m_document->addLayer(std::move(layer));
-        }
-    });
-
-    // --- Nova Camada de Ajuste (Adjustment Layer, estilo Photoshop) ---
-    m_addAdjustmentLayerAction = m_layerMenu->addAction(QString());
-    m_addAdjustmentLayerAction->setIcon(ThemeIcons::actionHistory());
-    connect(m_addAdjustmentLayerAction, &QAction::triggered, this, [this] {
-        if (!m_document)
-            return;
-        // Menu com os tipos de ajuste disponíveis.
-        QMenu menu(this);
-        static const struct { AdjustmentType type; const char* key; const char* fallback; } kAdjustKinds[] = {
-            { AdjustmentType::BrightnessContrast, "layer.adjust.brightnessContrast", "Brightness / Contrast" },
-            { AdjustmentType::HueSaturation,      "layer.adjust.hueSaturation",      "Hue / Saturation" },
-            { AdjustmentType::ColorBalance,       "layer.adjust.colorBalance",       "Color Balance" },
-            { AdjustmentType::PhotoFilter,        "layer.adjust.photoFilter",        "Photo Filter" },
-            { AdjustmentType::Invert,             "layer.adjust.invert",             "Invert" },
-            { AdjustmentType::Posterize,          "layer.adjust.posterize",          "Posterize" },
-            { AdjustmentType::Threshold,          "layer.adjust.threshold",          "Threshold" },
-            { AdjustmentType::GradientMap,        "layer.adjust.gradientMap",        "Gradient Map" },
-        };
-        for (const auto& def : kAdjustKinds) {
-            QAction* act = menu.addAction(m_i18n
-                ? m_i18n->t("editor", QString::fromLatin1(def.key))
-                : QString::fromLatin1(def.fallback));
-            connect(act, &QAction::triggered, this, [this, def] {
-                auto layer = std::make_unique<AdjustmentLayer>();
-                layer->name = m_i18n
-                    ? m_i18n->t("editor", QString::fromLatin1(def.key))
-                    : QString::fromLatin1(def.fallback);
-                layer->kind = def.type;
-                // Parâmetros padrão por tipo (o efeito é visível de cara;
-                // PhotoCraft usa os mesmos defaults de cada diálogo).
-                switch (def.type) {
-                case AdjustmentType::BrightnessContrast:
-                    layer->parameters = {{QStringLiteral("brightness"), 10.0},
-                                         {QStringLiteral("contrast"), 10.0}};
-                    break;
-                case AdjustmentType::HueSaturation:
-                    layer->parameters = {{QStringLiteral("hue"), 0.0},
-                                         {QStringLiteral("saturation"), 0.0}};
-                    break;
-                case AdjustmentType::PhotoFilter:
-                case AdjustmentType::ColorBalance:
-                    layer->parameters = {{QStringLiteral("temperature"), 20.0}};
-                    break;
-                default:
-                    break;
-                }
-                if (m_history) {
-                    m_history->execute(std::make_unique<AddLayerCommand>(
-                        *m_document, std::move(layer), m_document->rootGroup(), -1));
-                } else {
-                    m_document->addLayer(std::move(layer));
-                }
-            });
-        }
-        menu.exec(QCursor::pos());
-    });
-
-    m_layerMenu->addSeparator();
-
-    // Submenu para adicionar diferentes tipos de formas geométricas
-    m_addShapeMenu = m_layerMenu->addMenu(QString());
-    m_addShapeMenu->addAction(m_addRectAction);
-    m_addShapeMenu->addAction(m_addRoundedRectAction);
-    m_addShapeMenu->addAction(m_addEllipseAction);
-    m_addShapeMenu->addAction(m_addLineAction);
-    m_addShapeMenu->addSeparator();
-    m_addShapeMenu->addAction(m_addArrowRightAction);
-    m_addShapeMenu->addAction(m_addArrowCurvedAction);
-    m_addShapeMenu->addAction(m_addStarAction);
-    m_addShapeMenu->addAction(m_addBadgeAction);
-    m_addShapeMenu->addSeparator();
-    m_addShapeMenu->addAction(m_addSpeechBubbleAction);
-    m_addShapeMenu->addAction(m_addHeartAction);
-    m_addShapeMenu->addSeparator();
-    for (const auto& def : kNewShapeDefs) {
-        QAction* act = m_addShapeMenu->addAction(QString());
-        act->setIcon(ThemeIcons::toolShape());
-        const ShapeKind kind = def.kind;
-        connect(act, &QAction::triggered, this, [this, kind] { addShape(kind); });
-        m_addNewShapeActions.append(act);
-    }
-
-    // Submenu de alinhamento rápido da camada em relação à tela
-    m_alignMenu = m_layerMenu->addMenu(QString());
-    m_alignMenu->addAction(m_alignLeftAction);
-    m_alignMenu->addAction(m_alignCenterXAction);
-    m_alignMenu->addAction(m_alignRightAction);
-    m_alignMenu->addSeparator();
-    m_alignMenu->addAction(m_alignTopAction);
-    m_alignMenu->addAction(m_alignCenterYAction);
-    m_alignBottomAction->setIcon(ThemeIcons::actionAlignBottom());
-    m_alignMenu->addAction(m_alignBottomAction);
-    m_alignMenu->addSeparator();
-    m_alignMenu->addAction(m_alignCenterBothAction);
-    m_alignMenu->addSeparator();
-    m_alignMenu->addAction(m_distributeHAction);
-    m_alignMenu->addAction(m_distributeVAction);
-
-    m_layerMenu->addAction(m_groupAction);
-    m_layerMenu->addAction(m_ungroupAction);
-    m_layerMenu->addSeparator();
-    m_layerMenu->addAction(m_mergeSelectedAction);
-    m_layerMenu->addAction(m_mergeVisibleAction);
-    m_layerMenu->addAction(m_flattenAction);
-    m_layerMenu->addAction(m_textBehindSubjectAction);
-    m_layerMenu->addSeparator();
-    m_layerMenu->addAction(m_flipHAction);
-    m_layerMenu->addAction(m_flipVAction);
-    m_layerMenu->addAction(m_rotateLeftAction);
-    m_layerMenu->addAction(m_rotateRightAction);
-    m_layerMenu->addSeparator();
-    m_layerMenu->addAction(m_removeBgAiAction);
-    m_layerMenu->addAction(m_removeBgAiQuickAction);
-    m_layerMenu->addSeparator();
-    m_layerMenu->addAction(m_deleteAction);
-
-    m_viewMenu = menuBar()->addMenu(QString());
-    m_viewMenu->addAction(m_zoomInAction);
-    m_viewMenu->addAction(m_zoomOutAction);
-    m_viewMenu->addAction(m_zoomFitAction);
-    m_viewMenu->addSeparator();
-    m_viewMenu->addAction(m_toggleGridAction);
-    m_viewMenu->addAction(m_toggleSnapAction);
-    m_viewMenu->addAction(m_toggleHistoryAction);
-    m_panelsMenu = m_viewMenu->addMenu(m_i18n ? m_i18n->t("common", "menu.view.panels") : QStringLiteral("Panels"));
-    m_panelsMenu->addAction(m_toggleToolsBarAction);
-    m_panelsMenu->addAction(m_toggleRightPanelAction);
-    m_viewMenu->addSeparator();
-    m_safeZoneMenu = m_viewMenu->addMenu(QString());
-    m_safeNoneAction = m_safeZoneMenu->addAction(QString());
-    m_safeNoneAction->setCheckable(true);
-    m_safeNoneAction->setChecked(true);
-    m_safeYouTubeAction = m_safeZoneMenu->addAction(QString());
-    m_safeYouTubeAction->setCheckable(true);
-    m_safeInstagramAction = m_safeZoneMenu->addAction(QString());
-    m_safeInstagramAction->setCheckable(true);
-    m_safeTikTokAction = m_safeZoneMenu->addAction(QString());
-    m_safeTikTokAction->setCheckable(true);
-
-    auto* safeGroup = new QActionGroup(this);
-    safeGroup->addAction(m_safeNoneAction);
-    safeGroup->addAction(m_safeYouTubeAction);
-    safeGroup->addAction(m_safeInstagramAction);
-    safeGroup->addAction(m_safeTikTokAction);
-
-    connect(m_safeNoneAction, &QAction::triggered, this, [this]{ if(m_canvas) m_canvas->setSafeZoneMode(0); });
-    connect(m_safeYouTubeAction, &QAction::triggered, this, [this]{ if(m_canvas) m_canvas->setSafeZoneMode(1); });
-    connect(m_safeInstagramAction, &QAction::triggered, this, [this]{ if(m_canvas) m_canvas->setSafeZoneMode(2); });
-    connect(m_safeTikTokAction, &QAction::triggered, this, [this]{ if(m_canvas) m_canvas->setSafeZoneMode(3); });
-
-    m_toolsMenu = menuBar()->addMenu(QString());
-    m_windowMenu = menuBar()->addMenu(QStringLiteral("Window"));
-    m_windowMenu->addAction(m_toggleToolsBarAction);
-    m_windowMenu->addAction(m_toggleRightPanelAction);
-    m_windowMenu->addSeparator();
-    m_windowMenu->addAction(m_toggleLayersDockAction);
-    m_windowMenu->addAction(m_toggleTextDockAction);
-    m_windowMenu->addAction(m_toggleShapeDockAction);
-    m_windowMenu->addAction(m_toggleImageDockAction);
-    m_windowMenu->addAction(m_toggleHistoryAction);
-    m_selectionToolsMenu = m_toolsMenu->addMenu(m_i18n ? m_i18n->t("common", "menu.tools.selection") : QStringLiteral("Select & Cut"));
-    m_selectionToolsMenu->addAction(m_toolSelectAction);
-    m_selectionToolsMenu->addAction(m_toolMarqueeAction);
-    m_selectionToolsMenu->addAction(m_toolScissorsAction);
-    m_selectionToolsMenu->addAction(m_toolWandAction);
-    m_selectionToolsMenu->addAction(m_toolCropAction);
-    m_retouchToolsMenu = m_toolsMenu->addMenu(m_i18n ? m_i18n->t("common", "menu.tools.retouch") : QStringLiteral("Retouch & Paint"));
-    m_retouchToolsMenu->addAction(m_toolPaintAction);
-    m_retouchToolsMenu->addAction(m_toolGradientAction);
-    m_retouchToolsMenu->addAction(m_toolFloodAction);
-    m_retouchToolsMenu->addSeparator();
-    m_retouchToolsMenu->addAction(m_toolCloneAction);
-    m_retouchToolsMenu->addAction(m_toolRetouchAction);
-    m_retouchToolsMenu->addAction(m_toolHealingAction);
-    m_retouchToolsMenu->addSeparator();
-    m_retouchToolsMenu->addAction(m_toolEyedropperAction);
-    m_createToolsMenu = m_toolsMenu->addMenu(m_i18n ? m_i18n->t("common", "menu.tools.create") : QStringLiteral("Create"));
-    m_createToolsMenu->addAction(m_addTextAction);
-    m_createToolsMenu->addSeparator();
-    m_createToolsMenu->addAction(m_addRectAction);
-    m_createToolsMenu->addAction(m_addRoundedRectAction);
-    m_createToolsMenu->addAction(m_addEllipseAction);
-    m_createToolsMenu->addAction(m_addLineAction);
-
-    m_settingsMenu = menuBar()->addMenu(QString());
-    m_settingsMenu->addAction(m_settingsAction);
-    m_fileMenu->addSeparator();
-    m_fileMenu->addAction(m_startScreenAction);
-
-    m_helpMenu = menuBar()->addMenu(QString());
-    m_helpMenu->addAction(m_aboutAction);
-    m_helpMenu->addAction(m_aboutQtAction);
 
     warnDuplicateShortcuts(this);
 }
@@ -2014,21 +1509,8 @@ void MainWindow::createDemoDocumentForSnapshot()
 
 void MainWindow::selectToolByName(const QString& name)
 {
-    QAction* target = nullptr;
-    if (name == QLatin1String("select"))          target = m_toolSelectAction;
-    else if (name == QLatin1String("marquee"))    target = m_toolMarqueeAction;
-    else if (name == QLatin1String("crop"))       target = m_toolCropAction;
-    else if (name == QLatin1String("scissors"))   target = m_toolScissorsAction;
-    else if (name == QLatin1String("wand"))       target = m_toolWandAction;
-    else if (name == QLatin1String("clone"))      target = m_toolCloneAction;
-    else if (name == QLatin1String("paint"))      target = m_toolPaintAction;
-    else if (name == QLatin1String("gradient"))   target = m_toolGradientAction;
-    else if (name == QLatin1String("flood"))      target = m_toolFloodAction;
-    else if (name == QLatin1String("retouch"))    target = m_toolRetouchAction;
-    else if (name == QLatin1String("healing"))    target = m_toolHealingAction;
-    else if (name == QLatin1String("eyedropper")) target = m_toolEyedropperAction;
-    if (target)
-        target->trigger();
+    if (m_actions)
+        m_actions->selectToolByName(name);
 }
 
 void MainWindow::applyToolOptionsCompact(bool compact)
@@ -3173,277 +2655,10 @@ void MainWindow::retranslateUi()
     if (!m_i18n)
         return;
 
-    m_newAction->setText(m_i18n->t("common", "menu.file.new"));
-    m_openAction->setText(m_i18n->t("common", "menu.file.open"));
-    m_saveAction->setText(m_i18n->t("common", "menu.file.save"));
-    m_saveAsAction->setText(m_i18n->t("common", "menu.file.saveAs"));
-    m_importAction->setText(m_i18n->t("common", "menu.file.import"));
-    m_exportAction->setText(m_i18n->t("common", "menu.file.export"));
-    m_quitAction->setText(m_i18n->t("common", "menu.file.quit"));
-    m_undoAction->setText(m_i18n->t("common", "menu.edit.undo"));
-    m_redoAction->setText(m_i18n->t("common", "menu.edit.redo"));
-    m_addTextAction->setText(m_i18n->t("common", "menu.layer.addText"));
-    if (m_addShapeMenu)
-        m_addShapeMenu->setTitle(m_i18n->t("common", "menu.layer.addShape"));
-    if (m_addRectAction)
-        m_addRectAction->setText(m_i18n->t("common", "menu.layer.shape.rect"));
-    if (m_addRoundedRectAction)
-        m_addRoundedRectAction->setText(m_i18n->t("common", "menu.layer.shape.roundedRect"));
-    if (m_addEllipseAction)
-        m_addEllipseAction->setText(m_i18n->t("common", "menu.layer.shape.ellipse"));
-    if (m_addLineAction)
-        m_addLineAction->setText(m_i18n->t("common", "menu.layer.shape.line"));
-    if (m_addArrowRightAction)
-        m_addArrowRightAction->setText(m_i18n->t("common", "menu.layer.shape.arrowRight"));
-    if (m_addArrowCurvedAction)
-        m_addArrowCurvedAction->setText(m_i18n->t("common", "menu.layer.shape.arrowCurved"));
-    if (m_addStarAction)
-        m_addStarAction->setText(m_i18n->t("common", "menu.layer.shape.star"));
-    if (m_addBadgeAction)
-        m_addBadgeAction->setText(m_i18n->t("common", "menu.layer.shape.badge"));
-    if (m_addSpeechBubbleAction)
-        m_addSpeechBubbleAction->setText(m_i18n->t("common", "menu.layer.shape.speechBubble"));
-    if (m_addHeartAction)
-        m_addHeartAction->setText(m_i18n->t("common", "menu.layer.shape.heart"));
-    for (int i = 0; i < m_addNewShapeActions.size() && i < kNewShapeCount; ++i) {
-        m_addNewShapeActions[i]->setText(
-            m_i18n->t("editor", QStringLiteral("shape.kind.%1")
-                          .arg(QLatin1String(kNewShapeDefs[i].key))));
-    }
-    if (m_alignMenu)
-        m_alignMenu->setTitle(m_i18n->t("common", "menu.layer.align"));
-    if (m_alignLeftAction)
-        m_alignLeftAction->setText(m_i18n->t("common", "menu.layer.align.left"));
-    if (m_alignCenterXAction)
-        m_alignCenterXAction->setText(m_i18n->t("common", "menu.layer.align.centerX"));
-    if (m_alignRightAction)
-        m_alignRightAction->setText(m_i18n->t("common", "menu.layer.align.right"));
-    if (m_alignTopAction)
-        m_alignTopAction->setText(m_i18n->t("common", "menu.layer.align.top"));
-    if (m_alignCenterYAction)
-        m_alignCenterYAction->setText(m_i18n->t("common", "menu.layer.align.centerY"));
-    if (m_alignBottomAction)
-        m_alignBottomAction->setText(m_i18n->t("common", "menu.layer.align.bottom"));
-    if (m_alignCenterBothAction)
-        m_alignCenterBothAction->setText(m_i18n->t("common", "menu.layer.align.centerBoth"));
-    if (m_distributeHAction)
-        m_distributeHAction->setText(m_i18n->t("common", "menu.layer.distribute.horizontal"));
-    if (m_distributeVAction)
-        m_distributeVAction->setText(m_i18n->t("common", "menu.layer.distribute.vertical"));
-    if (m_groupAction)
-        m_groupAction->setText(m_i18n->t("common", "menu.layer.group"));
-    if (m_ungroupAction)
-        m_ungroupAction->setText(m_i18n->t("common", "menu.layer.ungroup"));
-    const bool portuguese = m_i18n && m_i18n->currentLanguage() == QStringLiteral("pt-BR");
-    if (m_mergeSelectedAction)
-        m_mergeSelectedAction->setText(portuguese ? QStringLiteral("Mesclar camadas selecionadas") : QStringLiteral("Merge selected layers"));
-    if (m_mergeVisibleAction)
-        m_mergeVisibleAction->setText(portuguese ? QStringLiteral("Mesclar camadas visíveis") : QStringLiteral("Merge visible layers"));
-    if (m_flattenAction)
-        m_flattenAction->setText(portuguese ? QStringLiteral("Achatar imagem") : QStringLiteral("Flatten image"));
-
-    if (m_viewMenu)
-        m_viewMenu->setTitle(m_i18n->t("common", "menu.view"));
-    if (m_zoomInAction) {
-        const QString text = m_i18n->currentLanguage() == QStringLiteral("pt-BR")
-            ? QStringLiteral("Aumentar Zoom") : QStringLiteral("Zoom In");
-        m_zoomInAction->setText(text);
-        m_zoomInAction->setToolTip(text + QStringLiteral(" (Ctrl++)"));
-    }
-    if (m_zoomOutAction) {
-        const QString text = m_i18n->currentLanguage() == QStringLiteral("pt-BR")
-            ? QStringLiteral("Diminuir Zoom") : QStringLiteral("Zoom Out");
-        m_zoomOutAction->setText(text);
-        m_zoomOutAction->setToolTip(text + QStringLiteral(" (Ctrl+-)"));
-    }
-    if (m_zoomFitAction) {
-        const QString text = m_i18n->currentLanguage() == QStringLiteral("pt-BR")
-            ? QStringLiteral("Ajustar à Janela") : QStringLiteral("Fit to Viewport");
-        m_zoomFitAction->setText(text);
-        m_zoomFitAction->setToolTip(text + QStringLiteral(" (Ctrl+0)"));
-    }
-    m_newAction->setToolTip(m_newAction->text() + QStringLiteral(" (Ctrl+N)"));
-    m_openAction->setToolTip(m_openAction->text() + QStringLiteral(" (Ctrl+O)"));
-    m_saveAction->setToolTip(m_saveAction->text() + QStringLiteral(" (Ctrl+S)"));
-    m_exportAction->setToolTip(m_exportAction->text() + QStringLiteral(" (Ctrl+E)"));
-    m_undoAction->setToolTip(m_undoAction->text() + QStringLiteral(" (Ctrl+Z)"));
-    m_redoAction->setToolTip(m_redoAction->text() + QStringLiteral(" (Ctrl+Y)"));
-    auto setToolTipWithShortcut = [](QAction* action, const QString& label,
-                                     const QString& shortcut) {
-        if (action)
-            action->setToolTip(label + QStringLiteral("  ") + shortcut);
-    };
-    // Uma única tabela (nome i18n + atalho) para TODAS as ferramentas:
-    // antes o retranslate sobrescrevia os tooltips e esquecia gradiente/
-    // retoque/reparo, e o balde ainda anunciava "G" (virou Shift+G).
-    const bool pt = m_i18n->currentLanguage() == QStringLiteral("pt-BR");
-    struct ToolTipDef {
-        QAction* action;
-        const char* key;
-        const char* shortcut;
-    };
-    const ToolTipDef toolTips[] = {
-        {m_toolSelectAction,     "tools.select",     "V"},
-        {m_toolMarqueeAction,    "tools.marquee",    "M"},
-        {m_toolScissorsAction,   "tools.scissors",   "X"},
-        {m_toolWandAction,       "tools.wand",       "W"},
-        {m_toolCropAction,       "tools.crop",       "C"},
-        {m_toolPaintAction,      "tools.paint",      "B"},
-        {m_toolGradientAction,   "tools.gradient",   "G"},
-        {m_toolFloodAction,      "tools.flood",      "Shift+G"},
-        {m_toolCloneAction,      "tools.clone",      "S"},
-        {m_toolRetouchAction,    "tools.retouch",    "U"},
-        {m_toolHealingAction,    "tools.healing",    "J"},
-        {m_toolEyedropperAction, "tools.eyedropper", "I"},
-    };
-    for (const ToolTipDef& def : toolTips) {
-        if (!def.action)
-            continue;
-        setToolTipWithShortcut(def.action,
-                               m_i18n->t("editor", QString::fromLatin1(def.key)),
-                               QString::fromLatin1(def.shortcut));
-    }
-    setToolTipWithShortcut(m_addTextAction,
-                           pt ? QStringLiteral("Texto") : QStringLiteral("Text"), "T");
-    setToolTipWithShortcut(m_addRectAction,
-                           pt ? QStringLiteral("Retângulo") : QStringLiteral("Rectangle"), "R");
-
-    // Menus Filtro/Seleção, dica do conta-gotas e pincéis: antes ficavam
-    // só em português (usuário em inglês via texto PT).
-    if (m_artisticMenu)
-        m_artisticMenu->setTitle(m_i18n->t("editor", "filters.artistic"));
-    if (m_toneMenu)
-        m_toneMenu->setTitle(m_i18n->t("editor", "filters.tone"));
-    {
-        static const char* const filterKeys[] = {
-            "filters.grayscale", "filters.sepia", "filters.vintage",
-            "filters.highContrast", "filters.vividPop", "filters.cyberpunk",
-            "filters.goldenHour", "filters.cinemaNoir", "filters.invert",
-            "filters.posterize", "filters.threshold",
-        };
-        const int filterCount = int(sizeof(filterKeys) / sizeof(filterKeys[0]));
-        for (int i = 0; i < m_filterActions.size() && i < filterCount; ++i) {
-            if (m_filterActions[i])
-                m_filterActions[i]->setText(
-                    m_i18n->t("editor", QString::fromLatin1(filterKeys[i])));
-        }
-    }
-    if (m_deselectAction)
-        m_deselectAction->setText(m_i18n->t("editor", "selection.deselect"));
-    if (m_invertSelectionAction)
-        m_invertSelectionAction->setText(m_i18n->t("editor", "selection.invert"));
-    if (m_selectionOpsAction) {
-        m_selectionOpsAction->setText(m_i18n->t("editor", "selection.operations"));
-        m_selectionOpsAction->setToolTip(
-            m_i18n->t("editor", "selection.operationsTooltip"));
-    }
-    // Select > Modify e Color Range (mesma ordem de m_modifyActions)
-    if (m_modifyMenu)
-        m_modifyMenu->setTitle(m_i18n->t("editor", "selection.modify.title"));
-    {
-        static const char* const modifyKeys[] = {
-            "selection.modify.expand", "selection.modify.contract",
-            "selection.modify.border", "selection.modify.smooth",
-            "selection.modify.feather",
-        };
-        const int keyCount = int(sizeof(modifyKeys) / sizeof(modifyKeys[0]));
-        for (int i = 0; i < m_modifyActions.size() && i < keyCount; ++i) {
-            if (m_modifyActions[i])
-                m_modifyActions[i]->setText(
-                    m_i18n->t("editor", QString::fromLatin1(modifyKeys[i])));
-        }
-    }
-    if (m_colorRangeAction)
-        m_colorRangeAction->setText(m_i18n->t("editor", "selection.colorRange.title"));
-    if (m_toggleGridAction) {
-        m_toggleGridAction->setText(m_i18n->t("common", "menu.view.showGrid"));
-        m_toggleGridAction->setToolTip(m_toggleGridAction->text() + QStringLiteral(" (Ctrl+')"));
-    }
-    if (m_toggleSnapAction) {
-        m_toggleSnapAction->setText(m_i18n->t("common", "menu.view.snapToGrid"));
-        m_toggleSnapAction->setToolTip(m_toggleSnapAction->text());
-    }
-    if (m_toggleHistoryAction) {
-        m_toggleHistoryAction->setText(m_i18n->t("common", "menu.view.history"));
-        m_toggleHistoryAction->setToolTip(m_toggleHistoryAction->text() + QStringLiteral(" (Ctrl+H)"));
-    }
-    if (m_panelsMenu)
-        m_panelsMenu->setTitle(m_i18n->t("common", "menu.view.panels"));
-    if (m_toggleToolsBarAction) {
-        m_toggleToolsBarAction->setText(m_i18n->t("common", "menu.view.toggleToolsBar"));
-        m_toggleToolsBarAction->setToolTip(m_toggleToolsBarAction->text() + QStringLiteral(" (Ctrl+B)"));
-    }
-    if (m_toggleRightPanelAction) {
-        m_toggleRightPanelAction->setText(m_i18n->t("common", "menu.view.toggleRightPanel"));
-        m_toggleRightPanelAction->setToolTip(m_toggleRightPanelAction->text() + QStringLiteral(" (Ctrl+J)"));
-    }
-    if (m_toggleLayersDockAction) {
-        m_toggleLayersDockAction->setText(m_i18n->t("common", "panel.layers"));
-        m_toggleLayersDockAction->setToolTip(m_toggleLayersDockAction->text());
-    }
-    if (m_toggleTextDockAction) {
-        m_toggleTextDockAction->setText(m_i18n->t("editor", "text.title"));
-        m_toggleTextDockAction->setToolTip(m_toggleTextDockAction->text());
-    }
-    if (m_toggleShapeDockAction) {
-        m_toggleShapeDockAction->setText(m_i18n->t("editor", "shape.title"));
-        m_toggleShapeDockAction->setToolTip(m_toggleShapeDockAction->text());
-    }
-    if (m_toggleImageDockAction) {
-        m_toggleImageDockAction->setText(m_i18n->t("common", "panel.image"));
-        m_toggleImageDockAction->setToolTip(m_toggleImageDockAction->text());
-    }
-    if (m_safeZoneMenu)
-        m_safeZoneMenu->setTitle(m_i18n->t("common", "menu.view.safeZones"));
-    if (m_safeNoneAction)
-        m_safeNoneAction->setText(m_i18n->t("common", "menu.view.safe.none"));
-    if (m_safeYouTubeAction)
-        m_safeYouTubeAction->setText(m_i18n->t("common", "menu.view.safe.youtube"));
-    if (m_safeInstagramAction)
-        m_safeInstagramAction->setText(m_i18n->t("common", "menu.view.safe.instagram"));
-    if (m_safeTikTokAction)
-        m_safeTikTokAction->setText(m_i18n->t("common", "menu.view.safe.tiktok"));
-
-    m_flipHAction->setText(m_i18n->t("common", "menu.layer.flipH"));
-    m_flipVAction->setText(m_i18n->t("common", "menu.layer.flipV"));
-    m_rotateLeftAction->setText(m_i18n->t("common", "menu.layer.rotateLeft"));
-    m_rotateRightAction->setText(m_i18n->t("common", "menu.layer.rotateRight"));
-    m_deleteAction->setText(m_i18n->t("common", "menu.layer.delete"));
-    if (m_textBehindSubjectAction)
-        m_textBehindSubjectAction->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
-            ? QStringLiteral("Texto atrás do personagem")
-            : QStringLiteral("Text behind subject"));
-    m_settingsAction->setText(m_i18n->t("common", "menu.settings.open"));
-    m_startScreenAction->setText(m_i18n->t("common", "start.screenAction"));
-    m_aboutAction->setText(m_i18n->t("common", "menu.help.about"));
-    m_aboutQtAction->setText(m_i18n->t("common", "menu.help.aboutQt"));
-
-    if (m_removeBgAiAction) {
-        m_removeBgAiAction->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
-            ? QStringLiteral("Remover Fundo com IA...")
-            : QStringLiteral("Remove Background with AI..."));
-    }
-    if (m_removeBgAiQuickAction) {
-        m_removeBgAiQuickAction->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
-            ? QStringLiteral("Remover Fundo Rápido (1-Clique)")
-            : QStringLiteral("Quick Remove Background (1-Click)"));
-    }
-
-    m_fileMenu->setTitle(m_i18n->t("common", "menu.file"));
-    if (m_openRecentMenu)
-        m_openRecentMenu->setTitle(m_i18n->t("common", "menu.file.openRecent"));
-    m_editMenu->setTitle(m_i18n->t("common", "menu.edit"));
-    if (m_imageMenu) m_imageMenu->setTitle(pt ? QStringLiteral("Imagem") : QStringLiteral("Image"));
-    if (m_selectMenu) m_selectMenu->setTitle(pt ? QStringLiteral("Selecionar") : QStringLiteral("Select"));
-    if (m_filterMenu) m_filterMenu->setTitle(pt ? QStringLiteral("Filtro") : QStringLiteral("Filter"));
-    if (m_windowMenu) m_windowMenu->setTitle(pt ? QStringLiteral("Janela") : QStringLiteral("Window"));
-    m_layerMenu->setTitle(m_i18n->t("common", "menu.layer"));
-    if (m_addFillLayerAction)
-        m_addFillLayerAction->setText(m_i18n->t("editor", "layer.newFillLayer"));
-    if (m_addAdjustmentLayerAction)
-        m_addAdjustmentLayerAction->setText(m_i18n->t("editor", "layer.newAdjustmentLayer"));
-    m_settingsMenu->setTitle(m_i18n->t("common", "menu.settings"));
-    m_helpMenu->setTitle(m_i18n->t("common", "menu.help"));
+    if (m_actions)
+        m_actions->retranslate(m_i18n);
+    if (m_menuBuilder)
+        m_menuBuilder->retranslate(m_i18n);
 
     if (m_layersDock)
         m_layersDock->setWindowTitle(m_i18n->t("common", "panel.layers"));
@@ -3455,58 +2670,6 @@ void MainWindow::retranslateUi()
         m_imageDock->setWindowTitle(m_i18n->t("common", "panel.image"));
     if (m_historyDock)
         m_historyDock->setWindowTitle(m_i18n->t("common", "panel.history"));
-
-    // Retradução das ferramentas da barra e opções com tooltips contendo atalhos
-    if (m_toolSelectAction) {
-        m_toolSelectAction->setText(m_i18n->t("editor", "tools.select"));
-        m_toolSelectAction->setToolTip(QStringLiteral("%1 (V)").arg(m_i18n->t("editor", "tools.select")));
-    }
-    if (m_toolCropAction) {
-        m_toolCropAction->setText(m_i18n->t("editor", "tools.crop"));
-        m_toolCropAction->setToolTip(QStringLiteral("%1 (C)").arg(m_i18n->t("editor", "tools.crop")));
-    }
-    if (m_toolScissorsAction) {
-        m_toolScissorsAction->setText(m_i18n->t("editor", "tools.scissors"));
-        m_toolScissorsAction->setToolTip(QStringLiteral("%1 (X)").arg(m_i18n->t("editor", "tools.scissors")));
-    }
-    if (m_toolWandAction) {
-        m_toolWandAction->setText(m_i18n->t("editor", "tools.wand"));
-        m_toolWandAction->setToolTip(QStringLiteral("%1 (W)").arg(m_i18n->t("editor", "tools.wand")));
-    }
-    if (m_toolCloneAction) {
-        m_toolCloneAction->setText(m_i18n->t("editor", "tools.clone"));
-        m_toolCloneAction->setToolTip(QStringLiteral("%1 (S)").arg(m_i18n->t("editor", "tools.clone")));
-    }
-    if (m_toolPaintAction) {
-        m_toolPaintAction->setText(m_i18n->t("editor", "tools.paintName"));
-        m_toolPaintAction->setToolTip(QStringLiteral("%1 (B)").arg(m_i18n->t("editor", "tools.paintName")));
-    }
-    if (m_toolFloodAction) {
-        m_toolFloodAction->setText(m_i18n->t("editor", "tools.floodName"));
-        m_toolFloodAction->setToolTip(QStringLiteral("%1 (G)").arg(m_i18n->t("editor", "tools.floodName")));
-    }
-    if (m_toolEyedropperAction) {
-        const QString eyedropperText = m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Conta-gotas") : QStringLiteral("Eyedropper");
-        m_toolEyedropperAction->setText(eyedropperText);
-        m_toolEyedropperAction->setToolTip(QStringLiteral("%1 (I)").arg(eyedropperText));
-    }
-
-
-    if (m_addTextAction) {
-        m_addTextAction->setToolTip(QStringLiteral("%1 (T)").arg(m_i18n->t("common", "menu.layer.addText")));
-    }
-    if (m_addRectAction) {
-        m_addRectAction->setToolTip(QStringLiteral("%1 (U)").arg(m_i18n->t("common", "menu.layer.shape.rect")));
-    }
-
-    if (m_toolsMenu)
-        m_toolsMenu->setTitle(m_i18n->t("editor", "tools.title"));
-    if (m_selectionToolsMenu)
-        m_selectionToolsMenu->setTitle(m_i18n->t("common", "menu.tools.selection"));
-    if (m_retouchToolsMenu)
-        m_retouchToolsMenu->setTitle(m_i18n->t("common", "menu.tools.retouch"));
-    if (m_createToolsMenu)
-        m_createToolsMenu->setTitle(m_i18n->t("common", "menu.tools.create"));
 
     if (m_toolOptionsBarWidget)
         m_toolOptionsBarWidget->retranslateUi();

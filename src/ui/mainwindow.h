@@ -43,6 +43,8 @@ class ImageInspector;
 class HistoryPanel;
 class StartScreen;
 class ToolOptionsBar;
+class ActionManager;
+class MenuBuilder;
 
 class MainWindow final : public QMainWindow
 {
@@ -83,6 +85,7 @@ private:
     void buildCentralWidget();
     void buildLayersDock();
     void buildActions();
+    void connectActionSignals();
     void buildToolBars();
     void buildMenus();
     void buildStatusBar();
@@ -157,6 +160,9 @@ private:
     QString m_suggestedSavePath;
     bool m_modified = false;
 
+    ActionManager* m_actions = nullptr;
+    MenuBuilder* m_menuBuilder = nullptr;
+
     QAction* m_newAction = nullptr;
     QAction* m_openAction = nullptr;
     QAction* m_saveAction = nullptr;
@@ -215,6 +221,8 @@ private:
     QAction* m_rotateLeftAction = nullptr;
     QAction* m_rotateRightAction = nullptr;
     QAction* m_deleteAction = nullptr;
+    QAction* m_lockLayerAction = nullptr;
+    QAction* m_selectAllAction = nullptr;
     QAction* m_settingsAction = nullptr;
     QAction* m_startScreenAction = nullptr;
     QAction* m_aboutAction = nullptr;

@@ -184,6 +184,10 @@ add_executable(creatorcanvas
     ui/tooloptionsbar.cpp
     ui/canvasoverlayrenderer.h
     ui/canvasoverlayrenderer.cpp
+    ui/actionmanager.h
+    ui/actionmanager.cpp
+    ui/menubuilder.h
+    ui/menubuilder.cpp
     ui/recoverydialog.h
     ui/recoverydialog.cpp
 )
