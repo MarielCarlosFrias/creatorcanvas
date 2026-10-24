@@ -11,6 +11,7 @@
 #include "core/Document.h"
 #include "core/DocumentController.h"
 #include "core/snap/SnapEngine.h"
+#include "canvasoverlayrenderer.h"
 #include "tools/CanvasTool.h"
 
 class QLineEdit;
@@ -192,11 +193,7 @@ protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
-    struct HandleSet
-    {
-        QPointF points[9];
-        bool valid = false;
-    };
+    using HandleSet = CanvasHandles;
 
     enum class Gesture { None, Move, Scale, Rotate };
 
@@ -213,8 +210,6 @@ private:
     bool imagePixelTransparent(const ImageLayer& image, const QPointF& local) const;
     HandleSet handlePositions(const Layer& layer) const;
     int handleAt(const QPointF& widgetPos) const;
-    void drawSelectionOverlay(QPainter* painter);
-    void drawSnapGuides(QPainter* painter);
     void collectSnapTargets(GroupLayer* group, const LayerId& excludeId,
                             QList<Layer*>& out) const;
     void selectLayer(const LayerId& id);
@@ -224,11 +219,6 @@ private:
 
     void addToSelection(const LayerId& id);
     void removeFromSelection(const LayerId& id);
-    void drawMultiSelectionOverlay(QPainter* painter);
-    void drawRubberBand(QPainter* painter);
-    void drawGridOverlay(QPainter* painter);
-    void drawSafeZoneOverlay(QPainter* painter);
-    void drawMockupPlacementOverlay(QPainter* painter);
     void finishMockupPlacement();
     QList<Layer*> hitTestRubberBand(const QRectF& docRect) const;
 

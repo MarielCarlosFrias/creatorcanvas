@@ -65,6 +65,8 @@ add_library(cc_core STATIC
     core/serialization/ProjectFile.h
     core/serialization/ProjectFile.cpp
     core/geometry/AffineTransform.h
+    core/geometry/LayerAlignment.h
+    core/geometry/LayerAlignment.cpp
     core/assets/AssetStore.h
     core/assets/AssetStore.cpp
     core/image/ImageProcessing.h
@@ -180,6 +182,8 @@ add_executable(creatorcanvas
     ui/collapsiblesection.cpp
     ui/tooloptionsbar.h
     ui/tooloptionsbar.cpp
+    ui/canvasoverlayrenderer.h
+    ui/canvasoverlayrenderer.cpp
     ui/recoverydialog.h
     ui/recoverydialog.cpp
 )

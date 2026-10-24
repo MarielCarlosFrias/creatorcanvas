@@ -10,6 +10,7 @@
 #include "core/Document.h"
 #include "core/history/CommandStack.h"
 #include "core/document/NewDocumentSpec.h"
+#include "core/geometry/LayerAlignment.h"
 #include "services/presetstore.h"
 #include "services/autosaveservice.h"
 #include "services/recentfiles.h"
@@ -99,11 +100,7 @@ private:
     void rotateLayer(double degrees);
     void addText();
     void addShape(ShapeKind kind);
-    enum class AlignTarget {
-        Left, CenterX, Right,
-        Top, CenterY, Bottom,
-        CenterBoth
-    };
+    using AlignTarget = cc::AlignTarget;
     void alignSelectedLayer(AlignTarget target);
     void alignMultipleLayers(AlignTarget target);
     void distributeHorizontally();

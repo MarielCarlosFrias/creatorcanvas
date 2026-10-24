@@ -2450,56 +2450,9 @@ void MainWindow::alignSelectedLayer(AlignTarget target)
     if (m_selectedId.isNull())
         return;
 
-    Layer* layer = m_document->findLayer(m_selectedId);
-    if (!layer || layer->locked)
-        return;
-
-    const QRectF local = layer->contentBounds();
-    if (local.isEmpty())
-        return;
-
-    const QRectF docBounds = layer->transform.matrix(local).mapRect(local);
-    const double docW = m_document->width();
-    const double docH = m_document->height();
-
-    double dx = 0.0;
-    double dy = 0.0;
-
-    switch (target) {
-    case AlignTarget::Left:
-        dx = -docBounds.left();
-        break;
-    case AlignTarget::CenterX:
-        dx = (docW / 2.0) - docBounds.center().x();
-        break;
-    case AlignTarget::Right:
-        dx = docW - docBounds.right();
-        break;
-    case AlignTarget::Top:
-        dy = -docBounds.top();
-        break;
-    case AlignTarget::CenterY:
-        dy = (docH / 2.0) - docBounds.center().y();
-        break;
-    case AlignTarget::Bottom:
-        dy = docH - docBounds.bottom();
-        break;
-    case AlignTarget::CenterBoth:
-        dx = (docW / 2.0) - docBounds.center().x();
-        dy = (docH / 2.0) - docBounds.center().y();
-        break;
-    }
-
-    if (qFuzzyIsNull(dx) && qFuzzyIsNull(dy))
-        return;
-
-    const AffineTransform oldT = layer->transform;
-    AffineTransform newT = oldT;
-    newT.position += QPointF(dx, dy);
-
-    if (m_history) {
-        m_history->execute(std::make_unique<SetLayerTransformCommand>(
-            *m_document, m_selectedId, oldT, newT));
+    if (LayerAlignment::alignLayer(*m_document, m_history.get(), m_selectedId, target)) {
+        if (m_canvas)
+            m_canvas->update();
     }
 }
 
@@ -2511,75 +2464,9 @@ void MainWindow::alignMultipleLayers(AlignTarget target)
     if (ids.size() < 2)
         return;
 
-    struct LayerInfo {
-        LayerId id;
-        QRectF docBounds;
-        AffineTransform oldTransform;
-    };
-    QVector<LayerInfo> infos;
-    QRectF unionRect;
-
-    for (const auto& lid : ids) {
-        Layer* layer = m_document->findLayer(lid);
-        if (!layer || layer->locked)
-            continue;
-        const QRectF local = layer->contentBounds();
-        if (local.isEmpty())
-            continue;
-        const QRectF docBounds = layer->transform.matrix(local).mapRect(local);
-        infos.append({lid, docBounds, layer->transform});
-        unionRect = unionRect.isNull() ? docBounds : unionRect.united(docBounds);
+    if (LayerAlignment::alignLayers(*m_document, m_history.get(), ids, target)) {
+        m_canvas->update();
     }
-    if (infos.size() < 2 || unionRect.isEmpty())
-        return;
-
-    auto compound = std::make_unique<CompoundCommand>(QStringLiteral("layer.align"));
-
-    for (const auto& info : infos) {
-        double dx = 0.0;
-        double dy = 0.0;
-
-        switch (target) {
-        case AlignTarget::Left:
-            dx = unionRect.left() - info.docBounds.left();
-            break;
-        case AlignTarget::CenterX:
-            dx = unionRect.center().x() - info.docBounds.center().x();
-            break;
-        case AlignTarget::Right:
-            dx = unionRect.right() - info.docBounds.right();
-            break;
-        case AlignTarget::Top:
-            dy = unionRect.top() - info.docBounds.top();
-            break;
-        case AlignTarget::CenterY:
-            dy = unionRect.center().y() - info.docBounds.center().y();
-            break;
-        case AlignTarget::Bottom:
-            dy = unionRect.bottom() - info.docBounds.bottom();
-            break;
-        case AlignTarget::CenterBoth:
-            dx = unionRect.center().x() - info.docBounds.center().x();
-            dy = unionRect.center().y() - info.docBounds.center().y();
-            break;
-        }
-
-        if (!qFuzzyIsNull(dx) || !qFuzzyIsNull(dy)) {
-            AffineTransform newT = info.oldTransform;
-            newT.position += QPointF(dx, dy);
-            if (m_history) {
-                compound->addCommand(std::make_unique<SetLayerTransformCommand>(
-                    *m_document, info.id, info.oldTransform, newT));
-            } else {
-                m_document->setLayerTransform(info.id, newT);
-            }
-        }
-    }
-
-    if (m_history && !compound->isEmpty()) {
-        m_history->execute(std::move(compound));
-    }
-    m_canvas->update();
 }
 
 void MainWindow::distributeHorizontally()
@@ -2590,55 +2477,9 @@ void MainWindow::distributeHorizontally()
     if (ids.size() < 3)
         return;
 
-    struct Info {
-        LayerId id;
-        QRectF docBounds;
-        AffineTransform oldTransform;
-        double centerX;
-    };
-    QVector<Info> infos;
-    for (const auto& lid : ids) {
-        Layer* layer = m_document->findLayer(lid);
-        if (!layer || layer->locked)
-            continue;
-        const QRectF local = layer->contentBounds();
-        if (local.isEmpty())
-            continue;
-        const QRectF db = layer->transform.matrix(local).mapRect(local);
-        infos.append({lid, db, layer->transform, db.center().x()});
+    if (LayerAlignment::distributeHorizontally(*m_document, m_history.get(), ids)) {
+        m_canvas->update();
     }
-    if (infos.size() < 3)
-        return;
-
-    std::sort(infos.begin(), infos.end(), [](const Info& a, const Info& b) {
-        return a.centerX < b.centerX;
-    });
-
-    const double firstCenter = infos.first().centerX;
-    const double lastCenter = infos.last().centerX;
-    const double step = (lastCenter - firstCenter) / (infos.size() - 1);
-
-    auto compound = std::make_unique<CompoundCommand>(QStringLiteral("layer.distributeH"));
-
-    for (int i = 1; i < infos.size() - 1; ++i) {
-        const double targetX = firstCenter + step * i;
-        const double dx = targetX - infos[i].centerX;
-        if (!qFuzzyIsNull(dx)) {
-            AffineTransform newT = infos[i].oldTransform;
-            newT.position += QPointF(dx, 0.0);
-            if (m_history) {
-                compound->addCommand(std::make_unique<SetLayerTransformCommand>(
-                    *m_document, infos[i].id, infos[i].oldTransform, newT));
-            } else {
-                m_document->setLayerTransform(infos[i].id, newT);
-            }
-        }
-    }
-
-    if (m_history && !compound->isEmpty()) {
-        m_history->execute(std::move(compound));
-    }
-    m_canvas->update();
 }
 
 void MainWindow::distributeVertically()
@@ -2649,55 +2490,9 @@ void MainWindow::distributeVertically()
     if (ids.size() < 3)
         return;
 
-    struct Info {
-        LayerId id;
-        QRectF docBounds;
-        AffineTransform oldTransform;
-        double centerY;
-    };
-    QVector<Info> infos;
-    for (const auto& lid : ids) {
-        Layer* layer = m_document->findLayer(lid);
-        if (!layer || layer->locked)
-            continue;
-        const QRectF local = layer->contentBounds();
-        if (local.isEmpty())
-            continue;
-        const QRectF db = layer->transform.matrix(local).mapRect(local);
-        infos.append({lid, db, layer->transform, db.center().y()});
+    if (LayerAlignment::distributeVertically(*m_document, m_history.get(), ids)) {
+        m_canvas->update();
     }
-    if (infos.size() < 3)
-        return;
-
-    std::sort(infos.begin(), infos.end(), [](const Info& a, const Info& b) {
-        return a.centerY < b.centerY;
-    });
-
-    const double firstCenter = infos.first().centerY;
-    const double lastCenter = infos.last().centerY;
-    const double step = (lastCenter - firstCenter) / (infos.size() - 1);
-
-    auto compound = std::make_unique<CompoundCommand>(QStringLiteral("layer.distributeV"));
-
-    for (int i = 1; i < infos.size() - 1; ++i) {
-        const double targetY = firstCenter + step * i;
-        const double dy = targetY - infos[i].centerY;
-        if (!qFuzzyIsNull(dy)) {
-            AffineTransform newT = infos[i].oldTransform;
-            newT.position += QPointF(0.0, dy);
-            if (m_history) {
-                compound->addCommand(std::make_unique<SetLayerTransformCommand>(
-                    *m_document, infos[i].id, infos[i].oldTransform, newT));
-            } else {
-                m_document->setLayerTransform(infos[i].id, newT);
-            }
-        }
-    }
-
-    if (m_history && !compound->isEmpty()) {
-        m_history->execute(std::move(compound));
-    }
-    m_canvas->update();
 }
 
 void MainWindow::groupSelectedLayers()
