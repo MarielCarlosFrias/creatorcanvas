@@ -268,6 +268,8 @@ Setup scripts: `scripts/fetch_onnx.sh` (Linux), `scripts/fetch_onnx.bat` (Window
 
 - Namespaces: `common`, `editor`, `settings`, `templates` under `resources/locales/<lang>/`.
 - Languages: `en`, `pt-BR`.
+- New language directories under `resources/locales/` are discovered automatically by `I18nService`; every JSON file must also be listed in `resources/locales.qrc` so it is embedded in the application.
+- Translation contributions are welcome. See [Adding or updating a translation](CONTRIBUTING.md#adding-or-updating-a-translation).
 - Runtime switch in Preferences; UI calls `retranslateUi`.
 - Missing key → English catalog → humanized fallback + log warning.
 

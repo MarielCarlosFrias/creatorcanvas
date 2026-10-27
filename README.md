@@ -86,6 +86,7 @@ Most photo editing tools are either overly basic web canvas tools or intimidatin
 
 ### 🌍 Internationalization & Accessibility
 - Native multi-language support (English and Portuguese `pt-BR`) with on-the-fly switching.
+- New language folders under `resources/locales/` are discovered automatically, but every JSON file must also be listed in `resources/locales.qrc` for the embedded application resource. Translation contributions are welcome; see [Adding or updating a translation](CONTRIBUTING.md#adding-or-updating-a-translation).
 - High-contrast dark theme optimized for long editing sessions.
 
 ---

@@ -12,6 +12,25 @@ Thanks for taking a look at CreatorCanvas. This is a young, milestone-driven pro
 6. **Qualify `cc::` free functions explicitly** when calling them from inside a class that defines a member of the same name (e.g. `cc::saveDocument(...)` vs `MainWindow::saveDocument()`), or the member will silently shadow the free function.
 7. **Avoid broad `sed`/regex rewrites of source files.** Prefer small, exact, reviewed string replacements so a patch either applies exactly where intended or fails loudly — not a near-miss that silently touches the wrong occurrence.
 
+## Adding or updating a translation
+
+1. Start from `main`.
+2. Copy `resources/locales/en/` to `resources/locales/<code>/`.
+3. Translate values only; keep all JSON keys unchanged.
+4. Fill in the `_meta` block in `common.json`:
+   ```json
+   "_meta": { "nativeName": "Svenska", "englishName": "Swedish" }
+   ```
+5. Preserve positional placeholders such as `%1` and `%2`. They may be reordered to fit the target language. CreatorCanvas has no pluralization system.
+6. Add every new JSON file to `resources/locales.qrc`.
+7. Run the i18n test suite:
+   ```bash
+   ctest --test-dir build/linux-debug --output-on-failure
+   ```
+8. Open a pull request. Translation contributions are welcome.
+
+For example, a value such as `"language": "Language: %1"` must retain `%1` in the translation.
+
 ## Workflow
 
 1. Build and run the existing test suite before you start (`ctest --test-dir build/linux-debug --output-on-failure`) — all **19** executables in `tests/CMakeLists.txt` should pass on a clean checkout.
