@@ -735,10 +735,10 @@ void LayersPanel::buildUi()
                 return;
             if (Layer* l = m_document->findLayer(m_selectedId))
                 if (l->type() == LayerType::Adjustment)
-                    for (const auto& [k, v] :
+                    for (const auto& parameter :
                          static_cast<AdjustmentLayer*>(l)->parameters)
-                        if (k == key)
-                            before = v;
+                        if (parameter.first == key)
+                            before = parameter.second;
         });
         connect(slider, &QSlider::valueChanged, this,
                 [this, slider, spin, label, &key](int value) {
@@ -752,8 +752,11 @@ void LayersPanel::buildUi()
                 if (l->type() == LayerType::Adjustment) {
                     auto* adj = static_cast<AdjustmentLayer*>(l);
                     bool found = false;
-                    for (auto& [k, v] : adj->parameters)
-                        if (k == key) { v = double(value); found = true; }
+                    for (auto& parameter : adj->parameters)
+                        if (parameter.first == key) {
+                            parameter.second = double(value);
+                            found = true;
+                        }
                     if (!found)
                         adj->parameters.emplace_back(key, double(value));
                     m_document->touchLayer(m_selectedId);
@@ -768,20 +771,20 @@ void LayersPanel::buildUi()
                 return;
             auto* adj = static_cast<AdjustmentLayer*>(l);
             double now = 0.0;
-            for (const auto& [k, v] : adj->parameters)
-                if (k == key)
-                    now = v;
+            for (const auto& parameter : adj->parameters)
+                if (parameter.first == key)
+                    now = parameter.second;
             if (now == before)
                 return;
             // Restaura e aplica via comando (1 undo).
-            for (auto& [k, v] : adj->parameters)
-                if (k == key)
-                    v = before;
+            for (auto& parameter : adj->parameters)
+                if (parameter.first == key)
+                    parameter.second = before;
             // CompoundCommand: old params -> new params (deep copies).
             auto oldParams = adj->parameters;
-            for (auto& [k, v] : adj->parameters)
-                if (k == key)
-                    v = now;
+            for (auto& parameter : adj->parameters)
+                if (parameter.first == key)
+                    parameter.second = now;
             auto newParams = adj->parameters;
             m_history->execute(std::make_unique<LayerPropertyCommand<
                 std::vector<std::pair<QString, double>>>>(
@@ -937,8 +940,8 @@ void LayersPanel::updateControlsForSelection()
         if (isAdjustment) {
             auto* adj = static_cast<AdjustmentLayer*>(layer);
             auto get = [&adj](const QString& key, double def) {
-                for (const auto& [k, v] : adj->parameters)
-                    if (k == key) return v;
+                for (const auto& parameter : adj->parameters)
+                    if (parameter.first == key) return parameter.second;
                 return def;
             };
             switch (adj->kind) {
