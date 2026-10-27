@@ -182,6 +182,44 @@ private slots:
         QVERIFY(!i18n.setLanguage(QStringLiteral("fr")));
         QCOMPARE(i18n.currentLanguage(), QStringLiteral("en"));
     }
+
+    void everyLocaleJsonIsListedInQrc()
+    {
+        const QString root = QString::fromLatin1(CC_PROJECT_ROOT);
+        const QDir locales(root + QStringLiteral("/resources/locales"));
+        QFile qrc(root + QStringLiteral("/resources/locales.qrc"));
+        QVERIFY2(locales.exists(), "resources/locales directory not found");
+        QVERIFY2(qrc.open(QIODevice::ReadOnly | QIODevice::Text),
+                 "resources/locales.qrc could not be opened");
+
+        const QString qrcText = QString::fromUtf8(qrc.readAll());
+        const QRegularExpression filePattern(QStringLiteral(
+            R"(<file>\s*([^<]+)\s*</file>)"));
+        QSet<QString> listed;
+        auto matches = filePattern.globalMatch(qrcText);
+        while (matches.hasNext())
+            listed.insert(matches.next().captured(1).trimmed());
+
+        QStringList missing;
+        const QStringList languages =
+            locales.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+        for (const QString& lang : languages) {
+            const QDir langDir(locales.filePath(lang));
+            for (const QString& file :
+                 langDir.entryList({QStringLiteral("*.json")}, QDir::Files)) {
+                const QString resourcePath =
+                    QStringLiteral("locales/%1/%2").arg(lang, file);
+                if (!listed.contains(resourcePath))
+                    missing << resourcePath
+                            + QStringLiteral(" (add it to resources/locales.qrc)");
+            }
+        }
+
+        missing.sort();
+        QVERIFY2(missing.isEmpty(),
+                 qPrintable(QStringLiteral("Locale JSON files missing from resources/locales.qrc:\n")
+                            + missing.join(QLatin1Char('\n'))));
+    }
     /// Regressão real: a barra de status mostrava a chave crua
     /// ("editor.canvas.status.paintHelp") quando o código pedia uma chave
     /// ausente do catálogo. Este teste varre src/ e falha para qualquer
@@ -240,8 +278,14 @@ private slots:
         QStringList missing;
         for (const QString& lang : languages) {
             for (const QString& key : used) {
-                if (!catalogs.value(lang).contains(key))
-                    missing << lang + QStringLiteral(": ") + key;
+                if (!catalogs.value(lang).contains(key)) {
+                    const int separator = key.indexOf(QLatin1Char('.'));
+                    const QString ns = separator >= 0 ? key.left(separator) : key;
+                    const QString leaf = separator >= 0 ? key.mid(separator + 1) : key;
+                    missing << lang + QStringLiteral(": namespace '") + ns
+                            + QStringLiteral("' (") + ns + QStringLiteral(".json), key '")
+                            + leaf + QLatin1Char('\'');
+                }
             }
         }
         missing.sort();
