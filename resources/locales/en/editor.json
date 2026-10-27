@@ -374,5 +374,23 @@
     "adjust.posterize": "Posterize",
     "adjust.threshold": "Threshold",
     "adjust.gradientMap": "Gradient Map"
-  }
+  },
+  "adjustment.brightness": "Brightness:",
+  "adjustment.contrast": "Contrast:",
+  "adjustment.hue": "Hue:",
+  "adjustment.saturation": "Saturation:",
+  "adjustment.temperature": "Temperature:",
+  "blendIf.title": "Blend If (Luminance Range)",
+  "blendIf.reset": "Reset Blend If",
+  "tools.scissors.hint": "Click or drag to outline. Double-click or press Enter to cut.",
+  "tools.wand.hint": "Click a color on the image to create a selection. The image is not changed.",
+  "tools.clone.hint": "Right-click/Shift-click: set source; drag to clone.",
+  "tools.paint.brush": "Brush:",
+  "tools.paint.size": "Size:",
+  "tools.paint.opacity": "Opacity:",
+  "tools.flood.tolerance": "Tolerance:",
+  "ai.removeBackground": "Remove Background with AI...",
+  "ai.quickRemoveBackground": "Quick Remove Background (1-Click)",
+  "ai.mockup": "Mockup / Replace Logo...",
+  "tools.eyedropper": "Eyedropper"
 }

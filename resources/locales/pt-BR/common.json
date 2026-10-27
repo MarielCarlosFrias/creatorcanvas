@@ -179,5 +179,20 @@
   "panel.lockPixels": "Trancar pixels da imagem",
   "panel.lockPosition": "Trancar posição",
   "panel.lockAll": "Trancar tudo",
-  "panel.clipped": "Máscara de recorte: recortar pela camada de baixo"
+  "panel.clipped": "Máscara de recorte: recortar pela camada de baixo",
+  "menu.image": "Imagem",
+  "menu.filter": "Filtro",
+  "menu.select": "Selecionar",
+  "menu.window": "Janela",
+  "menu.layer.merge": "Mesclar camadas (Ctrl+E)",
+  "menu.layer.flatten": "Achatar imagem",
+  "action.zoomIn": "Aumentar Zoom",
+  "action.zoomOut": "Diminuir Zoom",
+  "action.zoomFit": "Ajustar à Janela",
+  "action.mergeSelected": "Mesclar camadas selecionadas",
+  "action.mergeVisible": "Mesclar camadas visíveis",
+  "action.flatten": "Achatar imagem",
+  "action.textBehindSubject": "Texto atrás do personagem",
+  "action.toggleLayerLock": "Alternar Bloqueio da Camada",
+  "action.selectAll": "Selecionar Tudo"
 }

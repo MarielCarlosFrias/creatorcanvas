@@ -125,8 +125,7 @@ void SettingsDialog::retranslateUi()
     m_languageLabel->setText(m_i18n->t("settings", "dialog.language"));
     m_autosaveLabel->setText(m_i18n->t("settings", "dialog.autosave"));
     if (m_historyLimitLabel)
-        m_historyLimitLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
-            ? QStringLiteral("Estados do histórico") : QStringLiteral("History states"));
+        m_historyLimitLabel->setText(m_i18n->t("settings", "dialog.historyLimit"));
     if (m_gpuAccelerationLabel)
         m_gpuAccelerationLabel->setText(m_i18n->t("settings", "dialog.gpuAcceleration"));
     if (m_restartHintLabel)

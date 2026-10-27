@@ -374,5 +374,23 @@
     "adjust.posterize": "Posterizar",
     "adjust.threshold": "Limiar",
     "adjust.gradientMap": "Mapa de Gradiente"
-  }
+  },
+  "adjustment.brightness": "Brilho:",
+  "adjustment.contrast": "Contraste:",
+  "adjustment.hue": "Matiz:",
+  "adjustment.saturation": "Saturação:",
+  "adjustment.temperature": "Temperatura:",
+  "blendIf.title": "Blend If (Mesclagem Avançada)",
+  "blendIf.reset": "Restaurar Blend If",
+  "tools.scissors.hint": "Clique ou arraste para contornar. Dê dois cliques ou Enter para cortar.",
+  "tools.wand.hint": "Clique em uma cor na imagem para torná-la transparente.",
+  "tools.clone.hint": "Clique direito/Shift: definir origem; arraste para clonar.",
+  "tools.paint.brush": "Pincel:",
+  "tools.paint.size": "Tamanho:",
+  "tools.paint.opacity": "Opacidade:",
+  "tools.flood.tolerance": "Tolerância:",
+  "ai.removeBackground": "Remover Fundo com IA...",
+  "ai.quickRemoveBackground": "Remover Fundo Rápido (1-Clique)",
+  "ai.mockup": "Mockup / Substituir Logo...",
+  "tools.eyedropper": "Conta-gotas"
 }

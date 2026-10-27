@@ -743,18 +743,14 @@ void ToolOptionsBar::retranslateUi()
     if (m_scissorsCancelBtn)
         m_scissorsCancelBtn->setText(m_i18n->t("editor", "tools.scissors.cancel") + QStringLiteral(" (Esc)"));
     if (m_scissorsHintLabel)
-        m_scissorsHintLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
-            ? QStringLiteral("Clique ou arraste para contornar. Dê dois cliques ou Enter para cortar.")
-            : QStringLiteral("Click or drag to outline. Double-click or press Enter to cut."));
+        m_scissorsHintLabel->setText(m_i18n->t("editor", "tools.scissors.hint"));
 
     if (m_wandTolLabel)
         m_wandTolLabel->setText(m_i18n->t("editor", "tools.wand.tolerance") + QStringLiteral(":"));
     if (m_wandContiguousCheck)
         m_wandContiguousCheck->setText(m_i18n->t("editor", "tools.wand.contiguous"));
     if (m_wandHintLabel)
-        m_wandHintLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
-            ? QStringLiteral("Clique em uma cor na imagem para torná-la transparente.")
-            : QStringLiteral("Click a color on the image to create a selection. The image is not changed."));
+        m_wandHintLabel->setText(m_i18n->t("editor", "tools.wand.hint"));
 
     if (m_cloneRadiusLabel)
         m_cloneRadiusLabel->setText(m_i18n->t("editor", "tools.clone.radius") + QStringLiteral(":"));
@@ -763,18 +759,16 @@ void ToolOptionsBar::retranslateUi()
     if (m_cloneOpacityLabel)
         m_cloneOpacityLabel->setText(m_i18n->t("editor", "tools.clone.opacity") + QStringLiteral(":"));
     if (m_cloneHintLabel)
-        m_cloneHintLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR")
-            ? QStringLiteral("Clique direito/Shift: definir origem; arraste para clonar.")
-            : QStringLiteral("Right-click/Shift-click: set source; drag to clone."));
+        m_cloneHintLabel->setText(m_i18n->t("editor", "tools.clone.hint"));
 
     if (m_paintBrushLabel)
-        m_paintBrushLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Pincel:") : QStringLiteral("Brush:"));
+        m_paintBrushLabel->setText(m_i18n->t("editor", "tools.paint.brush"));
     if (m_paintSizeLabel)
-        m_paintSizeLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Tamanho:") : QStringLiteral("Size:"));
+        m_paintSizeLabel->setText(m_i18n->t("editor", "tools.paint.size"));
     if (m_paintOpacityLabel)
-        m_paintOpacityLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Opacidade:") : QStringLiteral("Opacity:"));
+        m_paintOpacityLabel->setText(m_i18n->t("editor", "tools.paint.opacity"));
     if (m_floodTolLabel)
-        m_floodTolLabel->setText(m_i18n->currentLanguage() == QStringLiteral("pt-BR") ? QStringLiteral("Tolerância:") : QStringLiteral("Tolerance:"));
+        m_floodTolLabel->setText(m_i18n->t("editor", "tools.flood.tolerance"));
 
     if (m_marqueeShapeLabel)
         m_marqueeShapeLabel->setText(m_i18n->t("editor", "tools.marquee.shape") + QStringLiteral(":"));

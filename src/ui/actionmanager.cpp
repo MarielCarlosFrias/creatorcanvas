@@ -325,8 +325,6 @@ void ActionManager::retranslate(I18nService* i18n)
     if (!i18n)
         return;
 
-    const bool pt = (i18n->currentLanguage() == QStringLiteral("pt-BR"));
-
     // --- Arquivo ---
     newAction->setText(i18n->t("common", "menu.file.new"));
     newAction->setToolTip(newAction->text() + QStringLiteral(" (Ctrl+N)"));
@@ -355,15 +353,15 @@ void ActionManager::retranslate(I18nService* i18n)
     redoAction->setToolTip(redoAction->text() + QStringLiteral(" (Ctrl+Y)"));
 
     // --- Zoom ---
-    const QString zInText = pt ? QStringLiteral("Aumentar Zoom") : QStringLiteral("Zoom In");
+    const QString zInText = i18n->t("common", "action.zoomIn");
     zoomInAction->setText(zInText);
     zoomInAction->setToolTip(zInText + QStringLiteral(" (Ctrl++)"));
 
-    const QString zOutText = pt ? QStringLiteral("Diminuir Zoom") : QStringLiteral("Zoom Out");
+    const QString zOutText = i18n->t("common", "action.zoomOut");
     zoomOutAction->setText(zOutText);
     zoomOutAction->setToolTip(zOutText + QStringLiteral(" (Ctrl+-)"));
 
-    const QString zFitText = pt ? QStringLiteral("Ajustar à Janela") : QStringLiteral("Fit to Viewport");
+    const QString zFitText = i18n->t("common", "action.zoomFit");
     zoomFitAction->setText(zFitText);
     zoomFitAction->setToolTip(zFitText + QStringLiteral(" (Ctrl+0)"));
 
@@ -432,26 +430,21 @@ void ActionManager::retranslate(I18nService* i18n)
     // --- Operações de Camadas ---
     groupAction->setText(i18n->t("common", "menu.layer.group"));
     ungroupAction->setText(i18n->t("common", "menu.layer.ungroup"));
-    mergeSelectedAction->setText(pt ? QStringLiteral("Mesclar camadas selecionadas")
-                                   : QStringLiteral("Merge selected layers"));
-    mergeVisibleAction->setText(pt ? QStringLiteral("Mesclar camadas visíveis")
-                                  : QStringLiteral("Merge visible layers"));
-    flattenAction->setText(pt ? QStringLiteral("Achatar imagem")
-                              : QStringLiteral("Flatten image"));
-    textBehindSubjectAction->setText(pt ? QStringLiteral("Texto atrás do personagem")
-                                       : QStringLiteral("Text behind subject"));
+    mergeSelectedAction->setText(i18n->t("common", "action.mergeSelected"));
+    mergeVisibleAction->setText(i18n->t("common", "action.mergeVisible"));
+    flattenAction->setText(i18n->t("common", "action.flatten"));
+    textBehindSubjectAction->setText(i18n->t("common", "action.textBehindSubject"));
 
     flipHAction->setText(i18n->t("common", "menu.layer.flipH"));
     flipVAction->setText(i18n->t("common", "menu.layer.flipV"));
     rotateLeftAction->setText(i18n->t("common", "menu.layer.rotateLeft"));
     rotateRightAction->setText(i18n->t("common", "menu.layer.rotateRight"));
     deleteAction->setText(i18n->t("common", "menu.layer.delete"));
-    lockLayerAction->setText(pt ? QStringLiteral("Alternar Bloqueio da Camada")
-                                : QStringLiteral("Toggle Layer Lock"));
+    lockLayerAction->setText(i18n->t("common", "action.toggleLayerLock"));
     lockLayerAction->setToolTip(lockLayerAction->text() + QStringLiteral(" (Ctrl+/)"));
 
     // --- Seleção ---
-    selectAllAction->setText(pt ? QStringLiteral("Selecionar Tudo") : QStringLiteral("Select All"));
+    selectAllAction->setText(i18n->t("common", "action.selectAll"));
     deselectAction->setText(i18n->t("editor", "selection.deselect"));
     invertSelectionAction->setText(i18n->t("editor", "selection.invert"));
     selectionOpsAction->setText(i18n->t("editor", "selection.operations"));
@@ -487,17 +480,14 @@ void ActionManager::retranslate(I18nService* i18n)
     setToolHint(toolRetouchAction,    "tools.retouch",    QStringLiteral("U"));
     setToolHint(toolHealingAction,    "tools.healing",    QStringLiteral("J"));
 
-    const QString eyedropperText = pt ? QStringLiteral("Conta-gotas") : QStringLiteral("Eyedropper");
+    const QString eyedropperText = i18n->t("editor", "tools.eyedropper");
     toolEyedropperAction->setText(eyedropperText);
     toolEyedropperAction->setToolTip(QStringLiteral("%1 (I)").arg(eyedropperText));
 
     // --- IA & Filtros ---
-    removeBgAiAction->setText(pt ? QStringLiteral("Remover Fundo com IA...")
-                                 : QStringLiteral("Remove Background with AI..."));
-    removeBgAiQuickAction->setText(pt ? QStringLiteral("Remover Fundo Rápido (1-Clique)")
-                                      : QStringLiteral("Quick Remove Background (1-Click)"));
-    mockupAction->setText(pt ? QStringLiteral("Mockup / Substituir Logo...")
-                             : QStringLiteral("Mockup / Replace Logo..."));
+    removeBgAiAction->setText(i18n->t("editor", "ai.removeBackground"));
+    removeBgAiQuickAction->setText(i18n->t("editor", "ai.quickRemoveBackground"));
+    mockupAction->setText(i18n->t("editor", "ai.mockup"));
 
     static const char* const filterKeys[] = {
         "filters.grayscale", "filters.sepia", "filters.vintage",

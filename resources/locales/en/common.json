@@ -179,5 +179,20 @@
   "panel.lockPixels": "Lock image pixels",
   "panel.lockPosition": "Lock position",
   "panel.lockAll": "Lock all",
-  "panel.clipped": "Clipping mask: clip to layer below"
+  "panel.clipped": "Clipping mask: clip to layer below",
+  "menu.image": "Image",
+  "menu.filter": "Filter",
+  "menu.select": "Select",
+  "menu.window": "Window",
+  "menu.layer.merge": "Merge layers (Ctrl+E)",
+  "menu.layer.flatten": "Flatten image",
+  "action.zoomIn": "Zoom In",
+  "action.zoomOut": "Zoom Out",
+  "action.zoomFit": "Fit to Viewport",
+  "action.mergeSelected": "Merge selected layers",
+  "action.mergeVisible": "Merge visible layers",
+  "action.flatten": "Flatten image",
+  "action.textBehindSubject": "Text behind subject",
+  "action.toggleLayerLock": "Toggle Layer Lock",
+  "action.selectAll": "Select All"
 }

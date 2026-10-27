@@ -10,6 +10,7 @@
         "confirmExit": "Confirm before closing with unsaved changes",
         "canvas": "Canvas",
         "showGrid": "Show grid when opening a document",
-        "snapToGrid": "Snap objects to grid"
+        "snapToGrid": "Snap objects to grid",
+        "historyLimit": "History states"
     }
 }

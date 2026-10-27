@@ -1589,11 +1589,10 @@ void ImageInspector::retranslateUi()
     if (m_presetNoirBtn)
         m_presetNoirBtn->setText(m_i18n ? m_i18n->t("editor", "image.filter.noir") : QStringLiteral("Noir"));
 
-    const bool portuguese = m_i18n && m_i18n->currentLanguage() == QStringLiteral("pt-BR");
     if (m_blendIfSection)
-        m_blendIfSection->setTitle(portuguese ? QStringLiteral("Blend If (Mesclagem Avançada)") : QStringLiteral("Blend If (Luminance Range)"));
+        m_blendIfSection->setTitle(m_i18n->t("editor", "blendIf.title"));
     if (m_blendIfResetBtn)
-        m_blendIfResetBtn->setText(portuguese ? QStringLiteral("Restaurar Blend If") : QStringLiteral("Reset Blend If"));
+        m_blendIfResetBtn->setText(m_i18n->t("editor", "blendIf.reset"));
 }
 
 } // namespace cc

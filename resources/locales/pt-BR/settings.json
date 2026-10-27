@@ -10,6 +10,7 @@
         "confirmExit": "Confirmar antes de fechar com alterações não salvas",
         "canvas": "Tela de desenho",
         "showGrid": "Mostrar grade ao abrir um documento",
-        "snapToGrid": "Alinhar objetos à grade"
+        "snapToGrid": "Alinhar objetos à grade",
+        "historyLimit": "Estados do histórico"
     }
 }

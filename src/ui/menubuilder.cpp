@@ -201,8 +201,6 @@ void MenuBuilder::retranslate(I18nService* i18n)
     if (!i18n)
         return;
 
-    const bool pt = (i18n->currentLanguage() == QStringLiteral("pt-BR"));
-
     if (fileMenu)
         fileMenu->setTitle(i18n->t("common", "menu.file"));
     if (openRecentMenu)
@@ -210,15 +208,15 @@ void MenuBuilder::retranslate(I18nService* i18n)
     if (editMenu)
         editMenu->setTitle(i18n->t("common", "menu.edit"));
     if (imageMenu)
-        imageMenu->setTitle(pt ? QStringLiteral("Imagem") : QStringLiteral("Image"));
+        imageMenu->setTitle(i18n->t("common", "menu.image"));
     if (filterMenu)
-        filterMenu->setTitle(pt ? QStringLiteral("Filtro") : QStringLiteral("Filter"));
+        filterMenu->setTitle(i18n->t("common", "menu.filter"));
     if (artisticMenu)
         artisticMenu->setTitle(i18n->t("editor", "filters.artistic"));
     if (toneMenu)
         toneMenu->setTitle(i18n->t("editor", "filters.tone"));
     if (selectMenu)
-        selectMenu->setTitle(pt ? QStringLiteral("Selecionar") : QStringLiteral("Select"));
+        selectMenu->setTitle(i18n->t("common", "menu.select"));
     if (modifyMenu)
         modifyMenu->setTitle(i18n->t("editor", "selection.modify.title"));
     if (layerMenu)
@@ -242,7 +240,7 @@ void MenuBuilder::retranslate(I18nService* i18n)
     if (createToolsMenu)
         createToolsMenu->setTitle(i18n->t("common", "menu.tools.create"));
     if (windowMenu)
-        windowMenu->setTitle(pt ? QStringLiteral("Janela") : QStringLiteral("Window"));
+        windowMenu->setTitle(i18n->t("common", "menu.window"));
     if (settingsMenu)
         settingsMenu->setTitle(i18n->t("common", "menu.settings"));
     if (helpMenu)

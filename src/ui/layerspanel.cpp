@@ -941,32 +941,24 @@ void LayersPanel::updateControlsForSelection()
                     if (k == key) return v;
                 return def;
             };
-            const bool pt = m_i18n
-                ? m_i18n->currentLanguage() == QStringLiteral("pt-BR")
-                : false;
             switch (adj->kind) {
             case AdjustmentType::BrightnessContrast:
                 m_adjustParam1Key = QStringLiteral("brightness");
                 m_adjustParam2Key = QStringLiteral("contrast");
-                m_adjustParam1Label->setText(pt ? QStringLiteral("Brilho:")
-                                                : QStringLiteral("Brightness:"));
-                m_adjustParam2Label->setText(pt ? QStringLiteral("Contraste:")
-                                                : QStringLiteral("Contrast:"));
+                m_adjustParam1Label->setText(m_i18n->t("editor", "adjustment.brightness"));
+                m_adjustParam2Label->setText(m_i18n->t("editor", "adjustment.contrast"));
                 break;
             case AdjustmentType::HueSaturation:
                 m_adjustParam1Key = QStringLiteral("hue");
                 m_adjustParam2Key = QStringLiteral("saturation");
-                m_adjustParam1Label->setText(pt ? QStringLiteral("Matiz:")
-                                                : QStringLiteral("Hue:"));
-                m_adjustParam2Label->setText(pt ? QStringLiteral("Saturação:")
-                                                : QStringLiteral("Saturation:"));
+                m_adjustParam1Label->setText(m_i18n->t("editor", "adjustment.hue"));
+                m_adjustParam2Label->setText(m_i18n->t("editor", "adjustment.saturation"));
                 break;
             case AdjustmentType::ColorBalance:
             case AdjustmentType::PhotoFilter:
                 m_adjustParam1Key = QStringLiteral("temperature");
                 m_adjustParam2Key = QString();
-                m_adjustParam1Label->setText(pt ? QStringLiteral("Temperatura:")
-                                                : QStringLiteral("Temperature:"));
+                m_adjustParam1Label->setText(m_i18n->t("editor", "adjustment.temperature"));
                 m_adjustParam2Label->setText(QString());
                 break;
             default:
@@ -1471,9 +1463,8 @@ void LayersPanel::showContextMenu(const QPoint& pos)
     menu.addSeparator();
     QAction* quickExportAction = menu.addAction(m_i18n ? m_i18n->t("common", "panel.quickExportPng") : QStringLiteral("Quick Export as PNG"));
     menu.addSeparator();
-    const bool portuguese = m_i18n && m_i18n->currentLanguage() == QStringLiteral("pt-BR");
-    QAction* mergeAction = menu.addAction(portuguese ? QStringLiteral("Mesclar camadas (Ctrl+E)") : QStringLiteral("Merge layers (Ctrl+E)"));
-    QAction* flattenAction = menu.addAction(portuguese ? QStringLiteral("Achatar imagem") : QStringLiteral("Flatten image"));
+    QAction* mergeAction = menu.addAction(m_i18n->t("common", "menu.layer.merge"));
+    QAction* flattenAction = menu.addAction(m_i18n->t("common", "menu.layer.flatten"));
     menu.addSeparator();
     QAction* groupAction = menu.addAction(m_i18n->t("common", "menu.layer.group"));
     QAction* ungroupAction = menu.addAction(m_i18n->t("common", "menu.layer.ungroup"));
