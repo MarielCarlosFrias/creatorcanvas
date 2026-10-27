@@ -65,6 +65,14 @@ jobs:
             cmake --build --preset ${{ matrix.preset }}
           fi
 
+      - name: Diagnose Linux fonts
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          fc-match "Sans Serif"
+          fc-match sans-serif
+          fc-list | head -20
+
       - name: Test
         shell: bash
         run: |

@@ -666,7 +666,7 @@ std::unique_ptr<Document> TemplateFactory::createTemplate(TemplateKind kind, I18
         headline->name = QStringLiteral("Manchete Finanças");
         headline->content = QStringLiteral("COMO MULTIPLICAR\nSEU CAPITAL\nEM 2026");
         headline->sizePt = 56;
-        headline->box = QSizeF(780, 245);
+        headline->box = QSizeF(980, 245);
         headline->bold = true;
         headline->color = Qt::white;
         headline->align = TextAlignment::Left;
@@ -1046,7 +1046,7 @@ std::unique_ptr<Document> TemplateFactory::createTemplate(TemplateKind kind, I18
         auto mainText = std::make_unique<TextLayer>();
         mainText->name = QStringLiteral("Título Principal");
         mainText->content = QStringLiteral("HUMANO");
-        mainText->sizePt = 165;
+        mainText->sizePt = 135;
         mainText->box = QSizeF(1080, 240);
         mainText->bold = true;
         mainText->color = Qt::black; // Fundo ou cor base (suporta textura)
