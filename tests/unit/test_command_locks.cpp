@@ -5,10 +5,21 @@
 #include "core/commands/LayerStructureCommands.h"
 #include "core/commands/LayerTransformCommands.h"
 #include "core/commands/LayerPropertyCommands.h"
+#include "core/selection/SelectionOperations.h"
 
+#include <QPainter>
 #include <QtTest>
 
 using namespace cc;
+
+namespace {
+
+QRgb unmult(const QImage& img, int x, int y)
+{
+    return qUnpremultiply(img.pixel(x, y));
+}
+
+} // namespace
 
 class TestCommandLocks final : public QObject
 {
@@ -297,6 +308,132 @@ private slots:
         doc.setLayerLocks(id, LayerLocks());
         QVERIFY(!doc.findLayer(id)->locked);
         QVERIFY(!doc.findLayer(id)->locks.all);
+    }
+
+    void pixelLockBlocksImageModification()
+    {
+        Document doc(800, 600);
+        CommandStack stack;
+
+        QImage bitmap(800, 600, QImage::Format_ARGB32_Premultiplied);
+        bitmap.fill(Qt::white);
+        auto layer = std::make_unique<ImageLayer>();
+        layer->name = QStringLiteral("Image");
+        layer->assetId = doc.assets().addImage(bitmap);
+        layer->naturalWidth = 800;
+        layer->naturalHeight = 600;
+        layer->transform.position = QPointF(400, 300);
+        const LayerId id = layer->id();
+        const LayerId oldAssetId = layer->assetId;
+        const AffineTransform oldTransform = layer->transform;
+        doc.addLayer(std::move(layer));
+
+        // Unlocked: modification succeeds
+        QImage modified(800, 600, QImage::Format_ARGB32_Premultiplied);
+        modified.fill(Qt::black);
+        const LayerId newAssetId = doc.assets().addImage(modified);
+        auto cmd = std::make_unique<ModifyImageLayerCommand>(
+            doc, id, oldAssetId, 800, 600, oldTransform,
+            newAssetId, 800, 600, oldTransform,
+            QStringLiteral("image.modify"));
+        QVERIFY(cmd->canExecute());
+        stack.execute(std::move(cmd));
+        QCOMPARE(static_cast<ImageLayer*>(doc.findLayer(id))->assetId, newAssetId);
+
+        // Lock pixels: modification blocked via command
+        LayerLocks pixelLock;
+        pixelLock.pixels = true;
+        doc.setLayerLocks(id, pixelLock);
+        QVERIFY(SelectionOperations::canEditPixels(doc, id) == false);
+
+        auto blockedCmd = std::make_unique<ModifyImageLayerCommand>(
+            doc, id, newAssetId, 800, 600, oldTransform,
+            newAssetId, 800, 600, oldTransform,
+            QStringLiteral("image.modify"));
+        QVERIFY(!blockedCmd->canExecute());
+        stack.execute(std::move(blockedCmd));
+        QCOMPARE(static_cast<ImageLayer*>(doc.findLayer(id))->assetId, newAssetId);
+
+        // Direct Document setter also defensively rejects
+        QVERIFY(!doc.setImageLayerAsset(id, newAssetId, 800, 600));
+        QCOMPARE(static_cast<ImageLayer*>(doc.findLayer(id))->assetId, newAssetId);
+
+        // Unlock allows modification again
+        doc.setLayerLocks(id, LayerLocks());
+        QVERIFY(doc.setImageLayerAsset(id, newAssetId, 800, 600));
+    }
+
+    void selectionMaskRestrictsFilterToSelectedArea()
+    {
+        // Comportamento central do PhotoCraft: com uma seleção ativa,
+        // um filtro/ajuste só afeta a ÁREA SELECIONADA — o resto fica
+        // intacto.
+        QImage original(10, 10, QImage::Format_ARGB32_Premultiplied);
+        original.fill(QColor(200, 200, 200));
+
+        QImage modified(10, 10, QImage::Format_ARGB32_Premultiplied);
+        modified.fill(QColor(0, 0, 0));
+
+        // Seleção: apenas a metade esquerda (x < 5) selecionada.
+        QImage selection(10, 10, QImage::Format_Alpha8);
+        selection.fill(0);
+        for (int y = 0; y < 10; ++y)
+            for (int x = 0; x < 5; ++x)
+                selection.scanLine(y)[x] = 255;
+
+        const QImage masked = SelectionOperations::applySelectionMask(
+            original, modified, selection);
+
+        // Esquerda (selecionada): modificado (preto).
+        QCOMPARE(qRed(unmult(masked, 2, 5)), 0);
+        // Direita (não selecionada): original (cinza claro).
+        QCOMPARE(qRed(unmult(masked, 7, 5)), 200);
+
+        // Sem seleção: modificado completo.
+        const QImage unmasked = SelectionOperations::applySelectionMask(
+            original, modified, QImage());
+        QCOMPARE(qRed(unmult(unmasked, 7, 5)), 0);
+    }
+
+    void groupLockPropagatesToImageChild()
+    {
+        Document doc(100, 100);
+
+        auto group = std::make_unique<GroupLayer>();
+        group->name = QStringLiteral("Folder");
+        const LayerId groupId = group->id();
+        doc.addLayer(std::move(group));
+
+        QImage bitmap(100, 100, QImage::Format_ARGB32_Premultiplied);
+        bitmap.fill(Qt::white);
+        auto child = std::make_unique<ImageLayer>();
+        child->name = QStringLiteral("ImageChild");
+        child->assetId = doc.assets().addImage(bitmap);
+        child->naturalWidth = 100;
+        child->naturalHeight = 100;
+        const LayerId childId = child->id();
+        doc.addLayer(std::move(child), static_cast<GroupLayer*>(doc.findLayer(groupId)));
+
+        // O filho não tem lock próprio, mas herda o do grupo
+        QVERIFY(doc.effectiveLocks(childId).pixels == false); // group not locked yet
+
+        // Tranca o grupo — o filho herda o lock de pixels
+        LayerLocks groupLock;
+        groupLock.pixels = true;
+        doc.setLayerLocks(groupId, groupLock);
+        QVERIFY(doc.effectiveLocks(childId).pixels);
+        QVERIFY(!SelectionOperations::canEditPixels(doc, childId));
+
+        // Qualquer modificação no filho é bloqueada
+        QImage black(100, 100, QImage::Format_ARGB32_Premultiplied);
+        black.fill(Qt::black);
+        const LayerId newAssetId = doc.assets().addImage(black);
+        QVERIFY(!doc.setImageLayerAsset(childId, newAssetId, 100, 100));
+
+        // Destravar o grupo devolve a liberdade ao filho
+        doc.setLayerLocks(groupId, LayerLocks());
+        QVERIFY(!doc.effectiveLocks(childId).pixels);
+        QVERIFY(SelectionOperations::canEditPixels(doc, childId));
     }
 };
 

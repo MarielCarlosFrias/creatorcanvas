@@ -8,6 +8,7 @@
 #include <QPainter>
 
 #include "ToolCommit.h"
+#include "core/selection/SelectionOperations.h"
 #include "core/image/ImageProcessing.h"
 #include "localization/i18nservice.h"
 
@@ -72,13 +73,12 @@ void GradientTool::mousePress(QMouseEvent* event, const QPointF& docPos, const T
         return;
 
     // Photocraft: locks granulares — pixels trancados bloqueiam a edição.
-    if (effectiveLocksOf(ctx).pixels) {
+    ImageLayer* img = activeImageLayer(ctx);
+    if (!img || !SelectionOperations::canEditPixels(*ctx.document, img->id())) {
         reportPixelsLocked(ctx);
         event->accept();
         return;
     }
-
-    ImageLayer* img = activeImageLayer(ctx);
     if (!img) {
         if (ctx.requestStatusMessage) {
             ctx.requestStatusMessage(trOr(ctx, "canvas.status.gradientNoLayer",
@@ -258,13 +258,12 @@ void RetouchTool::mousePress(QMouseEvent* event, const QPointF& docPos, const To
     if (event->button() != Qt::LeftButton || !ctx.document)
         return;
     // Photocraft: locks granulares — pixels trancados bloqueiam a edição.
-    if (effectiveLocksOf(ctx).pixels) {
+    ImageLayer* img = activeImageLayer(ctx);
+    if (!img || !SelectionOperations::canEditPixels(*ctx.document, img->id())) {
         reportPixelsLocked(ctx);
         event->accept();
         return;
     }
-
-    ImageLayer* img = activeImageLayer(ctx);
     if (!img) {
         if (ctx.requestStatusMessage) {
             ctx.requestStatusMessage(trOr(ctx, "canvas.status.retouchNoLayer",
@@ -391,13 +390,12 @@ void HealingTool::mousePress(QMouseEvent* event, const QPointF& docPos, const To
     if (event->button() != Qt::LeftButton || !ctx.document)
         return;
     // Photocraft: locks granulares — pixels trancados bloqueiam a edição.
-    if (effectiveLocksOf(ctx).pixels) {
+    ImageLayer* img = activeImageLayer(ctx);
+    if (!img || !SelectionOperations::canEditPixels(*ctx.document, img->id())) {
         reportPixelsLocked(ctx);
         event->accept();
         return;
     }
-
-    ImageLayer* img = activeImageLayer(ctx);
     if (!img) {
         if (ctx.requestStatusMessage) {
             ctx.requestStatusMessage(trOr(ctx, "canvas.status.retouchNoLayer",

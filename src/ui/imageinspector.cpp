@@ -1,5 +1,6 @@
 #include "imageinspector.h"
 #include "collapsiblesection.h"
+#include "puppetwarpdialog.h"
 #include "themeicons.h"
 #include "core/history/CommandStack.h"
 #include "core/history/DocumentCommands.h"
@@ -724,6 +725,8 @@ void ImageInspector::buildUi()
     m_mockupButton = new QPushButton(QStringLiteral("Importar logo e criar mockup"), this);
     m_mockupButton->setObjectName(QStringLiteral("PrimaryButton"));
     mockupLayout->addWidget(m_mockupButton);
+    m_puppetWarpButton = new QPushButton(m_i18n ? m_i18n->t("editor", "puppet.button") : QStringLiteral("Puppet Warp da imagem selecionada"), this);
+    mockupLayout->addWidget(m_puppetWarpButton);
     m_mockupSection->setContentLayout(mockupLayout);
     advLayout->addWidget(m_mockupSection);
 
@@ -967,6 +970,7 @@ void ImageInspector::buildUi()
     });
 
     connect(m_mockupButton, &QPushButton::clicked, this, &ImageInspector::openMockupDialog);
+    connect(m_puppetWarpButton, &QPushButton::clicked, this, &ImageInspector::openPuppetWarpDialog);
 
     // Conexões de Chroma Key (Color to Alpha)
     auto updateChromaColorBtn = [this](const QColor& c) {
@@ -1138,7 +1142,7 @@ void ImageInspector::openMockupDialog()
 
 void ImageInspector::setMockupArea(const QPolygonF& destination)
 {
-    if (!m_document || m_pendingMockupLogo.isNull() || destination.size() < 3)
+    if (!m_document || m_pendingMockupLogo.isNull() || destination.size() != 4)
         return;
     QImage logo = m_pendingMockupLogo;
     m_pendingMockupLogo = QImage();
@@ -1147,23 +1151,16 @@ void ImageInspector::setMockupArea(const QPolygonF& destination)
         {QStringLiteral("Multiply"), BlendMode::Multiply}, {QStringLiteral("Screen"), BlendMode::Screen},
         {QStringLiteral("Overlay"), BlendMode::Overlay}, {QStringLiteral("Darken"), BlendMode::Darken},
         {QStringLiteral("Lighten"), BlendMode::Lighten}, {QStringLiteral("Add"), BlendMode::Add}};
-    const QRectF targetBounds = destination.boundingRect();
-    const QPolygonF quadDestination = destination.size() == 4
-        ? destination
-        : QPolygonF{targetBounds.topLeft(), targetBounds.topRight(),
-                    targetBounds.bottomRight(), targetBounds.bottomLeft()};
-    const QPolygonF source{QPointF(0, 0), QPointF(logo.width(), 0),
-                           QPointF(logo.width(), logo.height()), QPointF(0, logo.height())};
-    QTransform warp;
-    if (!QTransform::quadToQuad(source, quadDestination, warp)) return;
-
     QImage canvas(m_document->width(), m_document->height(), QImage::Format_ARGB32_Premultiplied);
     canvas.fill(Qt::transparent);
     QPainter painter(&canvas);
     painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
-    // A área marcada define a deformação, não uma máscara de corte. A fonte
-    // inteira é projetada para o quadrilátero e o alfa original do PNG é
-    // preservado sem eliminar pixels fora do polígono livre.
+
+    const QPolygonF source{QPointF(0, 0), QPointF(logo.width(), 0),
+                           QPointF(logo.width(), logo.height()), QPointF(0, logo.height())};
+    QTransform warp;
+    if (!QTransform::quadToQuad(source, destination, warp))
+        return;
     painter.setTransform(warp);
     painter.drawImage(QPointF(0, 0), logo);
     painter.end();
@@ -1253,6 +1250,34 @@ void ImageInspector::setMockupArea(const QPolygonF& destination)
             : QStringLiteral("Pré-visualização cancelada."));
 }
 
+void ImageInspector::openPuppetWarpDialog()
+{
+    ImageLayer* layer = nullptr;
+    if (!m_document || !editingLayer(&layer))
+        return;
+    const QImage source = m_document->assets().decodedImage(layer->assetId);
+    if (source.isNull())
+        return;
+
+    PuppetWarpDialog dialog(source, m_i18n, this);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+    const QImage warped = dialog.resultImage();
+    if (warped.isNull())
+        return;
+    const LayerId newAssetId = m_document->assets().addImage(warped);
+    if (newAssetId.isNull())
+        return;
+
+    if (m_history) {
+        m_history->execute(std::make_unique<SetLayerImageAssetCommand>(
+            *m_document, m_id, layer->assetId, layer->naturalWidth, layer->naturalHeight,
+            newAssetId, warped.width(), warped.height()));
+    } else {
+        m_document->setImageLayerAsset(m_id, newAssetId, warped.width(), warped.height());
+    }
+}
+
 void ImageInspector::schedulePreview()
 {
     // Evita recalcular a imagem a cada evento individual do slider.
@@ -1265,6 +1290,20 @@ void ImageInspector::onPreviewTimeout()
     ImageLayer* layer = nullptr;
     if (!editingLayer(&layer) || !m_document || m_originalAssetId.isNull())
         return;
+
+    // Photocraft: locks bloqueiam qualquer edição de pixels — inclusive a
+    // prévia do inspector (antes o filtro aparecia mesmo trancado).
+    if (!SelectionOperations::canEditPixels(*m_document, m_id)) {
+        m_latestPreviewImage = QImage();
+        m_currentPreviewAssetId = LayerId();
+        if (layer->assetId != m_originalAssetId) {
+            m_document->setImageLayerAsset(m_id, m_originalAssetId,
+                layer->naturalWidth, layer->naturalHeight);
+            m_document->touchLayer(m_id);
+        }
+        emit imagePreviewCleared();
+        return;
+    }
 
     const int b = m_brightnessSlider->value();
     const int exposure = m_exposureSlider->value();
@@ -1328,7 +1367,16 @@ void ImageInspector::onPreviewTimeout()
                 return;
             if (generation != self->m_previewGeneration.load() || layerId != self->m_id || !self->m_document)
                 return;
-            self->m_latestPreviewImage = std::move(adjusted);
+            // Aplica a seleção ativa como máscara na prévia: apenas a área
+            // selecionada mostra o filtro; o resto fica como o original.
+            QImage masked = adjusted;
+            if (!self->m_document->pixelSelection().isNull())
+                masked = SelectionOperations::applySelectionMask(
+                    self->m_originalPreviewImage.isNull()
+                        ? self->m_document->assets().decodedImage(self->m_originalAssetId)
+                        : self->m_originalPreviewImage,
+                    masked, self->m_document->pixelSelection());
+            self->m_latestPreviewImage = std::move(masked);
             emit self->imagePreviewReady(layerId, self->m_latestPreviewImage);
         }, Qt::QueuedConnection);
     }).detach();
@@ -1593,6 +1641,8 @@ void ImageInspector::retranslateUi()
         m_blendIfSection->setTitle(m_i18n->t("editor", "blendIf.title"));
     if (m_blendIfResetBtn)
         m_blendIfResetBtn->setText(m_i18n->t("editor", "blendIf.reset"));
+    if (m_puppetWarpButton)
+        m_puppetWarpButton->setText(m_i18n->t("editor", "puppet.button"));
 }
 
 } // namespace cc

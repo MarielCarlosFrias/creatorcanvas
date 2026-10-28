@@ -7,6 +7,7 @@
 #include "core/image/ImageProcessing.h"
 #include "ToolCommit.h"
 #include "localization/i18nservice.h"
+#include "core/selection/SelectionOperations.h"
 
 namespace cc {
 
@@ -114,7 +115,25 @@ void CloneStampTool::mousePress(QMouseEvent* event, const QPointF& docPos, const
     if (!ctx.document) return;
 
     // Photocraft: pixels trancados bloqueiam o clone stamp.
-    if (effectiveLocksOf(ctx).pixels) {
+    // Verifica locks na camada alvo (hit-tested), não apenas na selecionada.
+    Layer* targetLayer = nullptr;
+    if (!ctx.selectedLayerId.isNull())
+        targetLayer = ctx.document->findLayer(ctx.selectedLayerId);
+    if (!targetLayer || targetLayer->type() != LayerType::Image) {
+        const auto& children = ctx.document->rootGroup()->children;
+        for (auto it = children.rbegin(); it != children.rend(); ++it) {
+            Layer* l = it->get();
+            if (l && l->visible && l->type() == LayerType::Image) {
+                const QTransform m = l->transform.matrix(l->contentBounds());
+                const QPointF local = m.inverted().map(docPos);
+                if (l->contentBounds().contains(local)) {
+                    targetLayer = l;
+                    break;
+                }
+            }
+        }
+    }
+    if (!targetLayer || !SelectionOperations::canEditPixels(*ctx.document, targetLayer->id())) {
         reportPixelsLocked(ctx);
         event->accept();
         return;
@@ -334,13 +353,31 @@ void FloodFillTool::activate(const ToolContext& ctx)
 void FloodFillTool::mousePress(QMouseEvent* event, const QPointF& docPos, const ToolContext& ctx)
 {
     // Photocraft: pixels trancados bloqueiam o balde de tinta.
-    if (effectiveLocksOf(ctx).pixels) {
+    if (!ctx.document || event->button() != Qt::LeftButton) return;
+
+    // Verifica locks na camada alvo (hit-tested), não apenas na selecionada.
+    Layer* targetLayer = nullptr;
+    if (!ctx.selectedLayerId.isNull())
+        targetLayer = ctx.document->findLayer(ctx.selectedLayerId);
+    if (!targetLayer || targetLayer->type() != LayerType::Image) {
+        const auto& children = ctx.document->rootGroup()->children;
+        for (auto it = children.rbegin(); it != children.rend(); ++it) {
+            Layer* l = it->get();
+            if (l && l->visible && l->type() == LayerType::Image) {
+                const QTransform m = l->transform.matrix(l->contentBounds());
+                const QPointF local = m.inverted().map(docPos);
+                if (l->contentBounds().contains(local)) {
+                    targetLayer = l;
+                    break;
+                }
+            }
+        }
+    }
+    if (!targetLayer || !SelectionOperations::canEditPixels(*ctx.document, targetLayer->id())) {
         reportPixelsLocked(ctx);
         event->accept();
         return;
     }
-
-    if (!ctx.document || event->button() != Qt::LeftButton) return;
 
     Layer* layer = nullptr;
     if (!ctx.selectedLayerId.isNull())

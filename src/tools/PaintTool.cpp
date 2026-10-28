@@ -6,6 +6,7 @@
 #include "core/history/DocumentCommands.h"
 #include "core/history/CommandStack.h"
 #include "localization/i18nservice.h"
+#include "core/selection/SelectionOperations.h"
 
 namespace cc {
 
@@ -30,14 +31,8 @@ void PaintTool::mousePress(QMouseEvent* event, const QPointF& docPos, const Tool
         return;
 
     m_currentDocPos = docPos;
-    // Photocraft: locks granulares — pixels trancados bloqueiam a edição.
-    if (effectiveLocksOf(ctx).pixels) {
-        reportPixelsLocked(ctx);
-        event->accept();
-        return;
-    }
 
-
+    // Resolve the target layer: selected layer first, then hit-test, then create.
     Layer* layer = nullptr;
     if (!ctx.selectedLayerId.isNull())
         layer = ctx.document->findLayer(ctx.selectedLayerId);
@@ -47,7 +42,7 @@ void PaintTool::mousePress(QMouseEvent* event, const QPointF& docPos, const Tool
         const auto& children = ctx.document->rootGroup()->children;
         for (auto it = children.rbegin(); it != children.rend(); ++it) {
             Layer* l = it->get();
-            if (l && l->visible && !l->locked && l->type() == LayerType::Image) {
+            if (l && l->visible && l->type() == LayerType::Image) {
                 const QTransform m = l->transform.matrix(l->contentBounds());
                 const QPointF local = m.inverted().map(docPos);
                 if (l->contentBounds().contains(local)) {
@@ -80,44 +75,55 @@ void PaintTool::mousePress(QMouseEvent* event, const QPointF& docPos, const Tool
         layer = ctx.document->findLayer(createdId);
     }
 
-    if (layer && layer->type() == LayerType::Image) {
-        auto* img = static_cast<ImageLayer*>(layer);
-        const QTransform matrix = layer->transform.matrix(layer->contentBounds());
-        const QPointF localPos = matrix.inverted().map(docPos);
+    // Photocraft: locks granulares — pixels trancados bloqueiam a edição.
+    // Verifica locks na camada ALVO (não apenas na selecionada via
+    // ctx.selectedLayerId), pois o hit-testing pode pintar numa camada
+    // diferente da selecionada no painel.
+    if (!layer || layer->type() != LayerType::Image)
+        return; // nenhuma camada de imagem alvo
 
-        m_activeLayerId = layer->id();
-        m_origAssetId = img->assetId;
-        m_origWidth = img->naturalWidth;
-        m_origHeight = img->naturalHeight;
-        m_origTransform = layer->transform;
+    if (!SelectionOperations::canEditPixels(*ctx.document, layer->id())) {
+        reportPixelsLocked(ctx);
+        event->accept();
+        return;
+    }
 
-        m_workingImage = ctx.document->assets().decodedImage(img->assetId);
-        if (m_workingImage.isNull()) {
-            m_workingImage = QImage(img->naturalWidth > 0 ? img->naturalWidth : ctx.document->width(),
-                                    img->naturalHeight > 0 ? img->naturalHeight : ctx.document->height(),
-                                    QImage::Format_ARGB32_Premultiplied);
-            m_workingImage.fill(Qt::transparent);
-        }
+    auto* img = static_cast<ImageLayer*>(layer);
+    const QTransform matrix = layer->transform.matrix(layer->contentBounds());
+    const QPointF localPos = matrix.inverted().map(docPos);
 
-        m_prevPointLocal = localPos;
-        m_isPainting = true;
+    m_activeLayerId = layer->id();
+    m_origAssetId = img->assetId;
+    m_origWidth = img->naturalWidth;
+    m_origHeight = img->naturalHeight;
+    m_origTransform = layer->transform;
 
-        // Paint first dot
-        m_workingImage = ImageProcessing::paintStroke(
-            m_workingImage, m_prevPointLocal, localPos,
-            m_brushType, m_color, m_size, m_opacity);
+    m_workingImage = ctx.document->assets().decodedImage(img->assetId);
+    if (m_workingImage.isNull()) {
+        m_workingImage = QImage(img->naturalWidth > 0 ? img->naturalWidth : ctx.document->width(),
+                                img->naturalHeight > 0 ? img->naturalHeight : ctx.document->height(),
+                                QImage::Format_ARGB32_Premultiplied);
+        m_workingImage.fill(Qt::transparent);
+    }
 
-        // A5: durante o gesto NAO criamos assets — antes eram addImage()
-        // por mouse-move (cada um ~1x a imagem inteira, retidos para
+    m_prevPointLocal = localPos;
+    m_isPainting = true;
+
+    // Paint first dot
+    m_workingImage = ImageProcessing::paintStroke(
+        m_workingImage, m_prevPointLocal, localPos,
+        m_brushType, m_color, m_size, m_opacity);
+
+    // A5: durante o gesto NAO criamos assets — antes eram addImage()
+    // por mouse-move (cada um ~1x a imagem inteira, retidos para
         // sempre no AssetStore e no arquivo salvo). A prévia vai pelo
         // overlay do CanvasView; um único asset nasce no release.
-        if (ctx.setLayerPreview)
-            ctx.setLayerPreview(m_activeLayerId, m_workingImage);
+    if (ctx.setLayerPreview)
+        ctx.setLayerPreview(m_activeLayerId, m_workingImage);
 
-        if (ctx.requestUpdate)
-            ctx.requestUpdate();
-        event->accept();
-    }
+    if (ctx.requestUpdate)
+        ctx.requestUpdate();
+    event->accept();
 }
 
 void PaintTool::mouseMove(QMouseEvent* event, const QPointF& docPos, const ToolContext& ctx)
