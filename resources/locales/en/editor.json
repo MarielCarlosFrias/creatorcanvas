@@ -392,5 +392,11 @@
   "ai.removeBackground": "Remove Background with AI...",
   "ai.quickRemoveBackground": "Quick Remove Background (1-Click)",
   "ai.mockup": "Mockup / Replace Logo...",
+  "puppet.button": "Puppet Warp Selected Image",
+  "puppet.title": "Puppet Warp",
+  "puppet.hint": "Click to add a pin, then drag it to deform the image. Drag an existing pin to adjust it.",
+  "puppet.reset": "Reset Pins",
+  "puppet.apply": "Apply",
+  "puppet.cancel": "Cancel",
   "tools.eyedropper": "Eyedropper"
 }

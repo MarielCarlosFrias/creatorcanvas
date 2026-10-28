@@ -392,5 +392,11 @@
   "ai.removeBackground": "Remover Fundo com IA...",
   "ai.quickRemoveBackground": "Remover Fundo Rápido (1-Clique)",
   "ai.mockup": "Mockup / Substituir Logo...",
+  "puppet.button": "Puppet Warp da Imagem Selecionada",
+  "puppet.title": "Puppet Warp",
+  "puppet.hint": "Clique para adicionar um pino e arraste-o para deformar a imagem. Arraste um pino existente para ajustá-lo.",
+  "puppet.reset": "Redefinir Pinos",
+  "puppet.apply": "Aplicar",
+  "puppet.cancel": "Cancelar",
   "tools.eyedropper": "Conta-gotas"
 }

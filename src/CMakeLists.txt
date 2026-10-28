@@ -174,6 +174,8 @@ add_executable(creatorcanvas
     ui/shapeinspector.cpp
     ui/imageinspector.h
     ui/imageinspector.cpp
+    ui/puppetwarpdialog.h
+    ui/puppetwarpdialog.cpp
     ui/maskeditcanvas.h
     ui/maskeditcanvas.cpp
     ui/aibackgrounddialog.h
