@@ -1159,7 +1159,7 @@ void ImageInspector::openMockupDialog()
 
 void ImageInspector::setMockupArea(const QPolygonF& destination)
 {
-    if (!m_document || m_pendingMockupLogo.isNull() || destination.size() != 4)
+    if (!m_document || m_pendingMockupLogo.isNull() || destination.size() < 4)
         return;
 
     QImage logo = m_pendingMockupLogo;
@@ -1174,42 +1174,153 @@ void ImageInspector::setMockupArea(const QPolygonF& destination)
         targetLayer = m_document->findLayer(m_id);
     }
 
-    // Renderiza a logo deformada para caber EXATAMENTE nos 4 pontos marcados
-    // no espaço do documento. Usamos QTransform::quadToQuad que faz a
-    // transformação projetiva (perspectiva correta, como Photoshop).
-    QImage canvas(m_document->width(), m_document->height(), QImage::Format_ARGB32_Premultiplied);
-    canvas.fill(Qt::transparent);
-    QPainter painter(&canvas);
-    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
-
-    const QPolygonF source{QPointF(0, 0), QPointF(logo.width(), 0),
-                           QPointF(logo.width(), logo.height()), QPointF(0, logo.height())};
-    QTransform warp;
-    if (!QTransform::quadToQuad(source, destination, warp)) {
-        return;
+    // ========================================================================
+    // 1. Calcular bounding box dos pontos de destino
+    //    A camada terá exatamente esse tamanho (não tela inteira).
+    // ========================================================================
+    qreal dstX0 = destination.first().x();
+    qreal dstY0 = destination.first().y();
+    qreal dstX1 = destination.first().x();
+    qreal dstY1 = destination.first().y();
+    for (const auto& p : destination) {
+        dstX0 = qMin(dstX0, p.x());
+        dstY0 = qMin(dstY0, p.y());
+        dstX1 = qMax(dstX1, p.x());
+        dstY1 = qMax(dstY1, p.y());
     }
-    painter.setTransform(warp);
-    painter.drawImage(QPointF(0, 0), logo);
-    painter.end();
+    const int outW = qMax(1, qRound(dstX1 - dstX0));
+    const int outH = qMax(1, qRound(dstY1 - dstY0));
 
-    // Criar uma NOVA camada separada para o mockup (não modificar a camada alvo)
+    // Normalizar pontos de destino para coordenadas locais do canvas de saída
+    QPolygonF localDst;
+    localDst.reserve(destination.size());
+    for (const auto& p : destination)
+        localDst.append(QPointF(p.x() - dstX0, p.y() - dstY0));
+
+    // ========================================================================
+    // 2. Definir pontos de origem correspondentes na imagem fonte
+    //    Para 4 pontos: cantos da imagem (perspectiva exata).
+    //    Para N pontos: distribuídos uniformemente sobre a imagem.
+    // ========================================================================
+    const int n = logo.width();
+    const int m = logo.height();
+    QPolygonF localSrc;
+    localSrc.reserve(destination.size());
+
+    if (destination.size() == 4) {
+        // 4 pontos: mapeamento projetivo exato (Photoshop Perspective)
+        localSrc << QPointF(0, 0)
+                 << QPointF(n, 0)
+                 << QPointF(n, m)
+                 << QPointF(0, m);
+    } else {
+        // N pontos: distribuir uniformemente sobre a imagem fonte
+        // (grid simples para deformação em malha)
+        const int cols = qCeil(qSqrt(destination.size()));
+        const int rows = qCeil(qreal(destination.size()) / cols);
+        int idx = 0;
+        for (int r = 0; r < rows && idx < destination.size(); ++r) {
+            for (int c = 0; c < cols && idx < destination.size(); ++c, ++idx) {
+                const qreal fx = qreal(c) / qreal(qMax(1, cols - 1));
+                const qreal fy = qreal(r) / qreal(qMax(1, rows - 1));
+                localSrc.append(QPointF(fx * n, fy * m));
+            }
+        }
+    }
+
+    // ========================================================================
+    // 3. Renderizar a imagem fonte deformada para o canvas de saída
+    //    Usamos mapeamento inverso: para cada pixel de saída, amostramos
+    //    a imagem fonte na posição correspondente.
+    // ========================================================================
+    QImage canvas(outW, outH, QImage::Format_ARGB32_Premultiplied);
+    canvas.fill(Qt::transparent);
+
+    const QImage src = logo.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+
+    if (destination.size() == 4) {
+        // Perspectiva exata com QTransform::quadToQuad
+        QTransform warp;
+        if (!QTransform::quadToQuad(localSrc, localDst, warp)) {
+            return;
+        }
+        const QTransform invWarp = warp.inverted();
+        QPainter painter(&canvas);
+        painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+        for (int y = 0; y < outH; ++y) {
+            for (int x = 0; x < outW; ++x) {
+                const QPointF srcPt = invWarp.map(QPointF(qreal(x), qreal(y)));
+                if (srcPt.x() >= 0 && srcPt.x() < n && srcPt.y() >= 0 && srcPt.y() < m) {
+                    canvas.setPixel(x, y, src.pixel(qRound(srcPt.x()), qRound(srcPt.y())));
+                }
+            }
+        }
+    } else {
+        // N pontos: deformação por interpolação inversa da distância (IDW)
+        // Para cada pixel de saída, calcular o ponto de origem na imagem fonte
+        // baseado na proximidade aos pontos de controle.
+        const int w = localDst.size();
+        for (int y = 0; y < outH; ++y) {
+            for (int x = 0; x < outW; ++x) {
+                const QPointF dstPt{qreal(x), qreal(y)};
+
+                // IDW: calcular peso baseado na distância aos pontos de destino
+                qreal totalWeight = 0;
+                qreal sumSrcX = 0;
+                qreal sumSrcY = 0;
+                bool exactMatch = false;
+
+                for (int i = 0; i < w; ++i) {
+                    const qreal dx = dstPt.x() - localDst[i].x();
+                    const qreal dy = dstPt.y() - localDst[i].y();
+                    const qreal dist2 = dx * dx + dy * dy;
+
+                    if (dist2 < 0.25) { // pixel coincide com ponto de controle
+                        sumSrcX = localSrc[i].x();
+                        sumSrcY = localSrc[i].y();
+                        totalWeight = 1;
+                        exactMatch = true;
+                        break;
+                    }
+
+                    const qreal weight = 1.0 / dist2;
+                    totalWeight += weight;
+                    sumSrcX += localSrc[i].x() * weight;
+                    sumSrcY += localSrc[i].y() * weight;
+                }
+
+                if (!exactMatch && totalWeight > 0) {
+                    sumSrcX /= totalWeight;
+                    sumSrcY /= totalWeight;
+                }
+
+                if (sumSrcX >= 0 && sumSrcX < n && sumSrcY >= 0 && sumSrcY < m) {
+                    canvas.setPixel(x, y, src.pixel(qRound(sumSrcX), qRound(sumSrcY)));
+                }
+            }
+        }
+    }
+
+    // ========================================================================
+    // 4. Criar uma NOVA camada separada para o mockup
+    //    O tamanho da camada é EXATAMENTE o bounding box dos pontos.
+    // ========================================================================
     auto mockupLayer = std::make_unique<ImageLayer>();
     mockupLayer->name = QStringLiteral("Mockup — Logo");
     mockupLayer->naturalWidth = canvas.width();
     mockupLayer->naturalHeight = canvas.height();
-    // Posiciona no centro do documento (a imagem já está nos pontos corretos via warp)
-    mockupLayer->transform.position = QPointF(m_document->width() / 2.0, m_document->height() / 2.0);
+    // Posiciona no canto superior esquerdo do bounding box dos pontos
+    mockupLayer->transform.position = QPointF(dstX0, dstY0);
     mockupLayer->assetId = m_document->assets().addImage(canvas);
 
     const LayerId mockupId = mockupLayer->id();
 
     // Coloca acima da camada alvo (ou no topo se não houver alvo)
-    int insertIndex = -1; // topo da pilha
+    int insertIndex = -1;
     if (targetLayer) {
         insertIndex = m_document->indexOf(targetLayer->id()) + 1;
     }
 
-    // Adicionar via comando para ter undo/redo
     if (m_history) {
         m_history->execute(std::make_unique<AddLayerCommand>(
             *m_document, std::move(mockupLayer), nullptr, insertIndex));
@@ -1217,18 +1328,19 @@ void ImageInspector::setMockupArea(const QPolygonF& destination)
         m_document->addLayer(std::move(mockupLayer), nullptr, insertIndex);
     }
 
-    // Selecionar a nova camada de mockup
     if (m_document->findLayer(mockupId)) {
         m_document->touchLayer(mockupId);
-        // Notificar a seleção da nova camada
         emit layerSelectedChanged(mockupId);
     }
 
     m_originalAssetId = LayerId();
     m_originalPreviewImage = QImage();
 
+    const QString msg = destination.size() == 4
+        ? QStringLiteral("Mockup criado em camada separada (perspectiva de 4 pontos). Pode mover, ocultar ou desfazer (Ctrl+Z).")
+        : QStringLiteral("Mockup criado em camada separada (deformação de %1 pontos). Pode mover, ocultar ou desfazer (Ctrl+Z).").arg(destination.size());
     if (m_mockupHint)
-        m_mockupHint->setText(QStringLiteral("Mockup criado numa camada separada acima da camada alvo. Pode mover, ocultar ou desfazer (Ctrl+Z)."));
+        m_mockupHint->setText(msg);
 }
 
 void ImageInspector::clearPendingMockup()

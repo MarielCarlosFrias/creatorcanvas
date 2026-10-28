@@ -809,7 +809,7 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
         }
         if (event->button() == Qt::LeftButton) {
             // Shift + clique: reposiciona o ponto mais próximo (ajuste iterativo tipo Photoshop)
-            if (m_mockupCorners.size() == 4 && (event->modifiers() & Qt::ShiftModifier)) {
+            if (m_mockupCorners.size() >= 4 && (event->modifiers() & Qt::ShiftModifier)) {
                 qreal minDist = std::numeric_limits<qreal>::max();
                 int nearestIdx = -1;
                 for (int i = 0; i < m_mockupCorners.size(); ++i) {
@@ -827,10 +827,12 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
                     return;
                 }
             }
-            if (m_mockupCorners.size() < 4)
-                m_mockupCorners << docPos;
-            if (m_mockupCorners.size() == 4)
-                emit statusMessageRequested(QStringLiteral("Mockup: quatro cantos marcados. Pressione Enter ou dê duplo clique para confirmar. Shift+clique num ponto para reposicioná-lo."));
+            // Permitir qualquer quantidade de pontos (mínimo 4 para deformação)
+            m_mockupCorners << docPos;
+            if (m_mockupCorners.size() >= 4)
+                emit statusMessageRequested(QStringLiteral("Mockup: %1 pontos marcados (mínimo 4). Pressione Enter ou dê duplo clique para confirmar. Shift+clique num ponto para reposicioná-lo.").arg(m_mockupCorners.size()));
+            else
+                emit statusMessageRequested(QStringLiteral("Mockup: %1 pontos marcados (precisa de pelo menos 4). Continue clicando.").arg(m_mockupCorners.size()));
             update();
             event->accept();
             return;
@@ -1307,7 +1309,7 @@ bool CanvasView::eventFilter(QObject* watched, QEvent* event)
 
 void CanvasView::keyPressEvent(QKeyEvent* event)
 {
-    if (m_mockupPlacementActive && event->key() == Qt::Key_Return && m_mockupCorners.size() == 4) {
+    if (m_mockupPlacementActive && event->key() == Qt::Key_Return && m_mockupCorners.size() >= 4) {
         finishMockupPlacement();
         event->accept();
         return;
@@ -1758,7 +1760,7 @@ QColor CanvasView::sampleColorAt(const QPointF& docPos) const
 
 void CanvasView::finishMockupPlacement()
 {
-    if (!m_mockupPlacementActive || m_mockupCorners.size() != 4)
+    if (!m_mockupPlacementActive || m_mockupCorners.size() < 4)
         return;
     const QPolygonF completed = m_mockupCorners;
     m_mockupPlacementActive = false;
