@@ -43,6 +43,7 @@ public:
     void setDocument(Document* document);
     void refresh();
     void setMockupArea(const QPolygonF& corners);
+    void clearPendingMockup();
     void openMockupDialog();
     void applyPreset(int presetIndex);
 

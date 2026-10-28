@@ -800,6 +800,8 @@ void MainWindow::buildLayersDock()
             m_canvas, &CanvasView::clearImagePreview);
     connect(m_canvas, &CanvasView::mockupAreaSelected,
             m_imageInspector, &ImageInspector::setMockupArea);
+    connect(m_canvas, &CanvasView::mockupPlacementCancelled,
+            m_imageInspector, &ImageInspector::clearPendingMockup);
 
     // Cria o painel de Histórico (Undo/Redo visual estilo Photoshop)
     m_historyPanel = new HistoryPanel(m_i18n, m_history.get(), this);

@@ -166,6 +166,7 @@ signals:
     void statusMessageRequested(const QString& message);
     void quickAiBusyChanged(bool busy);
     void mockupAreaSelected(const QPolygonF& corners);
+    void mockupPlacementCancelled();
     void colorPicked(const QColor& color);
 
 protected:

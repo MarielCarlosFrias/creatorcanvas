@@ -1666,6 +1666,7 @@ void CanvasView::cancelMockupPlacement()
     m_mockupCorners.clear();
     setCursor(Qt::ArrowCursor);
     emit statusMessageRequested(QStringLiteral("Posicionamento do mockup cancelado."));
+    emit mockupPlacementCancelled();
     update();
 }
 

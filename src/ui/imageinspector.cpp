@@ -1102,6 +1102,13 @@ void ImageInspector::openMockupDialog()
     ImageLayer* selected = nullptr;
     if (!m_document || !editingLayer(&selected)) return;
 
+    // Photocraft: bloquear mockup em camada com pixels trancados.
+    if (!SelectionOperations::canEditPixels(*m_document, m_id)) {
+        QMessageBox::warning(this, QStringLiteral("CreatorCanvas"),
+            QStringLiteral("The layer is locked (image pixels)."));
+        return;
+    }
+
     QDialog sourceDialog(this);
     sourceDialog.setWindowTitle(QStringLiteral("Escolher imagem para o mockup"));
     auto* sourceForm = new QFormLayout(&sourceDialog);
@@ -1242,6 +1249,31 @@ void ImageInspector::setMockupArea(const QPolygonF& destination)
     });
     connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    // Controles de reposicionamento do mockup
+    auto* posX = new QDoubleSpinBox(&dialog);
+    posX->setRange(-99999, 99999);
+    posX->setDecimals(1);
+    posX->setValue(contentRect.topLeft().x());
+    auto* posY = new QDoubleSpinBox(&dialog);
+    posY->setRange(-99999, 99999);
+    posY->setDecimals(1);
+    posY->setValue(contentRect.topLeft().y());
+    form->addRow(QStringLiteral("Posição X"), posX);
+    form->addRow(QStringLiteral("Posição Y"), posY);
+
+    connect(posX, qOverload<double>(&QDoubleSpinBox::valueChanged), &dialog, [this, previewId](double v) {
+        if (auto* layer = m_document ? m_document->findLayer(previewId) : nullptr) {
+            layer->transform.position.setX(v);
+            m_document->touchLayer(previewId);
+        }
+    });
+    connect(posY, qOverload<double>(&QDoubleSpinBox::valueChanged), &dialog, [this, previewId](double v) {
+        if (auto* layer = m_document ? m_document->findLayer(previewId) : nullptr) {
+            layer->transform.position.setY(v);
+            m_document->touchLayer(previewId);
+        }
+    });
+
     const bool accepted = dialog.exec() == QDialog::Accepted;
     auto finalLayer = m_document->takeLayer(previewId);
     if (!finalLayer) return;
@@ -1258,6 +1290,14 @@ void ImageInspector::setMockupArea(const QPolygonF& destination)
         m_mockupHint->setText(accepted
             ? QStringLiteral("Mockup criado numa camada separada. Pode selecionar, mover, ocultar ou desfazer.")
             : QStringLiteral("Pré-visualização cancelada."));
+}
+
+void ImageInspector::clearPendingMockup()
+{
+    m_pendingMockupLogo = QImage();
+    m_previewTimer.stop();
+    if (m_mockupHint)
+        m_mockupHint->setText(QStringLiteral("Clique em \"Mockup / Substituir Logo\" para começar."));
 }
 
 void ImageInspector::openPuppetWarpDialog()
