@@ -1162,42 +1162,21 @@ void ImageInspector::setMockupArea(const QPolygonF& destination)
     if (!m_document || m_pendingMockupLogo.isNull() || destination.size() != 4)
         return;
 
-    // Aplica o mockup na CAMADA SELECIONADA (não cria nova camada separada).
-    // Isso garante que a imagem corresponda EXATAMENTE aos 4 pontos marcados.
-    ImageLayer* selected = nullptr;
-    if (!editingLayer(&selected)) {
-        // Se nenhuma camada de imagem está selecionada, usa a camada ativa do documento
-        selected = static_cast<ImageLayer*>(m_document->findLayer(m_id));
-    }
-    if (!selected) {
-        // Sem camada de imagem alvo: cria uma nova camada de imagem para o mockup
-        auto newLayer = std::make_unique<ImageLayer>();
-        newLayer->name = QStringLiteral("Mockup — Logo");
-        newLayer->naturalWidth = m_document->width();
-        newLayer->naturalHeight = m_document->height();
-        newLayer->transform.position = QPointF(m_document->width() / 2.0, m_document->height() / 2.0);
-        QImage blank(m_document->width(), m_document->height(), QImage::Format_ARGB32_Premultiplied);
-        blank.fill(Qt::transparent);
-        newLayer->assetId = m_document->assets().addImage(blank);
-        const LayerId createdId = newLayer->id();
-        m_document->addLayer(std::move(newLayer));
-        selected = static_cast<ImageLayer*>(m_document->findLayer(createdId));
-        m_id = createdId;
-        m_originalAssetId = selected->assetId;
-        m_originalPreviewImage = m_document->assets().decodedImage(m_originalAssetId);
-    }
-
     QImage logo = m_pendingMockupLogo;
     m_pendingMockupLogo = QImage();
 
-    const QVector<QPair<QString, BlendMode>> modes = {{QStringLiteral("Normal"), BlendMode::Normal},
-        {QStringLiteral("Multiply"), BlendMode::Multiply}, {QStringLiteral("Screen"), BlendMode::Screen},
-        {QStringLiteral("Overlay"), BlendMode::Overlay}, {QStringLiteral("Darken"), BlendMode::Darken},
-        {QStringLiteral("Lighten"), BlendMode::Lighten}, {QStringLiteral("Add"), BlendMode::Add}};
+    // Determinar a camada alvo para colocar o mockup ACIMA dela
+    ImageLayer* imgLayer = nullptr;
+    Layer* targetLayer = nullptr;
+    if (editingLayer(&imgLayer)) {
+        targetLayer = imgLayer;
+    } else if (!m_id.isNull()) {
+        targetLayer = m_document->findLayer(m_id);
+    }
 
     // Renderiza a logo deformada para caber EXATAMENTE nos 4 pontos marcados
-    // no espaço do documento. Usamos o tamanho do documento como canvas para
-    // manter a correspondência exata com as coordenadas dos pontos.
+    // no espaço do documento. Usamos QTransform::quadToQuad que faz a
+    // transformação projetiva (perspectiva correta, como Photoshop).
     QImage canvas(m_document->width(), m_document->height(), QImage::Format_ARGB32_Premultiplied);
     canvas.fill(Qt::transparent);
     QPainter painter(&canvas);
@@ -1213,35 +1192,43 @@ void ImageInspector::setMockupArea(const QPolygonF& destination)
     painter.drawImage(QPointF(0, 0), logo);
     painter.end();
 
-    // Pega a imagem existente da camada selecionada (para compor sobre ela)
-    QImage baseImage = m_document->assets().decodedImage(selected->assetId);
-    if (baseImage.isNull()) {
-        baseImage = QImage(m_document->width(), m_document->height(), QImage::Format_ARGB32_Premultiplied);
-        baseImage.fill(Qt::transparent);
+    // Criar uma NOVA camada separada para o mockup (não modificar a camada alvo)
+    auto mockupLayer = std::make_unique<ImageLayer>();
+    mockupLayer->name = QStringLiteral("Mockup — Logo");
+    mockupLayer->naturalWidth = canvas.width();
+    mockupLayer->naturalHeight = canvas.height();
+    // Posiciona no centro do documento (a imagem já está nos pontos corretos via warp)
+    mockupLayer->transform.position = QPointF(m_document->width() / 2.0, m_document->height() / 2.0);
+    mockupLayer->assetId = m_document->assets().addImage(canvas);
+
+    const LayerId mockupId = mockupLayer->id();
+
+    // Coloca acima da camada alvo (ou no topo se não houver alvo)
+    int insertIndex = -1; // topo da pilha
+    if (targetLayer) {
+        insertIndex = m_document->indexOf(targetLayer->id()) + 1;
     }
 
-    // Compoe a logo deformada sobre a imagem base
-    QPainter basePainter(&baseImage);
-    basePainter.setRenderHint(QPainter::SmoothPixmapTransform, true);
-    basePainter.drawImage(QPointF(0, 0), canvas);
-    basePainter.end();
-
-    const LayerId newAssetId = m_document->assets().addImage(baseImage);
-
+    // Adicionar via comando para ter undo/redo
     if (m_history) {
-        m_history->execute(std::make_unique<SetLayerImageAssetCommand>(
-            *m_document, selected->id(), selected->assetId,
-            selected->naturalWidth, selected->naturalHeight,
-            newAssetId, baseImage.width(), baseImage.height()));
+        m_history->execute(std::make_unique<AddLayerCommand>(
+            *m_document, std::move(mockupLayer), nullptr, insertIndex));
     } else {
-        m_document->setImageLayerAsset(selected->id(), newAssetId, baseImage.width(), baseImage.height());
+        m_document->addLayer(std::move(mockupLayer), nullptr, insertIndex);
     }
 
-    m_originalAssetId = newAssetId;
-    m_originalPreviewImage = baseImage;
+    // Selecionar a nova camada de mockup
+    if (m_document->findLayer(mockupId)) {
+        m_document->touchLayer(mockupId);
+        // Notificar a seleção da nova camada
+        emit layerSelectedChanged(mockupId);
+    }
+
+    m_originalAssetId = LayerId();
+    m_originalPreviewImage = QImage();
 
     if (m_mockupHint)
-        m_mockupHint->setText(QStringLiteral("Mockup aplicado na camada selecionada. Pode ajustar novamente ou desfazer (Ctrl+Z)."));
+        m_mockupHint->setText(QStringLiteral("Mockup criado numa camada separada acima da camada alvo. Pode mover, ocultar ou desfazer (Ctrl+Z)."));
 }
 
 void ImageInspector::clearPendingMockup()

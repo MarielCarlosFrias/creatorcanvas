@@ -53,6 +53,7 @@ public slots:
 signals:
     void eyedropperRequested();
     void mockupPlacementRequested();
+    void layerSelectedChanged(const cc::LayerId& id);
     void imagePreviewReady(const cc::LayerId& id, const QImage& image);
     void imagePreviewCleared();
 
