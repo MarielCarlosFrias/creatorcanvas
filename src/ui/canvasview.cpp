@@ -808,10 +808,29 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
             return;
         }
         if (event->button() == Qt::LeftButton) {
+            // Shift + clique: reposiciona o ponto mais próximo (ajuste iterativo tipo Photoshop)
+            if (m_mockupCorners.size() == 4 && (event->modifiers() & Qt::ShiftModifier)) {
+                qreal minDist = std::numeric_limits<qreal>::max();
+                int nearestIdx = -1;
+                for (int i = 0; i < m_mockupCorners.size(); ++i) {
+                    qreal d = QLineF(docPos, m_mockupCorners[i]).length();
+                    if (d < minDist) {
+                        minDist = d;
+                        nearestIdx = i;
+                    }
+                }
+                if (nearestIdx >= 0 && minDist < 20.0 * (1.0 / m_zoom)) {
+                    m_mockupCorners[nearestIdx] = docPos;
+                    update();
+                    emit statusMessageRequested(QStringLiteral("Mockup: ponto %1 reposicionado. Marque novamente ou pressione Enter para confirmar.").arg(nearestIdx + 1));
+                    event->accept();
+                    return;
+                }
+            }
             if (m_mockupCorners.size() < 4)
                 m_mockupCorners << docPos;
             if (m_mockupCorners.size() == 4)
-                emit statusMessageRequested(QStringLiteral("Mockup: quatro cantos marcados. Pressione Enter ou dê duplo clique para confirmar."));
+                emit statusMessageRequested(QStringLiteral("Mockup: quatro cantos marcados. Pressione Enter ou dê duplo clique para confirmar. Shift+clique num ponto para reposicioná-lo."));
             update();
             event->accept();
             return;

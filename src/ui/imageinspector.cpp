@@ -1161,6 +1161,32 @@ void ImageInspector::setMockupArea(const QPolygonF& destination)
 {
     if (!m_document || m_pendingMockupLogo.isNull() || destination.size() != 4)
         return;
+
+    // Aplica o mockup na CAMADA SELECIONADA (não cria nova camada separada).
+    // Isso garante que a imagem corresponda EXATAMENTE aos 4 pontos marcados.
+    ImageLayer* selected = nullptr;
+    if (!editingLayer(&selected)) {
+        // Se nenhuma camada de imagem está selecionada, usa a camada ativa do documento
+        selected = static_cast<ImageLayer*>(m_document->findLayer(m_id));
+    }
+    if (!selected) {
+        // Sem camada de imagem alvo: cria uma nova camada de imagem para o mockup
+        auto newLayer = std::make_unique<ImageLayer>();
+        newLayer->name = QStringLiteral("Mockup — Logo");
+        newLayer->naturalWidth = m_document->width();
+        newLayer->naturalHeight = m_document->height();
+        newLayer->transform.position = QPointF(m_document->width() / 2.0, m_document->height() / 2.0);
+        QImage blank(m_document->width(), m_document->height(), QImage::Format_ARGB32_Premultiplied);
+        blank.fill(Qt::transparent);
+        newLayer->assetId = m_document->assets().addImage(blank);
+        const LayerId createdId = newLayer->id();
+        m_document->addLayer(std::move(newLayer));
+        selected = static_cast<ImageLayer*>(m_document->findLayer(createdId));
+        m_id = createdId;
+        m_originalAssetId = selected->assetId;
+        m_originalPreviewImage = m_document->assets().decodedImage(m_originalAssetId);
+    }
+
     QImage logo = m_pendingMockupLogo;
     m_pendingMockupLogo = QImage();
 
@@ -1168,6 +1194,10 @@ void ImageInspector::setMockupArea(const QPolygonF& destination)
         {QStringLiteral("Multiply"), BlendMode::Multiply}, {QStringLiteral("Screen"), BlendMode::Screen},
         {QStringLiteral("Overlay"), BlendMode::Overlay}, {QStringLiteral("Darken"), BlendMode::Darken},
         {QStringLiteral("Lighten"), BlendMode::Lighten}, {QStringLiteral("Add"), BlendMode::Add}};
+
+    // Renderiza a logo deformada para caber EXATAMENTE nos 4 pontos marcados
+    // no espaço do documento. Usamos o tamanho do documento como canvas para
+    // manter a correspondência exata com as coordenadas dos pontos.
     QImage canvas(m_document->width(), m_document->height(), QImage::Format_ARGB32_Premultiplied);
     canvas.fill(Qt::transparent);
     QPainter painter(&canvas);
@@ -1176,120 +1206,42 @@ void ImageInspector::setMockupArea(const QPolygonF& destination)
     const QPolygonF source{QPointF(0, 0), QPointF(logo.width(), 0),
                            QPointF(logo.width(), logo.height()), QPointF(0, logo.height())};
     QTransform warp;
-    if (!QTransform::quadToQuad(source, destination, warp))
+    if (!QTransform::quadToQuad(source, destination, warp)) {
         return;
+    }
     painter.setTransform(warp);
     painter.drawImage(QPointF(0, 0), logo);
     painter.end();
 
-    // Mantém a imagem inteira deformada: apenas recorta o espaço de trabalho
-    // da área marcada, nunca a caixa alfa dos pixels da fonte. Assim nenhum
-    // pixel visível do PNG é eliminado; as zonas transparentes continuam
-    // transparentes dentro do mockup.
-    // Recorta apenas o bounding box dos pixels realmente visíveis. Nunca
-    // usamos a caixa da seleção como limite, pois isso elimina partes da
-    // imagem deformada quando a fonte ultrapassa ligeiramente o quadrilátero.
-    QRect contentRect;
-    int left = canvas.width(), top = canvas.height(), right = -1, bottom = -1;
-    for (int y = 0; y < canvas.height(); ++y) {
-        const QRgb* line = reinterpret_cast<const QRgb*>(canvas.constScanLine(y));
-        for (int x = 0; x < canvas.width(); ++x) {
-            if (qAlpha(line[x]) == 0) continue;
-            left = std::min(left, x); top = std::min(top, y);
-            right = std::max(right, x); bottom = std::max(bottom, y);
-        }
+    // Pega a imagem existente da camada selecionada (para compor sobre ela)
+    QImage baseImage = m_document->assets().decodedImage(selected->assetId);
+    if (baseImage.isNull()) {
+        baseImage = QImage(m_document->width(), m_document->height(), QImage::Format_ARGB32_Premultiplied);
+        baseImage.fill(Qt::transparent);
     }
-    if (right >= left && bottom >= top)
-        contentRect = QRect(QPoint(left, top), QPoint(right, bottom)).intersected(canvas.rect());
-    if (contentRect.isEmpty())
-        return;
-    const QImage cropped = canvas.copy(contentRect);
 
-    auto overlay = std::make_unique<ImageLayer>();
-    overlay->name = QStringLiteral("Mockup — Logo");
-    const LayerId croppedAsset = m_document->assets().addImage(cropped);
-    overlay->assetId = croppedAsset;
-    overlay->naturalWidth = cropped.width();
-    overlay->naturalHeight = cropped.height();
-    // AffineTransform usa o centro do conteúdo como origem visual.
-    overlay->transform.position = contentRect.topLeft()
-        + QPointF(cropped.width() / 2.0, cropped.height() / 2.0);
+    // Compoe a logo deformada sobre a imagem base
+    QPainter basePainter(&baseImage);
+    basePainter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    basePainter.drawImage(QPointF(0, 0), canvas);
+    basePainter.end();
 
-    const LayerId previewId = overlay->id();
-    // B5: prévia transitória — o autosave continua rodando durante o
-    // diálogo modal, mas esta camada NUNCA é gravada em save/recuperação
-    // enquanto o usuário não confirmar.
-    overlay->transient = true;
-    // Adiciona temporariamente a camada para que o diálogo mostre o resultado.
-    m_document->addLayer(std::move(overlay));
-    auto* previewLayer = static_cast<ImageLayer*>(m_document->findLayer(previewId));
-    if (!previewLayer) return;
-    QDialog dialog(this);
-    dialog.setWindowTitle(QStringLiteral("Pré-visualização — Mockup / Substituir Logo"));
-    auto* form = new QFormLayout(&dialog);
-    form->addRow(new QLabel(QStringLiteral("Ajuste o resultado no canvas. OK confirma; Cancelar ou Esc remove a prévia."), &dialog));
-    auto* opacity = new QSlider(Qt::Horizontal, &dialog); opacity->setRange(1, 100); opacity->setValue(100);
-    form->addRow(QStringLiteral("Opacidade"), opacity);
-    auto* blend = new QComboBox(&dialog);
-    for (const auto& mode : modes) blend->addItem(mode.first, static_cast<int>(mode.second));
-    form->addRow(QStringLiteral("Mistura"), blend);
-    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
-    form->addRow(buttons);
-    connect(opacity, &QSlider::valueChanged, &dialog, [this, previewId](int value) {
-        if (auto* layer = m_document ? m_document->findLayer(previewId) : nullptr) {
-            layer->setOpacity(value / 100.0f);
-            m_document->touchLayer(previewId);
-        }
-    });
-    connect(blend, qOverload<int>(&QComboBox::currentIndexChanged), &dialog, [this, previewId, blend](int) {
-        if (auto* layer = m_document ? m_document->findLayer(previewId) : nullptr) {
-            layer->blendMode = static_cast<BlendMode>(blend->currentData().toInt());
-            m_document->touchLayer(previewId);
-        }
-    });
-    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    // Controles de reposicionamento do mockup
-    auto* posX = new QDoubleSpinBox(&dialog);
-    posX->setRange(-99999, 99999);
-    posX->setDecimals(1);
-    posX->setValue(contentRect.topLeft().x());
-    auto* posY = new QDoubleSpinBox(&dialog);
-    posY->setRange(-99999, 99999);
-    posY->setDecimals(1);
-    posY->setValue(contentRect.topLeft().y());
-    form->addRow(QStringLiteral("Posição X"), posX);
-    form->addRow(QStringLiteral("Posição Y"), posY);
+    const LayerId newAssetId = m_document->assets().addImage(baseImage);
 
-    connect(posX, qOverload<double>(&QDoubleSpinBox::valueChanged), &dialog, [this, previewId](double v) {
-        if (auto* layer = m_document ? m_document->findLayer(previewId) : nullptr) {
-            layer->transform.position.setX(v);
-            m_document->touchLayer(previewId);
-        }
-    });
-    connect(posY, qOverload<double>(&QDoubleSpinBox::valueChanged), &dialog, [this, previewId](double v) {
-        if (auto* layer = m_document ? m_document->findLayer(previewId) : nullptr) {
-            layer->transform.position.setY(v);
-            m_document->touchLayer(previewId);
-        }
-    });
-
-    const bool accepted = dialog.exec() == QDialog::Accepted;
-    auto finalLayer = m_document->takeLayer(previewId);
-    if (!finalLayer) return;
-    if (accepted) {
-        // Promovida a definitiva: sai do modo transitório antes de entrar
-        // na história (e, com ela, no documento persistido).
-        finalLayer->transient = false;
-        if (m_history)
-            m_history->execute(std::make_unique<AddLayerCommand>(*m_document, std::move(finalLayer)));
-        else
-            m_document->addLayer(std::move(finalLayer));
+    if (m_history) {
+        m_history->execute(std::make_unique<SetLayerImageAssetCommand>(
+            *m_document, selected->id(), selected->assetId,
+            selected->naturalWidth, selected->naturalHeight,
+            newAssetId, baseImage.width(), baseImage.height()));
+    } else {
+        m_document->setImageLayerAsset(selected->id(), newAssetId, baseImage.width(), baseImage.height());
     }
+
+    m_originalAssetId = newAssetId;
+    m_originalPreviewImage = baseImage;
+
     if (m_mockupHint)
-        m_mockupHint->setText(accepted
-            ? QStringLiteral("Mockup criado numa camada separada. Pode selecionar, mover, ocultar ou desfazer.")
-            : QStringLiteral("Pré-visualização cancelada."));
+        m_mockupHint->setText(QStringLiteral("Mockup aplicado na camada selecionada. Pode ajustar novamente ou desfazer (Ctrl+Z)."));
 }
 
 void ImageInspector::clearPendingMockup()
