@@ -1260,9 +1260,19 @@ void ImageInspector::setMockupArea(const QPolygonF& destination)
             }
         }
     } else {
-        // ----- N pontos (5+): deformação em malha (mesh warp) -----
-        // Divide os pontos de destino em quadriláteros adjacentes e aplica
-        // transformação bilinear dentro de cada um, como o Photoshop Warp.
+        // ----- N pontos (5+): pontos de origem distribuídos uniformemente -----
+        const int cols = qCeil(qSqrt(destination.size()));
+        const int rows = qCeil(qreal(destination.size()) / cols);
+        int idx = 0;
+        for (int r = 0; r < rows && idx < destination.size(); ++r) {
+            for (int c = 0; c < cols && idx < destination.size(); ++c, ++idx) {
+                const qreal fx = qreal(c) / qreal(qMax(1, cols - 1));
+                const qreal fy = qreal(r) / qreal(qMax(1, rows - 1));
+                localSrc.append(QPointF(fx * n, fy * m));
+            }
+        }
+
+        // ----- N pontos (5+): deformação com IDW e raio limitado -----
         const int w = localDst.size();
 
         // Para cada pixel de saída, encontra qual quadrilátero ele pertence
