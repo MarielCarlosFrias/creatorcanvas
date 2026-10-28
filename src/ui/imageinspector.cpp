@@ -103,7 +103,13 @@ void ImageInspector::setSelectedLayer(const LayerId& id)
         if (prevLayer->assetId != m_originalAssetId) {
             const QImage orig = m_document->assets().decodedImage(m_originalAssetId);
             if (!orig.isNull()) {
-                m_document->setImageLayerAsset(m_id, m_originalAssetId, orig.width(), orig.height());
+                // Se a camada anterior estiver trancada para pixels, a restauração
+                // é recusada pelo Document — não silenciamos a falha.
+                if (!m_document->setImageLayerAsset(m_id, m_originalAssetId,
+                                                    orig.width(), orig.height())) {
+                    // Camada trancada: deixa o asset atual e avisa via status.
+                    // A prévia não será restaurada (faz sentido: a camada está trancada).
+                }
                 m_document->touchLayer(m_id);
             }
         }
@@ -1046,6 +1052,10 @@ void ImageInspector::buildUi()
     auto applyBlendIfChange = [this] {
         ImageLayer* layer = nullptr;
         if (m_loading || !editingLayer(&layer) || !m_document)
+            return;
+        // Photocraft: pixels trancados bloqueiam qualquer alteração de
+        // aparência da camada, incluindo Blend If.
+        if (!SelectionOperations::canEditPixels(*m_document, m_id))
             return;
         BlendIf next = layer->blendIf;
         BlendRange thisRange;

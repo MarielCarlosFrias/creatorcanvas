@@ -606,20 +606,6 @@ void MainWindow::buildCentralWidget()
             });
     connect(m_canvas, &CanvasView::deleteRequested,
             this, &MainWindow::deleteSelectedLayer);
-    connect(m_canvas, &CanvasView::imageLayerModified, this,
-            [this](const LayerId& id,
-                   const LayerId& oldAssetId, int oldWidth, int oldHeight,
-                   const AffineTransform& oldTransform,
-                   const LayerId& newAssetId, int newWidth, int newHeight,
-                   const AffineTransform& newTransform,
-                   const QString& actionName) {
-                if (m_history && m_document)
-                    m_history->execute(std::make_unique<ModifyImageLayerCommand>(
-                        *m_document, id,
-                        oldAssetId, oldWidth, oldHeight, oldTransform,
-                        newAssetId, newWidth, newHeight, newTransform,
-                        actionName));
-            });
     connect(m_canvas, &CanvasView::statusMessageRequested, this,
             [this](const QString& message) {
                 statusBar()->showMessage(message, 3000);

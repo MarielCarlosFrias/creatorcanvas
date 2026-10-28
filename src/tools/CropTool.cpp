@@ -8,6 +8,8 @@
 #include "core/history/DocumentCommands.h"
 #include "core/history/CommandStack.h"
 #include "core/image/ImageProcessing.h"
+#include "core/selection/SelectionOperations.h"
+#include "ToolCommit.h"
 #include "localization/i18nservice.h"
 
 namespace cc {
@@ -253,6 +255,13 @@ void CropTool::applyCrop(const ToolContext& ctx)
     auto* img = static_cast<ImageLayer*>(layer);
     const QImage orig = ctx.document->assets().decodedImage(img->assetId);
     if (orig.isNull()) {
+        cancel(ctx);
+        return;
+    }
+
+    // Photocraft: pixels trancados bloqueiam o corte da camada.
+    if (!SelectionOperations::canEditPixels(*ctx.document, layer->id())) {
+        reportPixelsLocked(ctx);
         cancel(ctx);
         return;
     }

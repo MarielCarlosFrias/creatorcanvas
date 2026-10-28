@@ -156,22 +156,6 @@ void TestAiQuick::testResultAppliedOnlyToTargetLayer()
     CanvasView view;
     view.setDocument(doc.get());
 
-    // Conecta sinal de modificação para atualizar o Document como o MainWindow faz
-    connect(&view, &CanvasView::imageLayerModified,
-            [&doc](const LayerId& targetId,
-                   const LayerId&, int, int, const AffineTransform&,
-                   const LayerId& newAssetId, int newW, int newH, const AffineTransform& newTransform,
-                   const QString&) {
-        Layer* l = doc->findLayer(targetId);
-        if (l && l->type() == LayerType::Image) {
-            auto* imgL = static_cast<ImageLayer*>(l);
-            imgL->assetId = newAssetId;
-            imgL->naturalWidth = newW;
-            imgL->naturalHeight = newH;
-            imgL->transform = newTransform;
-        }
-    });
-
     // Dispara remoção rápida apenas na Layer 1
     view.removeBackgroundAiQuick(id1);
 

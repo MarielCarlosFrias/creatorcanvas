@@ -163,12 +163,6 @@ signals:
     void duplicateRequested(const cc::LayerId& id);
     void textBoxCommitted(const cc::LayerId& id,
                           const QSizeF& oldValue, const QSizeF& newValue);
-    void imageLayerModified(const cc::LayerId& id,
-                            const cc::LayerId& oldAssetId, int oldWidth, int oldHeight,
-                            const cc::AffineTransform& oldTransform,
-                            const cc::LayerId& newAssetId, int newWidth, int newHeight,
-                            const cc::AffineTransform& newTransform,
-                            const QString& actionName);
     void statusMessageRequested(const QString& message);
     void quickAiBusyChanged(bool busy);
     void mockupAreaSelected(const QPolygonF& corners);

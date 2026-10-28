@@ -66,6 +66,7 @@ private:
     void resetAdjustments();
     void schedulePreview();
     void onPreviewTimeout();
+    void openPuppetWarpDialog();
 
     I18nService* m_i18n = nullptr;
     QPointer<Document> m_document;
@@ -212,6 +213,7 @@ private:
     class CollapsibleSection* m_perspectiveSection = nullptr;
     class CollapsibleSection* m_mockupSection = nullptr;
     QPushButton* m_mockupButton = nullptr;
+    QPushButton* m_puppetWarpButton = nullptr;
     QLabel* m_mockupHint = nullptr;
     QImage m_pendingMockupLogo;
 

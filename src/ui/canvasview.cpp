@@ -808,7 +808,10 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
             return;
         }
         if (event->button() == Qt::LeftButton) {
-            m_mockupCorners << docPos;
+            if (m_mockupCorners.size() < 4)
+                m_mockupCorners << docPos;
+            if (m_mockupCorners.size() == 4)
+                emit statusMessageRequested(QStringLiteral("Mockup: quatro cantos marcados. Pressione Enter ou dê duplo clique para confirmar."));
             update();
             event->accept();
             return;
@@ -1285,7 +1288,7 @@ bool CanvasView::eventFilter(QObject* watched, QEvent* event)
 
 void CanvasView::keyPressEvent(QKeyEvent* event)
 {
-    if (m_mockupPlacementActive && event->key() == Qt::Key_Return && m_mockupCorners.size() >= 3) {
+    if (m_mockupPlacementActive && event->key() == Qt::Key_Return && m_mockupCorners.size() == 4) {
         finishMockupPlacement();
         event->accept();
         return;
@@ -1651,7 +1654,7 @@ void CanvasView::beginMockupPlacement()
     m_mockupCorners.clear();
     m_mockupPlacementActive = true;
     setCursor(Qt::CrossCursor);
-    emit statusMessageRequested(QStringLiteral("Mockup: clique nos quatro cantos da área (canto superior esquerdo, superior direito, inferior direito, inferior esquerdo). Clique direito para cancelar."));
+    emit statusMessageRequested(QStringLiteral("Mockup: clique nos quatro cantos da área, por ordem: superior esquerdo, superior direito, inferior direito, inferior esquerdo. Enter confirma; botão direito cancela."));
     update();
 }
 
@@ -1735,7 +1738,7 @@ QColor CanvasView::sampleColorAt(const QPointF& docPos) const
 
 void CanvasView::finishMockupPlacement()
 {
-    if (!m_mockupPlacementActive || m_mockupCorners.size() < 3)
+    if (!m_mockupPlacementActive || m_mockupCorners.size() != 4)
         return;
     const QPolygonF completed = m_mockupCorners;
     m_mockupPlacementActive = false;
