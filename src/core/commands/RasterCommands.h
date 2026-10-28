@@ -42,7 +42,8 @@ public:
     void redo() override
     {
         for (const auto& source : m_sources) {
-            if (m_doc->effectiveLocks(source.id).all)
+            const auto locks = m_doc->effectiveLocks(source.id);
+            if (locks.pixels || locks.all)
                 return;
         }
 

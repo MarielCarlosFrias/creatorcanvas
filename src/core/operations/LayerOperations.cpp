@@ -101,8 +101,8 @@ LayerId mergeVisible(Document& document,
 {
     QList<LayerId> ids;
     for (const auto& child : document.rootGroup()->children) {
-        // Camadas bloqueadas não participam — ficam intactas por cima
-        if (child->visible && !child->locked
+        // Camadas bloqueadas (pixels ou all) não participam — ficam intactas por cima
+        if (child->visible && !document.effectiveLocks(child->id()).all
             && child->type() != LayerType::Background)
             ids.append(child->id());
     }
@@ -131,7 +131,7 @@ LayerId flatten(Document& document,
     QList<LayerId> ids;       // desbloqueadas — serão achatadas na imagem
     QList<Layer*> kept;       // bloqueadas — preservadas no lugar
     for (const auto& child : document.rootGroup()->children) {
-        if (child->locked)
+        if (document.effectiveLocks(child->id()).all)
             kept.append(child.get());
         else
             ids.append(child->id());

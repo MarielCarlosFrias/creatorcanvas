@@ -151,6 +151,9 @@ public:
         if (!m_created) {
             Layer* original = m_doc->findLayer(m_originalId);
             Q_ASSERT(original);
+            // Photocraft: camada com pixels trancados não pode ser duplicada
+            if (m_doc->effectiveLocks(m_originalId).pixels || m_doc->effectiveLocks(m_originalId).all)
+                return;
             m_clone = original->deepCopy();
             m_clone->name = original->name + QStringLiteral(" copy");
             m_copyId = m_clone->id();
@@ -245,9 +248,10 @@ public:
 
     void redo() override
     {
-        // Se qualquer membro estiver bloqueado, aborta a operação de agrupamento
+        // Se qualquer membro estiver bloqueado (pixels ou all), aborta a operação de agrupamento
         for (const auto& id : m_layerIds) {
-            if (m_doc->effectiveLocks(id).all)
+            const auto locks = m_doc->effectiveLocks(id);
+            if (locks.pixels || locks.all)
                 return;
         }
 
