@@ -1302,12 +1302,11 @@ QImage ImageProcessing::redEyeRemove(const QImage& target, const QPoint& center,
     return result.convertToFormat(target.format());
 }
 
-namespace {
 // Ordena os pontos em sentido horário visual (y cresce para baixo),
 // começando pelo ponto mais próximo do canto superior-esquerdo — a
 // convenção TL→TR→BR→BL que o QTransform::quadToQuad espera. Genérico
 // para qualquer anel de 3+ pontos.
-QPolygonF mockupRingOrder(const QPolygonF& corners)
+static QPolygonF mockupRingOrder(const QPolygonF& corners)
 {
     if (corners.size() < 3)
         return corners;
@@ -1370,7 +1369,7 @@ QPolygonF mockupRingOrder(const QPolygonF& corners)
 // O quadToQuad só é confiável quando o quad é CONVEXO e simples: cliques
 // em zigue-zague/interior produzem um quad côncavo ou "laço" e o warp
 // vira uma fita degenerada. Nesses casos cai no MLS (mais esperto).
-bool mockupQuadIsConvex(const QPolygonF& quad)
+static bool mockupQuadIsConvex(const QPolygonF& quad)
 {
     if (quad.size() != 4)
         return false;
@@ -1391,8 +1390,6 @@ bool mockupQuadIsConvex(const QPolygonF& quad)
     }
     return true;
 }
-
-} // namespace
 
 // Warp de mockup estilo Photoshop: quad projetivo com 4 pontos; nos
 // demais casos (5+ pontos ou quad côncavo), warp por FORMA — o polígono
