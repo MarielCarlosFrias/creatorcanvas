@@ -107,18 +107,6 @@ void GradientTool::mousePress(QMouseEvent* event, const QPointF& docPos, const T
         return;
     }
 
-    // Limite de segurança: gradient em imagens muito grandes trava a UI
-    constexpr int kMaxGradientPixels = 2000 * 2000;
-    if (img->naturalWidth * img->naturalHeight > kMaxGradientPixels) {
-        if (ctx.requestStatusMessage) {
-            ctx.requestStatusMessage(trOr(ctx, "canvas.status.layerTooLarge",
-                QStringLiteral("Gradient: camada muito grande para edição em tempo real. "
-                               "Reduza o tamanho da camada.")));
-        }
-        event->accept();
-        return;
-    }
-
     m_layerId = img->id();
     m_origAssetId = img->assetId;
     m_origWidth = img->naturalWidth;
@@ -341,18 +329,6 @@ void RetouchTool::mousePress(QMouseEvent* event, const QPointF& docPos, const To
     if (bitmap.isNull())
         return;
 
-    // Limite de segurança: retoque em imagens muito grandes trava a UI
-    constexpr int kMaxRetouchPixels = 2000 * 2000;
-    if (img->naturalWidth * img->naturalHeight > kMaxRetouchPixels) {
-        if (ctx.requestStatusMessage) {
-            ctx.requestStatusMessage(trOr(ctx, "canvas.status.layerTooLarge",
-                QStringLiteral("Retoque: camada muito grande para edição em tempo real. "
-                               "Reduza o tamanho da camada.")));
-        }
-        event->accept();
-        return;
-    }
-
     m_layerId = img->id();
     m_origAssetId = img->assetId;
     m_origWidth = img->naturalWidth;
@@ -484,18 +460,6 @@ void HealingTool::mousePress(QMouseEvent* event, const QPointF& docPos, const To
     const QImage bitmap = ctx.document->assets().decodedImage(img->assetId);
     if (bitmap.isNull())
         return;
-
-    // Limite de segurança: retoque em imagens muito grandes trava a UI
-    constexpr int kMaxRetouchPixels = 2000 * 2000;
-    if (img->naturalWidth * img->naturalHeight > kMaxRetouchPixels) {
-        if (ctx.requestStatusMessage) {
-            ctx.requestStatusMessage(trOr(ctx, "canvas.status.layerTooLarge",
-                QStringLiteral("Retoque: camada muito grande para edição em tempo real. "
-                               "Reduza o tamanho da camada.")));
-        }
-        event->accept();
-        return;
-    }
 
     m_layerId = img->id();
     m_origAssetId = img->assetId;

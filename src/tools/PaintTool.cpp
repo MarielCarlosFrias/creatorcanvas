@@ -99,18 +99,6 @@ void PaintTool::mousePress(QMouseEvent* event, const QPointF& docPos, const Tool
     m_origHeight = img->naturalHeight;
     m_origTransform = layer->transform;
 
-    // Limite de segurança: paint em imagens muito grandes trava a UI
-    // (processamento pixel-a-pixel por evento de mouse).
-    constexpr int kMaxPaintPixels = 2000 * 2000;
-    if (img->naturalWidth * img->naturalHeight > kMaxPaintPixels) {
-        if (ctx.requestStatusMessage) {
-            ctx.requestStatusMessage(QStringLiteral("Paint: camada muito grande para pintura em tempo real. "
-                                                    "Reduza o tamanho da camada ou use uma ferramenta diferente."));
-        }
-        event->accept();
-        return;
-    }
-
     m_workingImage = ctx.document->assets().decodedImage(img->assetId);
     if (m_workingImage.isNull()) {
         m_workingImage = QImage(img->naturalWidth > 0 ? img->naturalWidth : ctx.document->width(),
