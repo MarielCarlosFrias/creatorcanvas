@@ -291,55 +291,41 @@ void CanvasOverlayRenderer::drawMockupPlacement(QPainter* painter,
     else if (screen.size() == 2)
         painter->drawLine(screen[0], screen[1]);
 
-    // Prévia ao vivo do warp de mockup: usa apenas o warp projetivo
-    // (quadToQuad com os 4 cantos do bounding box), que é rápido o suficiente
-    // para rodar em cada repaint sem travar a UI. O warp completo por Coons
-    // (5+ pontos) é aplicado só ao confirmar (ImageProcessing::mockupWarp),
-    // não durante o arrasto dos pontos.
+    // Prévia ao vivo: usa EXATAMENTE a mesma função do resultado final
+    // (ImageProcessing::mockupWarp) — projetiva com 4 pontos, Coons com 5+.
+    // Antes o preview esticava o logo ao RETÂNGULO delimitador dos pontos,
+    // ignorando a marcação: o que se via durante a marcação não correspondia
+    // nem aos pontos nem ao resultado ("não funciona conforme previsto").
+    // Custo: o warp só é recalculado quando pontos/logo mudam (por clique,
+    // não por repaint), então não há custo contínuo.
     if (!logo.isNull() && mockupCorners.size() >= 4) {
-        // Para a prévia, usar os 4 cantos do bounding box dos pontos
-        // (projeção projetiva simples e rápida).
-        QPointF tl(mockupCorners.first().x(), mockupCorners.first().y());
-        QPointF tr(mockupCorners.first().x(), mockupCorners.first().y());
-        QPointF br(mockupCorners.first().x(), mockupCorners.first().y());
-        QPointF bl(mockupCorners.first().x(), mockupCorners.first().y());
-        for (const QPointF& p : mockupCorners) {
-            tl.setX(qMin(tl.x(), p.x()));
-            tl.setY(qMin(tl.y(), p.y()));
-            tr.setX(qMax(tr.x(), p.x()));
-            tr.setY(qMin(tr.y(), p.y()));
-            br.setX(qMax(br.x(), p.x()));
-            br.setY(qMax(br.y(), p.y()));
-            bl.setX(qMin(bl.x(), p.x()));
-            bl.setY(qMax(bl.y(), p.y()));
+        static MockupPreviewCache cache;
+        bool same = cache.valid
+                 && cache.logo.cacheKey() == logo.cacheKey()
+                 && cache.points.size() == mockupCorners.size();
+        for (int i = 0; same && i < cache.points.size(); ++i)
+            same = (cache.points[i] == mockupCorners[i]);
+        if (!same) {
+            const auto warp = ImageProcessing::mockupWarp(
+                logo, QPolygonF(mockupCorners));
+            cache.points = mockupCorners;
+            cache.logo = logo;
+            cache.image = warp.image;
+            cache.topLeft = warp.topLeft;
+            cache.valid = true;
         }
-        QPolygonF srcQuad;
-        srcQuad << QPointF(0, 0) << QPointF(logo.width(), 0)
-                << QPointF(logo.width(), logo.height()) << QPointF(0, logo.height());
-        QPolygonF dstQuad;
-        dstQuad << tl << tr << br << bl;
-        QTransform warp;
-        if (QTransform::quadToQuad(srcQuad, dstQuad, warp)) {
-            // Bounding box dos pontos de destino para a imagem de prévia
-            const qreal pw = qMax(1.0, qMax(tr.x(), br.x()) - qMin(tl.x(), bl.x()));
-            const qreal ph = qMax(1.0, qMax(tr.y(), br.y()) - qMin(tl.y(), bl.y()));
-            QImage preview(pw, ph, QImage::Format_ARGB32_Premultiplied);
-            preview.fill(Qt::transparent);
-            QPainter pp(&preview);
-            pp.setRenderHint(QPainter::SmoothPixmapTransform, true);
-            pp.setTransform(warp);
-            pp.drawImage(QPointF(0, 0), logo);
-            pp.end();
-            // Posicionar no documento (top-left dos pontos)
-            const QPointF posTL(qMin(tl.x(), bl.x()), qMin(tl.y(), tr.y()));
+        if (!cache.image.isNull()) {
+            // Escala doc->tela derivada do próprio transform.
             const QPointF origin = toDevice.map(QPointF(0, 0));
             const QPointF unit = toDevice.map(QPointF(1, 0));
             const qreal scale = QLineF(origin, unit).length();
             if (scale > 0.0) {
-                painter->drawImage(QRectF(toDevice.map(posTL),
-                                           QSizeF(preview.width() * scale,
-                                                  preview.height() * scale)),
-                                   preview);
+                // topLeft já inclui a margem do warp: desenhar por ele
+                // garante preview == resultado final.
+                painter->drawImage(QRectF(toDevice.map(cache.topLeft),
+                                          QSizeF(cache.image.width() * scale,
+                                                 cache.image.height() * scale)),
+                                   cache.image);
             }
         }
     }
