@@ -330,7 +330,7 @@ std::unique_ptr<Document> TemplateFactory::createTemplate(TemplateKind kind, I18
         title->name = QStringLiteral("Título Épico");
         title->content = QStringLiteral("FINAL\nSECRETO!");
         title->sizePt = 72;
-        title->box = QSizeF(560, 190);
+        title->box = QSizeF(640, 190);
         title->bold = true;
         title->color = Qt::white;
         title->align = TextAlignment::Left;
@@ -349,7 +349,7 @@ std::unique_ptr<Document> TemplateFactory::createTemplate(TemplateKind kind, I18
         sub->name = QStringLiteral("Subtítulo");
         sub->content = QStringLiteral("EPISÓDIO FINAL");
         sub->sizePt = 38;
-        sub->box = QSizeF(560, 56);
+        sub->box = QSizeF(600, 56);
         sub->bold = true;
         sub->color = QColor(0x00, 0xff, 0xff);
         sub->align = TextAlignment::Left;
@@ -585,7 +585,7 @@ std::unique_ptr<Document> TemplateFactory::createTemplate(TemplateKind kind, I18
         title->name = QStringLiteral("Título Revelador");
         title->content = QStringLiteral("ELE CONTOU\nTUDO SOBRE\nO SEGREDO!");
         title->sizePt = 54;
-        title->box = QSizeF(560, 220);
+        title->box = QSizeF(640, 220);
         title->bold = true;
         title->color = Qt::white;
         title->align = TextAlignment::Left;
