@@ -151,7 +151,7 @@ All types derive from `cc::Layer` (`src/core/layers/Layer.h`):
 | `Lighten` | `Lighten` |
 | `Add` | `Plus` |
 
-There are **seven** modes, not twelve. Dodge, burn, hard/soft light, difference, and exclusion are not implemented.
+There are **twelve** blend modes defined in the enum; seven are currently mapped to `QPainter` composition modes (Normal, Multiply, Screen, Overlay, Darken, Lighten, Add). Dodge, burn, hard/soft light, difference, and exclusion are defined but not yet mapped.
 
 ### Text effects
 
@@ -314,7 +314,7 @@ Saves write a temporary file and rename into place (atomic replace on the same v
 
 ## 12. Testing & Verification
 
-**20** QTest executables in `tests/CMakeLists.txt` (all run with `QT_QPA_PLATFORM=offscreen`):
+**31** QTest executables in `tests/CMakeLists.txt` (all run with `QT_QPA_PLATFORM=offscreen`):
 
 1. `test_settings` — preferences persistence
 2. `test_i18n` — catalogs, key symmetry, fallback, and a **source scan** that fails if any `t("section", "key")` used in `src/` is missing from either catalog (regression: the status bar showed the raw key `editor.canvas.status.paintHelp`)
@@ -341,6 +341,12 @@ Saves write a temporary file and rename into place (atomic replace on the same v
 23. `test_tools_extras` — marquee/gradient/retouch/healing behaviour, undo steps and raster ops
 24. `test_canvas_zoom` — fit mode refits on resize, manual zoom is preserved
 25. `test_template_textfit` — template text fit rules
+26. `test_command_locks` — command stack locking semantics
+27. `test_alignment` — layer alignment/distribution
+28. `test_layer_operations` — layer add/remove/duplicate
+29. `test_layer_render` — per-layer raster rendering
+30. `test_undo_render` — undo/redo render consistency
+31. `test_hit_alpha` — alpha-aware hit testing
 
 ### Smoke test
 

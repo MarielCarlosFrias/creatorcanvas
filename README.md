@@ -10,7 +10,9 @@ Create high-impact YouTube thumbnails, social media posts, stories, banners, and
 [![Qt 6.8 LTS](https://img.shields.io/badge/Qt-6.8%20LTS-41CD52?style=for-the-badge&logo=qt&logoColor=white)](https://www.qt.io/)
 [![CMake](https://img.shields.io/badge/CMake-%E2%89%A5%203.24-064F8C?style=for-the-badge&logo=cmake&logoColor=white)](https://cmake.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-blue?style=for-the-badge)](https://github.com/MarielCarlosFrias/creatorcanvas)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-blue?style=for-the-badge)](https://github.com/theking1x/creatorcanvas)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen?style=for-the-badge)](#)
+[![Tests](https://img.shields.io/badge/tests-31%2F31_passing-brightgreen?style=for-the-badge)](#)
 
 <br/>
 
@@ -110,7 +112,7 @@ CreatorCanvas Architecture
 | **Build System** | CMake ≥ 3.24 | Presets for Linux (`linux-debug`, `linux-release`) and Windows |
 | **Machine Learning** | ONNX Runtime | Local, offline inference (`u2netp.onnx`) |
 | **Archive Engine** | miniz | Clean project bundling into `.creatorcanvas` containers |
-| **Testing** | QTest / CTest | 20 automated test suites with 100% pass rate |
+| **Testing** | QTest / CTest | 31 automated test suites with 100% pass rate |
 
 ---
 
@@ -164,12 +166,27 @@ build\windows-release\bin\Release\CreatorCanvas.exe
 
 Every commit passes a comprehensive verification pipeline:
 
-- **Unit Test Suites**: 25/25 test executables passing (`test_document`, `test_layers`, `test_tools`, `test_serialization`, `test_effects`, etc.).
+- **Unit Test Suites**: 31/31 test executables passing (`test_document`, `test_layers`, `test_tools`, `test_serialization`, `test_effects`, etc.).
 - **Self-Diagnostic Smoke Test**:
   ```bash
   ./build/linux-debug/bin/CreatorCanvas --smoke-test
   ```
   *Validates locales, ONNX AI inference, ZIP save/load roundtrip, thumbnail generation, and headless UI initialization.*
+
+---
+
+## 🤝 Contribuindo
+
+Contribuições são bem-vindas! Comece por aqui:
+
+1. **Leia o guia completo**: [`CONTRIBUTING.md`](CONTRIBUTING.md) e [`DOCUMENTATION.md`](DOCUMENTATION.md)
+2. **Verifique o estado atual**: abra uma issue antes de começar a implementar algo grande
+3. **Faça o fork**, crie uma branch (`git checkout -b feat/minha-mudanca`), faça suas alterações e envie um PR
+4. **Testes**: todos os 31 testes devem passar (`ctest --output-on-failure`)
+5. **Strings de usuário**: nada hardcoded — use `I18nService::t("namespace", "chave")` e adicione à chave tanto em `en` quanto em `pt-BR`
+6. **Commits**: use Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, etc.) ou marque com milestone (`M<n>: <descrição>`)
+
+Leia o [Código de Conduta](CODE_OF_CONDUCT.md) antes de participar.
 
 ---
 

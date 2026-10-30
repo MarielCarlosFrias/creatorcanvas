@@ -175,6 +175,102 @@ void SelectTool::mousePress(QMouseEvent* event, const QPointF& docPos, const Too
     }
 }
 
+namespace {
+
+// Aplica um gesto de escala a uma única camada. O ponto oposto ao handle
+// arrastado permanece fixo no documento; scaleX/scaleY são derivados da
+// variação proporcional do tamanho dos bounds.
+void applyScale(Layer* layer, AffineTransform& t, const QPointF& delta,
+                int activeHandle, const QPointF& anchorDocPos)
+{
+    if (!layer) return;
+    const QRectF cb = layer->contentBounds();
+    if (cb.isEmpty() || cb.width() <= 0 || cb.height() <= 0) return;
+
+    const QTransform mat = layer->transform.matrix(cb);
+    const QRectF docBounds = mat.mapRect(cb);
+    if (docBounds.isEmpty() || docBounds.width() <= 0 || docBounds.height() <= 0)
+        return;
+
+    QRectF r = docBounds;
+    const double dx = delta.x();
+    const double dy = delta.y();
+
+    // Cada handle move lados específicos do rect.
+    switch (activeHandle) {
+    case 0: // TL
+        r.setLeft(r.left() + dx);
+        r.setTop(r.top() + dy);
+        break;
+    case 1: // T
+        r.setTop(r.top() + dy);
+        break;
+    case 2: // TR
+        r.setRight(r.right() + dx);
+        r.setTop(r.top() + dy);
+        break;
+    case 3: // R
+        r.setRight(r.right() + dx);
+        break;
+    case 4: // BR
+        r.setRight(r.right() + dx);
+        r.setBottom(r.bottom() + dy);
+        break;
+    case 5: // B
+        r.setBottom(r.bottom() + dy);
+        break;
+    case 6: // BL
+        r.setLeft(r.left() + dx);
+        r.setBottom(r.bottom() + dy);
+        break;
+    case 7: // L
+        r.setLeft(r.left() + dx);
+        break;
+    default:
+        return;
+    }
+
+    if (r.width() <= 0 || r.height() <= 0)
+        return;
+
+    const double newScaleX = r.width() / docBounds.width();
+    const double newScaleY = r.height() / docBounds.height();
+
+    // Expressa o ponto de ancoragem em coordenadas locais da camada (antes da
+    // transformação), para poder reposicionar mantendo-o fixo após a escala.
+    const QPointF anchorLocal = mat.inverted().map(anchorDocPos);
+    const QPointF centerLocal = cb.center();
+
+    t.scaleX = std::max(0.01, newScaleX);
+    t.scaleY = std::max(0.01, newScaleY);
+
+    // A nova position é aquela que coloca o ponto de ancoragem no mesmo lugar
+    // do documento após aplicar escala em torno do centro local.
+    const QPointF offsetFromCenter = anchorLocal - centerLocal;
+    const QPointF newOffset(offsetFromCenter.x() * t.scaleX, offsetFromCenter.y() * t.scaleY);
+    t.position = anchorDocPos - newOffset + (centerLocal - QPointF(0, 0));
+}
+
+// Aplica um gesto de rotação a uma única camada. O ângulo é medido entre o
+// vetor centro->pontoInicial e o vetor centro->pontoAtual.
+void applyRotate(Layer* /*layer*/, AffineTransform& t, const QPointF& docPos,
+                 const QPointF& dragStartDocPos, const QPointF& centerDocPos)
+{
+    const double initialAngle = std::atan2(dragStartDocPos.y() - centerDocPos.y(),
+                                           dragStartDocPos.x() - centerDocPos.x());
+    const double currentAngle = std::atan2(docPos.y() - centerDocPos.y(),
+                                           docPos.x() - centerDocPos.x());
+    double deltaDeg = (currentAngle - initialAngle) * 180.0 / M_PI;
+
+    // Normaliza delta para [-180, 180] para evitar saltos.
+    while (deltaDeg > 180.0) deltaDeg -= 360.0;
+    while (deltaDeg < -180.0) deltaDeg += 360.0;
+
+    t.rotationDeg += deltaDeg;
+}
+
+} // namespace
+
 void SelectTool::mouseMove(QMouseEvent* event, const QPointF& docPos, const ToolContext& ctx)
 {
     Q_UNUSED(event);
@@ -187,15 +283,50 @@ void SelectTool::mouseMove(QMouseEvent* event, const QPointF& docPos, const Tool
     }
 
     const QPointF delta = docPos - m_dragStartDocPos;
+    const QRectF selectionBounds = computeSelectionBounds(ctx);
+    const QPointF selectionCenter = selectionBounds.isEmpty()
+        ? QPointF()
+        : selectionBounds.center();
+
     for (const auto& id : m_selectedLayers) {
         Layer* layer = ctx.document->findLayer(id);
         if (!layer || !m_initialTransforms.contains(id)) continue;
 
+        AffineTransform t = m_initialTransforms[id];
+
         if (m_gesture == Gesture::Move) {
-            AffineTransform t = m_initialTransforms[id];
             t.position += delta;
             // Pela API do Document: clamp + bumpRevision + sinal, em vez de
             // mutar o membro direto (que não notificava nada).
+            ctx.document->setLayerTransform(id, t);
+        } else if (m_gesture == Gesture::Scale) {
+            // Ponto de ancoragem: oposto ao handle arrastado.
+            QPointF anchor = selectionCenter;
+            if (m_selectedLayers.size() == 1) {
+                const QRectF cb = layer->contentBounds();
+                if (!cb.isEmpty()) {
+                    const QTransform mat = layer->transform.matrix(cb);
+                    const QRectF docBounds = mat.mapRect(cb);
+                    if (!docBounds.isEmpty()) {
+                        // O ponto fixo é o canto/lado oposto ao handle ativo.
+                        switch (m_activeHandle) {
+                        case 0: anchor = docBounds.bottomRight(); break; // TL <-> BR
+                        case 1: anchor = QPointF(docBounds.center().x(), docBounds.bottom()); break; // T <-> base
+                        case 2: anchor = docBounds.bottomLeft(); break; // TR <-> BL
+                        case 3: anchor = QPointF(docBounds.left(), docBounds.center().y()); break; // R <-> centro esquerdo
+                        case 4: anchor = docBounds.topLeft(); break; // BR <-> TL
+                        case 5: anchor = QPointF(docBounds.center().x(), docBounds.top()); break; // B <-> topo
+                        case 6: anchor = docBounds.topRight(); break; // BL <-> TR
+                        case 7: anchor = QPointF(docBounds.right(), docBounds.center().y()); break; // L <-> centro direito
+                        default: anchor = docBounds.center(); break;
+                        }
+                    }
+                }
+            }
+            applyScale(layer, t, delta, m_activeHandle, anchor);
+            ctx.document->setLayerTransform(id, t);
+        } else if (m_gesture == Gesture::Rotate) {
+            applyRotate(layer, t, docPos, m_dragStartDocPos, selectionCenter);
             ctx.document->setLayerTransform(id, t);
         }
     }

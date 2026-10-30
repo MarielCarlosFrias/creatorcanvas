@@ -20,6 +20,7 @@
 #include <miniz.h>
 
 #include <cstring>
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -1268,8 +1269,13 @@ private:
                         std::unique_ptr<Layer>* out)
     {
         auto adjustment = std::make_unique<AdjustmentLayer>();
-        adjustment->kind =
-            static_cast<AdjustmentType>(o.value(QStringLiteral("kind")).toInt(0));
+        {
+            const int kindRaw = o.value(QStringLiteral("kind")).toInt(0);
+            if (kindRaw < 0 || kindRaw >= 11) { // AdjustmentType tem 11 valores (0..10)
+                return false;
+            }
+            adjustment->kind = static_cast<AdjustmentType>(kindRaw);
+        }
         const QJsonArray paramsArr =
             o.value(QStringLiteral("parameters")).toArray();
         for (const QJsonValue& p : paramsArr) {
@@ -1290,8 +1296,13 @@ private:
                   std::unique_ptr<Layer>* out)
     {
         auto fill = std::make_unique<FillLayer>();
-        fill->kind =
-            static_cast<FillType>(o.value(QStringLiteral("kind")).toInt(0));
+        {
+            const int kindRaw = o.value(QStringLiteral("kind")).toInt(0);
+            if (kindRaw < 0 || kindRaw > 2) { // FillType tem 3 valores (0..2)
+                return false;
+            }
+            fill->kind = static_cast<FillType>(kindRaw);
+        }
         fill->color =
             colorFromString(o.value(QStringLiteral("color")).toString());
         if (o.contains(QStringLiteral("gradient")))
@@ -1367,16 +1378,17 @@ private:
             for (std::size_t i = 0; i < static_cast<std::size_t>(rangesArr.size()); ++i) {
                 const QJsonObject rangeObj = rangesArr.at(static_cast<int>(i)).toObject();
                 BlendRange thisRange;
-                thisRange.black[0] = static_cast<quint8>(rangeObj.value(QStringLiteral("thisBlackLo")).toInt(0));
-                thisRange.black[1] = static_cast<quint8>(rangeObj.value(QStringLiteral("thisBlackHi")).toInt(0));
-                thisRange.white[0] = static_cast<quint8>(rangeObj.value(QStringLiteral("thisWhiteLo")).toInt(255));
-                thisRange.white[1] = static_cast<quint8>(rangeObj.value(QStringLiteral("thisWhiteHi")).toInt(255));
+                auto clampByte = [](int v) { return static_cast<quint8>(std::clamp(v, 0, 255)); };
+                thisRange.black[0] = clampByte(rangeObj.value(QStringLiteral("thisBlackLo")).toInt(0));
+                thisRange.black[1] = clampByte(rangeObj.value(QStringLiteral("thisBlackHi")).toInt(0));
+                thisRange.white[0] = clampByte(rangeObj.value(QStringLiteral("thisWhiteLo")).toInt(255));
+                thisRange.white[1] = clampByte(rangeObj.value(QStringLiteral("thisWhiteHi")).toInt(255));
 
                 BlendRange underRange;
-                underRange.black[0] = static_cast<quint8>(rangeObj.value(QStringLiteral("underBlackLo")).toInt(0));
-                underRange.black[1] = static_cast<quint8>(rangeObj.value(QStringLiteral("underBlackHi")).toInt(0));
-                underRange.white[0] = static_cast<quint8>(rangeObj.value(QStringLiteral("underWhiteLo")).toInt(255));
-                underRange.white[1] = static_cast<quint8>(rangeObj.value(QStringLiteral("underWhiteHi")).toInt(255));
+                underRange.black[0] = clampByte(rangeObj.value(QStringLiteral("underBlackLo")).toInt(0));
+                underRange.black[1] = clampByte(rangeObj.value(QStringLiteral("underBlackHi")).toInt(0));
+                underRange.white[0] = clampByte(rangeObj.value(QStringLiteral("underWhiteLo")).toInt(255));
+                underRange.white[1] = clampByte(rangeObj.value(QStringLiteral("underWhiteHi")).toInt(255));
 
                 layer.blendIf.set(i, {thisRange, underRange});
             }
