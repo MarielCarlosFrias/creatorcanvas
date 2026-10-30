@@ -28,39 +28,65 @@ QImage warpImage(const QImage& source, const QVector<WarpPin>& pins)
 
     QImage result(source.size(), QImage::Format_ARGB32_Premultiplied);
     result.fill(Qt::transparent);
-    const int width = source.width();
-    const int height = source.height();
+    // Premultiplica antes de amostrar: interpolar alpha "straight" por canal
+    // gera halos e cores erradas. Photoshop trabalha em premultiplicado aqui.
+    const QImage src = source.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    const int width = src.width();
+    const int height = src.height();
     constexpr double epsilon = 1e-4;
+    QTransform quadWarp;
+    bool useQuad = false;
+    if (pins.size() == 4) {
+        // Exatamente 4 pins: usa mapeamento projetivo EXATO (perspectiva,
+        // convencao Photoshop: TL -> TR -> BR -> BL) entre origem e destino.
+        // Com N pins (5+) mantem o puppet warp "leve" via IDW.
+        QPolygonF srcQuad;
+        QPolygonF dstQuad;
+        for (const WarpPin& pin : pins) {
+            srcQuad.append(pin.source);
+            dstQuad.append(pin.destination);
+        }
+        if (QTransform::quadToQuad(srcQuad, dstQuad, quadWarp))
+            useQuad = true;
+    }
+    const QTransform invQuad = quadWarp.inverted();
 
     for (int y = 0; y < height; ++y) {
         QRgb* destinationLine = reinterpret_cast<QRgb*>(result.scanLine(y));
         for (int x = 0; x < width; ++x) {
-            const QPointF point(x, y);
-            QPointF offset;
-            double totalWeight = 0.0;
-            for (const WarpPin& pin : pins) {
-                const QPointF delta = pin.destination - point;
-                const double distanceSquared = QPointF::dotProduct(delta, delta);
-                // A pin has full influence at its destination and a smooth,
-                // diminishing influence elsewhere, like a lightweight puppet warp.
-                const double weight = 1.0 / (distanceSquared + 64.0);
-                offset += (pin.destination - pin.source) * weight;
-                totalWeight += weight;
+            QPointF sample;
+            if (useQuad) {
+                sample = invQuad.map(QPointF(qreal(x), qreal(y)));
+            } else {
+                QPointF offset;
+                double totalWeight = 0.0;
+                for (const WarpPin& pin : pins) {
+                    const QPointF delta = pin.destination - QPointF(qreal(x), qreal(y));
+                    const double distanceSquared = QPointF::dotProduct(delta, delta);
+                    // A pin has full influence at its destination and a smooth,
+                    // diminishing influence elsewhere, like a lightweight puppet warp.
+                    const double weight = 1.0 / (distanceSquared + 64.0);
+                    offset += (pin.destination - pin.source) * weight;
+                    totalWeight += weight;
+                }
+                if (totalWeight > epsilon)
+                    offset /= totalWeight;
+                sample = QPointF(qreal(x), qreal(y)) - offset;
             }
-            if (totalWeight > epsilon)
-                offset /= totalWeight;
-
-            const QPointF sample = point - offset;
-            const int x0 = static_cast<int>(std::floor(sample.x()));
-            const int y0 = static_cast<int>(std::floor(sample.y()));
-            if (x0 < 0 || y0 < 0 || x0 + 1 >= width || y0 + 1 >= height)
-                continue;
-            const double fx = sample.x() - x0;
-            const double fy = sample.y() - y0;
-            const QColor a = source.pixelColor(x0, y0);
-            const QColor b = source.pixelColor(x0 + 1, y0);
-            const QColor c = source.pixelColor(x0, y0 + 1);
-            const QColor d = source.pixelColor(x0 + 1, y0 + 1);
+            // Clamp aos limites da imagem: deformacoes que empurram o conteudo
+            // para fora da borda nao podem deixar "buracos" (pixels transparentes).
+            const double sampleX = qBound(0.0, sample.x(), double(width - 1));
+            const double sampleY = qBound(0.0, sample.y(), double(height - 1));
+            const int x0 = static_cast<int>(std::floor(sampleX));
+            const int y0 = static_cast<int>(std::floor(sampleY));
+            const double fx = sampleX - x0;
+            const double fy = sampleY - y0;
+            const int x1 = qMin(x0 + 1, width - 1);
+            const int y1 = qMin(y0 + 1, height - 1);
+            const QColor a = src.pixelColor(x0, y0);
+            const QColor b = src.pixelColor(x1, y0);
+            const QColor c = src.pixelColor(x0, y1);
+            const QColor d = src.pixelColor(x1, y1);
             const auto interpolate = [fx, fy](int av, int bv, int cv, int dv) {
                 const double top = av + (bv - av) * fx;
                 const double bottom = cv + (dv - cv) * fx;

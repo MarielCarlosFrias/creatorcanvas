@@ -25,6 +25,8 @@
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QLineF>
+#include <QApplication>
+#include <QDateTime>
 #include <QMenu>
 #include <QMimeData>
 #include <QMouseEvent>
@@ -751,7 +753,7 @@ void CanvasView::paintEvent(QPaintEvent*)
     }
 
     if (m_mockupPlacementActive) {
-        CanvasOverlayRenderer::drawMockupPlacement(&painter, m_mockupCorners, docToDevice());
+        CanvasOverlayRenderer::drawMockupPlacement(&painter, m_mockupCorners, docToDevice(), m_mockupPlacementLogo);
     }
 
     CanvasOverlayRenderer::drawSnapGuides(&painter, m_document->width(), m_document->height(), m_activeGuides, m_zoom, docToDevice());
@@ -808,6 +810,22 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
             return;
         }
         if (event->button() == Qt::LeftButton) {
+            // Repetição rápida (< intervalo de duplo clique) no mesmo lugar:
+            // é o segundo press de um duplo clique usado para CONFIRMAR —
+            // não é um ponto novo. Sem este guarda, confirmar por duplo
+            // clique acrescenta pontos fantasmas e o mockup cai no caminho
+            // de 5+ pontos (IDW), preenchendo o retângulo delimitador todo.
+            const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+            const bool rapidRepeat = (nowMs - m_lastMockupPressMs)
+                                         <= QApplication::doubleClickInterval()
+                                     && QLineF(event->pos(), m_lastMockupPressPos).length() < 8.0;
+            m_lastMockupPressMs = nowMs;
+            m_lastMockupPressPos = event->pos();
+            if (rapidRepeat) {
+                update();
+                event->accept();
+                return;
+            }
             // Shift + clique: reposiciona o ponto mais próximo (ajuste iterativo tipo Photoshop)
             if (m_mockupCorners.size() >= 4 && (event->modifiers() & Qt::ShiftModifier)) {
                 qreal minDist = std::numeric_limits<qreal>::max();
@@ -1309,7 +1327,9 @@ bool CanvasView::eventFilter(QObject* watched, QEvent* event)
 
 void CanvasView::keyPressEvent(QKeyEvent* event)
 {
-    if (m_mockupPlacementActive && event->key() == Qt::Key_Return && m_mockupCorners.size() >= 4) {
+    if (m_mockupPlacementActive
+        && (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)
+        && m_mockupCorners.size() >= 4) {
         finishMockupPlacement();
         event->accept();
         return;
@@ -1668,14 +1688,15 @@ void CanvasView::setTool(CanvasTool tool)
     emit toolChanged(m_tool);
 }
 
-void CanvasView::beginMockupPlacement()
+void CanvasView::beginMockupPlacement(const QImage& logo)
 {
     if (!m_document)
         return;
+    m_mockupPlacementLogo = logo;
     m_mockupCorners.clear();
     m_mockupPlacementActive = true;
     setCursor(Qt::CrossCursor);
-    emit statusMessageRequested(QStringLiteral("Mockup: clique nos quatro cantos da área, por ordem: superior esquerdo, superior direito, inferior direito, inferior esquerdo. Enter confirma; botão direito cancela."));
+    emit statusMessageRequested(QStringLiteral("Mockup: clique nos quatro cantos da área (qualquer ordem). Duplo clique ou Enter confirma; botão direito cancela. Shift+clique reposiciona um ponto."));
     update();
 }
 
@@ -1685,6 +1706,7 @@ void CanvasView::cancelMockupPlacement()
         return;
     m_mockupPlacementActive = false;
     m_mockupCorners.clear();
+    m_mockupPlacementLogo = QImage();
     setCursor(Qt::ArrowCursor);
     emit statusMessageRequested(QStringLiteral("Posicionamento do mockup cancelado."));
     emit mockupPlacementCancelled();
@@ -1765,6 +1787,7 @@ void CanvasView::finishMockupPlacement()
     const QPolygonF completed = m_mockupCorners;
     m_mockupPlacementActive = false;
     m_mockupCorners.clear();
+    m_mockupPlacementLogo = QImage();
     setCursor(Qt::ArrowCursor);
     update();
     emit mockupAreaSelected(completed);

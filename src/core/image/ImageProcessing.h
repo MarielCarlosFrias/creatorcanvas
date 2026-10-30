@@ -10,6 +10,15 @@
 
 namespace cc {
 
+/// Resultado do warp de mockup: imagem deformada + posição do topo-esquerdo
+/// no documento (a imagem inclui uma margem: o conteúdo deformado pode se
+/// estender um pouco além do quad/polígono marcado sem ser recortado).
+struct MockupWarpResult
+{
+    QImage image;
+    QPointF topLeft;
+};
+
 /// Resultado retornado pela operacao de corte com tesoura (Scissors Cut).
 /// Contem a imagem resultante e o deslocamento top-left caso tenha sido recortada para a caixa delimitadora.
 struct ScissorsCutResult
@@ -163,6 +172,19 @@ public:
 
     /// Remove olho vermelho: dessatura pixels avermelhados num raio.
     static QImage redEyeRemove(const QImage& target, const QPoint& center, int radius);
+
+    /// Warp de mockup estilo Photoshop:
+    /// - Exatamente 4 pontos em quad convexo: mapeamento projetivo exato
+    ///   (quad -> quad) — perspectiva verdadeira;
+    /// - Qualquer outro caso (5+ pontos, ou 4 cliques em zigue-zague):
+    ///   warp por FORMA — o polígono marcado molda a imagem inteira linha
+    ///   a linha: cada linha horizontal da fonte é esticada entre as bordas
+    ///   marcadas naquela altura, então cada ponto (inclusive os do meio de
+    ///   aresta) abre/fecha a imagem no seu lugar, sem rotação do conteúdo
+    ///   e sem recorte de pixels;
+    /// - Pontos em QUALQUER ordem (reordenados a partir do acima-esquerda);
+    /// - Retorna a imagem deformada + a posicao do topo-esquerdo no doc.
+    static MockupWarpResult mockupWarp(const QImage& source, const QPolygonF& destinationPoints);
 };
 
 } // namespace cc

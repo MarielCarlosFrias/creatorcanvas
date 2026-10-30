@@ -1,10 +1,89 @@
 #include "canvasoverlayrenderer.h"
 #include "designtokens.h"
+#include "core/image/ImageProcessing.h"
 
 #include <QFontMetrics>
+#include <QLineF>
+#include <QPolygonF>
+#include <QVector>
+#include <QtMath>
 #include <algorithm>
+#include <limits>
 
 namespace cc {
+
+namespace {
+// Espelha a ordenação do ImageProcessing::mockupRingOrder — MANTER EM
+// SINCRONIA: se o warp final muda a ordem, esta função muda junto. Uma
+// cópia antiga (min(x+y) como início) rotulava o ponto 1 na base de áreas
+// que alargam para baixo (estrada em perspectiva) e empenhava o contorno
+// da prévia enquanto o warp usava outro anel — prévia e resultado
+// DISCORDAVAM.
+QPolygonF normalizeQuadCornersPreview(const QVector<QPointF>& corners)
+{
+    if (corners.size() < 3)
+        return corners;
+
+    QPointF centroid(0, 0);
+    for (const QPointF& p : corners)
+        centroid += p;
+    centroid /= qreal(corners.size());
+
+    QVector<QPointF> sorted;
+    for (const QPointF& p : corners)
+        sorted.append(p);
+    std::sort(sorted.begin(), sorted.end(),
+              [&centroid](const QPointF& a, const QPointF& b) {
+                  const double aa = qAtan2(a.y() - centroid.y(),
+                                           a.x() - centroid.x());
+                  const double ab = qAtan2(b.y() - centroid.y(),
+                                           b.x() - centroid.x());
+                  if (aa != ab)
+                      return aa < ab;
+                  // Empate angular (dois pontos no MESMO raio): no lado
+                  // direito do centróide o passeio CW vai do mais distante
+                  // ao mais próximo; no esquerdo, o contrário.
+                  const double da = (a.x() - centroid.x()) * (a.x() - centroid.x())
+                                  + (a.y() - centroid.y()) * (a.y() - centroid.y());
+                  const double db = (b.x() - centroid.x()) * (b.x() - centroid.x())
+                                  + (b.y() - centroid.y()) * (b.y() - centroid.y());
+                  if (qCos(aa) >= 0.0)
+                      return da > db;
+                  return da < db;
+              });
+
+    // O passeio começa no ponto mais "acima-esquerda" VISTO DO CENTRÓIDE
+    // (direção −135°), igual ao warp final.
+    int start = 0;
+    double best = std::numeric_limits<double>::max();
+    for (int i = 0; i < sorted.size(); ++i) {
+        const double ang = qAtan2(sorted[i].y() - centroid.y(),
+                                  sorted[i].x() - centroid.x());
+        double diff = std::abs(ang + 3.0 * M_PI / 4.0);
+        if (diff > M_PI)
+            diff = 2.0 * M_PI - diff;
+        if (diff < best) {
+            best = diff;
+            start = i;
+        }
+    }
+    QPolygonF normalized;
+    for (int i = 0; i < sorted.size(); ++i)
+        normalized.append(sorted[(start + i) % sorted.size()]);
+    return normalized;
+}
+
+// Cache do warp de prévia: a deformação COMPLETA por pixel (Newton + LUTs)
+// é pesada demais para rodar em cada repaint (exposições de janela, hover…).
+// Recalcula só quando os pontos ou a logo mudam. UI thread apenas.
+struct MockupPreviewCache {
+    QPolygonF points;
+    QImage logo;
+    QImage image;
+    QPointF topLeft;
+    bool valid = false;
+};
+} // namespace
 
 void CanvasOverlayRenderer::drawSelection(QPainter* painter,
                                           const CanvasHandles& handles,
@@ -191,12 +270,16 @@ void CanvasOverlayRenderer::drawSafeZones(QPainter* painter,
 
 void CanvasOverlayRenderer::drawMockupPlacement(QPainter* painter,
                                                 const QVector<QPointF>& mockupCorners,
-                                                const QTransform& toDevice)
+                                                const QTransform& toDevice,
+                                                const QImage& logo)
 {
     painter->save();
     painter->resetTransform();
+    // Mesma normalização do warp final: a prévia respeita a ordem TL→TR→BR→BL
+    // independentemente da ordem em que os cantos foram marcados.
+    const QPolygonF ordered = normalizeQuadCornersPreview(mockupCorners);
     QPolygonF screen;
-    for (const QPointF& point : mockupCorners)
+    for (const QPointF& point : ordered)
         screen << toDevice.map(point);
 
     QColor mkFill = Design::Accent();
@@ -207,6 +290,59 @@ void CanvasOverlayRenderer::drawMockupPlacement(QPainter* painter,
         painter->drawPolygon(screen);
     else if (screen.size() == 2)
         painter->drawLine(screen[0], screen[1]);
+
+    // Prévia ao vivo do warp de mockup: usa apenas o warp projetivo
+    // (quadToQuad com os 4 cantos do bounding box), que é rápido o suficiente
+    // para rodar em cada repaint sem travar a UI. O warp completo por Coons
+    // (5+ pontos) é aplicado só ao confirmar (ImageProcessing::mockupWarp),
+    // não durante o arrasto dos pontos.
+    if (!logo.isNull() && mockupCorners.size() >= 4) {
+        // Para a prévia, usar os 4 cantos do bounding box dos pontos
+        // (projeção projetiva simples e rápida).
+        QPointF tl(mockupCorners.first().x(), mockupCorners.first().y());
+        QPointF tr(mockupCorners.first().x(), mockupCorners.first().y());
+        QPointF br(mockupCorners.first().x(), mockupCorners.first().y());
+        QPointF bl(mockupCorners.first().x(), mockupCorners.first().y());
+        for (const QPointF& p : mockupCorners) {
+            tl.setX(qMin(tl.x(), p.x()));
+            tl.setY(qMin(tl.y(), p.y()));
+            tr.setX(qMax(tr.x(), p.x()));
+            tr.setY(qMin(tr.y(), p.y()));
+            br.setX(qMax(br.x(), p.x()));
+            br.setY(qMax(br.y(), p.y()));
+            bl.setX(qMin(bl.x(), p.x()));
+            bl.setY(qMax(bl.y(), p.y()));
+        }
+        QPolygonF srcQuad;
+        srcQuad << QPointF(0, 0) << QPointF(logo.width(), 0)
+                << QPointF(logo.width(), logo.height()) << QPointF(0, logo.height());
+        QPolygonF dstQuad;
+        dstQuad << tl << tr << br << bl;
+        QTransform warp;
+        if (QTransform::quadToQuad(srcQuad, dstQuad, warp)) {
+            // Bounding box dos pontos de destino para a imagem de prévia
+            const qreal pw = qMax(1.0, qMax(tr.x(), br.x()) - qMin(tl.x(), bl.x()));
+            const qreal ph = qMax(1.0, qMax(tr.y(), br.y()) - qMin(tl.y(), bl.y()));
+            QImage preview(pw, ph, QImage::Format_ARGB32_Premultiplied);
+            preview.fill(Qt::transparent);
+            QPainter pp(&preview);
+            pp.setRenderHint(QPainter::SmoothPixmapTransform, true);
+            pp.setTransform(warp);
+            pp.drawImage(QPointF(0, 0), logo);
+            pp.end();
+            // Posicionar no documento (top-left dos pontos)
+            const QPointF posTL(qMin(tl.x(), bl.x()), qMin(tl.y(), tr.y()));
+            const QPointF origin = toDevice.map(QPointF(0, 0));
+            const QPointF unit = toDevice.map(QPointF(1, 0));
+            const qreal scale = QLineF(origin, unit).length();
+            if (scale > 0.0) {
+                painter->drawImage(QRectF(toDevice.map(posTL),
+                                           QSizeF(preview.width() * scale,
+                                                  preview.height() * scale)),
+                                   preview);
+            }
+        }
+    }
     for (int i = 0; i < screen.size(); ++i) {
         painter->setBrush(Qt::white);
         painter->drawEllipse(screen[i], 5, 5);

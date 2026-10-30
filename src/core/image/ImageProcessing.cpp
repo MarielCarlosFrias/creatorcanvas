@@ -367,6 +367,12 @@ QImage ImageProcessing::floodFill(const QImage& source, const QPoint& seedPoint,
     if (source.isNull() || !source.rect().contains(seedPoint))
         return source;
 
+    // Limite de segurança: não processar imagens maiores que 2000x2000 com flood fill
+    // para evitar alocação excessiva de memória e travamento da UI.
+    constexpr int kMaxFloodPixels = 2000 * 2000;
+    if (source.width() * source.height() > kMaxFloodPixels)
+        return source;
+
     QImage result = source.convertToFormat(QImage::Format_ARGB32);
     const int w = result.width();
     const int h = result.height();
@@ -387,7 +393,7 @@ QImage ImageProcessing::floodFill(const QImage& source, const QPoint& seedPoint,
 
     std::vector<bool> visited(w * h, false);
     std::vector<QPoint> queue;
-    queue.reserve(w * 8);
+    queue.reserve(std::min(w * h, 65536));
     queue.push_back(seedPoint);
     visited[seedPoint.y() * w + seedPoint.x()] = true;
 
@@ -1080,6 +1086,12 @@ QImage ImageProcessing::retouchStroke(const QImage& target, const QPointF& prevP
     if (target.isNull() || size <= 0)
         return target;
 
+    // Limite de segurança: retouch em imagens muito grandes trava a UI
+    // (processamento pixel-a-pixel com laço 3x3 de vizinhos por passo).
+    constexpr int kMaxRetouchPixels = 2000 * 2000;
+    if (target.width() * target.height() > kMaxRetouchPixels)
+        return target;
+
     const qreal radius = std::max<qreal>(0.5, size / 2.0);
     const qreal blend = std::clamp(strength, 0.01, 1.0);
 
@@ -1207,6 +1219,11 @@ QImage ImageProcessing::spotHeal(const QImage& target, const QPoint& targetPoint
                                  qreal strength)
 {
     if (target.isNull() || radius <= 0)
+        return target;
+
+    // Limite de segurança: spot heal em imagens muito grandes trava a UI.
+    constexpr int kMaxSpotHealPixels = 2000 * 2000;
+    if (target.width() * target.height() > kMaxSpotHealPixels)
         return target;
 
     const int w = target.width(), h = target.height();
@@ -1440,6 +1457,10 @@ ImageProcessing::mockupWarp(const QImage& source, const QPolygonF& destinationPo
         if (!dup)
             localPts.append(lp);
     }
+
+    // Precisa de pelo menos 4 pontos únicos para qualquer warp válido.
+    if (localPts.size() < 4)
+        return result;
 
     // Anel dos pontos em ordem canônica (CW iniciando no acima-esquerda) —
     // o resultado não depende da ordem em que o usuário clicou.
@@ -1689,8 +1710,11 @@ ImageProcessing::mockupWarp(const QImage& source, const QPolygonF& destinationPo
                 const QVector<QPointF> leftLut = buildLut(left);
 
                 auto curveAt = [](const QVector<QPointF>& lut, double t) {
-                    const double s = qBound(0.0, t, 1.0) * qreal(kLut);
-                    const int i = qMin(int(s), kLut - 1);
+                    const int n = lut.size();
+                    if (n <= 1)
+                        return lut.isEmpty() ? QPointF(0, 0) : lut.first();
+                    const double s = qBound(0.0, t, 1.0) * qreal(n - 1);
+                    const int i = qMin(int(s), n - 2);
                     const double f = s - qreal(i);
                     return lut[i] + (lut[i + 1] - lut[i]) * f;
                 };

@@ -133,8 +133,9 @@ public:
 
     /// Starts a four-corner selection used by the mockup/logo tool. Points
     /// are collected directly on the document so the user never needs to
-    /// type canvas coordinates.
-    void beginMockupPlacement();
+    /// type canvas coordinates. While placement is active the given logo is
+    /// warped live onto the corners (Photoshop-like preview).
+    void beginMockupPlacement(const QImage& logo);
     void cancelMockupPlacement();
 
     /// Amostra a cor composta na coordenada do documento
@@ -267,6 +268,11 @@ private:
 
     bool m_mockupPlacementActive = false;
     QPolygonF m_mockupCorners;
+    QImage m_mockupPlacementLogo;
+    /// Detector de duplo clique: o segundo press de um duplo clique chega
+    /// aqui como MouseButtonPress — não deve criar um ponto novo.
+    qint64 m_lastMockupPressMs = 0;
+    QPointF m_lastMockupPressPos;
 
     ToolContext makeToolContext() const;
 

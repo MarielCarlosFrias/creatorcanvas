@@ -2,6 +2,7 @@
 #include <QImage>
 #include <QPainter>
 #include <QPolygonF>
+#include <QDebug>
 
 #include "core/image/ImageProcessing.h"
 #include "core/assets/AssetStore.h"
@@ -29,6 +30,10 @@ private slots:
     void testAssetStoreAddImage();
     void testModifyImageLayerCommand();
     void testColorToAlpha();
+    void testMockupWarpQuadIdentity();
+    void testMockupWarpQuadAnyOrder();
+    void testMockupWarpFivePointsShapeFit();
+    void testMockupWarpPolygonShapeFit();
 };
 
 void TestImageProcessing::testCropImage()
@@ -357,6 +362,122 @@ void TestImageProcessing::testColorToAlpha()
     QVERIFY(res3.pixelColor(5, 5).red() < 10);
     QVERIFY(res3.pixelColor(5, 5).green() < 10);
     QVERIFY(res3.pixelColor(5, 5).blue() < 10);
+}
+
+void TestImageProcessing::testMockupWarpQuadIdentity()
+{
+    // Fonte com gradiente: red = x, green = y
+    QImage src(100, 80, QImage::Format_ARGB32);
+    for (int y = 0; y < 80; ++y)
+        for (int x = 0; x < 100; ++x)
+            src.setPixel(x, y, qRgb(x * 255 / 99, y * 255 / 79, 0));
+
+    // Quad igual ao bbox da fonte (identidade). Margem pad = 2 →
+    // canvas 104x84 e topLeft (-2,-2).
+    const auto r = ImageProcessing::mockupWarp(src, {
+        QPointF(0, 0), QPointF(100, 0), QPointF(100, 80), QPointF(0, 80)
+    });
+    QCOMPARE(r.image.width(), 104);
+    QCOMPARE(r.image.height(), 84);
+    QCOMPARE(r.topLeft, QPointF(-2.0, -2.0));
+
+    // Converte coordenada do documento em coordenada do canvas (margem!)
+    auto px = [&r](int dx, int dy) {
+        return r.image.pixel(qRound(dx - r.topLeft.x()),
+                             qRound(dy - r.topLeft.y()));
+    };
+    // O mapeamento projetivo de um quad idêntico preserva o gradiente
+    const QRgb c = px(30, 50);
+    QVERIFY(qAlpha(c) > 250);
+    QVERIFY(qAbs(qRed(c) - 30 * 255 / 99) <= 3);
+    QVERIFY(qAbs(qGreen(c) - 50 * 255 / 79) <= 3);
+    const QRgb c2 = px(70, 20);
+    QVERIFY(qAlpha(c2) > 250);
+    QVERIFY(qAbs(qRed(c2) - 70 * 255 / 99) <= 3);
+    QVERIFY(qAbs(qGreen(c2) - 20 * 255 / 79) <= 3);
+}
+
+void TestImageProcessing::testMockupWarpQuadAnyOrder()
+{
+    QImage src(60, 40, QImage::Format_ARGB32);
+    src.fill(Qt::red);
+
+    // Mesma área marcada em ordem invertida — resultado deve ser idêntico
+    const auto a = ImageProcessing::mockupWarp(src, {
+        QPointF(10, 10), QPointF(70, 10), QPointF(70, 50), QPointF(10, 50)
+    });
+    const auto b = ImageProcessing::mockupWarp(src, {
+        QPointF(10, 50), QPointF(10, 10), QPointF(70, 10), QPointF(70, 50)
+    });
+    QCOMPARE(a.image.size(), b.image.size());
+    QCOMPARE(a.topLeft, b.topLeft);
+
+    auto px = [](const auto& r, int dx, int dy) {
+        return r.image.pixel(qRound(dx - r.topLeft.x()),
+                             qRound(dy - r.topLeft.y()));
+    };
+    // Pixel do centro deve ser vermelho opaco e igual nas duas ordens
+    QCOMPARE(px(a, 40, 30), px(b, 40, 30));
+    QVERIFY(qAlpha(px(a, 40, 30)) > 250);
+    QVERIFY(qRed(px(a, 40, 30)) > 240);
+}
+
+void TestImageProcessing::testMockupWarpFivePointsShapeFit()
+{
+    QImage src(50, 50, QImage::Format_ARGB32);
+    src.fill(Qt::blue);
+
+    // Semântica por FORMA: 5+ pontos moldam a imagem inteira linha a linha.
+    // O 5º ponto este EXATAMENTE sobre a aresta inferior (colinear): o
+    // polígono continua o quad completo — nada é ignorado nem deformado à
+    // toa.
+    const auto r = ImageProcessing::mockupWarp(src, {
+        QPointF(0, 0), QPointF(100, 0), QPointF(100, 80),
+        QPointF(50, 80), QPointF(0, 80)
+    });
+    // pad = 2 → canvas 104x84
+    QCOMPARE(r.image.width(), 104);
+    QCOMPARE(r.image.height(), 84);
+    auto px = [&r](int dx, int dy) {
+        return r.image.pixel(qRound(dx - r.topLeft.x()),
+                             qRound(dy - r.topLeft.y()));
+    };
+    QVERIFY(qAlpha(px(50, 41)) > 250);
+    QVERIFY(qBlue(px(50, 41)) > 240);
+    // Cantos da área também preenchidos (a imagem inteira é encaixada)
+    QVERIFY(qAlpha(px(1, 1)) > 250);
+    QVERIFY(qAlpha(px(99, 79)) > 250);
+}
+
+void TestImageProcessing::testMockupWarpPolygonShapeFit()
+{
+    QImage src(60, 60, QImage::Format_ARGB32);
+    src.fill(Qt::red);
+
+    // L-shape com 6 pontos: warp por FORMA — cada linha da imagem é
+    // esticada entre as bordas marcadas naquela altura. A cratera do L
+    // (x>50, y>40) NÃO recebe conteúdo: a área marcada molda a imagem.
+    const auto r = ImageProcessing::mockupWarp(src, {
+        QPointF(0, 0), QPointF(100, 0), QPointF(100, 40),
+        QPointF(50, 40), QPointF(50, 80), QPointF(0, 80)
+    });
+    QCOMPARE(r.image.width(), 104);
+    QCOMPARE(r.image.height(), 84);
+    auto px = [&r](int dx, int dy) {
+        return r.image.pixel(qRound(dx - r.topLeft.x()),
+                             qRound(dy - r.topLeft.y()));
+    };
+    // Interior do polígono (nos dois "braços" do L): opaco (vermelho)
+    QVERIFY(qAlpha(px(25, 20)) > 250);
+    QVERIFY(qRed(px(25, 20)) > 240);
+    QVERIFY(qAlpha(px(25, 70)) > 250);
+    QVERIFY(qRed(px(25, 70)) > 240);
+    QVERIFY(qAlpha(px(75, 20)) > 250);
+    // Cratera do L: transparente — a imagem molda a FORMA marcada
+    QCOMPARE(qAlpha(px(90, 70)), 0);
+    QCOMPARE(qAlpha(px(90, 75)), 0);
+    // Canto do polígono: preenchido
+    QVERIFY(qAlpha(px(1, 1)) > 250);
 }
 
 QTEST_MAIN(TestImageProcessing)

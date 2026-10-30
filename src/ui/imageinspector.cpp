@@ -34,6 +34,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPolygonF>
+#include <algorithm>
 #include <future>
 #include <thread>
 #include <QMetaObject>
@@ -1124,7 +1125,10 @@ void ImageInspector::openMockupDialog()
     }
     sourceForm->addRow(QStringLiteral("Imagem fonte"), sourceCombo);
     auto* removeBackground = new QCheckBox(QStringLiteral("Remover fundo uniforme (Varinha Mágica)"), &sourceDialog);
-    removeBackground->setToolTip(QStringLiteral("Útil para JPEGs com fundo branco ou de cor uniforme. O ficheiro original não é alterado."));
+    removeBackground->setToolTip(QStringLiteral("Útil para logos com fundo sólido (branco, magenta, etc.). Removido antes do warp para que só o conteúdo siga os pontos. O ficheiro original não é alterado."));
+    // Ligado por defeito: um logo com fundo sólido warpado SEM remoção
+    // produz exatamente "um retângulo" no canvas (a moldura vai junto).
+    removeBackground->setChecked(true);
     sourceForm->addRow(removeBackground);
     auto* sourceButtons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &sourceDialog);
     sourceForm->addRow(sourceButtons);
@@ -1148,19 +1152,91 @@ void ImageInspector::openMockupDialog()
     if (logo.isNull()) return;
 
     if (removeBackground->isChecked() && !logo.isNull()) {
-        // Usa um canto como semente, exatamente como a Varinha Mágica.
-        logo = ImageProcessing::removeBackground(logo, QPoint(0, 0), 18, true);
+        // Cor de fundo: amostra o canto (0,0) ANTES de qualquer remoção
+        // (usada depois para suavizar o halo anti-aliased do recorte).
+        const QColor bgColor = logo.pixelColor(QPoint(0, 0));
+
+        // Ferrinha a partir de TODOS os 4 cantos: só o canto (0,0) falha
+        // quando o conteúdo (logo) toca esse canto e o fundo fica pela metade.
+        QImage cleaned = logo;
+        const QPoint corners[4] = {
+            QPoint(0, 0),
+            QPoint(cleaned.width() - 1, 0),
+            QPoint(0, cleaned.height() - 1),
+            QPoint(cleaned.width() - 1, cleaned.height() - 1)
+        };
+        for (const QPoint& corner : corners)
+            cleaned = ImageProcessing::removeBackground(cleaned, corner, 18, true);
+
+        // Suaviza o halo anti-aliased: pixels encostados a zonas transparentes
+        // ganham alpha proporcional à distância da cor de fundo. Duas passadas
+        // cobrem halos de 1-2 px sem precisar de uma ferrinha mais agressiva.
+        if (bgColor.isValid()) {
+            if (cleaned.format() != QImage::Format_ARGB32)
+                cleaned = cleaned.convertToFormat(QImage::Format_ARGB32);
+            const double threshold = (18 / 100.0) * 441.67295593;
+            for (int pass = 0; pass < 2; ++pass) {
+                QImage haloFree = cleaned;
+                for (int y = 0; y < haloFree.height(); ++y) {
+                    QRgb* line = reinterpret_cast<QRgb*>(haloFree.scanLine(y));
+                    for (int x = 0; x < haloFree.width(); ++x) {
+                        const QRgb px = line[x];
+                        if (qAlpha(px) == 0)
+                            continue;
+                        bool touchesTransparent = false;
+                        if (x > 0 && qAlpha(line[x - 1]) == 0) touchesTransparent = true;
+                        if (x + 1 < haloFree.width() && qAlpha(line[x + 1]) == 0) touchesTransparent = true;
+                        if (y > 0 && qAlpha(reinterpret_cast<const QRgb*>(haloFree.constScanLine(y - 1))[x]) == 0) touchesTransparent = true;
+                        if (y + 1 < haloFree.height() && qAlpha(reinterpret_cast<const QRgb*>(haloFree.constScanLine(y + 1))[x]) == 0) touchesTransparent = true;
+                        if (!touchesTransparent)
+                            continue;
+                        const double dr = qRed(px) - bgColor.red();
+                        const double dg = qGreen(px) - bgColor.green();
+                        const double db = qBlue(px) - bgColor.blue();
+                        const double dist = qSqrt(dr * dr + dg * dg + db * db);
+                        if (dist < threshold)
+                            line[x] = qRgba(qRed(px), qGreen(px), qBlue(px), 0);
+                        else if (dist < 2.0 * threshold)
+                            line[x] = qRgba(qRed(px), qGreen(px), qBlue(px),
+                                            qRound(qAlpha(px) * ((dist - threshold) / threshold)));
+                    }
+                }
+                cleaned = haloFree;
+            }
+        }
+
+        // Recorta para o bounding box do conteúdo visível: o warp deve
+        // mapear o CONTEÚDO (o mago) no quad marcado, não a moldura
+        // retangular do ficheiro — é isto que gera o "retângulo".
+        QRect content(0, 0, -1, -1);
+        for (int y = 0; y < cleaned.height(); ++y) {
+            const QRgb* line = reinterpret_cast<const QRgb*>(cleaned.constScanLine(y));
+            for (int x = 0; x < cleaned.width(); ++x) {
+                if (qAlpha(line[x]) > 8) {
+                    if (!content.isValid()) content = QRect(x, y, 1, 1);
+                    else content = content.united(QRect(x, y, 1, 1));
+                }
+            }
+        }
+        if (content.isValid() && content != cleaned.rect()) {
+            const QImage cropped = ImageProcessing::cropImage(cleaned, content);
+            if (!cropped.isNull())
+                cleaned = cropped;
+        }
+
+        if (!cleaned.isNull())
+            logo = cleaned;
     }
 
     m_pendingMockupLogo = logo;
     if (m_mockupHint)
         m_mockupHint->setText(QStringLiteral("Agora marque, na imagem, a área onde a fonte deve ficar. Duplo clique ou Enter confirma."));
-    emit mockupPlacementRequested();
+    emit mockupPlacementRequested(m_pendingMockupLogo);
 }
 
-void ImageInspector::setMockupArea(const QPolygonF& destination)
+void ImageInspector::setMockupArea(const QPolygonF& cornersIn)
 {
-    if (!m_document || m_pendingMockupLogo.isNull() || destination.size() < 4)
+    if (!m_document || m_pendingMockupLogo.isNull() || cornersIn.size() < 4)
         return;
 
     QImage logo = m_pendingMockupLogo;
@@ -1175,157 +1251,26 @@ void ImageInspector::setMockupArea(const QPolygonF& destination)
         targetLayer = m_document->findLayer(m_id);
     }
 
-    const int n = logo.width();
-    const int m = logo.height();
-    const QImage src = logo.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    // ========================================================================
+    // 1-2. Warp estilo Photoshop (ImageProcessing::mockupWarp):
+    //   - 4 pontos: projeção exata (quadToQuad) bilinear;
+    //   - 5+ pontos: patch de Coons — as 4 pontas vão aos 4 cantos da área e
+    //     os pontos do meio dobram as arestas, sem recorte de pixels.
+    // Pontos em qualquer ordem; a camada inclui uma margem transparente
+    // (o conteúdo deformado pode passar um pouco da área marcada).
+    // ========================================================================
+    const auto warp = ImageProcessing::mockupWarp(logo, cornersIn);
+    if (warp.image.isNull())
+        return;
 
     // ========================================================================
-    // 1. Calcular bounding box dos pontos de destino
-    //    A camada terá exatamente esse tamanho (não tela inteira).
+    // 3. Posição no documento. O canvas inclui a margem transparente
+    //    (padding), e warp.topLeft dá o canto superior-esquerdo REAL dele
+    //    no documento (topLeft = bbox dos pontos − margem).
     // ========================================================================
-    qreal dstX0 = destination.first().x();
-    qreal dstY0 = destination.first().y();
-    qreal dstX1 = destination.first().x();
-    qreal dstY1 = destination.first().y();
-    for (const auto& p : destination) {
-        dstX0 = qMin(dstX0, p.x());
-        dstY0 = qMin(dstY0, p.y());
-        dstX1 = qMax(dstX1, p.x());
-        dstY1 = qMax(dstY1, p.y());
-    }
-    const int outW = qMax(1, qRound(dstX1 - dstX0));
-    const int outH = qMax(1, qRound(dstY1 - dstY0));
-
-    // Normalizar pontos de destino para coordenadas locais do canvas de saída
-    QPolygonF localDst;
-    localDst.reserve(destination.size());
-    for (const auto& p : destination)
-        localDst.append(QPointF(p.x() - dstX0, p.y() - dstY0));
-
-    // ========================================================================
-    // 2. Renderizar a imagem fonte deformada para o canvas de saída
-    //    Mapeamento inverso: para cada pixel de saída, amostramos a imagem
-    //    fonte na posição correspondente. Isso garante que a imagem se
-    //    auto-oriente e estique para corresponder exatamente aos pontos.
-    // ========================================================================
-    QImage canvas(outW, outH, QImage::Format_ARGB32_Premultiplied);
-    canvas.fill(Qt::transparent);
-
-    QPolygonF localSrc;
-    localSrc.reserve(destination.size());
-
-    if (destination.size() == 4) {
-        // ----- 4 pontos: perspectiva projetiva exata (Photoshop Perspective) -----
-        localSrc << QPointF(0, 0)
-                 << QPointF(n, 0)
-                 << QPointF(n, m)
-                 << QPointF(0, m);
-
-        QTransform warp;
-        if (!QTransform::quadToQuad(localSrc, localDst, warp)) {
-            return;
-        }
-        const QTransform invWarp = warp.inverted();
-
-        for (int y = 0; y < outH; ++y) {
-            QRgb* dstLine = reinterpret_cast<QRgb*>(canvas.scanLine(y));
-            for (int x = 0; x < outW; ++x) {
-                const QPointF srcPt = invWarp.map(QPointF(qreal(x), qreal(y)));
-                if (srcPt.x() >= 0 && srcPt.x() < n && srcPt.y() >= 0 && srcPt.y() < m) {
-                    // Amostragem bilinear simples para qualidade
-                    const int sx = qFloor(srcPt.x());
-                    const int sy = qFloor(srcPt.y());
-                    const qreal fx = srcPt.x() - sx;
-                    const qreal fy = srcPt.y() - sy;
-                    if (sx + 1 < n && sy + 1 < m) {
-                        const QRgb c00 = src.pixel(sx, sy);
-                        const QRgb c10 = src.pixel(sx + 1, sy);
-                        const QRgb c01 = src.pixel(sx, sy + 1);
-                        const QRgb c11 = src.pixel(sx + 1, sy + 1);
-                        const qreal iw = 1.0 - fx;
-                        const qreal jw = 1.0 - fy;
-                        const qreal r = qRed(c00) * iw * jw + qRed(c10) * fx * jw
-                                      + qRed(c01) * iw * fy + qRed(c11) * fx * fy;
-                        const qreal g = qGreen(c00) * iw * jw + qGreen(c10) * fx * jw
-                                      + qGreen(c01) * iw * fy + qGreen(c11) * fx * fy;
-                        const qreal b = qBlue(c00) * iw * jw + qBlue(c10) * fx * jw
-                                      + qBlue(c01) * iw * fy + qBlue(c11) * fx * fy;
-                        const qreal a = qAlpha(c00) * iw * jw + qAlpha(c10) * fx * jw
-                                      + qAlpha(c01) * iw * fy + qAlpha(c11) * fx * fy;
-                        dstLine[x] = qRgba(qRound(r), qRound(g), qRound(b), qRound(a));
-                    } else {
-                        dstLine[x] = src.pixel(sx, sy);
-                    }
-                }
-            }
-        }
-    } else {
-        // ----- N pontos (5+): pontos de origem distribuídos uniformemente -----
-        const int cols = qCeil(qSqrt(destination.size()));
-        const int rows = qCeil(qreal(destination.size()) / cols);
-        int idx = 0;
-        for (int r = 0; r < rows && idx < destination.size(); ++r) {
-            for (int c = 0; c < cols && idx < destination.size(); ++c, ++idx) {
-                const qreal fx = qreal(c) / qreal(qMax(1, cols - 1));
-                const qreal fy = qreal(r) / qreal(qMax(1, rows - 1));
-                localSrc.append(QPointF(fx * n, fy * m));
-            }
-        }
-
-        // ----- N pontos (5+): deformação com IDW e raio limitado -----
-        const int w = localDst.size();
-
-        // Para cada pixel de saída, encontra qual quadrilátero ele pertence
-        // e interpola bilinearmente dentro dele.
-        for (int y = 0; y < outH; ++y) {
-            QRgb* dstLine = reinterpret_cast<QRgb*>(canvas.scanLine(y));
-            for (int x = 0; x < outW; ++x) {
-                const QPointF dstPt = QPointF(qreal(x), qreal(y));
-
-                // Encontra o quadrilátero contendo este ponto (busca simples)
-                // Para simplicidade, usamos IDW com vizinhos próximos para
-                // N > 4, mas limitado a uma vizinhança para evitar "vômito".
-                qreal totalWeight = 0;
-                qreal sumSrcX = 0;
-                qreal sumSrcY = 0;
-                int validSamples = 0;
-
-                for (int i = 0; i < w; ++i) {
-                    const qreal dx = dstPt.x() - localDst[i].x();
-                    const qreal dy = dstPt.y() - localDst[i].y();
-                    const qreal dist = std::sqrt(dx * dx + dy * dy);
-
-                    // Raio de influência limitado para evitar distorção global
-                    const qreal influenceRadius = qMax(outW, outH) * 0.5;
-                    if (dist > influenceRadius)
-                        continue;
-
-                    if (dist < 0.5) {
-                        sumSrcX = localSrc[i].x();
-                        sumSrcY = localSrc[i].y();
-                        totalWeight = 1;
-                        validSamples = 1;
-                        break;
-                    }
-
-                    const qreal weight = 1.0 / (dist * dist + 0.01);
-                    totalWeight += weight;
-                    sumSrcX += localSrc[i].x() * weight;
-                    sumSrcY += localSrc[i].y() * weight;
-                    validSamples++;
-                }
-
-                if (validSamples > 0 && totalWeight > 0) {
-                    sumSrcX /= totalWeight;
-                    sumSrcY /= totalWeight;
-
-                    if (sumSrcX >= 0 && sumSrcX < n && sumSrcY >= 0 && sumSrcY < m) {
-                        dstLine[x] = src.pixel(qRound(sumSrcX), qRound(sumSrcY));
-                    }
-                }
-            }
-        }
-    }
+    const QImage canvas = warp.image;
+    const qreal dstX0 = warp.topLeft.x();
+    const qreal dstY0 = warp.topLeft.y();
 
     // ========================================================================
     // 4. Criar uma NOVA camada separada para o mockup
@@ -1335,8 +1280,14 @@ void ImageInspector::setMockupArea(const QPolygonF& destination)
     mockupLayer->name = QStringLiteral("Mockup — Logo");
     mockupLayer->naturalWidth = canvas.width();
     mockupLayer->naturalHeight = canvas.height();
-    // Posiciona no canto superior esquerdo do bounding box dos pontos
-    mockupLayer->transform.position = QPointF(dstX0, dstY0);
+    // Posiciona o centro da camada no centro do canvas do warp.
+    // AffineTransform::matrix() trata `position` como CENTRO do conteudo
+    // (translate -> scale -> translate(-center)); como topLeft É o canto
+    // real do canvas (que inclui a margem), topLeft + tamanho/2 centra a
+    // camada exatamente onde o warp foi desenhado — e matematicamente
+    // equivale ao centro do bbox dos pontos (a margem se cancela).
+    mockupLayer->transform.position = QPointF(dstX0 + canvas.width() / 2.0,
+                                              dstY0 + canvas.height() / 2.0);
     mockupLayer->assetId = m_document->assets().addImage(canvas);
 
     const LayerId mockupId = mockupLayer->id();
@@ -1362,9 +1313,9 @@ void ImageInspector::setMockupArea(const QPolygonF& destination)
     m_originalAssetId = LayerId();
     m_originalPreviewImage = QImage();
 
-    const QString msg = destination.size() == 4
+    const QString msg = cornersIn.size() == 4
         ? QStringLiteral("Mockup criado em camada separada (perspectiva de 4 pontos). Pode mover, ocultar ou desfazer (Ctrl+Z).")
-        : QStringLiteral("Mockup criado em camada separada (deformação de %1 pontos). Pode mover, ocultar ou desfazer (Ctrl+Z).").arg(destination.size());
+        : QStringLiteral("Mockup criado em camada separada (deformação de %1 pontos). Pode mover, ocultar ou desfazer (Ctrl+Z).").arg(cornersIn.size());
     if (m_mockupHint)
         m_mockupHint->setText(msg);
 }
