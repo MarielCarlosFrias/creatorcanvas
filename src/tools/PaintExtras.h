@@ -3,6 +3,7 @@
 #include "CanvasTool.h"
 #include "core/image/ImageProcessing.h"
 #include <QColor>
+#include <QElapsedTimer>
 #include <QImage>
 #include <QPointF>
 
@@ -53,6 +54,11 @@ private:
     int m_origHeight = 0;
     AffineTransform m_origTransform;
     QImage m_origBitmap; // bitmap original para prévia em tempo real
+    // Throttle da prévia: a deformação full-bitmap a cada mouse-move
+    // travava a UI. Recalcula a ~30 Hz; o valor final sempre é computado
+    // no release.
+    QElapsedTimer m_previewClock;
+    qint64 m_lastPreviewMs = -1;
 };
 
 /// Ferramenta de retoque por pincel: Blur, Sharpen, Smudge, Dodge, Burn, Sponge.

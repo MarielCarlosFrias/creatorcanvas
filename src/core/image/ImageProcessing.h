@@ -75,6 +75,13 @@ public:
     static QImage paintStroke(const QImage& target, const QPointF& prevPoint, const QPointF& curPoint,
                              BrushType brush, const QColor& color, int size, qreal opacity = 1.0);
 
+    /// Variante IN-PLACE do paintStroke: desenha direto em `target` sem
+    /// copiar a imagem inteira — o custo por evento de mouse fica limitado
+    /// à área do pincel, não ao tamanho do bitmap. `target` deve estar em
+    /// Format_ARGB32_Premultiplied ou ARGB32 (é convertido se necessário).
+    static void paintStrokeInPlace(QImage& target, const QPointF& prevPoint, const QPointF& curPoint,
+                                   BrushType brush, const QColor& color, int size, qreal opacity = 1.0);
+
     /// Balde de Tinta (Flood Fill): preenche uma área contígua de mesma cor com fillColor.
     static QImage floodFill(const QImage& source, const QPoint& seedPoint,
                             const QColor& fillColor, int tolerance = 20);

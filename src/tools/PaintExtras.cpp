@@ -116,6 +116,8 @@ void GradientTool::mousePress(QMouseEvent* event, const QPointF& docPos, const T
     m_startDoc = docPos;
     m_endDoc = docPos;
     m_lastDoc = docPos;
+    m_previewClock.start();
+    m_lastPreviewMs = -1;
 
     // Armazena o bitmap original para aplicar o gradiente em tempo real
     m_origBitmap = ctx.document->assets().decodedImage(m_origAssetId);
@@ -148,6 +150,16 @@ void GradientTool::mouseMove(QMouseEvent* event, const QPointF& docPos, const To
         end = m_startDoc + QPointF(std::cos(angle) * length, std::sin(angle) * length);
     }
     m_endDoc = end;
+
+    // Throttle: a prévia full-bitmap roda a ~30 Hz (não por mouse-move);
+    // sem isso o paintGradient a cada evento congelava a UI em 1080p+.
+    if (m_lastPreviewMs >= 0
+        && m_previewClock.elapsed() - m_lastPreviewMs < 30) {
+        if (ctx.requestUpdate)
+            ctx.requestUpdate(); // linha-guia continua acompanhando
+        return;
+    }
+    m_lastPreviewMs = m_previewClock.elapsed();
 
     // Aplica o gradiente em tempo real para prévia durante o arrasto
     if (!m_origBitmap.isNull() && ctx.setLayerPreview) {
@@ -280,6 +292,7 @@ void GradientTool::cancel(const ToolContext& ctx)
 {
     m_dragging = false;
     m_origBitmap = QImage();
+    m_lastPreviewMs = -1;
     if (ctx.clearLayerPreview)
         ctx.clearLayerPreview();
     if (ctx.requestUpdate)

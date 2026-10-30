@@ -110,8 +110,8 @@ void PaintTool::mousePress(QMouseEvent* event, const QPointF& docPos, const Tool
     m_prevPointLocal = localPos;
     m_isPainting = true;
 
-    // Paint first dot
-    m_workingImage = ImageProcessing::paintStroke(
+    // Paint first dot — IN-PLACE: sem cópia profunda do bitmap por evento.
+    ImageProcessing::paintStrokeInPlace(
         m_workingImage, m_prevPointLocal, localPos,
         m_brushType, m_color, m_size, m_opacity);
 
@@ -139,7 +139,8 @@ void PaintTool::mouseMove(QMouseEvent* event, const QPointF& docPos, const ToolC
             const QTransform matrix = layer->transform.matrix(layer->contentBounds());
             const QPointF localPos = matrix.inverted().map(docPos);
 
-            m_workingImage = ImageProcessing::paintStroke(
+            // Traço incremental IN-PLACE: sem cópia profunda por mouse-move.
+            ImageProcessing::paintStrokeInPlace(
                 m_workingImage, m_prevPointLocal, localPos,
                 m_brushType, m_color, m_size, m_opacity);
 

@@ -271,10 +271,20 @@ QImage ImageProcessing::paintStroke(const QImage& target, const QPointF& prevPoi
         return target;
 
     QImage result = target;
-    if (result.format() != QImage::Format_ARGB32_Premultiplied && result.format() != QImage::Format_ARGB32)
-        result = result.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    paintStrokeInPlace(result, prevPoint, curPoint, brush, color, size, opacity);
+    return result;
+}
 
-    QPainter painter(&result);
+void ImageProcessing::paintStrokeInPlace(QImage& target, const QPointF& prevPoint, const QPointF& curPoint,
+                                         BrushType brush, const QColor& color, int size, qreal opacity)
+{
+    if (target.isNull())
+        return;
+
+    if (target.format() != QImage::Format_ARGB32_Premultiplied && target.format() != QImage::Format_ARGB32)
+        target = target.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+
+    QPainter painter(&target);
 
     const int clampedSize = std::clamp(size, 1, 300);
     const qreal clampedOpacity = std::clamp(opacity, 0.0, 1.0);
@@ -357,20 +367,12 @@ QImage ImageProcessing::paintStroke(const QImage& target, const QPointF& prevPoi
         break;
     }
     }
-
-    return result;
 }
 
 QImage ImageProcessing::floodFill(const QImage& source, const QPoint& seedPoint,
                                   const QColor& fillColor, int tolerance)
 {
     if (source.isNull() || !source.rect().contains(seedPoint))
-        return source;
-
-    // Limite de segurança: não processar imagens maiores que 2000x2000 com flood fill
-    // para evitar alocação excessiva de memória e travamento da UI.
-    constexpr int kMaxFloodPixels = 2000 * 2000;
-    if (source.width() * source.height() > kMaxFloodPixels)
         return source;
 
     QImage result = source.convertToFormat(QImage::Format_ARGB32);
@@ -1031,6 +1033,36 @@ QImage ImageProcessing::paintGradient(const QImage& target, const QPointF& start
     if (target.isNull() || opacity <= 0.0)
         return target;
 
+    // Caminho rápido (sem máscara — o comum): UM único buffer, o gradiente
+    // é desenhado direto sobre a cópia do alvo. Evita alocar uma segunda
+    // imagem full-size por chamada (a prévia em tempo real chamava isto a
+    // cada mouse-move e travava a UI).
+    if (mask.isNull()) {
+        QImage result = target.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+        QPainter p(&result);
+        p.setRenderHint(QPainter::Antialiasing, true);
+        p.setPen(Qt::NoPen);
+        p.setOpacity(std::clamp(opacity, 0.0, 1.0));
+        if (radial) {
+            const qreal radius = std::max<qreal>(1.0, QLineF(start, end).length());
+            QRadialGradient g(start, radius);
+            g.setColorAt(0.0, startColor);
+            g.setColorAt(1.0, endColor);
+            p.setBrush(QBrush(g));
+        } else {
+            QPointF s = start, e = end;
+            if (QLineF(s, e).length() < 0.5)
+                e = s + QPointF(1.0, 0.0);
+            QLinearGradient g(s, e);
+            g.setColorAt(0.0, startColor);
+            g.setColorAt(1.0, endColor);
+            p.setBrush(QBrush(g));
+        }
+        p.drawRect(result.rect());
+        p.end();
+        return result;
+    }
+
     QImage gradient(target.size(), QImage::Format_ARGB32_Premultiplied);
     gradient.fill(Qt::transparent);
     {
@@ -1055,7 +1087,7 @@ QImage ImageProcessing::paintGradient(const QImage& target, const QPointF& start
         gp.drawRect(gradient.rect());
     }
 
-    if (!mask.isNull() && mask.size() == gradient.size()) {
+    if (mask.size() == gradient.size()) {
         const QImage alpha = mask.convertToFormat(QImage::Format_Alpha8);
         for (int y = 0; y < gradient.height(); ++y) {
             QRgb* row = reinterpret_cast<QRgb*>(gradient.scanLine(y));
@@ -1086,11 +1118,8 @@ QImage ImageProcessing::retouchStroke(const QImage& target, const QPointF& prevP
     if (target.isNull() || size <= 0)
         return target;
 
-    // Limite de segurança: retouch em imagens muito grandes trava a UI
-    // (processamento pixel-a-pixel com laço 3x3 de vizinhos por passo).
-    constexpr int kMaxRetouchPixels = 2000 * 2000;
-    if (target.width() * target.height() > kMaxRetouchPixels)
-        return target;
+    // O custo é limitado pela ÁREA DO PINCEL por passo (não pelo tamanho
+    // da imagem): raio <= 200 → janela <= 400x400 por passo de traço.
 
     const qreal radius = std::max<qreal>(0.5, size / 2.0);
     const qreal blend = std::clamp(strength, 0.01, 1.0);
@@ -1221,10 +1250,7 @@ QImage ImageProcessing::spotHeal(const QImage& target, const QPoint& targetPoint
     if (target.isNull() || radius <= 0)
         return target;
 
-    // Limite de segurança: spot heal em imagens muito grandes trava a UI.
-    constexpr int kMaxSpotHealPixels = 2000 * 2000;
-    if (target.width() * target.height() > kMaxSpotHealPixels)
-        return target;
+    // Custo limitado ao raio do pincel (janela (2r)²), não ao bitmap todo.
 
     const int w = target.width(), h = target.height();
     const int iradius = std::max(1, radius);
