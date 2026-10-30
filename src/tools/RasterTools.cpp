@@ -404,6 +404,17 @@ void FloodFillTool::mousePress(QMouseEvent* event, const QPointF& docPos, const 
         auto* imgLayer = static_cast<ImageLayer*>(layer);
         const QImage oldImg = ctx.document->assets().decodedImage(imgLayer->assetId);
         if (!oldImg.isNull()) {
+            // Limite de segurança: flood fill em imagens muito grandes trava a UI
+            constexpr int kMaxFloodPixels = 2000 * 2000;
+            if (oldImg.width() * oldImg.height() > kMaxFloodPixels) {
+                if (ctx.requestStatusMessage) {
+                    ctx.requestStatusMessage(QStringLiteral("Flood Fill: camada muito grande para edição em tempo real. "
+                                                            "Reduza o tamanho da camada."));
+                }
+                event->accept();
+                return;
+            }
+
             const QTransform matrix = imgLayer->transform.matrix(imgLayer->contentBounds());
             const QPoint imgPos = matrix.inverted().map(docPos).toPoint();
             if (imgPos.x() >= 0 && imgPos.x() < oldImg.width() && imgPos.y() >= 0 && imgPos.y() < oldImg.height()) {
