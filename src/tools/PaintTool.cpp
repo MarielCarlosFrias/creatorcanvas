@@ -7,6 +7,7 @@
 #include "core/history/CommandStack.h"
 #include "localization/i18nservice.h"
 #include "core/selection/SelectionOperations.h"
+#include <cstring>
 
 namespace cc {
 
@@ -165,9 +166,45 @@ void PaintTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const To
         Layer* layer = ctx.document->findLayer(m_activeLayerId);
         if (layer && layer->type() == LayerType::Image) {
             auto* img = static_cast<ImageLayer*>(layer);
+
+            // Se a imagem de trabalho não mudou nada em relação ao original,
+            // não há nada para commitar — apenas limpa a prévia.
+            const QImage original = ctx.document->assets().decodedImage(m_origAssetId);
+            if (!original.isNull() && m_workingImage.size() == original.size()
+                && m_workingImage.format() == original.format()) {
+                bool identical = true;
+                if (m_workingImage.height() == original.height()) {
+                    for (int y = 0; y < m_workingImage.height() && identical; ++y) {
+                        if (std::memcmp(m_workingImage.constScanLine(y),
+                                        original.constScanLine(y),
+                                        m_workingImage.bytesPerLine()) != 0) {
+                            identical = false;
+                        }
+                    }
+                } else {
+                    identical = false;
+                }
+                if (identical) {
+                    if (ctx.clearLayerPreview)
+                        ctx.clearLayerPreview();
+                    m_workingImage = QImage();
+                    if (ctx.requestUpdate)
+                        ctx.requestUpdate();
+                    return;
+                }
+            }
+
             const LayerId finalAssetId = ctx.document->assets().addImage(m_workingImage);
+            if (finalAssetId.isNull()) {
+                // Se não conseguiu criar o asset, mantém a prévia na tela
+                // para não perder a edição do usuário.
+                if (ctx.requestUpdate)
+                    ctx.requestUpdate();
+                return;
+            }
             const QString cmdName = ctx.i18n ? ctx.i18n->t("editor", "canvas.layer.paint") : QStringLiteral("Painting");
 
+            // Só limpa a prévia DEPOIS de criar o asset com sucesso.
             if (ctx.clearLayerPreview)
                 ctx.clearLayerPreview();
 

@@ -52,6 +52,7 @@ private:
     int m_origWidth = 0;
     int m_origHeight = 0;
     AffineTransform m_origTransform;
+    QImage m_origBitmap; // bitmap original para prévia em tempo real
 };
 
 /// Ferramenta de retoque por pincel: Blur, Sharpen, Smudge, Dodge, Burn, Sponge.

@@ -45,6 +45,17 @@ QPointF toLocal(const ImageLayer* img, const QPointF& docPos)
     return img->transform.matrix(bounds).inverted().map(docPos);
 }
 
+/// Converte coordenadas de documento para coordenadas locais de um QImage.
+QPointF toLocalPoint(const QImage& image, const QPointF& docPos)
+{
+    QRectF bounds(0, 0, image.width(), image.height());
+    if (bounds.isEmpty())
+        return docPos;
+    QTransform t;
+    t.translate(bounds.width() / 2.0, bounds.height() / 2.0);
+    return t.inverted().map(docPos);
+}
+
 } // namespace
 
 // ============================================================================
@@ -106,6 +117,14 @@ void GradientTool::mousePress(QMouseEvent* event, const QPointF& docPos, const T
     m_endDoc = docPos;
     m_lastDoc = docPos;
 
+    // Armazena o bitmap original para aplicar o gradiente em tempo real
+    m_origBitmap = ctx.document->assets().decodedImage(m_origAssetId);
+    if (m_origBitmap.isNull()) {
+        m_dragging = false;
+        cancel(ctx);
+        return;
+    }
+
     if (ctx.requestUpdate)
         ctx.requestUpdate();
     event->accept();
@@ -129,6 +148,26 @@ void GradientTool::mouseMove(QMouseEvent* event, const QPointF& docPos, const To
         end = m_startDoc + QPointF(std::cos(angle) * length, std::sin(angle) * length);
     }
     m_endDoc = end;
+
+    // Aplica o gradiente em tempo real para prévia durante o arrasto
+    if (!m_origBitmap.isNull() && ctx.setLayerPreview) {
+        const QImage mask = ctx.document->pixelSelection();
+        QImage previewMask;
+        if (!mask.isNull()) {
+            previewMask = mask.convertToFormat(QImage::Format_Alpha8);
+        }
+
+        const QPointF localStart = m_origBitmap.width() > 0 ? toLocalPoint(m_origBitmap, m_startDoc) : m_startDoc;
+        const QPointF localEnd = m_origBitmap.width() > 0 ? toLocalPoint(m_origBitmap, m_endDoc) : m_endDoc;
+
+        const QImage result = ImageProcessing::paintGradient(
+            m_origBitmap, localStart, localEnd, m_startColor, m_endColor, m_radial,
+            m_opacity, previewMask);
+        if (!result.isNull()) {
+            ctx.setLayerPreview(m_layerId, result);
+        }
+    }
+
     if (ctx.requestUpdate)
         ctx.requestUpdate();
 }
@@ -141,15 +180,24 @@ void GradientTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const
     m_dragging = false;
     m_endDoc = docPos;
 
+    // Limpa a prévia do overlay antes de commitar
+    if (ctx.clearLayerPreview)
+        ctx.clearLayerPreview();
+
     Layer* layer = ctx.document->findLayer(m_layerId);
     if (!layer || layer->type() != LayerType::Image) {
+        m_origBitmap = QImage();
         cancel(ctx);
         return;
     }
     auto* img = static_cast<ImageLayer*>(layer);
 
-    const QImage bitmap = ctx.document->assets().decodedImage(m_origAssetId);
+    // Usa o bitmap original já armazenado (evita reler do asset)
+    const QImage bitmap = m_origBitmap.isNull()
+        ? ctx.document->assets().decodedImage(m_origAssetId)
+        : m_origBitmap;
     if (bitmap.isNull()) {
+        m_origBitmap = QImage();
         cancel(ctx);
         return;
     }
@@ -171,6 +219,8 @@ void GradientTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const
                           m_origTransform, result,
                           trOr(ctx, "canvas.command.gradient", QStringLiteral("Gradient")));
     }
+
+    m_origBitmap = QImage();
 
     if (ctx.requestStatusMessage) {
         ctx.requestStatusMessage(trOr(ctx, "canvas.status.gradientDone",
@@ -229,6 +279,9 @@ void GradientTool::drawOverlay(QPainter* painter, const ToolContext& ctx)
 void GradientTool::cancel(const ToolContext& ctx)
 {
     m_dragging = false;
+    m_origBitmap = QImage();
+    if (ctx.clearLayerPreview)
+        ctx.clearLayerPreview();
     if (ctx.requestUpdate)
         ctx.requestUpdate();
 }
