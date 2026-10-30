@@ -1039,34 +1039,67 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
         const QImage pixels = (options.previewLayerId == image.id() && !options.previewImage.isNull())
             ? options.previewImage
             : options.interactive
-            ? doc.assets().previewImage(image.assetId)
+            // 1200 px: cache de displayPreview mais barato e draws de frame
+            // muito mais leves em fotos pesadas; detalhe fino volta no
+            // release do mouse (caminho full-res).
+            ? doc.assets().previewImage(image.assetId, 1200)
             : doc.assets().decodedImage(image.assetId);
         if (!pixels.isNull()) {
             QImage maskedPixels = pixels;
-            if (!image.alphaMask.isNull() && image.alphaMask.size() == pixels.size()) {
+            if (!image.alphaMask.isNull()) {
                 const qint64 sourceKey = static_cast<qint64>(pixels.cacheKey());
                 const qint64 maskKey = static_cast<qint64>(image.alphaMask.cacheKey());
-                if (image.maskedRenderCache.isNull()
-                    || image.maskedRenderSourceKey != sourceKey
-                    || image.maskedRenderMaskKey != maskKey
-                    || image.maskedRenderCache.size() != pixels.size()) {
-                    // We write straight RGBA values below. Using a premultiplied
-                    // buffer here corrupts partially masked pixels (white/black
-                    // halos and blocks), so keep the non-premultiplied format.
-                    QImage composed = pixels.convertToFormat(QImage::Format_ARGB32);
-                    const QImage mask = image.alphaMask.convertToFormat(QImage::Format_Alpha8);
-                    for (int y = 0; y < composed.height(); ++y) {
-                        QRgb* dst = reinterpret_cast<QRgb*>(composed.scanLine(y));
-                        const uchar* src = mask.constScanLine(y);
-                        for (int x = 0; x < composed.width(); ++x)
-                            dst[x] = qRgba(qRed(dst[x]), qGreen(dst[x]), qBlue(dst[x]),
-                                           (qAlpha(dst[x]) * src[x]) / 255);
+                if (image.alphaMask.size() == pixels.size()) {
+                    // Caminho full-res: bitmap e máscara no mesmo tamanho.
+                    if (image.maskedRenderCache.isNull()
+                        || image.maskedRenderSourceKey != sourceKey
+                        || image.maskedRenderMaskKey != maskKey
+                        || image.maskedRenderCache.size() != pixels.size()) {
+                        // We write straight RGBA values below. Using a premultiplied
+                        // buffer here corrupts partially masked pixels (white/black
+                        // halos and blocks), so keep the non-premultiplied format.
+                        QImage composed = pixels.convertToFormat(QImage::Format_ARGB32);
+                        const QImage mask = image.alphaMask.convertToFormat(QImage::Format_Alpha8);
+                        for (int y = 0; y < composed.height(); ++y) {
+                            QRgb* dst = reinterpret_cast<QRgb*>(composed.scanLine(y));
+                            const uchar* src = mask.constScanLine(y);
+                            for (int x = 0; x < composed.width(); ++x)
+                                dst[x] = qRgba(qRed(dst[x]), qGreen(dst[x]), qBlue(dst[x]),
+                                               (qAlpha(dst[x]) * src[x]) / 255);
+                        }
+                        image.maskedRenderCache = std::move(composed);
+                        image.maskedRenderSourceKey = sourceKey;
+                        image.maskedRenderMaskKey = maskKey;
                     }
-                    image.maskedRenderCache = std::move(composed);
-                    image.maskedRenderSourceKey = sourceKey;
-                    image.maskedRenderMaskKey = maskKey;
+                    maskedPixels = image.maskedRenderCache;
+                } else {
+                    // Modo interativo: `pixels` é o preview downscaled (≤2048px)
+                    // e a máscara é full-res. A máscara TEM de ser reduzida e
+                    // aplicada também aqui — antes era simplesmente ignorada e
+                    // a imagem voltava a aparecer como era antes da edição
+                    // (fundo removido / máscara / recorte por máscara) sempre
+                    // que o usuário segurava o mouse.
+                    if (image.maskedPreviewCache.isNull()
+                        || image.maskedPreviewSourceKey != sourceKey
+                        || image.maskedPreviewMaskKey != maskKey
+                        || image.maskedPreviewCache.size() != pixels.size()) {
+                        QImage composed = pixels.convertToFormat(QImage::Format_ARGB32);
+                        QImage mask = image.alphaMask.convertToFormat(QImage::Format_Alpha8)
+                                          .scaled(pixels.size(), Qt::IgnoreAspectRatio,
+                                                  Qt::SmoothTransformation);
+                        for (int y = 0; y < composed.height(); ++y) {
+                            QRgb* dst = reinterpret_cast<QRgb*>(composed.scanLine(y));
+                            const uchar* src = mask.constScanLine(y);
+                            for (int x = 0; x < composed.width(); ++x)
+                                dst[x] = qRgba(qRed(dst[x]), qGreen(dst[x]), qBlue(dst[x]),
+                                               (qAlpha(dst[x]) * src[x]) / 255);
+                        }
+                        image.maskedPreviewCache = std::move(composed);
+                        image.maskedPreviewSourceKey = sourceKey;
+                        image.maskedPreviewMaskKey = maskKey;
+                    }
+                    maskedPixels = image.maskedPreviewCache;
                 }
-                maskedPixels = image.maskedRenderCache;
             }
             if (!image.blendIf.isDefault()) {
                 maskedPixels = applyBlendIf(maskedPixels, image.blendIf);

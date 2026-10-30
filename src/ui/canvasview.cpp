@@ -689,7 +689,11 @@ void CanvasView::paintEvent(QPaintEvent*)
     RenderOptions options;
     options.previewLayerId = m_previewLayerId;
     options.previewImage = m_previewImage;
-    options.interactive = (m_gesture != Gesture::None) || m_panning;
+    // Interativo também quando uma ferramenta tem prévia ativa (pincel,
+    // gradiente, retoque): sem isso cada frame redesenha TODAS as camadas
+    // em full-res e fotos pesadas travam com qualquer ferramenta.
+    options.interactive = (m_gesture != Gesture::None) || m_panning
+                          || !m_previewLayerId.isNull();
     options.checkerLight = dark ? QColor(0x38, 0x3b, 0x44) : QColor(0xe5, 0xe9, 0xef);
     options.checkerDark = dark ? QColor(0x24, 0x26, 0x2c) : QColor(0xff, 0xff, 0xff);
     options.canvasBorder = dark ? Design::DBorder() : Design::LBorder();

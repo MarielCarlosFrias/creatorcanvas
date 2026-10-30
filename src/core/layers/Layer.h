@@ -161,6 +161,14 @@ public:
     mutable QImage maskedRenderCache;
     mutable qint64 maskedRenderSourceKey = 0;
     mutable qint64 maskedRenderMaskKey = 0;
+    // Variante da cache para o modo interativo (preview downscaled ≤2048px):
+    // os tamanhos diferem do bitmap full-res, por isso tem campos próprios —
+    // sem isso a máscara alfa era IGNORADA ao segurar o mouse e a imagem
+    // voltava a aparecer como era antes da edição (fundo removido, máscara,
+    // recorte por máscara).
+    mutable QImage maskedPreviewCache;
+    mutable qint64 maskedPreviewSourceKey = 0;
+    mutable qint64 maskedPreviewMaskKey = 0;
 };
 
 class TextLayer final : public Layer
