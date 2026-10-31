@@ -216,8 +216,8 @@ void CanvasOverlayRenderer::drawMockupPlacement(QPainter* painter,
 {
     painter->save();
     painter->resetTransform();
-    // O anel do warp é a ORDEM DE CLIQUE — o contorno e os números da
-    // prévia seguem essa mesma ordem (número i = i-ésimo clique).
+    // O contorno da prévia segue os pontos marcados na ordem de clique
+    // (número i = i-ésimo clique); o WARP usa os 4 cantos extremos.
     QPolygonF screen;
     for (const QPointF& point : mockupCorners)
         screen << toDevice.map(point);
@@ -275,7 +275,7 @@ void CanvasOverlayRenderer::drawMockupPlacement(QPainter* painter,
         painter->setBrush(QColor(0x22, 0xa6, 0xf2));
         painter->drawText(screen[i] + QPointF(8, -8), QString::number(i + 1));
     }
-    const QString help = QStringLiteral("MOCKUP: %1 pontos (em ordem) — duplo clique/Enter confirma — botão direito cancela")
+    const QString help = QStringLiteral("MOCKUP: %1 pontos (4 cantos = perspectiva) — duplo clique/Enter confirma — botão direito cancela")
         .arg(mockupCorners.size());
     QFont font = painter->font();
     font.setBold(true);

@@ -181,9 +181,12 @@ public:
     static QImage redEyeRemove(const QImage& target, const QPoint& center, int radius);
 
     /// Warp de mockup estilo Photoshop:
-    /// - `destinationPoints` na ORDEM DE CLIQUE, contornando a área (CW ou
-    ///   CCW — a orientação é detectada automaticamente; pontos duplicados
-    ///   são ignorados);
+    /// - Semântica PHOTOSHOP (Free Transform → Distort): encaixa os 4
+    ///   CANTOS da imagem em 4 pontos por transformação PROJETIVA; com 5+
+    ///   pontos, os 4 CANTOS EXTREMOS do polígono definem o warp e os
+    ///   intermediários ficam como referência visual (não deformam). Não
+    ///   existe "encaixar N pontos de borda" no Photoshop — a operação é
+    ///   ambígua e achata o conteúdo;
     /// - Exatamente 4 pontos em quad convexo: mapeamento projetivo exato
     ///   (quad -> quad) — perspectiva verdadeira;
     /// - 5+ pontos (ou 4 cliques que não formam quad convexo): patch de

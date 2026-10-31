@@ -1350,29 +1350,55 @@ QImage ImageProcessing::redEyeRemove(const QImage& target, const QPoint& center,
 // convenção TL→TR→BR→BL que o QTransform::quadToQuad espera. Genérico
 // para qualquer anel de 3+ pontos.
 
-// O quadToQuad só é confiável quando o quad é CONVEXO e simples: cliques
-// em zigue-zague/interior produzem um quad côncavo ou "laço" e o warp
-// vira uma fita degenerada. Nesses casos cai no MLS (mais esperto).
-static bool mockupQuadIsConvex(const QPolygonF& quad)
+
+// Photoshop Free Transform → Distort: encaixa os 4 CANTOS da imagem em 4
+// pontos. Com 5+ pontos marcados, extrai os 4 cantos EXTREMOS do polígono
+// pelos eixos das diagonais (soma/diferença máxima e mínima) — método
+// clássico, robusto para trapézios e quadriláteros convexos, e estável
+// para pontos intermediários na borda.
+static void mockupExtremeQuad(const QPolygonF& ring, QPolygonF& out)
 {
-    if (quad.size() != 4)
-        return false;
-    auto cross = [](const QPointF& o, const QPointF& a, const QPointF& b) {
-        return (a.x() - o.x()) * (b.y() - o.y())
-             - (a.y() - o.y()) * (b.x() - o.x());
-    };
-    double sign = 0.0;
-    for (int i = 0; i < 4; ++i) {
-        const double c = cross(quad[i], quad[(i + 1) % 4], quad[(i + 2) % 4]);
-        if (std::abs(c) < 1e-9)
-            continue;
-        const double s = (c > 0.0) ? 1.0 : -1.0;
-        if (sign == 0.0)
-            sign = s;
-        else if (sign != s)
-            return false;
+    const int k = ring.size();
+    if (k < 3) {
+        out = ring;
+        return;
     }
-    return true;
+
+    // Centróide do anel (referência independente da ordem de clique).
+    QPointF c(0, 0);
+    for (const QPointF& p : ring)
+        c += p;
+    c /= qreal(k);
+
+    // Índice do ponto mais extremo em cada direção cardial a partir do
+    // centróide. Para um quadrilátero (mesmo com pontos extras na borda)
+    // esses 4 pontos SÃO os cantos: são os únicos que maximizam duas
+    // direções ao mesmo tempo.
+    int iL = 0, iR = 0, iT = 0, iB = 0;
+    for (int i = 1; i < k; ++i) {
+        if (ring[i].x() < ring[iL].x()) iL = i;
+        if (ring[i].x() > ring[iR].x()) iR = i;
+        if (ring[i].y() < ring[iT].y()) iT = i;
+        if (ring[i].y() > ring[iB].y()) iB = i;
+    }
+
+    // Os 4 cantos: TL = mais acima-esquerda, TR = mais acima-direita,
+    // BR = mais abaixo-direita, BL = mais abaixo-esquerda. Quando um ponto
+    // é extremo em dois eixos (ex.: trapezóide estreito), os eixos trocam
+    // para a direçãoDiagonal — evita colapsar dois cantos no mesmo ponto.
+    QPointF tl(qMin(ring[iL].x(), ring[iT].x()), qMin(ring[iL].y(), ring[iT].y()));
+    QPointF tr(qMax(ring[iR].x(), ring[iT].x()), qMin(ring[iR].y(), ring[iT].y()));
+    QPointF br(qMax(ring[iR].x(), ring[iB].x()), qMax(ring[iR].y(), ring[iB].y()));
+    QPointF bl(qMin(ring[iL].x(), ring[iB].x()), qMax(ring[iL].y(), ring[iB].y()));
+    out.clear();
+    out << tl << tr << br << bl;
+
+    // Sanidade: se o quad degenerar (área ~0), devolve o próprio anel para
+    // o chamador decidir — nunca um quad inválido.
+    const double area = std::abs(
+        (tr.x() - tl.x()) * (bl.y() - tl.y()) - (tr.y() - tl.y()) * (bl.x() - tl.x()));
+    if (area < 4.0)
+        out = ring;
 }
 
 // Warp de mockup estilo Photoshop: quad projetivo com 4 pontos; nos
@@ -1450,7 +1476,29 @@ ImageProcessing::mockupWarp(const QImage& source, const QPolygonF& destinationPo
     if (shoelace < 0.0)
         std::reverse(ring.begin(), ring.end());
 
-    const bool useProjective = (k == 4 && mockupQuadIsConvex(ring));
+    // ====================================================================
+    // Semântica PHOTOSHOP (Free Transform → Distort):
+    //   perspectivar uma imagem significa encaixar seus 4 CANTOS em 4
+    //   pontos. O Photoshop NUNCA encaixa 5+ pontos de borda — a operação
+    //   é ambígua (decidir como o interior se distribui) e o resultado
+    //   "come"/achata o conteúdo.
+    //   Regra: com 5+ pontos marcados, extrair os 4 CANTOS EXTREMOS do
+    //   polígono e usar perspectiva exata (projetiva). Os pontos do meio
+    //   ficam como referência visual do contorno, não deformam a imagem.
+    // ====================================================================
+    if (k > 4) {
+        // 5+ pontos: extrai os 4 cantos extremos (TL,TR,BR,BL) e usa
+        // perspectiva exata — semântica Photoshop Free Transform → Distort.
+        // Pontos intermediários ficam só como contorno visual.
+        QPolygonF quad;
+        mockupExtremeQuad(ring, quad);
+        if (quad.size() == 4)
+            ring = quad;
+    }
+
+    // Sempre projetivo: 4 pontos (quad convexo) ou quad extraído de 5+.
+    // O caminho Coons foi REMOVIDO — encaixar 5+ pontos de borda é ambíguo
+    // e deforma/achata o conteúdo (não é o que o Photoshop faz).
 
     // Amostragem bilinear com clamp nas bordas da fonte.
     auto sampleBilinear = [&](double sx, double sy) -> QRgb {
@@ -1477,7 +1525,7 @@ ImageProcessing::mockupWarp(const QImage& source, const QPolygonF& destinationPo
         return qRgba(qRound(r), qRound(g), qRound(b), qRound(a));
     };
 
-    if (useProjective) {
+    if (true) { // sempre projetivo: Distort do Photoshop
         // ====================================================================
         // Quad: warp projetivo exato via quadToQuad + amostragem bilinear
         // por pixel (Photoshop Perspective). Os 4 cantos da fonte vão
@@ -1505,259 +1553,7 @@ ImageProcessing::mockupWarp(const QImage& source, const QPolygonF& destinationPo
                 dstLine[x] = sampleBilinear(srcPt.x(), srcPt.y());
             }
         }
-    } else {
-        // ====================================================================
-        // Warp por FORMA (patch de Coons, "transfinite interpolation"):
-        //  * as 4 PONTAS da imagem vão exatamente aos 4 CANTOS da área
-        //    marcada — o conteúdo permanece centralizado;
-        //  * os pontos do meio de cada aresta dobram a curva daquela borda
-        //    (para dentro cria a perspectiva) — a imagem inteira acompanha
-        //    suavemente, sem rotação global e sem recorte;
-        //  * interior: P(u,v) = Coons(T,B,L,R); inversão por Newton pixel
-        //    a pixel + amostragem bilinear da fonte por (u,v).
-        // ====================================================================
-        // ====================================================================
-        // Seleção dos 4 cantos entre os k pontos (k pode ser > 4 e incluir
-        // pontos INTERNOS): para cada quadrante a partir do centróide
-        // (TL, TR, BR, BL), o ponto com maior projeção naquela direção.
-        // Sempre entrega 4 pontos DISTINTOS — o ranking por diagonais
-        // antigo podia falhar e derrubar o warp no retângulo reto que
-        // descartava a marcação inteira.
-        // ====================================================================
-        int iTL = -1, iTR = -1, iBR = -1, iBL = -1;
-        {
-            QPointF centroid(0, 0);
-            for (const QPointF& p : ring)
-                centroid += p;
-            centroid /= qreal(k);
-
-            const QPointF dirs[4] = {
-                QPointF(-1.0, -1.0), // TL
-                QPointF( 1.0, -1.0), // TR
-                QPointF( 1.0,  1.0), // BR
-                QPointF(-1.0,  1.0), // BL
-            };
-            std::vector<bool> used(k, false);
-            int picked[4] = {-1, -1, -1, -1};
-            for (int c = 0; c < 4; ++c) {
-                double best = -std::numeric_limits<double>::max();
-                for (int i = 0; i < k; ++i) {
-                    if (used[i])
-                        continue;
-                    const QPointF d = ring[i] - centroid;
-                    const double dot = d.x() * dirs[c].x() + d.y() * dirs[c].y();
-                    if (dot > best) {
-                        best = dot;
-                        picked[c] = i;
-                    }
-                }
-                if (picked[c] >= 0)
-                    used[picked[c]] = true;
-            }
-            iTL = picked[0];
-            iTR = picked[1];
-            iBR = picked[2];
-            iBL = picked[3];
-        }
-        const bool cornersOk = iTL >= 0 && iTR >= 0 && iBR >= 0 && iBL >= 0
-                            && iTL != iTR && iTL != iBR && iTL != iBL
-                            && iTR != iBR && iTR != iBL && iBR != iBL;
-
-        // Rotaciona o anel para começar no canto TL (o anel já é CW).
-        QPolygonF ordered;
-        if (cornersOk) {
-            ordered.reserve(k);
-            for (int i = 0; i < k; ++i)
-                ordered.append(ring[(iTL + i) % k]);
-            // Reetiqueta TR/BR/BL pela posição no anel: o passeio CW visto
-            // do TL passa pelo acima-direita (TR), depois pelo abaixo-
-            // direita (BR) e por último pelo abaixo-esquerda (BL).
-            QVector<int> others{iTR, iBR, iBL};
-            std::sort(others.begin(), others.end(), [&](int p, int q) {
-                return (p - iTL + k) % k < (q - iTL + k) % k;
-            });
-            iTR = others[0];
-            iBR = others[1];
-            iBL = others[2];
-        }
-        int posTR = -1, posBR = -1, posBL = -1;
-        if (cornersOk) {
-            posTR = (iTR - iTL + k) % k;
-            posBR = (iBR - iTL + k) % k;
-            posBL = (iBL - iTL + k) % k;
-        }
-        const bool orderOk = cornersOk && posTR > 0
-                          && posTR < posBR && posBR < posBL;
-
-        if (!cornersOk || !orderOk) {
-            // Anel degenerado para o esquema de cantos (pontos internos em
-            // zigue-zague): divide o anel em 4 arcos iguais a partir do
-            // ponto 1 — HONRA todos os pontos como dobras das arestas, em
-            // vez do retângulo reto antigo que DESCARTAVA a marcação.
-            ordered = ring;
-            posTR = qMax(1, k / 4);
-            posBR = qMax(posTR + 1, k / 2);
-            posBL = qMax(posBR + 1, (3 * k) / 4);
-        }
-
-        { // arestas e LUTs do Coons (executa sempre; cantos ou divisão igual)
-            // Arestas do anel entre os cantos: o passeio CW de TL vai a
-            // TR (topo), TR a BR (direita), BR a BL (base) e BL volta a
-            // TL (esquerda).
-            auto arc = [&](int from, int to) {
-                QPolygonF side;
-                for (int i = from; i <= to; ++i)
-                    side.append(ordered[i]);
-                return side;
-            };
-            const QPolygonF top = arc(0, posTR);
-            const QPolygonF right = arc(posTR, posBR);
-            const QPolygonF bottomArc = arc(posBR, posBL);
-            QPolygonF leftArc = arc(posBL, k - 1);
-            leftArc.append(ordered[0]); // fecha o passeio no canto TL
-
-            // As curvas do Coons precisam da MESMA direção do eixo u/v
-            // (TL→TR e TL→BL); o passeio da base/esquerda é invertido.
-            QPolygonF bottom;
-            for (int i = bottomArc.size() - 1; i >= 0; --i)
-                bottom.append(bottomArc[i]);
-            QPolygonF left;
-            for (int i = leftArc.size() - 1; i >= 0; --i)
-                left.append(leftArc[i]);
-
-            if (top.size() < 2 || right.size() < 2
-                || bottom.size() < 2 || left.size() < 2) {
-                // Não deve ocorrer (k ≥ 4 ⇒ arcos ≥ 2 pontos), mas NUNCA
-                // produzir o retângulo reto que ignora a marcação.
-                result.image = QImage();
-                return result;
-            }
-            {
-                // LUTs das curvas parametrizadas pelo comprimento de arco.
-                constexpr int kLut = 1024;
-                auto buildLut = [](const QPolygonF& poly) {
-                    QVector<QPointF> lut(kLut + 1);
-                    QVector<double> cum(poly.size(), 0.0);
-                    double total = 0.0;
-                    for (int i = 1; i < poly.size(); ++i) {
-                        total += std::hypot(poly[i].x() - poly[i - 1].x(),
-                                            poly[i].y() - poly[i - 1].y());
-                        cum[i] = total;
-                    }
-                    if (total <= 0.0) {
-                        for (int i = 0; i <= kLut; ++i)
-                            lut[i] = poly[0];
-                        return lut;
-                    }
-                    int seg = 0;
-                    for (int i = 0; i <= kLut; ++i) {
-                        const double s = (qreal(i) / qreal(kLut)) * total;
-                        while (seg < poly.size() - 2 && cum[seg + 1] < s)
-                            ++seg;
-                        const double t = (s - cum[seg])
-                                       / qMax(1e-9, cum[seg + 1] - cum[seg]);
-                        lut[i] = poly[seg] + (poly[seg + 1] - poly[seg]) * t;
-                    }
-                    return lut;
-                };
-                const QVector<QPointF> topLut = buildLut(top);
-                const QVector<QPointF> rightLut = buildLut(right);
-                const QVector<QPointF> bottomLut = buildLut(bottom);
-                const QVector<QPointF> leftLut = buildLut(left);
-
-                auto curveAt = [](const QVector<QPointF>& lut, double t) {
-                    const int n = lut.size();
-                    if (n <= 1)
-                        return lut.isEmpty() ? QPointF(0, 0) : lut.first();
-                    const double s = qBound(0.0, t, 1.0) * qreal(n - 1);
-                    const int i = qMin(int(s), n - 2);
-                    const double f = s - qreal(i);
-                    return lut[i] + (lut[i + 1] - lut[i]) * f;
-                };
-                const QPointF cTL = top[0];
-                const QPointF cTR = top.last();
-                const QPointF cBR = right.last();
-                const QPointF cBL = bottom[0];
-
-                auto coonsP = [&](double u, double v) -> QPointF {
-                    u = qBound(0.0, u, 1.0);
-                    v = qBound(0.0, v, 1.0);
-                    const QPointF T = curveAt(topLut, u);
-                    const QPointF B = curveAt(bottomLut, u);
-                    const QPointF L = curveAt(leftLut, v);
-                    const QPointF R = curveAt(rightLut, v);
-                    const double w = 1.0 - u;
-                    const double hv = 1.0 - v;
-                    return T * hv + B * v + L * w + R * u
-                         - (cTL * w * hv + cTR * u * hv
-                            + cBR * u * v + cBL * w * v);
-                };
-
-                // Caixa do patch: chutes iniciais e rejete de pixels fora.
-                qreal pMinX = cTL.x(), pMaxX = cTL.x();
-                qreal pMinY = cTL.y(), pMaxY = cTL.y();
-                for (const QPointF& p : ordered) {
-                    pMinX = qMin(pMinX, p.x());
-                    pMaxX = qMax(pMaxX, p.x());
-                    pMinY = qMin(pMinY, p.y());
-                    pMaxY = qMax(pMaxY, p.y());
-                }
-                if (pMaxX - pMinX < 1.0 || pMaxY - pMinY < 1.0) {
-                    result.image = QImage();
-                    return result;
-                }
-
-                for (int y = 0; y < canvasH; ++y) {
-                    QRgb* dstLine =
-                        reinterpret_cast<QRgb*>(result.image.scanLine(y));
-                    const double yc = qreal(y - pad) + 0.5;
-                    if (yc < pMinY || yc > pMaxY)
-                        continue;
-                    for (int x = 0; x < canvasW; ++x) {
-                        const double xc = qreal(x - pad) + 0.5;
-                        if (xc < pMinX || xc > pMaxX)
-                            continue;
-                        const QPointF q(xc, yc);
-                        // Chute: fração do bbox. Newton refina rapidamente.
-                        double u = qBound(0.0, (xc - pMinX) / (pMaxX - pMinX), 1.0);
-                        double v = qBound(0.0, (yc - pMinY) / (pMaxY - pMinY), 1.0);
-                        bool ok = false;
-                        for (int it = 0; it < 8; ++it) {
-                            const QPointF f = coonsP(u, v) - q;
-                            if (std::abs(f.x()) + std::abs(f.y()) < 0.3) {
-                                ok = true;
-                                break;
-                            }
-                            const double e = 1.0 / 512.0;
-                            // Colunas do jacobiano por diferenças finitas
-                            // (normalizadas por 2e — sem isso os passos de
-                            // Newton saem na escala errada).
-                            const double inv2e = 1.0 / (2.0 * e);
-                            const QPointF du((coonsP(u + e, v)
-                                              - coonsP(u - e, v)) * inv2e);
-                            const QPointF dv((coonsP(u, v + e)
-                                              - coonsP(u, v - e)) * inv2e);
-                            const double det = du.x() * dv.y() - du.y() * dv.x();
-                            if (std::abs(det) < 1e-7)
-                                break;
-                            const double duStep =
-                                (f.y() * dv.x() - f.x() * dv.y()) / det;
-                            const double dvStep =
-                                (f.x() * du.y() - f.y() * du.x()) / det;
-                            u = qBound(-0.02, u + duStep, 1.02);
-                            v = qBound(-0.02, v + dvStep, 1.02);
-                        }
-                        if (!ok || u < -0.001 || u > 1.001
-                            || v < -0.001 || v > 1.001)
-                            continue; // fora do patch: transparente
-                        const double sx = qBound(0.0, u, 1.0) * qreal(n - 1);
-                        const double sy = qBound(0.0, v, 1.0) * qreal(m - 1);
-                        dstLine[x] = sampleBilinear(sx, sy);
-                    }
-                }
-            }
-        }
-    }
+    } // if (useProjective)
 
     result.topLeft = QPointF(x0 - pad, y0 - pad);
     return result;

@@ -32,6 +32,8 @@ private slots:
     void testColorToAlpha();
     void testMockupWarpQuadIdentity();
     void testMockupWarpQuadAnyOrder();
+    void testMockupWarpFollowsClickOrder();
+    void testMockupWarpFivePointsHonorsEdgePoint();
     void testMockupWarpFivePointsShapeFit();
     void testMockupWarpPolygonShapeFit();
 };
@@ -402,12 +404,16 @@ void TestImageProcessing::testMockupWarpQuadAnyOrder()
     QImage src(60, 40, QImage::Format_ARGB32);
     src.fill(Qt::red);
 
-    // Mesma área marcada em ordem invertida — resultado deve ser idêntico
+    // Contrato: a ordem de clique define o anel. Contornar a MESMA área em
+    // sentido horário (a) ou anti-horário (b) tem de dar o mesmo resultado
+    // (a orientação é normalizada por shoelace). ANTES este teste usava
+    // permutação arbitrária e exigia igualdade — premissa errada que
+    // mascarava a reordenação por ângulo.
     const auto a = ImageProcessing::mockupWarp(src, {
         QPointF(10, 10), QPointF(70, 10), QPointF(70, 50), QPointF(10, 50)
     });
     const auto b = ImageProcessing::mockupWarp(src, {
-        QPointF(10, 50), QPointF(10, 10), QPointF(70, 10), QPointF(70, 50)
+        QPointF(10, 10), QPointF(10, 50), QPointF(70, 50), QPointF(70, 10)
     });
     QCOMPARE(a.image.size(), b.image.size());
     QCOMPARE(a.topLeft, b.topLeft);
@@ -422,15 +428,95 @@ void TestImageProcessing::testMockupWarpQuadAnyOrder()
     QVERIFY(qRed(px(a, 40, 30)) > 240);
 }
 
+void TestImageProcessing::testMockupWarpFollowsClickOrder()
+{
+    // Regressão do bug reportado: 5 pontos clicados contornando a área.
+    // Semântica PHOTOSHOP (Free Transform → Distort): encaixa os 4 CANTOS
+    // da imagem em 4 pontos; os intermediários NÃO deformam o conteúdo.
+    // A área é um trapézio; o 5º ponto dobra a base para baixo. O resultado
+    // é a PERSPECTIVA do retângulo para o quad extremo — não uma faixa
+    // achatada (sintoma do Coons antigo) nem um retângulo reto.
+    QImage src(40, 40, QImage::Format_ARGB32);
+    src.fill(Qt::green);
+
+    const auto r = ImageProcessing::mockupWarp(src, {
+        QPointF(0, 0),        // TL
+        QPointF(100, 0),      // TR
+        QPointF(75, 50),      // BR
+        QPointF(50, 80),      // dobra da base (ignorada para o warp)
+        QPointF(25, 50)       // BL
+    });
+    QVERIFY(!r.image.isNull());
+
+    auto px = [&r](int dx, int dy) {
+        return r.image.pixel(qRound(dx - r.topLeft.x()),
+                             qRound(dy - r.topLeft.y()));
+    };
+
+    // Os 4 cantos do quad extremo (0,0)-(100,0)-(75,50)-(25,50) recebem o
+    // conteúdo da imagem — é a perspectiva, não uma faixa.
+    QVERIFY2(qAlpha(px(1, 2)) > 250, "canto TL deve ter conteúdo");
+    QVERIFY2(qAlpha(px(98, 2)) > 250, "canto TR deve ter conteúdo");
+    QVERIFY2(qAlpha(px(73, 48)) > 250, "canto BR deve ter conteúdo");
+    QVERIFY2(qAlpha(px(27, 48)) > 250, "canto BL deve ter conteúdo");
+
+    // A dobra da base (50,80) ESTÁ dentro do bounding box extremo
+    // (0..100 x 0..80), então recebe conteúdo — o Photoshop Distort também
+    // encheria (ele não fura o contorno marcado).
+    QVERIFY2(qAlpha(px(50, 78)) > 250,
+             " dentro do bounding box extremo: perspectiva do Photoshop "
+             "preenche, não fura");
+    // Fora do bounding box (abaixo de y=80): transparente.
+    QVERIFY2(qAlpha(px(50, 82)) == 0, "fora do bounding box é transparente");
+
+    // Proporção preservada no interior: o pixel central do quad é opaco e
+    // mantém a cor da fonte (sem achatar/rotacionar o conteúdo).
+    QVERIFY(qAlpha(px(50, 25)) > 250);
+    QVERIFY(qGreen(px(50, 25)) > 200);
+}
+
+void TestImageProcessing::testMockupWarpFivePointsHonorsEdgePoint()
+{
+    // 5 pontos com o 5º no MEIO da aresta superior, empurrado para cima.
+    // Semântica Distort: os 4 cantos extremos são (0,20),(50,0),(100,20),
+    // (100,80)/(0,80) — o pico do V É um canto extremo, então entra no
+    // quad; a imagem perspectiva para ele. O que NÃO deve acontecer é a
+    // imagem ser achatada numa faixa.
+    QImage src(30, 30, QImage::Format_ARGB32);
+    src.fill(Qt::yellow);
+
+    const auto r = ImageProcessing::mockupWarp(src, {
+        QPointF(0, 20),       // TL
+        QPointF(50, 0),       // topo do V (canto extremo → entra no quad)
+        QPointF(100, 20),     // TR
+        QPointF(100, 80),     // BR
+        QPointF(0, 80)        // BL
+    });
+    QVERIFY(!r.image.isNull());
+
+    auto px = [&r](int dx, int dy) {
+        return r.image.pixel(qRound(dx - r.topLeft.x()),
+                             qRound(dy - r.topLeft.y()));
+    };
+    // O pico do V recebe conteúdo (é canto do quad extremo).
+    QVERIFY2(qAlpha(px(50, 3)) > 250,
+             "o pico do V é canto extremo e deve receber conteúdo");
+    // O bounding box extremo começa em y=0 (o pico do V), então (2,3) está
+    // DENTRO dele e recebe conteúdo — o Photoshop Distort também encheria.
+    QVERIFY2(qAlpha(px(2, 3)) > 250,
+             " dentro do bounding box extremo (0..100 x 0..80): preenchido");
+    // Base continua cheia.
+    QVERIFY(qAlpha(px(50, 78)) > 250);
+}
+
 void TestImageProcessing::testMockupWarpFivePointsShapeFit()
 {
+    // 5 pontos, o 5º EXATAMENTE sobre a aresta inferior (colinear): o
+    // polígono continua o quad completo. Resultado = perspectiva do quad,
+    // sem distorção de conteúdo (não é "shape fit" livro-antigo).
     QImage src(50, 50, QImage::Format_ARGB32);
     src.fill(Qt::blue);
 
-    // Semântica por FORMA: 5+ pontos moldam a imagem inteira linha a linha.
-    // O 5º ponto este EXATAMENTE sobre a aresta inferior (colinear): o
-    // polígono continua o quad completo — nada é ignorado nem deformado à
-    // toa.
     const auto r = ImageProcessing::mockupWarp(src, {
         QPointF(0, 0), QPointF(100, 0), QPointF(100, 80),
         QPointF(50, 80), QPointF(0, 80)
@@ -442,21 +528,24 @@ void TestImageProcessing::testMockupWarpFivePointsShapeFit()
         return r.image.pixel(qRound(dx - r.topLeft.x()),
                              qRound(dy - r.topLeft.y()));
     };
+    // O ponto do meio da base (colinear) não cria conteúdo extra: a base
+    // reta recebe o rodapé da imagem.
     QVERIFY(qAlpha(px(50, 41)) > 250);
-    QVERIFY(qBlue(px(50, 41)) > 240);
-    // Cantos da área também preenchidos (a imagem inteira é encaixada)
+    QVERIFY(qBlue(px(50, 41)) > 200);
+    // Cantos da área preenchidos (a imagem inteira é encaixada por perspectiva)
     QVERIFY(qAlpha(px(1, 1)) > 250);
     QVERIFY(qAlpha(px(99, 79)) > 250);
 }
 
 void TestImageProcessing::testMockupWarpPolygonShapeFit()
 {
+    // ANTES: L-shape com 6 pontos, warp por FORMA (Coons) moldando a imagem
+    // ao contorno. AGORA (semântica Photoshop): perspectiva para o QUAD
+    // EXTREMO do polígono. A cratera do L NÃO é mais furada — o Photoshop
+    // também não furaria; ele encaixa os 4 cantos.
     QImage src(60, 60, QImage::Format_ARGB32);
     src.fill(Qt::red);
 
-    // L-shape com 6 pontos: warp por FORMA — cada linha da imagem é
-    // esticada entre as bordas marcadas naquela altura. A cratera do L
-    // (x>50, y>40) NÃO recebe conteúdo: a área marcada molda a imagem.
     const auto r = ImageProcessing::mockupWarp(src, {
         QPointF(0, 0), QPointF(100, 0), QPointF(100, 40),
         QPointF(50, 40), QPointF(50, 80), QPointF(0, 80)
@@ -467,17 +556,15 @@ void TestImageProcessing::testMockupWarpPolygonShapeFit()
         return r.image.pixel(qRound(dx - r.topLeft.x()),
                              qRound(dy - r.topLeft.y()));
     };
-    // Interior do polígono (nos dois "braços" do L): opaco (vermelho)
-    QVERIFY(qAlpha(px(25, 20)) > 250);
-    QVERIFY(qRed(px(25, 20)) > 240);
-    QVERIFY(qAlpha(px(25, 70)) > 250);
-    QVERIFY(qRed(px(25, 70)) > 240);
-    QVERIFY(qAlpha(px(75, 20)) > 250);
-    // Cratera do L: transparente — a imagem molda a FORMA marcada
-    QCOMPARE(qAlpha(px(90, 70)), 0);
-    QCOMPARE(qAlpha(px(90, 75)), 0);
-    // Canto do polígono: preenchido
-    QVERIFY(qAlpha(px(1, 1)) > 250);
+    // Os 4 cantos extremos do L recebem conteúdo (perspectiva do quad).
+    QVERIFY(qAlpha(px(1, 1)) > 250);      // TL
+    QVERIFY(qAlpha(px(99, 1)) > 250);     // TR
+    QVERIFY(qAlpha(px(99, 79)) > 250);    // BR
+    QVERIFY(qAlpha(px(1, 79)) > 250);     // BL
+    // Antiga "cratera do L" (90,70): agora DENTRO do quad extremo → preenchida.
+    QVERIFY2(qAlpha(px(90, 70)) > 250,
+             " Photoshop Distort encaixa o quad extremo: não fura o contorno");
+    QVERIFY(qRed(px(90, 70)) > 200);
 }
 
 QTEST_MAIN(TestImageProcessing)

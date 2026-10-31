@@ -852,9 +852,9 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
             // Permitir qualquer quantidade de pontos (mínimo 4 para deformação)
             m_mockupCorners << docPos;
             if (m_mockupCorners.size() >= 4)
-                emit statusMessageRequested(QStringLiteral("Mockup: %1 pontos marcados (mínimo 4). Pressione Enter ou dê duplo clique para confirmar. Shift+clique num ponto para reposicioná-lo.").arg(m_mockupCorners.size()));
+                emit statusMessageRequested(QStringLiteral("Mockup: %1 pontos — os 4 CANTOS definem a perspectiva. Enter/duplo clique confirma; Shift+clique reposiciona.").arg(m_mockupCorners.size()));
             else
-                emit statusMessageRequested(QStringLiteral("Mockup: %1 pontos marcados (precisa de pelo menos 4). Continue clicando.").arg(m_mockupCorners.size()));
+                emit statusMessageRequested(QStringLiteral("Mockup: %1 pontos (mínimo 4 cantos). Continue clicando nos cantos da área.").arg(m_mockupCorners.size()));
             update();
             event->accept();
             return;
@@ -1700,7 +1700,7 @@ void CanvasView::beginMockupPlacement(const QImage& logo)
     m_mockupCorners.clear();
     m_mockupPlacementActive = true;
     setCursor(Qt::CrossCursor);
-    emit statusMessageRequested(QStringLiteral("Mockup: clique nos cantos EM ORDEM, contornando a área (horário ou anti-horário, 4+ pontos). Duplo clique ou Enter confirma; botão direito cancela. Shift+clique reposiciona um ponto."));
+    emit statusMessageRequested(QStringLiteral("Mockup (como o Photoshop Distort): marque os 4 CANTOS da área — a imagem é encaixada em perspectiva. Pontos extras na borda são só referência. Duplo clique ou Enter confirma; botão direito cancela. Shift+clique reposiciona um ponto."));
     update();
 }
 

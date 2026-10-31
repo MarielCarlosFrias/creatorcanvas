@@ -1230,7 +1230,7 @@ void ImageInspector::openMockupDialog()
 
     m_pendingMockupLogo = logo;
     if (m_mockupHint)
-        m_mockupHint->setText(QStringLiteral("Agora marque, na imagem, a área onde a fonte deve ficar. Duplo clique ou Enter confirma."));
+        m_mockupHint->setText(QStringLiteral("Agora marque os 4 CANTOS da área (como o Photoshop Distort). A imagem será encaixada em perspectiva. Duplo clique ou Enter confirma."));
     emit mockupPlacementRequested(m_pendingMockupLogo);
 }
 
@@ -1314,8 +1314,8 @@ void ImageInspector::setMockupArea(const QPolygonF& cornersIn)
     m_originalPreviewImage = QImage();
 
     const QString msg = cornersIn.size() == 4
-        ? QStringLiteral("Mockup criado em camada separada (perspectiva de 4 pontos). Pode mover, ocultar ou desfazer (Ctrl+Z).")
-        : QStringLiteral("Mockup criado em camada separada (deformação de %1 pontos). Pode mover, ocultar ou desfazer (Ctrl+Z).").arg(cornersIn.size());
+        ? QStringLiteral("Mockup aplicado em perspectiva (camada separada). Pode mover, ocultar ou desfazer (Ctrl+Z).")
+        : QStringLiteral("Mockup aplicado em perspectiva a partir dos 4 cantos (camada separada). Pode mover, ocultar ou desfazer (Ctrl+Z).").arg(cornersIn.size());
     if (m_mockupHint)
         m_mockupHint->setText(msg);
 }
