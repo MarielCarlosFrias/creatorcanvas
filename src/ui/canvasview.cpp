@@ -1700,7 +1700,7 @@ void CanvasView::beginMockupPlacement(const QImage& logo)
     m_mockupCorners.clear();
     m_mockupPlacementActive = true;
     setCursor(Qt::CrossCursor);
-    emit statusMessageRequested(QStringLiteral("Mockup: clique nos quatro cantos da área (qualquer ordem). Duplo clique ou Enter confirma; botão direito cancela. Shift+clique reposiciona um ponto."));
+    emit statusMessageRequested(QStringLiteral("Mockup: clique nos cantos EM ORDEM, contornando a área (horário ou anti-horário, 4+ pontos). Duplo clique ou Enter confirma; botão direito cancela. Shift+clique reposiciona um ponto."));
     update();
 }
 

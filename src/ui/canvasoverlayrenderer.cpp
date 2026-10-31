@@ -13,65 +13,6 @@
 namespace cc {
 
 namespace {
-// Espelha a ordenação do ImageProcessing::mockupRingOrder — MANTER EM
-// SINCRONIA: se o warp final muda a ordem, esta função muda junto. Uma
-// cópia antiga (min(x+y) como início) rotulava o ponto 1 na base de áreas
-// que alargam para baixo (estrada em perspectiva) e empenhava o contorno
-// da prévia enquanto o warp usava outro anel — prévia e resultado
-// DISCORDAVAM.
-QPolygonF normalizeQuadCornersPreview(const QVector<QPointF>& corners)
-{
-    if (corners.size() < 3)
-        return corners;
-
-    QPointF centroid(0, 0);
-    for (const QPointF& p : corners)
-        centroid += p;
-    centroid /= qreal(corners.size());
-
-    QVector<QPointF> sorted;
-    for (const QPointF& p : corners)
-        sorted.append(p);
-    std::sort(sorted.begin(), sorted.end(),
-              [&centroid](const QPointF& a, const QPointF& b) {
-                  const double aa = qAtan2(a.y() - centroid.y(),
-                                           a.x() - centroid.x());
-                  const double ab = qAtan2(b.y() - centroid.y(),
-                                           b.x() - centroid.x());
-                  if (aa != ab)
-                      return aa < ab;
-                  // Empate angular (dois pontos no MESMO raio): no lado
-                  // direito do centróide o passeio CW vai do mais distante
-                  // ao mais próximo; no esquerdo, o contrário.
-                  const double da = (a.x() - centroid.x()) * (a.x() - centroid.x())
-                                  + (a.y() - centroid.y()) * (a.y() - centroid.y());
-                  const double db = (b.x() - centroid.x()) * (b.x() - centroid.x())
-                                  + (b.y() - centroid.y()) * (b.y() - centroid.y());
-                  if (qCos(aa) >= 0.0)
-                      return da > db;
-                  return da < db;
-              });
-
-    // O passeio começa no ponto mais "acima-esquerda" VISTO DO CENTRÓIDE
-    // (direção −135°), igual ao warp final.
-    int start = 0;
-    double best = std::numeric_limits<double>::max();
-    for (int i = 0; i < sorted.size(); ++i) {
-        const double ang = qAtan2(sorted[i].y() - centroid.y(),
-                                  sorted[i].x() - centroid.x());
-        double diff = std::abs(ang + 3.0 * M_PI / 4.0);
-        if (diff > M_PI)
-            diff = 2.0 * M_PI - diff;
-        if (diff < best) {
-            best = diff;
-            start = i;
-        }
-    }
-    QPolygonF normalized;
-    for (int i = 0; i < sorted.size(); ++i)
-        normalized.append(sorted[(start + i) % sorted.size()]);
-    return normalized;
-}
 
 // Cache do warp de prévia: a deformação COMPLETA por pixel (Newton + LUTs)
 // é pesada demais para rodar em cada repaint (exposições de janela, hover…).
@@ -275,11 +216,10 @@ void CanvasOverlayRenderer::drawMockupPlacement(QPainter* painter,
 {
     painter->save();
     painter->resetTransform();
-    // Mesma normalização do warp final: a prévia respeita a ordem TL→TR→BR→BL
-    // independentemente da ordem em que os cantos foram marcados.
-    const QPolygonF ordered = normalizeQuadCornersPreview(mockupCorners);
+    // O anel do warp é a ORDEM DE CLIQUE — o contorno e os números da
+    // prévia seguem essa mesma ordem (número i = i-ésimo clique).
     QPolygonF screen;
-    for (const QPointF& point : ordered)
+    for (const QPointF& point : mockupCorners)
         screen << toDevice.map(point);
 
     QColor mkFill = Design::Accent();
@@ -335,7 +275,7 @@ void CanvasOverlayRenderer::drawMockupPlacement(QPainter* painter,
         painter->setBrush(QColor(0x22, 0xa6, 0xf2));
         painter->drawText(screen[i] + QPointF(8, -8), QString::number(i + 1));
     }
-    const QString help = QStringLiteral("MOCKUP: %1 pontos — duplo clique/Enter confirma — botão direito cancela")
+    const QString help = QStringLiteral("MOCKUP: %1 pontos (em ordem) — duplo clique/Enter confirma — botão direito cancela")
         .arg(mockupCorners.size());
     QFont font = painter->font();
     font.setBold(true);

@@ -181,15 +181,16 @@ public:
     static QImage redEyeRemove(const QImage& target, const QPoint& center, int radius);
 
     /// Warp de mockup estilo Photoshop:
+    /// - `destinationPoints` na ORDEM DE CLIQUE, contornando a área (CW ou
+    ///   CCW — a orientação é detectada automaticamente; pontos duplicados
+    ///   são ignorados);
     /// - Exatamente 4 pontos em quad convexo: mapeamento projetivo exato
     ///   (quad -> quad) — perspectiva verdadeira;
-    /// - Qualquer outro caso (5+ pontos, ou 4 cliques em zigue-zague):
-    ///   warp por FORMA — o polígono marcado molda a imagem inteira linha
-    ///   a linha: cada linha horizontal da fonte é esticada entre as bordas
-    ///   marcadas naquela altura, então cada ponto (inclusive os do meio de
-    ///   aresta) abre/fecha a imagem no seu lugar, sem rotação do conteúdo
-    ///   e sem recorte de pixels;
-    /// - Pontos em QUALQUER ordem (reordenados a partir do acima-esquerda);
+    /// - 5+ pontos (ou 4 cliques que não formam quad convexo): patch de
+    ///   Coons — as pontas da imagem vão aos 4 cantos (quadrantes) da área
+    ///   e os pontos restantes dobram as arestas; anel degenerado cai em
+    ///   divisão em 4 arcos iguais — NUNCA num retângulo reto que ignora
+    ///   os pontos;
     /// - Retorna a imagem deformada + a posicao do topo-esquerdo no doc.
     static MockupWarpResult mockupWarp(const QImage& source, const QPolygonF& destinationPoints);
 };

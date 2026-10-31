@@ -1349,65 +1349,6 @@ QImage ImageProcessing::redEyeRemove(const QImage& target, const QPoint& center,
 // começando pelo ponto mais próximo do canto superior-esquerdo — a
 // convenção TL→TR→BR→BL que o QTransform::quadToQuad espera. Genérico
 // para qualquer anel de 3+ pontos.
-static QPolygonF mockupRingOrder(const QPolygonF& corners)
-{
-    if (corners.size() < 3)
-        return corners;
-
-    QPointF centroid(0, 0);
-    for (const QPointF& p : corners)
-        centroid += p;
-    centroid /= qreal(corners.size());
-
-    QVector<QPointF> sorted;
-    for (const QPointF& p : corners)
-        sorted.append(p);
-    std::sort(sorted.begin(), sorted.end(),
-              [&centroid](const QPointF& a, const QPointF& b) {
-                  const double aa = qAtan2(a.y() - centroid.y(),
-                                           a.x() - centroid.x());
-                  const double ab = qAtan2(b.y() - centroid.y(),
-                                           b.x() - centroid.x());
-                  if (aa != ab)
-                      return aa < ab;
-                  // Empate angular (dois pontos no MESMO raio do centróide,
-                  // ex.: vértice côncavo no meio da parede): o passeio CW
-                  // vai sempre do mais distante ao mais próximo no lado
-                  // direito do centróide, e o contrário no lado esquerdo.
-                  // Empates arbitrários criam anéis em zigue-zague e furam
-                  // o warp por forma.
-                  const double da = (a.x() - centroid.x()) * (a.x() - centroid.x())
-                                  + (a.y() - centroid.y()) * (a.y() - centroid.y());
-                  const double db = (b.x() - centroid.x()) * (b.x() - centroid.x())
-                                  + (b.y() - centroid.y()) * (b.y() - centroid.y());
-                  if (qCos(aa) >= 0.0)
-                      return da > db; // lado direito: mais longe primeiro
-                  return da < db;     // lado esquerdo: mais perto primeiro
-              });
-
-    // O passeio pela borda da fonte começa no canto TL (0,0): o anel deve
-    // começar no ponto mais "acima-esquerda" VISTO DO CENTRÓIDE (direção
-    // −135° em coords de tela). min(x+y) falhava em áreas que alargam para
-    // baixo (estrada em perspectiva): escolhia a base como início e o
-    // conteúdo aparecia como se a base fosse o "ponto 1".
-    int start = 0;
-    double best = std::numeric_limits<double>::max();
-    for (int i = 0; i < sorted.size(); ++i) {
-        const double ang = qAtan2(sorted[i].y() - centroid.y(),
-                                  sorted[i].x() - centroid.x());
-        double diff = std::abs(ang + 3.0 * M_PI / 4.0);
-        if (diff > M_PI)
-            diff = 2.0 * M_PI - diff;
-        if (diff < best) {
-            best = diff;
-            start = i;
-        }
-    }
-    QPolygonF normalized;
-    for (int i = 0; i < sorted.size(); ++i)
-        normalized.append(sorted[(start + i) % sorted.size()]);
-    return normalized;
-}
 
 // O quadToQuad só é confiável quando o quad é CONVEXO e simples: cliques
 // em zigue-zague/interior produzem um quad côncavo ou "laço" e o warp
@@ -1488,10 +1429,28 @@ ImageProcessing::mockupWarp(const QImage& source, const QPolygonF& destinationPo
     if (localPts.size() < 4)
         return result;
 
-    // Anel dos pontos em ordem canônica (CW iniciando no acima-esquerda) —
-    // o resultado não depende da ordem em que o usuário clicou.
-    QPolygonF ring = mockupRingOrder(localPts);
-    const bool useProjective = (ring.size() == 4 && mockupQuadIsConvex(ring));
+    // Anel = ORDEM DE CLIQUE (contrato da interação: a UI instrui a
+    // contornar a área na sequência). A reordenação por ângulo antiga
+    // embaralhava marcações legítimas (ex.: ponto interno ou quinas numa
+    // ordem que o sort angular invertia), a seleção de cantos falhava e o
+    // warp caía no retângulo reto que DESCARTAVA todos os pontos.
+    QPolygonF ring = localPts;
+
+    // Garante orientação horária na tela (y para baixo): shoelace > 0.
+    // O usuário pode contornar CW ou CCW — as curvas do Coons precisam de
+    // UMA orientação consistente (TL→TR→BR→BL), senão a imagem sai
+    // espelhada verticalmente.
+    const int k = ring.size();
+    double shoelace = 0.0;
+    for (int i = 0; i < k; ++i) {
+        const QPointF& a = ring[i];
+        const QPointF& b = ring[(i + 1) % k];
+        shoelace += a.x() * b.y() - b.x() * a.y();
+    }
+    if (shoelace < 0.0)
+        std::reverse(ring.begin(), ring.end());
+
+    const bool useProjective = (k == 4 && mockupQuadIsConvex(ring));
 
     // Amostragem bilinear com clamp nas bordas da fonte.
     auto sampleBilinear = [&](double sx, double sy) -> QRgb {
@@ -1557,66 +1516,48 @@ ImageProcessing::mockupWarp(const QImage& source, const QPolygonF& destinationPo
         //  * interior: P(u,v) = Coons(T,B,L,R); inversão por Newton pixel
         //    a pixel + amostragem bilinear da fonte por (u,v).
         // ====================================================================
-        const int k = ring.size();
-
         // ====================================================================
         // Seleção dos 4 cantos entre os k pontos (k pode ser > 4 e incluir
-        // pontos INTERNOS — ex.: um pino no topo de uma placa STOP).
-        //
-        // Ranking GULOSO por diagonal: a diagonal 1 (x+y mínimo/máximo) pega
-        // os seus extremos e a diagonal 2 (x−y) pega os extremos ainda NÃO
-        // usados. Um ranking independente (como o anterior) poderia dar o
-        // MESMO ponto para TL e TR quando um pino interno vence os dois
-        // rankings — cornersOk=false e a imagem caía no fallback de
-        // retângulo, IGNORANDO todos os pontos.
-        //
-        // Os extremos são SÓ candidatos: o canto inicial (TL) é o candidato
-        // mais próximo da direção −135° vista do centróide (mesmo critério
-        // do anel e da prévia). Escolher TL por min(x+y) invertia a imagem
-        // 180° em áreas que alargam para baixo (estrada em perspectiva: o
-        // canto inferior-esquerdo tinha x+y menor que o superior-esquerdo).
+        // pontos INTERNOS): para cada quadrante a partir do centróide
+        // (TL, TR, BR, BL), o ponto com maior projeção naquela direção.
+        // Sempre entrega 4 pontos DISTINTOS — o ranking por diagonais
+        // antigo podia falhar e derrubar o warp no retângulo reto que
+        // descartava a marcação inteira.
         // ====================================================================
         int iTL = -1, iTR = -1, iBR = -1, iBL = -1;
         {
-            double sMin = std::numeric_limits<double>::max();
-            double sMax = -std::numeric_limits<double>::max();
-            int iA = -1, iB = -1;                          // diagonal 1
-            for (int i = 0; i < k; ++i) {
-                const double s = ring[i].x() + ring[i].y();
-                if (s < sMin) { sMin = s; iA = i; }
-                if (s > sMax) { sMax = s; iB = i; }
-            }
-            // Diagonal 2: extremos de x−y entre os pontos ainda livres.
-            double tMax = -std::numeric_limits<double>::max();
-            double tMin = std::numeric_limits<double>::max();
-            for (int i = 0; i < k; ++i) {
-                if (i == iA || i == iB)
-                    continue;
-                const double t = ring[i].x() - ring[i].y();
-                if (t > tMax) { tMax = t; iTR = i; }
-                if (t < tMin) { tMin = t; iBL = i; }
-            }
-            iTL = iA;
-            iBR = iB;
-            // TL real: candidato mais perto de −135° do centróide do anel.
             QPointF centroid(0, 0);
             for (const QPointF& p : ring)
                 centroid += p;
             centroid /= qreal(k);
-            double bestAng = -1.0;
-            for (int c : {iA, iB, iTR, iBL}) {
-                if (c < 0)
-                    continue;
-                const double ang = std::atan2(ring[c].y() - centroid.y(),
-                                              ring[c].x() - centroid.x());
-                double diff = std::abs(ang + 3.0 * M_PI / 4.0);
-                if (diff > M_PI)
-                    diff = 2.0 * M_PI - diff;
-                if (bestAng < 0.0 || diff < bestAng) {
-                    bestAng = diff;
-                    iTL = c;
+
+            const QPointF dirs[4] = {
+                QPointF(-1.0, -1.0), // TL
+                QPointF( 1.0, -1.0), // TR
+                QPointF( 1.0,  1.0), // BR
+                QPointF(-1.0,  1.0), // BL
+            };
+            std::vector<bool> used(k, false);
+            int picked[4] = {-1, -1, -1, -1};
+            for (int c = 0; c < 4; ++c) {
+                double best = -std::numeric_limits<double>::max();
+                for (int i = 0; i < k; ++i) {
+                    if (used[i])
+                        continue;
+                    const QPointF d = ring[i] - centroid;
+                    const double dot = d.x() * dirs[c].x() + d.y() * dirs[c].y();
+                    if (dot > best) {
+                        best = dot;
+                        picked[c] = i;
+                    }
                 }
+                if (picked[c] >= 0)
+                    used[picked[c]] = true;
             }
+            iTL = picked[0];
+            iTR = picked[1];
+            iBR = picked[2];
+            iBL = picked[3];
         }
         const bool cornersOk = iTL >= 0 && iTR >= 0 && iBR >= 0 && iBL >= 0
                             && iTL != iTR && iTL != iBR && iTL != iBL
@@ -1639,42 +1580,27 @@ ImageProcessing::mockupWarp(const QImage& source, const QPolygonF& destinationPo
             iBR = others[1];
             iBL = others[2];
         }
-        const int posTR = cornersOk ? (iTR - iTL + k) % k : -1;
-        const int posBR = cornersOk ? (iBR - iTL + k) % k : -1;
-        const int posBL = cornersOk ? (iBL - iTL + k) % k : -1;
+        int posTR = -1, posBR = -1, posBL = -1;
+        if (cornersOk) {
+            posTR = (iTR - iTL + k) % k;
+            posBR = (iBR - iTL + k) % k;
+            posBL = (iBL - iTL + k) % k;
+        }
         const bool orderOk = cornersOk && posTR > 0
                           && posTR < posBR && posBR < posBL;
 
-        // Plano B (anel degenerado): estica a imagem inteira reta ao bbox —
-        // previsível, sem rotação e sem recorte.
-        auto stretchBox = [&]() {
-            const QRectF localBox = QPolygonF(localPts).boundingRect();
-            const QPolygonF boxQuad{
-                localBox.topLeft(), localBox.topRight(),
-                localBox.bottomRight(), localBox.bottomLeft()};
-            QPolygonF srcQuad;
-            srcQuad << QPointF(0, 0) << QPointF(n, 0)
-                    << QPointF(n, m) << QPointF(0, m);
-            QTransform warp;
-            if (!QTransform::quadToQuad(srcQuad, boxQuad, warp))
-                return;
-            const QTransform invWarp = warp.inverted();
-            for (int y = 0; y < canvasH; ++y) {
-                QRgb* dstLine = reinterpret_cast<QRgb*>(result.image.scanLine(y));
-                for (int x = 0; x < canvasW; ++x) {
-                    const QPointF srcPt = invWarp.map(QPointF(qreal(x - pad),
-                                                             qreal(y - pad)));
-                    if (srcPt.x() < 0.0 || srcPt.x() >= n
-                        || srcPt.y() < 0.0 || srcPt.y() >= m)
-                        continue;
-                    dstLine[x] = sampleBilinear(srcPt.x(), srcPt.y());
-                }
-            }
-        };
-
         if (!cornersOk || !orderOk) {
-            stretchBox();
-        } else {
+            // Anel degenerado para o esquema de cantos (pontos internos em
+            // zigue-zague): divide o anel em 4 arcos iguais a partir do
+            // ponto 1 — HONRA todos os pontos como dobras das arestas, em
+            // vez do retângulo reto antigo que DESCARTAVA a marcação.
+            ordered = ring;
+            posTR = qMax(1, k / 4);
+            posBR = qMax(posTR + 1, k / 2);
+            posBL = qMax(posBR + 1, (3 * k) / 4);
+        }
+
+        { // arestas e LUTs do Coons (executa sempre; cantos ou divisão igual)
             // Arestas do anel entre os cantos: o passeio CW de TL vai a
             // TR (topo), TR a BR (direita), BR a BL (base) e BL volta a
             // TL (esquerda).
@@ -1701,8 +1627,12 @@ ImageProcessing::mockupWarp(const QImage& source, const QPolygonF& destinationPo
 
             if (top.size() < 2 || right.size() < 2
                 || bottom.size() < 2 || left.size() < 2) {
-                stretchBox();
-            } else {
+                // Não deve ocorrer (k ≥ 4 ⇒ arcos ≥ 2 pontos), mas NUNCA
+                // produzir o retângulo reto que ignora a marcação.
+                result.image = QImage();
+                return result;
+            }
+            {
                 // LUTs das curvas parametrizadas pelo comprimento de arco.
                 constexpr int kLut = 1024;
                 auto buildLut = [](const QPolygonF& poly) {
