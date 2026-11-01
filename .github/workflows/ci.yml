@@ -92,9 +92,13 @@ jobs:
                        | grep -oE '[0-9]+ - [A-Za-z0-9_]+' \
                        | sed 's/^[0-9]* - //' | paste -sd, - )
             echo "::error title=Testes falharam (rc=$rc)::${failed:-nomes indisponiveis}"
-            # Linhas de falha do QtTest + qualquer erro de sanitizer.
-            grep -hE 'FAIL!|Totals: .*failed|ERROR: (Address|UndefinedBehavior)Sanitizer|SUMMARY: |runtime error:|Segmentation|Aborted|ASSERT' \
-              ctest.log | head -25 | while IFS= read -r l; do echo "::error title=Falha::$l"; done
+            # Relatório sanitizer COMPLETO (alocação/libertação = a prova) e
+            # linhas de falha do QtTest. Anotações aceitam múltiplas linhas,
+            # então o dump inteiro cabe numa única anotação.
+            {
+              sed -n '/==.*==ERROR: /,/^==.*==ABORTING/p' ctest.log | head -45
+              grep -hE 'FAIL!|Totals: .*failed|runtime error:' ctest.log | head -10
+            } | while IFS= read -r l; do echo "::error title=Relatorio da falha::$l"; done
           fi
           exit $rc
 
