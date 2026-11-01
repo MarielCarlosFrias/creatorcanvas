@@ -87,14 +87,14 @@ jobs:
           cat ctest.log
           if [ "$rc" -ne 0 ]; then
             # Anotações ficam visíveis na API sem autenticação: a falha passa
-            # a ser diagnosticável pelo NOME dos testes (antes só havia
-            # "exit code 8"). Extrai a seção "The following tests FAILED".
+            # a ser diagnosticável (antes só havia "exit code 8").
             failed=$(sed -n '/The following tests FAILED/,/^$/p' ctest.log \
                        | grep -oE '[0-9]+ - [A-Za-z0-9_]+' \
                        | sed 's/^[0-9]* - //' | paste -sd, - )
-            first=$(grep -m1 -B2 -A25 'Failed ' ctest.log | head -60)
             echo "::error title=Testes falharam (rc=$rc)::${failed:-nomes indisponiveis}"
-            echo "::error title=Primeira falha::$first"
+            # Linhas de falha do QtTest + qualquer erro de sanitizer.
+            grep -hE 'FAIL!|Totals: .*failed|ERROR: (Address|UndefinedBehavior)Sanitizer|SUMMARY: |runtime error:|Segmentation|Aborted|ASSERT' \
+              ctest.log | head -25 | while IFS= read -r l; do echo "::error title=Falha::$l"; done
           fi
           exit $rc
 
