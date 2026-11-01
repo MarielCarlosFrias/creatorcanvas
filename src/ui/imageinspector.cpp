@@ -1124,6 +1124,17 @@ void ImageInspector::openMockupDialog()
                              imageLayer->id().toString(QUuid::WithoutBraces));
     }
     sourceForm->addRow(QStringLiteral("Imagem fonte"), sourceCombo);
+    // Modo do warp (Photoshop): Distort (4 cantos, perspectiva) ou Forma
+    // livre (contorno inteiro, qualquer formato).
+    auto* modeCombo = new QComboBox(&sourceDialog);
+    modeCombo->addItem(QStringLiteral("Perspectiva (4 cantos) — como Photoshop Distort"), false);
+    modeCombo->addItem(QStringLiteral("Forma livre (qualquer formato — contorno inteiro)"), true);
+    modeCombo->setToolTip(
+        QStringLiteral("Perspectiva: marque os 4 cantos da área; a imagem é encaixada em "
+                       "perspectiva exata (ideal para estradas/placas).\n"
+                       "Forma livre: marque o contorno inteiro (5+ pontos, qualquer "
+                       "formato); a imagem preenche a forma, seguindo as arestas."));
+    sourceForm->addRow(QStringLiteral("Modo"), modeCombo);
     auto* removeBackground = new QCheckBox(QStringLiteral("Remover fundo uniforme (Varinha Mágica)"), &sourceDialog);
     removeBackground->setToolTip(QStringLiteral("Útil para logos com fundo sólido (branco, magenta, etc.). Removido antes do warp para que só o conteúdo siga os pontos. O ficheiro original não é alterado."));
     // Ligado por defeito: um logo com fundo sólido warpado SEM remoção
@@ -1229,8 +1240,12 @@ void ImageInspector::openMockupDialog()
     }
 
     m_pendingMockupLogo = logo;
-    if (m_mockupHint)
-        m_mockupHint->setText(QStringLiteral("Agora marque os 4 CANTOS da área (como o Photoshop Distort). A imagem será encaixada em perspectiva. Duplo clique ou Enter confirma."));
+    m_pendingMockupFreeShape = modeCombo->currentData().toBool();
+    if (m_mockupHint) {
+        m_mockupHint->setText(m_pendingMockupFreeShape
+            ? QStringLiteral("Modo FORMA LIVRE: marque o contorno inteiro da área (5+ pontos). A imagem preencherá a forma. Duplo clique ou Enter confirma.")
+            : QStringLiteral("Modo PERSPECTIVA: marque os 4 CANTOS da área (como o Photoshop Distort). Duplo clique ou Enter confirma."));
+    }
     emit mockupPlacementRequested(m_pendingMockupLogo);
 }
 
@@ -1259,7 +1274,7 @@ void ImageInspector::setMockupArea(const QPolygonF& cornersIn)
     // Pontos em qualquer ordem; a camada inclui uma margem transparente
     // (o conteúdo deformado pode passar um pouco da área marcada).
     // ========================================================================
-    const auto warp = ImageProcessing::mockupWarp(logo, cornersIn);
+    const auto warp = ImageProcessing::mockupWarp(logo, cornersIn, m_pendingMockupFreeShape);
     if (warp.image.isNull())
         return;
 
@@ -1323,6 +1338,7 @@ void ImageInspector::setMockupArea(const QPolygonF& cornersIn)
 void ImageInspector::clearPendingMockup()
 {
     m_pendingMockupLogo = QImage();
+    m_pendingMockupFreeShape = false;
     m_previewTimer.stop();
     if (m_mockupHint)
         m_mockupHint->setText(QStringLiteral("Clique em \"Mockup / Substituir Logo\" para começar."));

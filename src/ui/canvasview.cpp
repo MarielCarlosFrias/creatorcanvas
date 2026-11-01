@@ -757,7 +757,7 @@ void CanvasView::paintEvent(QPaintEvent*)
     }
 
     if (m_mockupPlacementActive) {
-        CanvasOverlayRenderer::drawMockupPlacement(&painter, m_mockupCorners, docToDevice(), m_mockupPlacementLogo);
+        CanvasOverlayRenderer::drawMockupPlacement(&painter, m_mockupCorners, docToDevice(), m_mockupPlacementLogo, m_mockupPlacementFreeShape);
     }
 
     CanvasOverlayRenderer::drawSnapGuides(&painter, m_document->width(), m_document->height(), m_activeGuides, m_zoom, docToDevice());
@@ -1692,11 +1692,12 @@ void CanvasView::setTool(CanvasTool tool)
     emit toolChanged(m_tool);
 }
 
-void CanvasView::beginMockupPlacement(const QImage& logo)
+void CanvasView::beginMockupPlacement(const QImage& logo, bool freeShape)
 {
     if (!m_document)
         return;
     m_mockupPlacementLogo = logo;
+    m_mockupPlacementFreeShape = freeShape;
     m_mockupCorners.clear();
     m_mockupPlacementActive = true;
     setCursor(Qt::CrossCursor);
@@ -1711,6 +1712,7 @@ void CanvasView::cancelMockupPlacement()
     m_mockupPlacementActive = false;
     m_mockupCorners.clear();
     m_mockupPlacementLogo = QImage();
+    m_mockupPlacementFreeShape = false;
     setCursor(Qt::ArrowCursor);
     emit statusMessageRequested(QStringLiteral("Posicionamento do mockup cancelado."));
     emit mockupPlacementCancelled();
@@ -1792,6 +1794,7 @@ void CanvasView::finishMockupPlacement()
     m_mockupPlacementActive = false;
     m_mockupCorners.clear();
     m_mockupPlacementLogo = QImage();
+    m_mockupPlacementFreeShape = false;
     setCursor(Qt::ArrowCursor);
     update();
     emit mockupAreaSelected(completed);

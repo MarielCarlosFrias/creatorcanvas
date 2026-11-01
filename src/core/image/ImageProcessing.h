@@ -195,7 +195,15 @@ public:
     ///   divisão em 4 arcos iguais — NUNCA num retângulo reto que ignora
     ///   os pontos;
     /// - Retorna a imagem deformada + a posicao do topo-esquerdo no doc.
-    static MockupWarpResult mockupWarp(const QImage& source, const QPolygonF& destinationPoints);
+    /// Warp de mockup. Dois modos (Photoshop):
+    ///  - freeShape=false (padrão): DISTORT — os 4 cantos do polígono em
+    ///    perspectiva projetiva exata. Use para áreas quadriculares.
+    ///  - freeShape=true: FORMA LIVRE — o contorno inteiro marcado (5+ pontos
+    ///    em qualquer formato: hexágono, estrela, L) é a fronteira do patch
+    ///    de Coons; a imagem preenche a forma, com as arestas seguindo os
+    ///    pontos intermediários. Equivalente ao Warp com contorno do Photoshop.
+    static MockupWarpResult mockupWarp(const QImage& source, const QPolygonF& destinationPoints,
+                                       bool freeShape = false);
 };
 
 } // namespace cc

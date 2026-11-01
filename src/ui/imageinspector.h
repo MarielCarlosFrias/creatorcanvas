@@ -52,7 +52,7 @@ public slots:
 
 signals:
     void eyedropperRequested();
-    void mockupPlacementRequested(const QImage& logo);
+    void mockupPlacementRequested(const QImage& logo, bool freeShape = false);
     void layerSelectedChanged(const cc::LayerId& id);
     void imagePreviewReady(const cc::LayerId& id, const QImage& image);
     void imagePreviewCleared();
@@ -218,6 +218,7 @@ private:
     QPushButton* m_puppetWarpButton = nullptr;
     QLabel* m_mockupHint = nullptr;
     QImage m_pendingMockupLogo;
+    bool m_pendingMockupFreeShape = false; // false = perspectiva, true = forma livre
 
     // Blend If (Mesclagem Avançada por Luminância)
     class CollapsibleSection* m_blendIfSection = nullptr;

@@ -49,7 +49,8 @@ public:
     static void drawMockupPlacement(QPainter* painter,
                                     const QVector<QPointF>& mockupCorners,
                                     const QTransform& toDevice,
-                                    const QImage& logo = QImage());
+                                    const QImage& logo = QImage(),
+                                    bool freeShape = false);
 
     static void drawSnapGuides(QPainter* painter,
                                int docW,

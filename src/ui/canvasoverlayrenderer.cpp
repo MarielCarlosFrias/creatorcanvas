@@ -20,6 +20,7 @@ namespace {
 struct MockupPreviewCache {
     QPolygonF points;
     QImage logo;
+    bool freeShape = false;
     QImage image;
     QPointF topLeft;
     bool valid = false;
@@ -212,7 +213,8 @@ void CanvasOverlayRenderer::drawSafeZones(QPainter* painter,
 void CanvasOverlayRenderer::drawMockupPlacement(QPainter* painter,
                                                 const QVector<QPointF>& mockupCorners,
                                                 const QTransform& toDevice,
-                                                const QImage& logo)
+                                                const QImage& logo,
+                                                bool freeShape)
 {
     painter->save();
     painter->resetTransform();
@@ -242,14 +244,26 @@ void CanvasOverlayRenderer::drawMockupPlacement(QPainter* painter,
         static MockupPreviewCache cache;
         bool same = cache.valid
                  && cache.logo.cacheKey() == logo.cacheKey()
+                 && cache.freeShape == freeShape
                  && cache.points.size() == mockupCorners.size();
         for (int i = 0; same && i < cache.points.size(); ++i)
             same = (cache.points[i] == mockupCorners[i]);
         if (!same) {
+            QImage warpLogo = logo;
+            // Prévia: em forma livre o warp é por pixel (Newton por ponto) —
+            // numa marcação grande isso travaria a UI. Reduz a logo só para
+            // a PRÉVIA (o resultado final é sempre full-res).
+            if (freeShape) {
+                const int maxSide = 320;
+                if (warpLogo.width() > maxSide || warpLogo.height() > maxSide)
+                    warpLogo = warpLogo.scaled(maxSide, maxSide, Qt::KeepAspectRatio,
+                                               Qt::SmoothTransformation);
+            }
             const auto warp = ImageProcessing::mockupWarp(
-                logo, QPolygonF(mockupCorners));
+                warpLogo, QPolygonF(mockupCorners), freeShape);
             cache.points = mockupCorners;
             cache.logo = logo;
+            cache.freeShape = freeShape;
             cache.image = warp.image;
             cache.topLeft = warp.topLeft;
             cache.valid = true;

@@ -31,6 +31,8 @@ private slots:
     void testModifyImageLayerCommand();
     void testColorToAlpha();
     void testMockupWarpQuadIdentity();
+    void testMockupWarpFreeShapeHexagon();
+    void testMockupWarpModesDiffer();
     void testMockupWarpQuadAnyOrder();
     void testMockupWarpFollowsClickOrder();
     void testMockupWarpFivePointsHonorsEdgePoint();
@@ -364,6 +366,81 @@ void TestImageProcessing::testColorToAlpha()
     QVERIFY(res3.pixelColor(5, 5).red() < 10);
     QVERIFY(res3.pixelColor(5, 5).green() < 10);
     QVERIFY(res3.pixelColor(5, 5).blue() < 10);
+}
+
+void TestImageProcessing::testMockupWarpFreeShapeHexagon()
+{
+    // FORMA LIVRE: hexágono regular (forma NÃO quadricular). A imagem deve
+    // preencher a FORMA — as larguras variam seguindo o hexágono (afunila
+    // no topo e na base), ao contrário do modo perspectiva (que só encheria
+    // o quad central).
+    QImage src(60, 60, QImage::Format_ARGB32);
+    src.fill(Qt::red);
+
+    const QPolygonF hex{
+        QPointF(50, 0), QPointF(100, 30), QPointF(100, 80),
+        QPointF(50, 110), QPointF(0, 80), QPointF(0, 30)
+    };
+    const auto r = ImageProcessing::mockupWarp(src, hex, true);
+    QVERIFY(!r.image.isNull());
+
+    auto widthAt = [&](int dy) {
+        const int y = qRound(dy - r.topLeft.y());
+        if (y < 0 || y >= r.image.height())
+            return 0;
+        int f = -1, la = -1;
+        for (int x = 0; x < r.image.width(); ++x) {
+            if (qAlpha(r.image.pixel(x, y)) > 128) {
+                if (f < 0) f = x;
+                la = x;
+            }
+        }
+        return f < 0 ? 0 : la - f + 1;
+    };
+    // Meio do hexágono: largura total (100). Topo e base: mais estreitos.
+    const int wTop = widthAt(10);
+    const int wMid = widthAt(55);
+    const int wBot = widthAt(100);
+    QVERIFY2(wMid >= 95, qPrintable(QString("meio cheio: %1").arg(wMid)));
+    QVERIFY2(wTop < wMid && wBot < wMid,
+             qPrintable(QString("forma hexagonal: topo %1 / meio %2 / base %3")
+                            .arg(wTop).arg(wMid).arg(wBot)));
+    // Centro preenchido com a cor da fonte.
+    const int cx = qRound(50 - r.topLeft.x());
+    const int cy = qRound(55 - r.topLeft.y());
+    QVERIFY(qAlpha(r.image.pixel(cx, cy)) > 250);
+    QVERIFY(qRed(r.image.pixel(cx, cy)) > 200);
+}
+
+void TestImageProcessing::testMockupWarpModesDiffer()
+{
+    // Os dois modos têm de produzir resultados DIFERENTES para a mesma
+    // marcação não quadricular — o usuário escolhe entre eles.
+    QImage src(50, 50, QImage::Format_ARGB32);
+    src.fill(Qt::blue);
+    const QPolygonF pts{
+        QPointF(20, 5), QPointF(80, 5), QPointF(95, 50),
+        QPointF(80, 95), QPointF(20, 95), QPointF(5, 50)
+    };
+    const auto distort = ImageProcessing::mockupWarp(src, pts, false);
+    const auto livre = ImageProcessing::mockupWarp(src, pts, true);
+    QVERIFY(!distort.image.isNull());
+    QVERIFY(!livre.image.isNull());
+    // Ambos preenchidos, mas com cobertura diferente.
+    auto area = [](const MockupWarpResult& r) {
+        int cnt = 0;
+        for (int y = 0; y < r.image.height(); ++y)
+            for (int x = 0; x < r.image.width(); ++x)
+                if (qAlpha(r.image.pixel(x, y)) > 128)
+                    ++cnt;
+        return cnt;
+    };
+    QVERIFY2(area(livre) != area(distort),
+             qPrintable(QString("áreas devem diferir: livre %1 vs distort %2")
+                            .arg(area(livre)).arg(area(distort))));
+    // Regressão: nenhum dos dois pode ser nulo nem degenerar.
+    QVERIFY(distort.image.width() > 4 && distort.image.height() > 4);
+    QVERIFY(livre.image.width() > 4 && livre.image.height() > 4);
 }
 
 void TestImageProcessing::testMockupWarpQuadIdentity()
