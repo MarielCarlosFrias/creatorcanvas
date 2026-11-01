@@ -81,3 +81,17 @@ jobs:
           else
             ctest --test-dir build/${{ matrix.preset }} --output-on-failure
           fi
+
+      # Sempre publica o relatório: com `if: failure()` os logs ficam
+      # anexados ao run e a falha passa a ser diagnosticável sem precisar
+      # de token (antes só dava para ver "exit code 8" nas anotações).
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report-${{ matrix.preset }}
+          path: |
+            build/${{ matrix.preset }}/Testing/Temporary/
+            build/${{ matrix.preset }}/tests/*.log
+          if-no-files-found: warn
+          retention-days: 7

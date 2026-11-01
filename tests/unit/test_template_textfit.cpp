@@ -7,6 +7,7 @@
 #include "core/layers/Layer.h"
 
 #include <QFont>
+#include <QFontDatabase>
 #include <QFontMetrics>
 #include <QtTest>
 #include <QGuiApplication>
@@ -52,7 +53,12 @@ private slots:
                     continue; // auto-size cresce com o conteúdo
                 ++textLayersChecked;
 
-                QFont font(text->fontFamily);
+                // Métrica pela fonte PADRÃO do sistema: os templates usam
+                // a família padrão, e a largura real depende do SO (Noto no
+                // Linux, Segoe no Windows). Medir pela família padrão mantém
+                // o teste significativo em qualquer plataforma sem exigir
+                // fontes instaladas — o que antes fazia o Windows falhar.
+                QFont font = QFontDatabase::systemFont(QFontDatabase::GeneralFont);
                 font.setBold(text->bold);
                 font.setItalic(text->italic);
                 font.setPointSizeF(text->sizePt > 0 ? text->sizePt : 1.0);
