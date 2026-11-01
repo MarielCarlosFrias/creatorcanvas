@@ -44,12 +44,21 @@ public:
     {
         if (!canExecute())
             return;
+        // Defesa profunda: reproducao deterministica (Docker, Qt 6.8 +
+        // GCC 13 + ASan) mostrou SEGV por `m_doc` nulo neste ponto — o
+        // comando ficava com layout/estado corrompido entre TUs. Sem a
+        // guarda, execute() aborta o processo inteiro; com ela, o passo
+        // de histórico é ignorado em segurança.
+        if (m_doc == nullptr)
+            return;
         (m_doc->*m_apply)(m_layerId, m_newValue);
     }
 
     void undo() override
     {
         if (!canExecute())
+            return;
+        if (m_doc == nullptr)
             return;
         (m_doc->*m_apply)(m_layerId, m_oldValue);
     }
