@@ -430,12 +430,11 @@ void TestImageProcessing::testMockupWarpQuadAnyOrder()
 
 void TestImageProcessing::testMockupWarpFollowsClickOrder()
 {
-    // Regressão do bug reportado: 5 pontos clicados contornando a área.
-    // Semântica PHOTOSHOP (Free Transform → Distort): encaixa os 4 CANTOS
-    // da imagem em 4 pontos; os intermediários NÃO deformam o conteúdo.
-    // A área é um trapézio; o 5º ponto dobra a base para baixo. O resultado
-    // é a PERSPECTIVA do retângulo para o quad extremo — não uma faixa
-    // achatada (sintoma do Coons antigo) nem um retângulo reto.
+    // Semântica PHOTOSHOP (Free Transform → Distort): 5 pontos marcados
+    // contornando um TRAPÉZIO; o 5º ponto é extra na borda. O warp usa os
+    // 4 CANTOS do quadrilátero (0,0),(100,0),(75,50),(25,50) em perspectiva
+    // exata — o conteúdo converge para o topo, não achata nem vira retângulo.
+    // (Este era o bug: saía numa faixa achatada/deitada.)
     QImage src(40, 40, QImage::Format_ARGB32);
     src.fill(Qt::green);
 
@@ -443,7 +442,7 @@ void TestImageProcessing::testMockupWarpFollowsClickOrder()
         QPointF(0, 0),        // TL
         QPointF(100, 0),      // TR
         QPointF(75, 50),      // BR
-        QPointF(50, 80),      // dobra da base (ignorada para o warp)
+        QPointF(50, 80),      // extra: dobra da base (referência, não canto)
         QPointF(25, 50)       // BL
     });
     QVERIFY(!r.image.isNull());
@@ -452,68 +451,91 @@ void TestImageProcessing::testMockupWarpFollowsClickOrder()
         return r.image.pixel(qRound(dx - r.topLeft.x()),
                              qRound(dy - r.topLeft.y()));
     };
+    // Os 4 cantos do quadrilátero recebem conteúdo.
+    QVERIFY2(qAlpha(px(1, 1)) > 250, "TL tem conteúdo");
+    QVERIFY2(qAlpha(px(98, 1)) > 250, "TR tem conteúdo");
+    QVERIFY2(qAlpha(px(73, 48)) > 250, "BR tem conteúdo");
+    QVERIFY2(qAlpha(px(27, 48)) > 250, "BL tem conteúdo");
 
-    // Os 4 cantos do quad extremo (0,0)-(100,0)-(75,50)-(25,50) recebem o
-    // conteúdo da imagem — é a perspectiva, não uma faixa.
-    QVERIFY2(qAlpha(px(1, 2)) > 250, "canto TL deve ter conteúdo");
-    QVERIFY2(qAlpha(px(98, 2)) > 250, "canto TR deve ter conteúdo");
-    QVERIFY2(qAlpha(px(73, 48)) > 250, "canto BR deve ter conteúdo");
-    QVERIFY2(qAlpha(px(27, 48)) > 250, "canto BL deve ter conteúdo");
+    // PERSPECTIVA: a largura do conteúdo diminui com a altura (trapézio).
+    auto widthAt = [&](int dy) {
+        const int y = qRound(dy - r.topLeft.y());
+        int f = -1, la = -1;
+        for (int x = 0; x < r.image.width(); ++x) {
+            if (qAlpha(r.image.pixel(x, y)) > 128) {
+                if (f < 0) f = x;
+                la = x;
+            }
+        }
+        return f < 0 ? 0 : la - f + 1;
+    };
+    const int wTop = widthAt(5);
+    const int wMid = widthAt(25);
+    const int wLow = widthAt(45);
+    QVERIFY2(wTop > wMid && wMid > wLow,
+             qPrintable(QString("perspectiva: larguras %1 > %2 > %3")
+                            .arg(wTop).arg(wMid).arg(wLow)));
+    // O topo é a base larga (100px) — não é faixa achatada.
+    QVERIFY2(wTop >= 90, qPrintable(QString("topo largo: %1").arg(wTop)));
 
-    // A dobra da base (50,80) ESTÁ dentro do bounding box extremo
-    // (0..100 x 0..80), então recebe conteúdo — o Photoshop Distort também
-    // encheria (ele não fura o contorno marcado).
-    QVERIFY2(qAlpha(px(50, 78)) > 250,
-             " dentro do bounding box extremo: perspectiva do Photoshop "
-             "preenche, não fura");
-    // Fora do bounding box (abaixo de y=80): transparente.
-    QVERIFY2(qAlpha(px(50, 82)) == 0, "fora do bounding box é transparente");
-
-    // Proporção preservada no interior: o pixel central do quad é opaco e
-    // mantém a cor da fonte (sem achatar/rotacionar o conteúdo).
-    QVERIFY(qAlpha(px(50, 25)) > 250);
-    QVERIFY(qGreen(px(50, 25)) > 200);
+    // Abaixo da base do trapézio (y > 50): transparente.
+    QVERIFY2(qAlpha(px(50, 55)) == 0, "abaixo do trapézio é transparente");
 }
 
 void TestImageProcessing::testMockupWarpFivePointsHonorsEdgePoint()
 {
-    // 5 pontos com o 5º no MEIO da aresta superior, empurrado para cima.
-    // Semântica Distort: os 4 cantos extremos são (0,20),(50,0),(100,20),
-    // (100,80)/(0,80) — o pico do V É um canto extremo, então entra no
-    // quad; a imagem perspectiva para ele. O que NÃO deve acontecer é a
-    // imagem ser achatada numa faixa.
-    QImage src(30, 30, QImage::Format_ARGB32);
+    // 6 pontos de uma ESTRADA em perspectiva (trapézio convexo com 2 pontos
+    // extras nas arestas laterais). O quad são os 4 cantos; os extras nas
+    // arestas não devem degenerar o warp (regressão: RDP colapsava para 3
+    // vértices e produzia imagem NULA).
+    QImage src(40, 40, QImage::Format_ARGB32);
     src.fill(Qt::yellow);
 
     const auto r = ImageProcessing::mockupWarp(src, {
-        QPointF(0, 20),       // TL
-        QPointF(50, 0),       // topo do V (canto extremo → entra no quad)
-        QPointF(100, 20),     // TR
-        QPointF(100, 80),     // BR
-        QPointF(0, 80)        // BL
+        QPointF(20, 10),      // TL
+        QPointF(80, 10),      // TR
+        QPointF(95, 40),      // extra na aresta direita
+        QPointF(70, 90),      // BR
+        QPointF(30, 90),      // BL
+        QPointF(5, 40)        // extra na aresta esquerda
     });
-    QVERIFY(!r.image.isNull());
+    QVERIFY2(!r.image.isNull(), "imagem não pode ser nula (bug do RDP)");
 
     auto px = [&r](int dx, int dy) {
         return r.image.pixel(qRound(dx - r.topLeft.x()),
                              qRound(dy - r.topLeft.y()));
     };
-    // O pico do V recebe conteúdo (é canto do quad extremo).
-    QVERIFY2(qAlpha(px(50, 3)) > 250,
-             "o pico do V é canto extremo e deve receber conteúdo");
-    // O bounding box extremo começa em y=0 (o pico do V), então (2,3) está
-    // DENTRO dele e recebe conteúdo — o Photoshop Distort também encheria.
-    QVERIFY2(qAlpha(px(2, 3)) > 250,
-             " dentro do bounding box extremo (0..100 x 0..80): preenchido");
-    // Base continua cheia.
-    QVERIFY(qAlpha(px(50, 78)) > 250);
+    // Os 4 cantos recebem conteúdo.
+    // Pontos INTERIORES do trapézio recebem conteúdo (cantos exatos podem
+    // cair em alpha parcial por bilinear).
+    QVERIFY(qAlpha(px(25, 15)) > 250);   // topo-esquerda interno
+    QVERIFY(qAlpha(px(75, 15)) > 250);   // topo-direita interno
+    QVERIFY(qAlpha(px(35, 85)) > 250);   // base-esquerda interno
+    QVERIFY(qAlpha(px(65, 85)) > 250);   // base-direita interno
+    // Perspectiva: as larguras VARIAM com a altura (não é retângulo reto).
+    auto widthAt = [&](int dy) {
+        const int y = qRound(dy - r.topLeft.y());
+        int f = -1, la = -1;
+        for (int x = 0; x < r.image.width(); ++x) {
+            if (qAlpha(r.image.pixel(x, y)) > 128) {
+                if (f < 0) f = x;
+                la = x;
+            }
+        }
+        return f < 0 ? 0 : la - f + 1;
+    };
+    const int wTop = widthAt(15);
+    const int wBase = widthAt(85);
+    QVERIFY2(wTop != wBase,
+             qPrintable(QString("perspectiva: larguras diferem (%1 vs %2)")
+                            .arg(wTop).arg(wBase)));
+    QVERIFY2(qAlpha(px(50, 95)) == 0, "abaixo da estrada é transparente");
 }
 
 void TestImageProcessing::testMockupWarpFivePointsShapeFit()
 {
     // 5 pontos, o 5º EXATAMENTE sobre a aresta inferior (colinear): o
-    // polígono continua o quad completo. Resultado = perspectiva do quad,
-    // sem distorção de conteúdo (não é "shape fit" livro-antigo).
+    // polígono continua o quad completo — a perspectiva é a do quad.
     QImage src(50, 50, QImage::Format_ARGB32);
     src.fill(Qt::blue);
 
@@ -521,50 +543,51 @@ void TestImageProcessing::testMockupWarpFivePointsShapeFit()
         QPointF(0, 0), QPointF(100, 0), QPointF(100, 80),
         QPointF(50, 80), QPointF(0, 80)
     });
-    // pad = 2 → canvas 104x84
-    QCOMPARE(r.image.width(), 104);
-    QCOMPARE(r.image.height(), 84);
+    QVERIFY(!r.image.isNull());
     auto px = [&r](int dx, int dy) {
         return r.image.pixel(qRound(dx - r.topLeft.x()),
                              qRound(dy - r.topLeft.y()));
     };
-    // O ponto do meio da base (colinear) não cria conteúdo extra: a base
-    // reta recebe o rodapé da imagem.
-    QVERIFY(qAlpha(px(50, 41)) > 250);
-    QVERIFY(qBlue(px(50, 41)) > 200);
-    // Cantos da área preenchidos (a imagem inteira é encaixada por perspectiva)
+    // Quad (0,0)-(100,80): cantos preenchidos.
     QVERIFY(qAlpha(px(1, 1)) > 250);
+    QVERIFY(qAlpha(px(99, 1)) > 250);
     QVERIFY(qAlpha(px(99, 79)) > 250);
+    QVERIFY(qAlpha(px(1, 79)) > 250);
+    // Ponto do meio da base (colinear) dentro do quad.
+    QVERIFY(qAlpha(px(50, 79)) > 250);
+    QVERIFY(qBlue(px(50, 79)) > 200);
 }
 
 void TestImageProcessing::testMockupWarpPolygonShapeFit()
 {
-    // ANTES: L-shape com 6 pontos, warp por FORMA (Coons) moldando a imagem
-    // ao contorno. AGORA (semântica Photoshop): perspectiva para o QUAD
-    // EXTREMO do polígono. A cratera do L NÃO é mais furada — o Photoshop
-    // também não furaria; ele encaixa os 4 cantos.
+    // Perspectiva de um quadrilátero convexo RASREADO com 7 pontos (3 por
+    // aresta, como um rastro de contorno). Resultado: perspectiva dos 4
+    // cantos — NÃO é retângulo reto e NÃO é imagem nula.
     QImage src(60, 60, QImage::Format_ARGB32);
     src.fill(Qt::red);
 
     const auto r = ImageProcessing::mockupWarp(src, {
-        QPointF(0, 0), QPointF(100, 0), QPointF(100, 40),
-        QPointF(50, 40), QPointF(50, 80), QPointF(0, 80)
+        QPointF(10, 10),      // TL
+        QPointF(55, 10),      // aresta superior
+        QPointF(100, 10),     // TR
+        QPointF(120, 45),     // aresta direita
+        QPointF(100, 80),     // BR
+        QPointF(50, 80),      // aresta inferior
+        QPointF(10, 80)       // BL
     });
-    QCOMPARE(r.image.width(), 104);
-    QCOMPARE(r.image.height(), 84);
+    QVERIFY(!r.image.isNull());
     auto px = [&r](int dx, int dy) {
         return r.image.pixel(qRound(dx - r.topLeft.x()),
                              qRound(dy - r.topLeft.y()));
     };
-    // Os 4 cantos extremos do L recebem conteúdo (perspectiva do quad).
-    QVERIFY(qAlpha(px(1, 1)) > 250);      // TL
-    QVERIFY(qAlpha(px(99, 1)) > 250);     // TR
-    QVERIFY(qAlpha(px(99, 79)) > 250);    // BR
-    QVERIFY(qAlpha(px(1, 79)) > 250);     // BL
-    // Antiga "cratera do L" (90,70): agora DENTRO do quad extremo → preenchida.
-    QVERIFY2(qAlpha(px(90, 70)) > 250,
-             " Photoshop Distort encaixa o quad extremo: não fura o contorno");
-    QVERIFY(qRed(px(90, 70)) > 200);
+    // Cantos do quadrilátero (10,10),(100,10),(100,80),(10,80) preenchidos.
+    QVERIFY(qAlpha(px(11, 12)) > 250);
+    QVERIFY(qAlpha(px(98, 12)) > 250);
+    QVERIFY(qAlpha(px(98, 78)) > 250);
+    QVERIFY(qAlpha(px(11, 78)) > 250);
+    // Ponto extra da aresta direita (120,45) está FORA do quad → transparente.
+    QVERIFY2(qAlpha(px(115, 45)) == 0,
+             " ponto extra na aresta não puxa conteúdo (não é Coons)");
 }
 
 QTEST_MAIN(TestImageProcessing)

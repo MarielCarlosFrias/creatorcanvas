@@ -1345,58 +1345,78 @@ QImage ImageProcessing::redEyeRemove(const QImage& target, const QPoint& center,
     return result.convertToFormat(target.format());
 }
 
-// Ordena os pontos em sentido horário visual (y cresce para baixo),
-// começando pelo ponto mais próximo do canto superior-esquerdo — a
-// convenção TL→TR→BR→BL que o QTransform::quadToQuad espera. Genérico
-// para qualquer anel de 3+ pontos.
-
-
 // Photoshop Free Transform → Distort: encaixa os 4 CANTOS da imagem em 4
-// pontos. Com 5+ pontos marcados, extrai os 4 cantos EXTREMOS do polígono
-// pelos eixos das diagonais (soma/diferença máxima e mínima) — método
-// clássico, robusto para trapézios e quadriláteros convexos, e estável
-// para pontos intermediários na borda.
+// pontos por transformação projetiva.Quando o usuário marca 5+ pontos
+// (rastro do contorno, com pontos extras nas arestas), extrai os 4 CANTOS
+// do polígono pelos QUADRANTES vistos do centróide — TL, TR, BR, BL — com
+// desempate guloso (cada canto usa um ponto distinto). Esse método:
+//   * preserva a FORMA real (um trapézio de estrada continua trapézio,
+//     não vira retângulo reto — sintoma do bug "não faz 3D");
+//   * nunca colapsa para 3 vértices (que degenerava o quadToQuad e
+//     produzia imagem NULA — o outro sintoma, "não cria nada");
+//   * ignora pontos quase colineares nas arestas, exatamente os que o
+//     usuário marca como referência do contorno.
 static void mockupExtremeQuad(const QPolygonF& ring, QPolygonF& out)
 {
     const int k = ring.size();
-    if (k < 3) {
+    if (k <= 4) {
         out = ring;
         return;
     }
 
-    // Centróide do anel (referência independente da ordem de clique).
     QPointF c(0, 0);
     for (const QPointF& p : ring)
         c += p;
     c /= qreal(k);
 
-    // Índice do ponto mais extremo em cada direção cardial a partir do
-    // centróide. Para um quadrilátero (mesmo com pontos extras na borda)
-    // esses 4 pontos SÃO os cantos: são os únicos que maximizam duas
-    // direções ao mesmo tempo.
-    int iL = 0, iR = 0, iT = 0, iB = 0;
-    for (int i = 1; i < k; ++i) {
-        if (ring[i].x() < ring[iL].x()) iL = i;
-        if (ring[i].x() > ring[iR].x()) iR = i;
-        if (ring[i].y() < ring[iT].y()) iT = i;
-        if (ring[i].y() > ring[iB].y()) iB = i;
+    // Direções dos 4 cantos em coordenadas de tela (y cresce para baixo).
+    static const QPointF dirs[4] = {
+        QPointF(-1.0, -1.0), // TL
+        QPointF( 1.0, -1.0), // TR
+        QPointF( 1.0,  1.0), // BR
+        QPointF(-1.0,  1.0), // BL
+    };
+    // Critério: COSSENO do ângulo entre (ponto − centróide) e a direção do
+    // quadrante, NORMALIZADO pelo comprimento. Produto escalar bruto falha:
+    // um ponto muito distante na direção "errada" (ex.: canto inferior-
+    // esquerdo longe) vencia o TL porque |d| é grande — e o quad saía
+    // rotado/degenerado. Com cosseno, o ponto alinhado à direção vence
+    // independente da distância.
+    std::vector<bool> used(k, false);
+    int picked[4] = {-1, -1, -1, -1};
+    for (int q = 0; q < 4; ++q) {
+        const double dl = std::hypot(dirs[q].x(), dirs[q].y());
+        const double ux = dirs[q].x() / dl, uy = dirs[q].y() / dl;
+        double best = -std::numeric_limits<double>::max();
+        for (int i = 0; i < k; ++i) {
+            if (used[i])
+                continue;
+            const QPointF d = ring[i] - c;
+            const double len = std::hypot(d.x(), d.y());
+            if (len < 1e-9)
+                continue;
+            const double cosA = (d.x() * ux + d.y() * uy) / len;
+            if (cosA > best) {
+                best = cosA;
+                picked[q] = i;
+            }
+        }
+        if (picked[q] >= 0)
+            used[picked[q]] = true;
+    }
+    out.clear();
+    for (int q = 0; q < 4; ++q) {
+        if (picked[q] < 0) {
+            out = ring; // não deveria acontecer com k ≥ 5
+            return;
+        }
+        out << ring[picked[q]];
     }
 
-    // Os 4 cantos: TL = mais acima-esquerda, TR = mais acima-direita,
-    // BR = mais abaixo-direita, BL = mais abaixo-esquerda. Quando um ponto
-    // é extremo em dois eixos (ex.: trapezóide estreito), os eixos trocam
-    // para a direçãoDiagonal — evita colapsar dois cantos no mesmo ponto.
-    QPointF tl(qMin(ring[iL].x(), ring[iT].x()), qMin(ring[iL].y(), ring[iT].y()));
-    QPointF tr(qMax(ring[iR].x(), ring[iT].x()), qMin(ring[iR].y(), ring[iT].y()));
-    QPointF br(qMax(ring[iR].x(), ring[iB].x()), qMax(ring[iR].y(), ring[iB].y()));
-    QPointF bl(qMin(ring[iL].x(), ring[iB].x()), qMax(ring[iL].y(), ring[iB].y()));
-    out.clear();
-    out << tl << tr << br << bl;
-
-    // Sanidade: se o quad degenerar (área ~0), devolve o próprio anel para
-    // o chamador decidir — nunca um quad inválido.
+    // Sanidade: se o quad degenerar (área ~0), devolve o anel.
     const double area = std::abs(
-        (tr.x() - tl.x()) * (bl.y() - tl.y()) - (tr.y() - tl.y()) * (bl.x() - tl.x()));
+        (out[1].x() - out[0].x()) * (out[3].y() - out[0].y())
+        - (out[1].y() - out[0].y()) * (out[3].x() - out[0].x()));
     if (area < 4.0)
         out = ring;
 }
