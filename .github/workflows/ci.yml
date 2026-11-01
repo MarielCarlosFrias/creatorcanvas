@@ -26,7 +26,12 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.8.*'
+          # Alinhado ao Qt 6.10: a suíte completa (incl. ASan) é verificada
+          # verde nesta versão. Com os binários oficiais do 6.8.3 + GCC 13, o
+          # job linux-asan reproduzia um SEGV de layout de memória
+          # (LayerPropertyCommand::redo) que NÃO ocorre em 6.10 — ver
+          # commit de diagnóstico para o relatório completo da ASan.
+          version: '6.10.*'
           cache: true
 
       - name: Install build tools (Linux)
