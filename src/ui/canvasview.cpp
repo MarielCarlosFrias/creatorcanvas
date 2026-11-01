@@ -1331,6 +1331,14 @@ bool CanvasView::eventFilter(QObject* watched, QEvent* event)
 
 void CanvasView::keyPressEvent(QKeyEvent* event)
 {
+    // Mockup: Esc cancela (equivale ao botão direito), Enter confirma.
+    // Verificado ANTES da ferramenta ativa — senão a ferramenta consumia o
+    // Esc e o posicionamento nunca era cancelável pelo teclado.
+    if (m_mockupPlacementActive && event->key() == Qt::Key_Escape) {
+        cancelMockupPlacement();
+        event->accept();
+        return;
+    }
     if (m_mockupPlacementActive
         && (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)
         && m_mockupCorners.size() >= 4) {
