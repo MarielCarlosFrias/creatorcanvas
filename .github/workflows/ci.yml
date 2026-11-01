@@ -76,11 +76,27 @@ jobs:
       - name: Test
         shell: bash
         run: |
+          set +e
           if [ "${{ runner.os }}" = "Windows" ]; then
-            ctest --test-dir build/${{ matrix.preset }} -C Debug --output-on-failure
+            ctest --test-dir build/${{ matrix.preset }} -C Debug --output-on-failure > ctest.log 2>&1
           else
-            ctest --test-dir build/${{ matrix.preset }} --output-on-failure
+            ctest --test-dir build/${{ matrix.preset }} --output-on-failure > ctest.log 2>&1
           fi
+          rc=$?
+          set -e
+          cat ctest.log
+          if [ "$rc" -ne 0 ]; then
+            # Anotações ficam visíveis na API sem autenticação: a falha passa
+            # a ser diagnosticável pelo NOME dos testes (antes só havia
+            # "exit code 8"). Extrai a seção "The following tests FAILED".
+            failed=$(sed -n '/The following tests FAILED/,/^$/p' ctest.log \
+                       | grep -oE '[0-9]+ - [A-Za-z0-9_]+' \
+                       | sed 's/^[0-9]* - //' | paste -sd, - )
+            first=$(grep -m1 -B2 -A25 'Failed ' ctest.log | head -60)
+            echo "::error title=Testes falharam (rc=$rc)::${failed:-nomes indisponiveis}"
+            echo "::error title=Primeira falha::$first"
+          fi
+          exit $rc
 
       # Sempre publica o relatório: com `if: failure()` os logs ficam
       # anexados ao run e a falha passa a ser diagnosticável sem precisar
@@ -91,6 +107,7 @@ jobs:
         with:
           name: test-report-${{ matrix.preset }}
           path: |
+            ctest.log
             build/${{ matrix.preset }}/Testing/Temporary/
             build/${{ matrix.preset }}/tests/*.log
           if-no-files-found: warn
