@@ -19,8 +19,9 @@ ui_*.h
 .qmake.stash
 
 # Packaging staging output (kept out of git; scripts regenerate it)
-packaging/debroot/*.deb
-packaging/debroot/creatorcanvas_*_amd64/usr/bin/CreatorCanvas
+# Saída de empacotamento (regenerada por packaging/linux/build_deb.sh e
+# packaging/linux/build_appimage.sh — nunca versionar binários compilados)
+packaging/debroot/
 packaging/appimage-build/
 packaging/AppDir/
 *.AppImage
