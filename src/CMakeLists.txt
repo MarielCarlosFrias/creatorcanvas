@@ -206,7 +206,12 @@ if(NOT WIN32)
         WIN32_EXECUTABLE $<BOOL:WIN32>
         MACOSX_BUNDLE TRUE
         BUILD_RPATH "${ONNX_DIR}/lib"
-        INSTALL_RPATH "$ORIGIN/../lib/creatorcanvas"
+        # $ORIGIN precisa de escape (\$) no CMake: sem escape o CMake trata
+        # "$ORIGIN" como VARIÁVEL (indefinida → string vazia) e o RPATH de
+        # instalação viraria "/../lib/creatorcanvas" — o binário instalado
+        # não encontraria libonnxruntime.so.1 na máquina do usuário (era a
+        # falha do smoke test do .deb no Release).
+        INSTALL_RPATH "\$ORIGIN/../lib/creatorcanvas"
     )
 else()
     set_target_properties(creatorcanvas PROPERTIES

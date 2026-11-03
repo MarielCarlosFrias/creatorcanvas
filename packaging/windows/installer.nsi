@@ -6,8 +6,13 @@
 !include "LogicLib.nsh"
 
 ; General Configuration
+; VERSION pode ser sobrescrito pela linha de comando do makensis
+; (/DVERSION=x.y.z). Sem override, usa o valor do projeto.
+!ifndef VERSION
+    !define VERSION "0.2.1"
+!endif
 Name "CreatorCanvas"
-OutFile "CreatorCanvas-0.2.0-Setup.exe"
+OutFile "CreatorCanvas-${VERSION}-Setup.exe"
 InstallDir "$PROGRAMFILES64\CreatorCanvas"
 InstallDirRegKey HKLM "Software\CreatorCanvas" "Install_Dir"
 RequestExecutionLevel admin
@@ -52,7 +57,7 @@ Section "CreatorCanvas Core" SecCore
     
     ; Add or Remove Programs (Windows Control Panel & Settings)
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\CreatorCanvas" "DisplayName" "CreatorCanvas"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\CreatorCanvas" "DisplayVersion" "0.2.0"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\CreatorCanvas" "DisplayVersion" "${VERSION}"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\CreatorCanvas" "DisplayIcon" "$INSTDIR\CreatorCanvas.exe"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\CreatorCanvas" "Publisher" "CreatorCanvas Team"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\CreatorCanvas" "UninstallString" '"$INSTDIR\uninstall.exe"'

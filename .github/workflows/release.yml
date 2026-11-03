@@ -134,18 +134,36 @@ jobs:
           & $exe --version
           & $exe --smoke-test
 
+      - name: Ensure NSIS is available
+        shell: pwsh
+        run: |
+          $mk = Get-Command makensis -ErrorAction SilentlyContinue
+          if (-not $mk) {
+            Write-Host "makensis not found - installing NSIS via chocolatey"
+            choco install nsis -y --no-progress
+          }
+          $mk = Get-Command makensis -ErrorAction SilentlyContinue
+          if (-not $mk) { throw "makensis still not available after install" }
+          makensis /VERSION
+
       - name: Build Windows Installer (NSIS)
         shell: pwsh
         run: |
+          $version = "${{ github.ref_name }}" -replace '^v',''
           pushd packaging\windows
-          makensis installer.nsi
+          makensis /DVERSION=$version installer.nsi
           popd
-          Move-Item packaging\windows\CreatorCanvas-0.2.0-Setup.exe .
+          $setup = Get-ChildItem -Path . -Filter "CreatorCanvas-*-Setup.exe" |
+                    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $setup) { throw "Installer exe was not produced" }
+          Write-Host "Installer: $($setup.Name)"
+          Write-Output "SETUP=$($setup.Name)" >> $env:GITHUB_ENV
 
       - name: Smoke Test (NSIS Installer - silent install/uninstall)
         shell: pwsh
         run: |
-          $setup = "CreatorCanvas-0.2.0-Setup.exe"
+          $setup = $env:SETUP
+          if (-not $setup) { throw "SETUP env var missing" }
           $installDir = "$env:ProgramFiles\CreatorCanvas"
 
           # Silent install
@@ -183,7 +201,7 @@ jobs:
           name: creatorcanvas-windows
           path: |
             CreatorCanvas-portable.zip
-            CreatorCanvas-0.2.0-Setup.exe
+            ${{ env.SETUP }}
 
   publish-release:
     name: Publish GitHub Release

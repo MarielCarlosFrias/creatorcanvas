@@ -21,41 +21,36 @@ PKG_ARCH="$(dpkg --print-architecture 2>/dev/null || echo amd64)"
 
 echo "==> Building DEB for CreatorCanvas $VERSION [$PKG_ARCH]"
 
-cmake --build "$BUILD_DIR" --target stage --config Release
-
+# Instala via regras do CMake com DESTDIR — e NÃO copiando o binário staged.
+# O binário staged carrega o RUNPATH da ÁRVORE DE BUILD (caminho absoluto que
+# só existe na máquina que compilou); instalado assim, o .deb falhava com
+# "cannot open shared object file libonnxruntime.so.1" na máquina do usuário
+# (era a falha do smoke test do .deb no workflow Release). `cmake --install`
+# aplica o INSTALL_RPATH ($ORIGIN/../lib/creatorcanvas), tornando o pacote
+# relocalizável.
+cmake --build "$BUILD_DIR" --config Release
+# DESTDIR é variável de ambiente (não opção de linha de comando).
 rm -rf "$DEBROOT"
+mkdir -p "$DEBROOT"
+DESTDIR="$DEBROOT" cmake --install "$BUILD_DIR" --config Release --prefix /usr
 mkdir -p "$DEBROOT/DEBIAN"
-mkdir -p "$DEBROOT/usr/bin"
-mkdir -p "$DEBROOT/usr/share/creatorcanvas"
-mkdir -p "$DEBROOT/usr/share/applications"
-mkdir -p "$DEBROOT/usr/share/metainfo"
-mkdir -p "$DEBROOT/usr/share/icons/hicolor/scalable/apps"
-mkdir -p "$DEBROOT/usr/lib/creatorcanvas"
 
-install -m 0755 "$STAGING/bin/creatorcanvas" "$DEBROOT/usr/bin/creatorcanvas"
-
-if [ -d "$STAGING/lib/creatorcanvas" ]; then
-    cp -d -r "$STAGING/lib/creatorcanvas/." \
-          "$DEBROOT/usr/lib/creatorcanvas/"
+# O install do CMake usa OUTPUT_NAME "CreatorCanvas" (maiúsculo), mas o
+# .desktop (Exec=creatorcanvas), a convenção Linux e o smoke test do
+# workflow usam minúsculo. Num sistema de ficheiros sensível a maiúsculas
+# o comando não era encontrado. Symlink resolve os dois nomes.
+BIN_DIR="$DEBROOT/usr/bin"
+if [ -x "$BIN_DIR/CreatorCanvas" ] && [ ! -e "$BIN_DIR/creatorcanvas" ]; then
+    ln -s CreatorCanvas "$BIN_DIR/creatorcanvas"
 fi
 
-if [ -d "$STAGING/share/creatorcanvas" ]; then
-    cp -r "$STAGING/share/creatorcanvas/." \
-          "$DEBROOT/usr/share/creatorcanvas/"
-fi
-
+# O modelo de IA não é versionado (é descarregado no CI) e não tem regra de
+# install: entra manualmente.
 if [ -d "$PROJECT_DIR/resources/models" ]; then
     mkdir -p "$DEBROOT/usr/share/creatorcanvas/models"
     cp -r "$PROJECT_DIR/resources/models/." \
           "$DEBROOT/usr/share/creatorcanvas/models/"
 fi
-
-install -m 0644 "$PROJECT_DIR/packaging/linux/creatorcanvas.desktop" \
-        "$DEBROOT/usr/share/applications/creatorcanvas.desktop"
-install -m 0644 "$PROJECT_DIR/packaging/linux/creatorcanvas.appdata.xml" \
-        "$DEBROOT/usr/share/metainfo/creatorcanvas.appdata.xml"
-install -m 0644 "$PROJECT_DIR/resources/icons/creatorcanvas.svg" \
-        "$DEBROOT/usr/share/icons/hicolor/scalable/apps/creatorcanvas.svg"
 
 cat > "$DEBROOT/DEBIAN/control" <<EOF
 Package: $PKG_NAME
