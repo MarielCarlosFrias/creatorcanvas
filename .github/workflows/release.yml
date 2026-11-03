@@ -55,9 +55,26 @@ jobs:
           # resolve a libonnxruntime (verificada sem esta variável).
           LD_LIBRARY_PATH: ${{ env.QT_ROOT_DIR }}/lib
         run: |
-          sudo dpkg -i build/linux-release/packages/*.deb
-          creatorcanvas --version
-          QT_QPA_PLATFORM=offscreen creatorcanvas --smoke-test
+          set +e
+          {
+            echo "== dpkg =="
+            sudo dpkg -i build/linux-release/packages/*.deb; echo "dpkg rc=\$?"
+            echo "== ldd do binário instalado =="
+            ldd /usr/bin/CreatorCanvas | head -20; echo "ldd rc=\$?"
+            echo "== comando minusculo =="
+            creatorcanvas --version; echo "version rc=\$?"
+            echo "== smoke test =="
+            QT_QPA_PLATFORM=offscreen creatorcanvas --smoke-test; echo "smoke rc=\$?"
+          } > deb-smoke.log 2>&1
+          rc=$?
+          cat deb-smoke.log
+          if [ "\$rc" -ne 0 ]; then
+            grep -nE 'error|cannot open|not found|rc=|No such|FAIL|Segmentation' deb-smoke.log \
+              | head -25 | while IFS= read -r l; do
+                  echo "::error title=deb smoke::$l"
+              done
+          fi
+          exit \$rc
 
       - name: Download linuxdeploy and Qt plugin
         run: |
@@ -174,9 +191,26 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ github.ref_name }}" -replace '^v',''
+          $log = Join-Path $env:GITHUB_WORKSPACE "nsis.log"
+          if (Test-Path $log) { Remove-Item $log -Force }
           pushd packaging\windows
-          makensis /DVERSION=$version installer.nsi
+          & makensis /DVERSION=$version installer.nsi *>&1 | Tee-Object -FilePath $log
           popd
+          # Falhas do makensis viram anotação (legível pela API sem token).
+          if (Test-Path $log) {
+            Get-Content $log -Tail 40 | ForEach-Object {
+              Write-Host $_
+              if ($_ -match 'rror') {
+                Write-Host "::error title=NSIS::$_"
+              }
+            }
+          }
+          # O makensis escreve em packaging\windows; move para a raiz, onde o
+          # upload e o smoke test o procuram.
+          $built = Get-ChildItem -Path packaging\windows -Filter "CreatorCanvas-*-Setup.exe" |
+                   Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $built) { throw "makensis did not produce a Setup.exe" }
+          Move-Item $built.FullName . -Force
           $setup = Get-ChildItem -Path . -Filter "CreatorCanvas-*-Setup.exe" |
                     Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if (-not $setup) { throw "Installer exe was not produced" }
