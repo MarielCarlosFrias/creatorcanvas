@@ -192,19 +192,25 @@ jobs:
           $version = "${{ github.ref_name }}" -replace '^v',''
           $log = Join-Path $env:GITHUB_WORKSPACE "nsis.log"
           if (Test-Path $log) { Remove-Item $log -Force }
-          $mk = Get-Command makensis -ErrorAction SilentlyContinue
-          if (-not $mk) {
+          # Normaliza para o CAMINHO do executivo: Get-Command devolve
+          # CommandInfo (.Source) mas Get-Item devolve FileInfo (.FullName).
+          # Misturá-los fazia '&' receber \$null e o passo morria antes de
+          # qualquer diagnóstico.
+          $exe = $null
+          $c = Get-Command makensis -ErrorAction SilentlyContinue
+          if ($c) { $exe = $c.Source }
+          else {
             foreach ($p in @("C:\\Program Files\\NSIS\\makensis.exe",
                              "C:\\Program Files (x86)\\NSIS\\makensis.exe",
                              "$env:ChocolateyInstall\\bin\\makensis.exe")) {
-              if (Test-Path $p) { $mk = Get-Item $p; break }
+              if (Test-Path $p) { $exe = (Get-Item $p).FullName; break }
             }
           }
-          if (-not $mk) { throw "makensis indisponível" }
-          Write-Host "makensis: $($mk.Source)"
+          if (-not $exe) { throw "makensis indisponível" }
+          Write-Host "makensis: $exe"
           try {
             pushd packaging\windows
-            & $mk.Source /DVERSION=$version installer.nsi 2>&1 | Tee-Object -FilePath $log
+            & $exe /DVERSION=$version installer.nsi 2>&1 | Tee-Object -FilePath $log
           } catch {
             Write-Host "::error title=NSIS exception::\$($_.Exception.Message)"
           } finally {
