@@ -48,6 +48,12 @@ jobs:
           packaging/linux/build_deb.sh build/linux-release
 
       - name: Smoke Test (.deb)
+        env:
+          # O Qt deste job vem do jurplel (Não é o Qt do sistema), então o
+          # binário instalado precisa do LD_LIBRARY_PATH para achar
+          # libQt6Core/Gui/Widgets. O RPATH \$ORIGIN/../lib/creatorcanvas
+          # resolve a libonnxruntime (verificada sem esta variável).
+          LD_LIBRARY_PATH: ${{ env.QT_ROOT_DIR }}/lib
         run: |
           sudo dpkg -i build/linux-release/packages/*.deb
           creatorcanvas --version
@@ -137,14 +143,32 @@ jobs:
       - name: Ensure NSIS is available
         shell: pwsh
         run: |
-          $mk = Get-Command makensis -ErrorAction SilentlyContinue
+          function Find-Makensis {
+            $c = Get-Command makensis -ErrorAction SilentlyContinue
+            if ($c) { return $c.Source }
+            foreach ($p in @(
+                "C:\Program Files\NSIS\makensis.exe",
+                "C:\Program Files (x86)\NSIS\makensis.exe",
+                "$env:ChocolateyInstall\bin\makensis.exe"
+            )) {
+                if (Test-Path $p) { return $p }
+            }
+            return $null
+          }
+          $mk = Find-Makensis
           if (-not $mk) {
             Write-Host "makensis not found - installing NSIS via chocolatey"
             choco install nsis -y --no-progress
+            # choco não atualiza o PATH desta sessão: adiciona à mão.
+            $env:PATH += ";C:\Program Files\NSIS"
+            $env:PATH += ";$env:ChocolateyInstall\bin"
+            $mk = Find-Makensis
           }
-          $mk = Get-Command makensis -ErrorAction SilentlyContinue
-          if (-not $mk) { throw "makensis still not available after install" }
-          makensis /VERSION
+          if (-not $mk) {
+              throw "makensis indisponível: instala o NSIS ou usa um runner que o tenha"
+          }
+          Write-Host "makensis: $mk"
+          & $mk /VERSION
 
       - name: Build Windows Installer (NSIS)
         shell: pwsh
