@@ -21,10 +21,12 @@ RequestExecutionLevel admin
 !define VCREDIST_URL "https://aka.ms/vs/17/release/vc_redist.x64.exe"
 !define VCREDIST_FILE "$TEMP\CreatorCanvas-vc_redist.x64.exe"
 
-!ifexist "CreatorCanvas-portable\CreatorCanvas.exe"
-!else
-    !error "CreatorCanvas-portable is missing. Run build_portable.ps1 before makensis."
-!endif
+; O instalador é gerado a partir da pasta criada por build_portable.ps1.
+; Essa pasta já contém o executável, Qt, plugins e ONNX Runtime.
+; NOTA: não havia (e não há) como testar existência de ficheiro em tempo de
+; compilação no NSIS — o !ifexist que existia aqui não é um comando válido
+; ('Invalid command') e por isso o instalador NUNCA compilou desde a
+; v0.2.0. Se a pasta faltar, o \"File /r\" abaixo falha com erro claro.
 
 ; UI Configuration
 !define MUI_ABORTWARNING
