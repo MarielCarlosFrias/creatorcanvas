@@ -49,32 +49,31 @@ jobs:
 
       - name: Smoke Test (.deb)
         env:
-          # O Qt deste job vem do jurplel (Não é o Qt do sistema), então o
+          # O Qt deste job vem do jurplel (não é o Qt do sistema), então o
           # binário instalado precisa do LD_LIBRARY_PATH para achar
-          # libQt6Core/Gui/Widgets. O RPATH \$ORIGIN/../lib/creatorcanvas
-          # resolve a libonnxruntime (verificada sem esta variável).
+          # libQt6Core/Gui/Widgets. O RPATH $ORIGIN/../lib/creatorcanvas
+          # resolve a libonnxruntime sem esta variável (verificado localmente).
           LD_LIBRARY_PATH: ${{ env.QT_ROOT_DIR }}/lib
         run: |
           set +e
-          {
-            echo "== dpkg =="
-            sudo dpkg -i build/linux-release/packages/*.deb; echo "dpkg rc=\$?"
-            echo "== ldd do binário instalado =="
-            ldd /usr/bin/CreatorCanvas | head -20; echo "ldd rc=\$?"
-            echo "== comando minusculo =="
-            creatorcanvas --version; echo "version rc=\$?"
-            echo "== smoke test =="
-            QT_QPA_PLATFORM=offscreen creatorcanvas --smoke-test; echo "smoke rc=\$?"
-          } > deb-smoke.log 2>&1
-          rc=$?
+          dpkg=$(ls build/linux-release/packages/*.deb | head -1)
+          echo "== instalando $dpkg =="
+          sudo dpkg -i "$dpkg" > deb-smoke.log 2>&1
+          echo "dpkg rc=$?"
+          echo "== ldd do binário instalado =="
+          ldd /usr/bin/CreatorCanvas >> deb-smoke.log 2>&1
+          echo "ldd rc=$?"
+          creatorcanvas --version >> deb-smoke.log 2>&1
+          echo "version rc=$?"
+          QT_QPA_PLATFORM=offscreen creatorcanvas --smoke-test >> deb-smoke.log 2>&1
+          smoke_rc=$?
+          echo "smoke rc=$smoke_rc"
           cat deb-smoke.log
-          if [ "\$rc" -ne 0 ]; then
-            grep -nE 'error|cannot open|not found|rc=|No such|FAIL|Segmentation' deb-smoke.log \
-              | head -25 | while IFS= read -r l; do
-                  echo "::error title=deb smoke::$l"
-              done
-          fi
-          exit \$rc
+          grep -nE "error|cannot open|not found|rc=|No such|FAIL|Segmentation|Traceback" \
+              deb-smoke.log | head -25 | while IFS= read -r l; do
+              echo "::error title=deb smoke::$l"
+          done
+          exit $smoke_rc
 
       - name: Download linuxdeploy and Qt plugin
         run: |
