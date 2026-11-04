@@ -50,6 +50,7 @@ signals:
     void focusRequested(const QPointF& documentPos);
     void addTextRequested();
     void addShapeRequested();
+    void addAdjustmentRequested(cc::AdjustmentType type);
     void quickExportRequested(const cc::LayerId& id);
     void mergeRequested();
     void flattenRequested();
@@ -69,6 +70,7 @@ private:
     int docIndexFromRow(int row) const;
     LayerId layerIdFromRow(int row) const;
     QPixmap renderLayerThumbnail(const Layer& layer, int size = 32) const;
+    QMenu* createAdjustmentMenu(QWidget* parent);
 
     QPointer<Document> m_document;
     CommandStack* m_history = nullptr;
@@ -114,6 +116,7 @@ private:
 
     // Barra de ações inferior
     QToolButton* m_addLayerBtn = nullptr;
+    QToolButton* m_addAdjustBtn = nullptr;
     QToolButton* m_duplicateBtn = nullptr;
     QToolButton* m_moveUpBtn = nullptr;
     QToolButton* m_moveDownBtn = nullptr;

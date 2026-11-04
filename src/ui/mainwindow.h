@@ -113,6 +113,7 @@ private:
     void mergeSelectedLayers();
     void mergeVisibleLayers();
     void flattenDocument();
+    void addAdjustmentLayer(cc::AdjustmentType type);
     void textBehindSubject();
     void deleteSelectedLayer();
     bool saveDocument();

@@ -750,6 +750,8 @@ void MainWindow::buildLayersDock()
     connect(m_layersPanel, &LayersPanel::addShapeRequested, this, [this] {
         if (m_addRectAction) m_addRectAction->trigger();
     });
+    connect(m_layersPanel, &LayersPanel::addAdjustmentRequested,
+            this, &MainWindow::addAdjustmentLayer);
     connect(m_layersPanel, &LayersPanel::mergeRequested, this, &MainWindow::mergeSelectedLayers);
     connect(m_layersPanel, &LayersPanel::flattenRequested, this, &MainWindow::flattenDocument);
 
@@ -1094,34 +1096,8 @@ void MainWindow::connectActionSignals()
             QAction* act = menu.addAction(m_i18n
                 ? m_i18n->t("editor", QString::fromLatin1(def.key))
                 : QString::fromLatin1(def.fallback));
-            connect(act, &QAction::triggered, this, [this, def] {
-                auto layer = std::make_unique<AdjustmentLayer>();
-                layer->name = m_i18n
-                    ? m_i18n->t("editor", QString::fromLatin1(def.key))
-                    : QString::fromLatin1(def.fallback);
-                layer->kind = def.type;
-                switch (def.type) {
-                case AdjustmentType::BrightnessContrast:
-                    layer->parameters = {{QStringLiteral("brightness"), 10.0},
-                                         {QStringLiteral("contrast"), 10.0}};
-                    break;
-                case AdjustmentType::HueSaturation:
-                    layer->parameters = {{QStringLiteral("hue"), 0.0},
-                                         {QStringLiteral("saturation"), 0.0}};
-                    break;
-                case AdjustmentType::PhotoFilter:
-                case AdjustmentType::ColorBalance:
-                    layer->parameters = {{QStringLiteral("temperature"), 20.0}};
-                    break;
-                default:
-                    break;
-                }
-                if (m_history) {
-                    m_history->execute(std::make_unique<AddLayerCommand>(
-                        *m_document, std::move(layer), m_document->rootGroup(), -1));
-                } else {
-                    m_document->addLayer(std::move(layer));
-                }
+            connect(act, &QAction::triggered, this, [this, type = def.type] {
+                addAdjustmentLayer(type);
             });
         }
         menu.exec(QCursor::pos());
@@ -2037,6 +2013,60 @@ void MainWindow::flattenDocument()
     m_canvas->setSelectedLayer(flatId);
     if (m_layersPanel)
         m_layersPanel->refresh();
+}
+
+void MainWindow::addAdjustmentLayer(cc::AdjustmentType type)
+{
+    if (!m_document) return;
+
+    auto layer = std::make_unique<AdjustmentLayer>();
+    QString name;
+    switch (type) {
+    case AdjustmentType::BrightnessContrast:
+        name = m_i18n ? m_i18n->t("editor", "layer.adjust.brightnessContrast") : QStringLiteral("Brightness / Contrast");
+        layer->parameters = {{QStringLiteral("brightness"), 10.0},
+                             {QStringLiteral("contrast"), 10.0}};
+        break;
+    case AdjustmentType::HueSaturation:
+        name = m_i18n ? m_i18n->t("editor", "layer.adjust.hueSaturation") : QStringLiteral("Hue / Saturation");
+        layer->parameters = {{QStringLiteral("hue"), 0.0},
+                             {QStringLiteral("saturation"), 0.0}};
+        break;
+    case AdjustmentType::ColorBalance:
+        name = m_i18n ? m_i18n->t("editor", "layer.adjust.colorBalance") : QStringLiteral("Color Balance");
+        layer->parameters = {{QStringLiteral("temperature"), 20.0}};
+        break;
+    case AdjustmentType::PhotoFilter:
+        name = m_i18n ? m_i18n->t("editor", "layer.adjust.photoFilter") : QStringLiteral("Photo Filter");
+        layer->parameters = {{QStringLiteral("temperature"), 20.0}};
+        break;
+    case AdjustmentType::Invert:
+        name = m_i18n ? m_i18n->t("editor", "layer.adjust.invert") : QStringLiteral("Invert");
+        break;
+    case AdjustmentType::Posterize:
+        name = m_i18n ? m_i18n->t("editor", "layer.adjust.posterize") : QStringLiteral("Posterize");
+        layer->parameters = {{QStringLiteral("levels"), 4.0}};
+        break;
+    case AdjustmentType::Threshold:
+        name = m_i18n ? m_i18n->t("editor", "layer.adjust.threshold") : QStringLiteral("Threshold");
+        layer->parameters = {{QStringLiteral("threshold"), 128.0}};
+        break;
+    case AdjustmentType::GradientMap:
+        name = m_i18n ? m_i18n->t("editor", "layer.adjust.gradientMap") : QStringLiteral("Gradient Map");
+        break;
+    default:
+        name = QStringLiteral("Adjustment");
+        break;
+    }
+    layer->name = name;
+    layer->kind = type;
+
+    if (m_history) {
+        m_history->execute(std::make_unique<AddLayerCommand>(
+            *m_document, std::move(layer), m_document->rootGroup(), -1));
+    } else {
+        m_document->addLayer(std::move(layer));
+    }
 }
 
 void MainWindow::textBehindSubject()

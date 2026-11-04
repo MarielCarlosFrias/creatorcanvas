@@ -38,6 +38,7 @@ public:
     static QIcon layerTypeShape();
     static QIcon layerTypePaint();
     static QIcon layerTypeGroup();
+    static QIcon layerTypeAdjustment();
 
     // --- Actions ---
     static QIcon actionAdd();

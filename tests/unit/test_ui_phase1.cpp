@@ -4,6 +4,7 @@
 #include <QToolButton>
 #include <QLabel>
 #include <QPlainTextEdit>
+#include <QMenu>
 
 #include "ui/themeicons.h"
 #include "ui/collapsiblesection.h"
@@ -51,6 +52,7 @@ private slots:
         QVERIFY(!ThemeIcons::layerTypeImage().isNull());
         QVERIFY(!ThemeIcons::layerTypeShape().isNull());
         QVERIFY(!ThemeIcons::layerTypeGroup().isNull());
+        QVERIFY(!ThemeIcons::layerTypeAdjustment().isNull());
 
         // Platform brand badges
         QVERIFY(!ThemeIcons::brandYoutube(32).isNull());
@@ -363,6 +365,44 @@ private slots:
         // Redo properly restores final typed text
         history.redo();
         QCOMPARE(layer->content, QStringLiteral("Texto Atualizado"));
+    }
+
+    void testLayersPanelAdjustmentMenu()
+    {
+        QTemporaryDir tmpDir;
+        SettingsService settings(tmpDir.path() + "/settings.json");
+        I18nService i18n(&settings, {":/locales"});
+        i18n.loadAvailableLanguages();
+
+        CommandStack history;
+        Document doc(800, 600, 96);
+        LayersPanel panel(&i18n, &history);
+        panel.setDocument(&doc);
+
+        bool received = false;
+        cc::AdjustmentType receivedType = cc::AdjustmentType::Levels;
+        QObject::connect(&panel, &LayersPanel::addAdjustmentRequested,
+                         [&](cc::AdjustmentType type) {
+            received = true;
+            receivedType = type;
+        });
+
+        const auto buttons = panel.findChildren<QToolButton*>();
+        QToolButton* adjustBtn = nullptr;
+        for (auto* btn : buttons) {
+            if (btn->menu() && btn->toolTip().contains(QStringLiteral("Adjustment"), Qt::CaseInsensitive)) {
+                adjustBtn = btn;
+                break;
+            }
+        }
+        QVERIFY(adjustBtn != nullptr);
+        QVERIFY(adjustBtn->menu() != nullptr);
+        const auto actions = adjustBtn->menu()->actions();
+        QVERIFY(!actions.isEmpty());
+
+        actions.first()->trigger();
+        QVERIFY(received);
+        QCOMPARE(receivedType, cc::AdjustmentType::BrightnessContrast);
     }
 };
 

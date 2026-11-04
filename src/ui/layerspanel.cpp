@@ -273,6 +273,31 @@ void LayersPanel::setHistory(CommandStack* history)
     m_history = history;
 }
 
+QMenu* LayersPanel::createAdjustmentMenu(QWidget* parent)
+{
+    auto* menu = new QMenu(parent);
+    static const struct { AdjustmentType type; const char* key; const char* fallback; } kAdjustKinds[] = {
+        { AdjustmentType::BrightnessContrast, "layer.adjust.brightnessContrast", "Brightness / Contrast" },
+        { AdjustmentType::HueSaturation,      "layer.adjust.hueSaturation",      "Hue / Saturation" },
+        { AdjustmentType::ColorBalance,       "layer.adjust.colorBalance",       "Color Balance" },
+        { AdjustmentType::PhotoFilter,        "layer.adjust.photoFilter",        "Photo Filter" },
+        { AdjustmentType::Invert,             "layer.adjust.invert",             "Invert" },
+        { AdjustmentType::Posterize,          "layer.adjust.posterize",          "Posterize" },
+        { AdjustmentType::Threshold,          "layer.adjust.threshold",          "Threshold" },
+        { AdjustmentType::GradientMap,        "layer.adjust.gradientMap",        "Gradient Map" },
+    };
+    for (const auto& def : kAdjustKinds) {
+        const QString label = m_i18n
+            ? m_i18n->t("editor", QString::fromLatin1(def.key))
+            : QString::fromLatin1(def.fallback);
+        auto* act = menu->addAction(label);
+        connect(act, &QAction::triggered, this, [this, type = def.type] {
+            emit addAdjustmentRequested(type);
+        });
+    }
+    return menu;
+}
+
 void LayersPanel::buildUi()
 {
     auto* layout = new QVBoxLayout(this);
@@ -474,9 +499,18 @@ void LayersPanel::buildUi()
     auto* addMenu = new QMenu(m_addLayerBtn);
     auto* addTextAct = addMenu->addAction(ThemeIcons::layerTypeText(), QStringLiteral("Text Layer"));
     auto* addShapeAct = addMenu->addAction(ThemeIcons::layerTypeShape(), QStringLiteral("Shape Layer"));
+    addMenu->addSeparator();
+    auto* adjustSubMenu = createAdjustmentMenu(addMenu);
+    adjustSubMenu->setTitle(QStringLiteral("Adjustment Layer"));
+    adjustSubMenu->setIcon(ThemeIcons::layerTypeAdjustment());
+    addMenu->addMenu(adjustSubMenu);
     connect(addTextAct, &QAction::triggered, this, &LayersPanel::addTextRequested);
     connect(addShapeAct, &QAction::triggered, this, &LayersPanel::addShapeRequested);
     m_addLayerBtn->setMenu(addMenu);
+
+    m_addAdjustBtn = makeActionBtn(ThemeIcons::layerTypeAdjustment(), QStringLiteral("New Adjustment Layer"));
+    m_addAdjustBtn->setPopupMode(QToolButton::InstantPopup);
+    m_addAdjustBtn->setMenu(createAdjustmentMenu(m_addAdjustBtn));
 
     m_duplicateBtn = makeActionBtn(ThemeIcons::actionDuplicate(), QStringLiteral("Duplicate Layer"));
     connect(m_duplicateBtn, &QToolButton::clicked, this, [this] {
@@ -546,6 +580,7 @@ void LayersPanel::buildUi()
     controlsLayout->addWidget(m_applyMaskBtn);
 
     actionsLayout->addWidget(m_addLayerBtn);
+    actionsLayout->addWidget(m_addAdjustBtn);
     actionsLayout->addWidget(m_duplicateBtn);
     actionsLayout->addWidget(m_moveUpBtn);
     actionsLayout->addWidget(m_moveDownBtn);
@@ -1147,7 +1182,7 @@ void LayersPanel::rebuild()
             case LayerType::Image:      badgeIcon = ThemeIcons::layerTypeImage(); break;
             case LayerType::Group:      badgeIcon = ThemeIcons::layerTypeGroup(); break;
             case LayerType::Background: badgeIcon = ThemeIcons::layerTypeShape(); break;
-            case LayerType::Adjustment: badgeIcon = ThemeIcons::layerTypeShape(); break;
+            case LayerType::Adjustment: badgeIcon = ThemeIcons::layerTypeAdjustment(); break;
             case LayerType::Fill:       badgeIcon = ThemeIcons::layerTypeShape(); break;
             }
             typeIcon->setPixmap(badgeIcon.pixmap(14, 14));
@@ -1599,6 +1634,7 @@ void LayersPanel::retranslateUi()
             m_i18n->t("common", "panel.clipped"));
 
     if (m_addLayerBtn) m_addLayerBtn->setToolTip(m_i18n->t("common", "panel.addLayer"));
+    if (m_addAdjustBtn) m_addAdjustBtn->setToolTip(m_i18n ? m_i18n->t("editor", "layer.newAdjustmentLayer") : QStringLiteral("New Adjustment Layer..."));
     if (m_duplicateBtn) m_duplicateBtn->setToolTip(m_i18n->t("common", "panel.duplicate"));
     if (m_moveUpBtn) m_moveUpBtn->setToolTip(m_i18n->t("common", "panel.moveUp"));
     if (m_moveDownBtn) m_moveDownBtn->setToolTip(m_i18n->t("common", "panel.moveDown"));

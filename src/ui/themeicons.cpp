@@ -381,6 +381,25 @@ QIcon ThemeIcons::layerTypeGroup()
     });
 }
 
+QIcon ThemeIcons::layerTypeAdjustment()
+{
+    return makeMultiSizeIcon([](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        const QRectF rect(4 * scale, 4 * scale, 16 * scale, 16 * scale);
+        p.setPen(QPen(QColor(77, 170, 252), 1.6 * scale));
+        p.setBrush(Qt::NoBrush);
+        p.drawEllipse(rect);
+
+        QPainterPath half;
+        half.moveTo(12 * scale, 4 * scale);
+        half.arcTo(rect, 90, -180);
+        half.closeSubpath();
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(77, 170, 252));
+        p.drawPath(half);
+    });
+}
+
 QIcon ThemeIcons::actionAdd()
 {
     return makeMultiSizeIcon([](QPainter& p, int s) {
