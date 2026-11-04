@@ -71,6 +71,8 @@ add_library(cc_core STATIC
     core/assets/AssetStore.cpp
     core/image/ImageProcessing.h
     core/image/ImageProcessing.cpp
+    core/image/ImagePresets.h
+    core/image/ImagePresets.cpp
     core/image/BackgroundRemover.h
     core/image/BackgroundRemover.cpp
     imageio/ImageImporter.h

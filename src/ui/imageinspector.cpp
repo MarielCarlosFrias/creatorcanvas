@@ -5,6 +5,7 @@
 #include "core/history/CommandStack.h"
 #include "core/history/DocumentCommands.h"
 #include "core/image/ImageProcessing.h"
+#include "core/image/ImagePresets.h"
 #include "core/selection/SelectionOperations.h"
 #include "localization/i18nservice.h"
 
@@ -1565,61 +1566,10 @@ void ImageInspector::applyAdjustments()
 
 void ImageInspector::applyPreset(int presetIndex)
 {
-    m_loading = true;
-    m_brightnessSlider->setValue(0);
-    m_exposureSlider->setValue(0);
-    m_contrastSlider->setValue(0);
-    m_saturationSlider->setValue(0);
-    m_temperatureSlider->setValue(0);
-    m_hueSlider->setValue(0);
-    m_blurSlider->setValue(0);
-    m_sharpenSlider->setValue(0);
-
-    switch (presetIndex) {
-    case 0: // P&B (Grayscale)
-        m_saturationSlider->setValue(-100);
-        m_contrastSlider->setValue(10);
-        break;
-    case 1: // Sépia
-        m_saturationSlider->setValue(-50);
-        m_temperatureSlider->setValue(40);
-        m_contrastSlider->setValue(5);
-        break;
-    case 2: // Vintage
-        m_saturationSlider->setValue(-25);
-        m_temperatureSlider->setValue(20);
-        m_contrastSlider->setValue(15);
-        break;
-    case 3: // Alto Contraste
-        m_contrastSlider->setValue(50);
-        m_sharpenSlider->setValue(20);
-        break;
-    case 4: // Vivid Pop
-        m_saturationSlider->setValue(45);
-        m_contrastSlider->setValue(25);
-        m_sharpenSlider->setValue(15);
-        break;
-    case 5: // Cyberpunk
-        m_contrastSlider->setValue(35);
-        m_saturationSlider->setValue(30);
-        m_temperatureSlider->setValue(-40);
-        m_sharpenSlider->setValue(10);
-        break;
-    case 6: // Golden Hour
-        m_temperatureSlider->setValue(45);
-        m_saturationSlider->setValue(20);
-        m_brightnessSlider->setValue(10);
-        m_contrastSlider->setValue(10);
-        break;
-    case 7: // Dramatic Noir
-        m_saturationSlider->setValue(-100);
-        m_contrastSlider->setValue(60);
-        m_brightnessSlider->setValue(-10);
-        m_sharpenSlider->setValue(25);
-        break;
-    case 8: // Invert
-    case 9: // Posterize
-    case 10: { // Threshold
+    if (ImagePresets::isPixelFilter(presetIndex)) {
+        auto filterOpt = ImagePresets::getPixelFilter(presetIndex);
+        if (!filterOpt.has_value())
+            return;
         ImageLayer* layer = nullptr;
         if (editingLayer(&layer) && m_document) {
             // Photocraft: locks + seleção restringem filtros predefinidos.
@@ -1630,10 +1580,7 @@ void ImageInspector::applyPreset(int presetIndex)
             }
             const QImage base = m_document->assets().decodedImage(layer->assetId);
             if (!base.isNull()) {
-                ImageProcessing::PresetFilter filter = ImageProcessing::PresetFilter::Invert;
-                if (presetIndex == 9) filter = ImageProcessing::PresetFilter::Posterize;
-                else if (presetIndex == 10) filter = ImageProcessing::PresetFilter::Threshold;
-                QImage filtered = ImageProcessing::applyPresetFilter(base, filter);
+                QImage filtered = ImageProcessing::applyPresetFilter(base, *filterOpt);
                 if (!m_document->pixelSelection().isNull())
                     filtered = SelectionOperations::applySelectionMask(
                         base, filtered, m_document->pixelSelection());
@@ -1651,10 +1598,19 @@ void ImageInspector::applyPreset(int presetIndex)
                 }
             }
         }
-        m_loading = false;
         return;
     }
-    }
+
+    const ImageSliderPreset p = ImagePresets::getSliderPreset(presetIndex);
+    m_loading = true;
+    m_brightnessSlider->setValue(p.brightness);
+    m_exposureSlider->setValue(p.exposure);
+    m_contrastSlider->setValue(p.contrast);
+    m_saturationSlider->setValue(p.saturation);
+    m_temperatureSlider->setValue(p.temperature);
+    m_hueSlider->setValue(p.hue);
+    m_blurSlider->setValue(p.blur);
+    m_sharpenSlider->setValue(p.sharpen);
 
     auto formatVal = [](int val, const QString& unit) {
         return QStringLiteral("%1%2").arg(val > 0 ? QStringLiteral("+") + QString::number(val) : QString::number(val)).arg(unit);
