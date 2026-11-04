@@ -699,9 +699,73 @@ void renderImageOutline(QPainter* painter, const ImageLayer& image, const Docume
                        silhouette);
 }
 
+struct DropShadowCacheKey {
+    LayerId assetId;
+    QRgb color = 0;
+    int distance10 = 0;
+    int angle10 = 0;
+    int blur10 = 0;
+    int opacity100 = 0;
+    int naturalW = 0;
+    int naturalH = 0;
+
+    bool operator==(const DropShadowCacheKey& o) const {
+        return assetId == o.assetId
+            && color == o.color
+            && distance10 == o.distance10
+            && angle10 == o.angle10
+            && blur10 == o.blur10
+            && opacity100 == o.opacity100
+            && naturalW == o.naturalW
+            && naturalH == o.naturalH;
+    }
+};
+
+inline size_t qHash(const DropShadowCacheKey& k, size_t seed = 0) {
+    return ::qHash(k.assetId.toString(), seed)
+        ^ ::qHash(k.color)
+        ^ ::qHash(k.distance10)
+        ^ ::qHash(k.angle10)
+        ^ ::qHash(k.blur10)
+        ^ ::qHash(k.opacity100)
+        ^ ::qHash(k.naturalW)
+        ^ ::qHash(k.naturalH);
+}
+
+struct CachedDropShadow {
+    QImage silhouette;
+    double unscaledMargin = 0.0;
+    double offsetX = 0.0;
+    double offsetY = 0.0;
+};
+
+static QHash<DropShadowCacheKey, CachedDropShadow> s_dropShadowCache;
+
 void renderImageDropShadow(QPainter* painter, const ImageLayer& image, const Document& doc)
 {
     const auto& shadow = image.effects.dropShadow;
+
+    DropShadowCacheKey key;
+    key.assetId = image.assetId;
+    key.color = shadow.color.rgba();
+    key.distance10 = static_cast<int>(std::round(shadow.distance * 10.0));
+    key.angle10 = static_cast<int>(std::round(shadow.angleDeg * 10.0));
+    key.blur10 = static_cast<int>(std::round(shadow.blur * 10.0));
+    key.opacity100 = static_cast<int>(std::round(shadow.opacity * 100.0));
+    key.naturalW = image.naturalWidth;
+    key.naturalH = image.naturalHeight;
+
+    auto it = s_dropShadowCache.find(key);
+    if (it != s_dropShadowCache.end()) {
+        const CachedDropShadow& cached = it.value();
+        const QRectF destRect(-cached.unscaledMargin + cached.offsetX,
+                              -cached.unscaledMargin + cached.offsetY,
+                              image.naturalWidth + cached.unscaledMargin * 2.0,
+                              image.naturalHeight + cached.unscaledMargin * 2.0);
+        painter->drawImage(destRect, cached.silhouette);
+        return;
+    }
+
     const QImage fullImg = doc.assets().decodedImage(image.assetId);
     if (fullImg.isNull()) return;
 
@@ -737,6 +801,17 @@ void renderImageDropShadow(QPainter* painter, const ImageLayer& image, const Doc
     }
 
     const double unscaledMargin = margin / scaleDown;
+
+    if (s_dropShadowCache.size() > 32)
+        s_dropShadowCache.clear();
+
+    CachedDropShadow entry;
+    entry.silhouette = silhouette;
+    entry.unscaledMargin = unscaledMargin;
+    entry.offsetX = offsetX;
+    entry.offsetY = offsetY;
+    s_dropShadowCache.insert(key, entry);
+
     const QRectF destRect(-unscaledMargin + offsetX,
                           -unscaledMargin + offsetY,
                           image.naturalWidth + unscaledMargin * 2.0,
@@ -1382,6 +1457,12 @@ void renderSiblingLayers(const Document& doc, const QList<QUuid>& layerIds,
         }
     }
     painter->restore();
+}
+
+void clearRendererCaches()
+{
+    s_outlineCache.clear();
+    s_dropShadowCache.clear();
 }
 
 } // namespace cc

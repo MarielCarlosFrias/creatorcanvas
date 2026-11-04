@@ -134,6 +134,45 @@ private slots:
 
         QCOMPARE(target.pixelColor(10, 10), QColor(0x3a, 0x3b, 0x40));
     }
+
+    void dropShadowCachingAndClearCaches()
+    {
+        Document doc(100, 100);
+        QImage bitmap(40, 40, QImage::Format_ARGB32_Premultiplied);
+        bitmap.fill(Qt::blue);
+        const LayerId assetId = doc.assets().addImage(bitmap);
+
+        auto image = std::make_unique<ImageLayer>();
+        image->assetId = assetId;
+        image->naturalWidth = 40;
+        image->naturalHeight = 40;
+        image->effects.dropShadow.enabled = true;
+        image->effects.dropShadow.distance = 5.0;
+        image->effects.dropShadow.blur = 4.0;
+        image->effects.dropShadow.color = QColor(Qt::black);
+        image->effects.dropShadow.opacity = 0.8;
+        QVERIFY(doc.addLayer(std::move(image)));
+
+        QImage target1(100, 100, QImage::Format_ARGB32_Premultiplied);
+        target1.fill(Qt::transparent);
+        renderTo(target1, doc);
+
+        // Subsequent render uses cached drop shadow and must produce identical output
+        QImage target2(100, 100, QImage::Format_ARGB32_Premultiplied);
+        target2.fill(Qt::transparent);
+        renderTo(target2, doc);
+
+        QCOMPARE(target1, target2);
+
+        // Clearing caches does not break subsequent rendering
+        clearRendererCaches();
+
+        QImage target3(100, 100, QImage::Format_ARGB32_Premultiplied);
+        target3.fill(Qt::transparent);
+        renderTo(target3, doc);
+
+        QCOMPARE(target1, target3);
+    }
 };
 
 QTEST_GUILESS_MAIN(TestRenderer)

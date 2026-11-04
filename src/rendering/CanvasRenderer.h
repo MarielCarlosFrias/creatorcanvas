@@ -48,4 +48,7 @@ void renderSiblingLayers(const Document& doc,
                          QPainter* painter,
                          const RenderOptions& options = {});
 
+/// Limpa os caches internos de silhuetas e efeitos pré-renderizados (outline, drop shadow).
+void clearRendererCaches();
+
 } // namespace cc
