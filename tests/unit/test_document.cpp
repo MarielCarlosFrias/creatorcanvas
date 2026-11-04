@@ -1,5 +1,6 @@
 #include "core/Document.h"
 #include "core/DocumentController.h"
+#include "core/serialization/ProjectFile.h"
 
 #include <QSignalSpy>
 #include <QtTest>
@@ -525,6 +526,39 @@ private slots:
         QCOMPARE(doc.assets().assets().size(), 1);
         QVERIFY(doc.assets().find(asset1) != nullptr);
         QVERIFY(doc.assets().find(asset2) == nullptr);
+    }
+
+    void documentControllerSaveLifecycleWithThumbnail()
+    {
+        DocumentController controller;
+        auto doc = std::make_unique<Document>(400, 300);
+        auto shape = makeShape("Rect");
+        doc->addLayer(std::move(shape));
+
+        controller.setDocument(std::move(doc));
+        QVERIFY(controller.hasDocument());
+        QVERIFY(controller.canDiscardChanges());
+
+        controller.setModified(true);
+        QVERIFY(!controller.canDiscardChanges());
+
+        QTemporaryDir tempDir;
+        QVERIFY(tempDir.isValid());
+        const QString savePath = tempDir.filePath("controller_test.creatorcanvas");
+
+        QImage thumb(160, 120, QImage::Format_ARGB32_Premultiplied);
+        thumb.fill(Qt::yellow);
+
+        QString error;
+        QVERIFY(controller.saveDocumentAs(savePath, &error, &thumb));
+        QVERIFY(QFile::exists(savePath));
+        QCOMPARE(controller.currentFilePath(), savePath);
+        QVERIFY(!controller.isModified());
+        QVERIFY(controller.canDiscardChanges());
+
+        // Verify that loadProjectThumbnail reads the saved thumbnail
+        const QImage loadedThumb = cc::loadProjectThumbnail(savePath);
+        QVERIFY(!loadedThumb.isNull());
     }
 };
 

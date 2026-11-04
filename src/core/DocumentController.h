@@ -40,6 +40,7 @@ public:
 
     bool isModified() const { return m_modified; }
     void setModified(bool modified);
+    bool canDiscardChanges() const { return !m_modified; }
 
     // Registro de observadores
     void registerObserver(IDocumentObserver* observer);
@@ -49,8 +50,8 @@ public:
     void setDocument(std::unique_ptr<Document> newDoc, const QString& filePath = QString());
     bool createNewDocument(const NewDocumentSpec& spec);
     bool openDocument(const QString& filePath, QString* errorMessage = nullptr);
-    bool saveDocument(QString* errorMessage = nullptr);
-    bool saveDocumentAs(const QString& filePath, QString* errorMessage = nullptr);
+    bool saveDocument(QString* errorMessage = nullptr, const QImage* thumbnail = nullptr);
+    bool saveDocumentAs(const QString& filePath, QString* errorMessage = nullptr, const QImage* thumbnail = nullptr);
     void closeDocument();
 
 signals:

@@ -2218,14 +2218,14 @@ void MainWindow::deleteSelectedLayer()
 
 bool MainWindow::saveDocument()
 {
+    if (!m_docController || !m_document)
+        return false;
     if (m_currentFilePath.isEmpty())
         return saveDocumentAs();
 
     QString error;
-    if (m_document)
-        m_document->purgeUnreferencedAssets();
     const QImage thumb = generateThumbnail(*m_document);
-    if (!cc::saveDocument(*m_document, m_currentFilePath, &error, &thumb)) {
+    if (!m_docController->saveDocument(&error, &thumb)) {
         if (m_i18n)
             QMessageBox::warning(this,
                                  m_i18n->t("common", "dialog.saveError.title"),
@@ -2241,7 +2241,7 @@ bool MainWindow::saveDocument()
 
 bool MainWindow::saveDocumentAs()
 {
-    if (!m_i18n)
+    if (!m_i18n || !m_docController || !m_document)
         return false;
     // Pré-preenchimento: vazio por padrão; após abrir uma recuperação como
     // cópia, sugere o arquivo original para o usuário não perder o rastro.
@@ -2260,10 +2260,8 @@ bool MainWindow::saveDocumentAs()
         path += QLatin1String(".creatorcanvas");
 
     QString error;
-    if (m_document)
-        m_document->purgeUnreferencedAssets();
     const QImage thumb = generateThumbnail(*m_document);
-    if (!cc::saveDocument(*m_document, path, &error, &thumb)) {
+    if (!m_docController->saveDocumentAs(path, &error, &thumb)) {
         QMessageBox::warning(this,
                              m_i18n->t("common", "dialog.saveError.title"), error);
         return false;

@@ -98,7 +98,7 @@ bool DocumentController::openDocument(const QString& filePath, QString* errorMes
     return true;
 }
 
-bool DocumentController::saveDocument(QString* errorMessage)
+bool DocumentController::saveDocument(QString* errorMessage, const QImage* thumbnail)
 {
     if (m_currentFilePath.isEmpty()) {
         if (errorMessage) {
@@ -106,10 +106,10 @@ bool DocumentController::saveDocument(QString* errorMessage)
         }
         return false;
     }
-    return saveDocumentAs(m_currentFilePath, errorMessage);
+    return saveDocumentAs(m_currentFilePath, errorMessage, thumbnail);
 }
 
-bool DocumentController::saveDocumentAs(const QString& filePath, QString* errorMessage)
+bool DocumentController::saveDocumentAs(const QString& filePath, QString* errorMessage, const QImage* thumbnail)
 {
     if (!m_document) {
         if (errorMessage) {
@@ -118,7 +118,9 @@ bool DocumentController::saveDocumentAs(const QString& filePath, QString* errorM
         return false;
     }
 
-    const bool ok = cc::saveDocument(*m_document, filePath, errorMessage);
+    m_document->purgeUnreferencedAssets();
+
+    const bool ok = cc::saveDocument(*m_document, filePath, errorMessage, thumbnail);
     if (ok) {
         m_currentFilePath = filePath;
         setModified(false);
