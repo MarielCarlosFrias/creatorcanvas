@@ -173,6 +173,50 @@ private slots:
 
         QCOMPARE(target1, target3);
     }
+
+    void checkerboardCachingAndClippingComposition()
+    {
+        Document doc(60, 60);
+        RenderOptions opts;
+        opts.drawCheckerboard = true;
+        opts.checkerSize = 8;
+
+        QImage img1(60, 60, QImage::Format_ARGB32_Premultiplied);
+        img1.fill(Qt::transparent);
+        renderTo(img1, doc, opts);
+
+        // Second render should use cached brush and match pixel-for-pixel
+        QImage img2(60, 60, QImage::Format_ARGB32_Premultiplied);
+        img2.fill(Qt::transparent);
+        renderTo(img2, doc, opts);
+        QCOMPARE(img1, img2);
+
+        // Add a base layer and a clipped layer to exercise composite composition with reused temp buffer
+        auto base = std::make_unique<ShapeLayer>();
+        base->kind = ShapeKind::Rectangle;
+        base->fill = Qt::red;
+        base->points = QPolygonF({QPointF(10, 10), QPointF(50, 50)});
+        base->transform.position = QPointF(30, 30);
+        QVERIFY(doc.addLayer(std::move(base)));
+
+        auto clipped = std::make_unique<ShapeLayer>();
+        clipped->kind = ShapeKind::Rectangle;
+        clipped->fill = Qt::yellow;
+        clipped->points = QPolygonF({QPointF(0, 0), QPointF(60, 60)});
+        clipped->transform.position = QPointF(30, 30);
+        clipped->clipped = true;
+        QVERIFY(doc.addLayer(std::move(clipped)));
+
+        QImage compImg(60, 60, QImage::Format_ARGB32_Premultiplied);
+        compImg.fill(Qt::transparent);
+        renderTo(compImg, doc, opts);
+
+        // Outside base bounds (e.g. 5, 5), clipped layer should NOT show because alpha was 0
+        // Inside base bounds (e.g. 30, 30), clipped layer should show (yellow)
+        QCOMPARE(compImg.pixelColor(30, 30), QColor(Qt::yellow));
+
+        clearRendererCaches();
+    }
 };
 
 QTEST_GUILESS_MAIN(TestRenderer)

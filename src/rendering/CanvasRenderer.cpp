@@ -106,28 +106,55 @@ QImage applyBlendIf(const QImage& source, const BlendIf& blendIf)
     return result;
 }
 
+namespace {
+
+struct CheckerboardKey {
+    int size = 8;
+    QRgb light = 0;
+    QRgb dark = 0;
+
+    bool operator==(const CheckerboardKey& other) const {
+        return size == other.size && light == other.light && dark == other.dark;
+    }
+};
+
+inline size_t qHash(const CheckerboardKey& key, size_t seed = 0) noexcept {
+    return qHashMulti(seed, key.size, key.light, key.dark);
+}
+
+static QHash<CheckerboardKey, QBrush> s_checkerboardCache;
+
+} // namespace
+
 void drawCheckerboard(QPainter* painter, const QRectF& canvasOnDevice,
                       const RenderOptions& options)
 {
     painter->save();
     painter->resetTransform();
     painter->setClipRect(canvasOnDevice);
-    painter->fillRect(canvasOnDevice, options.checkerLight);
 
-    // QImage (not QPixmap): the renderer must work headless - the export
-    // path renders on worker threads without a GUI application.
-    QImage tile(options.checkerSize * 2, options.checkerSize * 2,
-                QImage::Format_ARGB32_Premultiplied);
-    tile.fill(options.checkerLight);
-    {
-        QPainter tilePainter(&tile);
-        tilePainter.fillRect(0, 0, options.checkerSize, options.checkerSize,
-                             options.checkerDark);
-        tilePainter.fillRect(options.checkerSize, options.checkerSize,
-                             options.checkerSize, options.checkerSize,
-                             options.checkerDark);
+    const CheckerboardKey key{options.checkerSize, options.checkerLight.rgba(), options.checkerDark.rgba()};
+    auto it = s_checkerboardCache.find(key);
+    if (it == s_checkerboardCache.end()) {
+        // QImage (not QPixmap): the renderer must work headless - the export
+        // path renders on worker threads without a GUI application.
+        QImage tile(options.checkerSize * 2, options.checkerSize * 2,
+                    QImage::Format_ARGB32_Premultiplied);
+        tile.fill(options.checkerLight);
+        {
+            QPainter tilePainter(&tile);
+            tilePainter.fillRect(0, 0, options.checkerSize, options.checkerSize,
+                                 options.checkerDark);
+            tilePainter.fillRect(options.checkerSize, options.checkerSize,
+                                 options.checkerSize, options.checkerSize,
+                                 options.checkerDark);
+        }
+        if (s_checkerboardCache.size() > 8)
+            s_checkerboardCache.clear();
+        it = s_checkerboardCache.insert(key, QBrush(tile));
     }
-    painter->fillRect(canvasOnDevice, QBrush(tile));
+
+    painter->fillRect(canvasOnDevice, it.value());
     painter->restore();
 }
 
@@ -1366,6 +1393,7 @@ void renderDocument(const Document& doc, QPainter* painter,
         QImage acc(doc.width(), doc.height(),
                    QImage::Format_ARGB32_Premultiplied);
         acc.fill(Qt::transparent);
+        QImage temp;
         {
             QPainter accPainter(&acc);
             accPainter.setRenderHint(QPainter::Antialiasing, true);
@@ -1394,8 +1422,9 @@ void renderDocument(const Document& doc, QPainter* painter,
                 } else if (child->clipped) {
                     // Renderiza a camada isolada e recorta com o alfa do
                     // acumulado (tudo o que está abaixo dela).
-                    QImage temp(doc.width(), doc.height(),
-                                QImage::Format_ARGB32_Premultiplied);
+                    if (temp.size() != QSize(doc.width(), doc.height()) || temp.format() != QImage::Format_ARGB32_Premultiplied) {
+                        temp = QImage(doc.width(), doc.height(), QImage::Format_ARGB32_Premultiplied);
+                    }
                     temp.fill(Qt::transparent);
                     {
                         QPainter tp(&temp);
@@ -1463,6 +1492,7 @@ void clearRendererCaches()
 {
     s_outlineCache.clear();
     s_dropShadowCache.clear();
+    s_checkerboardCache.clear();
 }
 
 } // namespace cc
