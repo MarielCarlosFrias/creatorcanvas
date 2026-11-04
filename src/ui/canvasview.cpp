@@ -6,6 +6,7 @@
 #include "core/history/DocumentCommands.h"
 #include "core/selection/SelectionOperations.h"
 #include "core/history/CommandStack.h"
+#include "canvascontextmenu.h"
 #include "rendering/CanvasRenderer.h"
 #include "tools/SelectTool.h"
 #include "tools/MarqueeTool.h"
@@ -1425,143 +1426,7 @@ void CanvasView::contextMenuEvent(QContextMenuEvent* event)
 
     selectLayer(layer->id());
 
-    QMenu menu(this);
-
-    // Rótulos contextualizados e traduzidos com fallbacks seguros
-    const QString duplicateText = m_i18n ? m_i18n->t("common", "panel.duplicate") : QStringLiteral("Duplicate");
-    const QString deleteText = m_i18n ? m_i18n->t("common", "panel.delete") : QStringLiteral("Delete");
-    const QString frontText = m_i18n ? m_i18n->t("common", "panel.front") : QStringLiteral("Bring to Front");
-    const QString backText = m_i18n ? m_i18n->t("common", "panel.back") : QStringLiteral("Send to Back");
-    const QString flipHText = m_i18n ? m_i18n->t("common", "menu.layer.flipH") : QStringLiteral("Flip Horizontal");
-    const QString flipVText = m_i18n ? m_i18n->t("common", "menu.layer.flipV") : QStringLiteral("Flip Vertical");
-    const QString centerText = m_i18n ? m_i18n->t("common", "menu.layer.align.centerBoth") : QStringLiteral("Center on Canvas");
-    const bool isCurrentlyLocked = layer->locked || layer->locks.all;
-    const QString lockText = isCurrentlyLocked
-        ? (m_i18n ? m_i18n->t("common", "panel.unlock") : QStringLiteral("Unlock"))
-        : (m_i18n ? m_i18n->t("common", "panel.lock") : QStringLiteral("Lock"));
-
-    QAction* duplicateAction = menu.addAction(duplicateText);
-    QAction* deleteAction = menu.addAction(deleteText);
-    menu.addSeparator();
-    QAction* frontAction = menu.addAction(frontText);
-    QAction* backAction = menu.addAction(backText);
-    menu.addSeparator();
-    QAction* flipHAction = menu.addAction(flipHText);
-    QAction* flipVAction = menu.addAction(flipVText);
-    QAction* centerAction = menu.addAction(centerText);
-    menu.addSeparator();
-    QAction* lockAction = menu.addAction(lockText);
-
-    QAction* removeBgAiDialogAction = nullptr;
-    QAction* removeBgAiQuickAction = nullptr;
-    QAction* maskInsideAction = nullptr;
-    QAction* maskOutsideAction = nullptr;
-    QAction* copySelectionAction = nullptr;
-    QAction* cutSelectionAction = nullptr;
-    QAction* invertSelectionAction = nullptr;
-    QAction* clearSelectionAction = nullptr;
-    if (layer->type() == LayerType::Image) {
-        if (!m_document->pixelSelection().isNull()) {
-            menu.addSeparator();
-            maskInsideAction = menu.addAction(QStringLiteral("Mask: keep inside selection"));
-            maskOutsideAction = menu.addAction(QStringLiteral("Mask: keep outside selection"));
-            copySelectionAction = menu.addAction(QStringLiteral("Copy selection to new layer"));
-            cutSelectionAction = menu.addAction(QStringLiteral("Cut selection to new layer"));
-            menu.addSeparator();
-            invertSelectionAction = menu.addAction(QStringLiteral("Invert selection"));
-            clearSelectionAction = menu.addAction(QStringLiteral("Cancel selection"));
-        }
-        menu.addSeparator();
-        const QString aiDialogText = m_i18n ? m_i18n->t("editor", "canvas.context.aiDialog")
-                                            : QStringLiteral("✨ Remove Background with AI...");
-        const QString aiQuickText = m_i18n ? m_i18n->t("editor", "canvas.context.aiQuick")
-                                           : QStringLiteral("⚡ Quick Background Removal (1-Click)");
-        removeBgAiDialogAction = menu.addAction(aiDialogText);
-        removeBgAiQuickAction = menu.addAction(aiQuickText);
-    }
-
-    QAction* chosen = menu.exec(event->globalPos());
-    if (!chosen)
-        return;
-
-    const LayerId id = layer->id();
-    if (chosen == invertSelectionAction) {
-        m_document->setPixelSelection(
-            SelectionOperations::inverted(m_document->pixelSelection()));
-        update();
-    } else if (chosen == clearSelectionAction) {
-        m_document->clearPixelSelection();
-        update();
-    } else if (chosen == copySelectionAction || chosen == cutSelectionAction) {
-        LayerId createdId;
-        if (SelectionOperations::extractToLayer(
-                *m_document, m_history, id, chosen == cutSelectionAction, &createdId)) {
-            if (chosen == cutSelectionAction) {
-                m_selectedId = createdId;
-                emit selectionChanged(m_selectedId);
-            }
-            update();
-        }
-    } else if (chosen == maskInsideAction || chosen == maskOutsideAction) {
-        if (SelectionOperations::applyMask(
-                *m_document, m_history, id, chosen == maskInsideAction)) {
-            update();
-        }
-    } else if (chosen == removeBgAiDialogAction) {
-        openAiBackgroundRemoval(id);
-    } else if (chosen == removeBgAiQuickAction) {
-        removeBackgroundAiQuick(id);
-    } else if (chosen == duplicateAction) {
-        emit duplicateRequested(id);
-    } else if (chosen == deleteAction) {
-        emit deleteRequested(id);
-    } else if (chosen == frontAction) {
-        // A4: antes mutava direto reorderLayer(root) — (1) sem comando de
-        // undo e (2) arrancava a camada do seu grupo pai para a raiz.
-        if (m_history) {
-            m_history->execute(std::make_unique<ReorderLayerCommand>(
-                *m_document, id, m_document->parentOf(id), -1));
-        } else {
-            m_document->reorderLayer(id, m_document->parentOf(id), -1);
-        }
-    } else if (chosen == backAction) {
-        if (m_history) {
-            m_history->execute(std::make_unique<ReorderLayerCommand>(
-                *m_document, id, m_document->parentOf(id), 0));
-        } else {
-            m_document->reorderLayer(id, m_document->parentOf(id), 0);
-        }
-    } else if (chosen == flipHAction) {
-        const AffineTransform oldT = layer->transform;
-        AffineTransform newT = oldT;
-        newT.scaleX = -newT.scaleX;
-        m_document->setLayerTransform(id, newT);
-        emit transformCommitted(id, oldT, newT);
-    } else if (chosen == flipVAction) {
-        const AffineTransform oldT = layer->transform;
-        AffineTransform newT = oldT;
-        newT.scaleY = -newT.scaleY;
-        m_document->setLayerTransform(id, newT);
-        emit transformCommitted(id, oldT, newT);
-    } else if (chosen == centerAction) {
-        const AffineTransform oldT = layer->transform;
-        AffineTransform newT = oldT;
-        newT.position = QPointF(m_document->width() / 2.0, m_document->height() / 2.0);
-        m_document->setLayerTransform(id, newT);
-        emit transformCommitted(id, oldT, newT);
-    } else if (chosen == lockAction) {
-        // A4: mesmo comando do painel de camadas — antes era mutação
-        // silenciosa, sem passo no undo.
-        const bool current = layer->locked || layer->locks.all;
-        const bool newLock = !current;
-        if (m_history) {
-            m_history->execute(std::make_unique<LayerLockCommand>(
-                *m_document, id, QStringLiteral("layer.lock"),
-                &Document::setLayerLocked, current, newLock));
-        } else {
-            m_document->setLayerLocked(id, newLock);
-        }
-    }
+    CanvasContextMenu::show(this, *m_document, m_history, m_i18n, layer->id(), event->globalPos(), this);
 }
 
 void CanvasView::keyReleaseEvent(QKeyEvent* event)

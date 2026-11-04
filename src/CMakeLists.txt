@@ -188,6 +188,8 @@ add_executable(creatorcanvas
     ui/tooloptionsbar.cpp
     ui/canvasoverlayrenderer.h
     ui/canvasoverlayrenderer.cpp
+    ui/canvascontextmenu.h
+    ui/canvascontextmenu.cpp
     ui/actionmanager.h
     ui/actionmanager.cpp
     ui/menubuilder.h
