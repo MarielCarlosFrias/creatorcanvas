@@ -3,12 +3,14 @@
 #include <QDialog>
 #include <QUuid>
 #include <QImage>
+#include <QMap>
 
 class QComboBox;
 class QLabel;
 class QSpinBox;
 class QRadioButton;
 class QButtonGroup;
+class QPushButton;
 class QTimer;
 
 namespace cc {
@@ -37,6 +39,7 @@ public:
                           QWidget* parent = nullptr);
 
     ExportSettings settings() const;
+    void applyPresetById(const QString& presetId);
 
 private:
     void buildUi();
@@ -52,6 +55,8 @@ private:
 
     // Controls
     QComboBox* m_presetCombo = nullptr;
+    QMap<QString, QPushButton*> m_presetChips;
+    QButtonGroup* m_presetChipsGroup = nullptr;
     QComboBox* m_format = nullptr;
     QComboBox* m_scale = nullptr;
     QSpinBox* m_quality = nullptr;

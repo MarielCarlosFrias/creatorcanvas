@@ -3,6 +3,7 @@
 #include "core/Document.h"
 #include "localization/i18nservice.h"
 #include "rendering/CanvasRenderer.h"
+#include "themeicons.h"
 
 #include <QBuffer>
 #include <QButtonGroup>
@@ -15,6 +16,7 @@
 #include <QLabel>
 #include <QLayout>
 #include <QPainter>
+#include <QPushButton>
 #include <QRadioButton>
 #include <QSpinBox>
 #include <QTimer>
@@ -80,6 +82,59 @@ void ExportDialog::buildUi()
     m_scopeLayer->setEnabled(hasSelectedLayer);
 
     leftLayout->addWidget(scopeBox);
+
+    // Quick Presets Chips Bar (Instagram, Story, YouTube, Original)
+    auto* chipsContainer = new QWidget(this);
+    auto* chipsLayout = new QHBoxLayout(chipsContainer);
+    chipsLayout->setContentsMargins(0, 2, 0, 4);
+    chipsLayout->setSpacing(6);
+
+    m_presetChipsGroup = new QButtonGroup(this);
+    m_presetChipsGroup->setExclusive(true);
+
+    auto makePresetChip = [this, chipsLayout](const QString& label, const QIcon& icon, const QString& presetId) {
+        auto* chip = new QPushButton(icon, label, this);
+        chip->setCheckable(true);
+        chip->setCursor(Qt::PointingHandCursor);
+        chip->setStyleSheet(QStringLiteral(
+            "QPushButton {"
+            "  background-color: #2b2d30;"
+            "  color: #e8eaed;"
+            "  border: 1px solid #3c4043;"
+            "  border-radius: 12px;"
+            "  padding: 4px 10px;"
+            "  font-size: 11px;"
+            "}"
+            "QPushButton:hover {"
+            "  background-color: #35373b;"
+            "  border-color: #5f6368;"
+            "}"
+            "QPushButton:checked {"
+            "  background-color: #1a73e8;"
+            "  color: #ffffff;"
+            "  border-color: #1a73e8;"
+            "  font-weight: bold;"
+            "}"
+        ));
+        m_presetChipsGroup->addButton(chip);
+        chipsLayout->addWidget(chip);
+        m_presetChips.insert(presetId, chip);
+        connect(chip, &QPushButton::clicked, this, [this, presetId] {
+            applyPresetById(presetId);
+        });
+        return chip;
+    };
+
+    auto* origChip = makePresetChip(
+        m_i18n ? m_i18n->t("editor", "export.preset.original") : QStringLiteral("Original"),
+        QIcon(), QStringLiteral("original"));
+    origChip->setChecked(true);
+    makePresetChip(QStringLiteral("Instagram"), QIcon(ThemeIcons::brandInstagram(16)), QStringLiteral("ig_post"));
+    makePresetChip(QStringLiteral("Story / Reels"), QIcon(ThemeIcons::brandTiktok(16)), QStringLiteral("story"));
+    makePresetChip(QStringLiteral("YouTube"), QIcon(ThemeIcons::brandYoutube(16)), QStringLiteral("yt_thumb"));
+    chipsLayout->addStretch();
+
+    leftLayout->addWidget(chipsContainer);
 
     auto* form = new QFormLayout;
     form->setSpacing(10);
@@ -208,11 +263,33 @@ void ExportDialog::updateQualityEnabled()
     m_quality->setEnabled(fmt != QLatin1String("png"));
 }
 
+void ExportDialog::applyPresetById(const QString& presetId)
+{
+    const int idx = m_presetCombo->findData(presetId);
+    if (idx >= 0) {
+        m_presetCombo->setCurrentIndex(idx);
+    }
+}
+
 void ExportDialog::updatePreset()
 {
     const QString preset = m_presetCombo->currentData().toString();
-    if (!m_doc || preset == QLatin1String("original"))
+    if (auto* chip = m_presetChips.value(preset, nullptr)) {
+        chip->setChecked(true);
+    }
+
+    if (!m_doc)
         return;
+
+    if (preset == QLatin1String("original")) {
+        for (int i = 0; i < m_scale->count(); ++i) {
+            if (qAbs(m_scale->itemData(i).toDouble() - 1.0) < 0.05) {
+                m_scale->setCurrentIndex(i);
+                break;
+            }
+        }
+        return;
+    }
 
     const double docW = m_doc->width();
     const double docH = m_doc->height();
@@ -392,6 +469,10 @@ void ExportDialog::retranslateUi()
                  QStringLiteral("export.preset.story"));
     setComboItem(m_presetCombo, QStringLiteral("x_banner"),
                  QStringLiteral("export.preset.xBanner"));
+
+    if (auto* origChip = m_presetChips.value(QStringLiteral("original"), nullptr)) {
+        origChip->setText(m_i18n->t("editor", "export.preset.original"));
+    }
 
     // Formatos
     setComboItem(m_format, QStringLiteral("png"),

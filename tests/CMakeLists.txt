@@ -94,3 +94,7 @@ cc_add_test(test_canvas_context_menu unit/test_canvas_context_menu.cpp
 cc_add_test(test_inline_text_editor unit/test_inline_text_editor.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/inlinetexteditor.cpp
 )
+cc_add_test(test_export_dialog unit/test_export_dialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/exportdialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/themeicons.cpp
+)
