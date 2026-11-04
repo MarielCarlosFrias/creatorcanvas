@@ -47,6 +47,12 @@ public:
     static QImage removeBackground(const QImage& source, const QPoint& seedPoint,
                                    int tolerance = 20, bool contiguous = true);
 
+    /// Prepara um logo para inserção em mockup:
+    /// remove o fundo uniforme a partir dos 4 cantos com varinha mágica,
+    /// suaviza o halo anti-aliased proporcional à tolerância especificada (5..60)
+    /// e recorta a imagem resultante para a caixa delimitadora do conteúdo visível.
+    static QImage prepareMockupLogo(const QImage& logo, bool removeBg, int tolerance = 18);
+
     /// Corte com tesoura ("Corte com Tesoura" / Scissors Cut) ao longo de um poligono arbitrario.
     /// keepInside: se true, mantem o interior do poligono e torna o exterior transparente.
     ///             se false, remove o interior (abre um orificio transparente) e mantem o exterior.

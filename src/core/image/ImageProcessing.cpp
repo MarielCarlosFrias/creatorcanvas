@@ -142,6 +142,76 @@ QImage ImageProcessing::removeBackground(const QImage& source, const QPoint& see
     return result;
 }
 
+QImage ImageProcessing::prepareMockupLogo(const QImage& logo, bool removeBg, int tolerance)
+{
+    if (logo.isNull() || !removeBg)
+        return logo;
+
+    const int tol = qBound(1, tolerance, 100);
+    const QColor bgColor = logo.pixelColor(QPoint(0, 0));
+    QImage cleaned = logo;
+    const QPoint corners[4] = {
+        QPoint(0, 0),
+        QPoint(cleaned.width() - 1, 0),
+        QPoint(0, cleaned.height() - 1),
+        QPoint(cleaned.width() - 1, cleaned.height() - 1)
+    };
+    for (const QPoint& corner : corners)
+        cleaned = removeBackground(cleaned, corner, tol, true);
+
+    if (bgColor.isValid()) {
+        if (cleaned.format() != QImage::Format_ARGB32)
+            cleaned = cleaned.convertToFormat(QImage::Format_ARGB32);
+        const double threshold = (tol / 100.0) * 441.67295593;
+        for (int pass = 0; pass < 2; ++pass) {
+            QImage haloFree = cleaned;
+            for (int y = 0; y < haloFree.height(); ++y) {
+                QRgb* line = reinterpret_cast<QRgb*>(haloFree.scanLine(y));
+                for (int x = 0; x < haloFree.width(); ++x) {
+                    const QRgb px = line[x];
+                    if (qAlpha(px) == 0)
+                        continue;
+                    bool touchesTransparent = false;
+                    if (x > 0 && qAlpha(line[x - 1]) == 0) touchesTransparent = true;
+                    if (x + 1 < haloFree.width() && qAlpha(line[x + 1]) == 0) touchesTransparent = true;
+                    if (y > 0 && qAlpha(reinterpret_cast<const QRgb*>(haloFree.constScanLine(y - 1))[x]) == 0) touchesTransparent = true;
+                    if (y + 1 < haloFree.height() && qAlpha(reinterpret_cast<const QRgb*>(haloFree.constScanLine(y + 1))[x]) == 0) touchesTransparent = true;
+                    if (!touchesTransparent)
+                        continue;
+                    const double dr = qRed(px) - bgColor.red();
+                    const double dg = qGreen(px) - bgColor.green();
+                    const double db = qBlue(px) - bgColor.blue();
+                    const double dist = qSqrt(dr * dr + dg * dg + db * db);
+                    if (dist < threshold)
+                        line[x] = qRgba(qRed(px), qGreen(px), qBlue(px), 0);
+                    else if (dist < 2.0 * threshold)
+                        line[x] = qRgba(qRed(px), qGreen(px), qBlue(px),
+                                        qRound(qAlpha(px) * ((dist - threshold) / threshold)));
+                }
+            }
+            cleaned = haloFree;
+        }
+    }
+
+    QRect content(0, 0, -1, -1);
+    for (int y = 0; y < cleaned.height(); ++y) {
+        const QRgb* line = reinterpret_cast<const QRgb*>(cleaned.constScanLine(y));
+        for (int x = 0; x < cleaned.width(); ++x) {
+            if (qAlpha(line[x]) > 8) {
+                if (!content.isValid()) content = QRect(x, y, 1, 1);
+                else content = content.united(QRect(x, y, 1, 1));
+            }
+        }
+    }
+    if (content.isValid() && content != cleaned.rect()) {
+        const QImage cropped = cropImage(cleaned, content);
+        if (!cropped.isNull())
+            cleaned = cropped;
+    }
+
+    return cleaned;
+}
+
 ScissorsCutResult ImageProcessing::scissorsCut(const QImage& source, const QPolygonF& polygon,
                                                bool keepInside, bool cropToBoundingRect)
 {

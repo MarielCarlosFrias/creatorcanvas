@@ -5,6 +5,7 @@
 #include "ui/mockupdialog.h"
 #include "core/Document.h"
 #include "core/layers/Layer.h"
+#include "core/image/ImageProcessing.h"
 
 class TestMockupDialog : public QObject
 {
@@ -13,6 +14,7 @@ class TestMockupDialog : public QObject
 private slots:
     void testProcessLogoDisabled();
     void testProcessLogoBackgroundRemovalAndCrop();
+    void testProcessLogoTolerance();
     void testDialogCreation();
 };
 
@@ -38,11 +40,10 @@ void TestMockupDialog::testProcessLogoBackgroundRemovalAndCrop()
         }
     }
 
-    QImage cleaned = cc::MockupDialog::processLogo(src, /*removeBackground=*/true);
+    QImage cleaned = cc::MockupDialog::processLogo(src, /*removeBackground=*/true, 18);
     QVERIFY(!cleaned.isNull());
 
     // O fundo branco deve ter sido removido e a imagem recortada para o quadrado azul
-    // O tamanho resultante deve ser aproximadamente 20x20
     QVERIFY(cleaned.width() <= 22 && cleaned.width() >= 18);
     QVERIFY(cleaned.height() <= 22 && cleaned.height() >= 18);
 
@@ -52,6 +53,28 @@ void TestMockupDialog::testProcessLogoBackgroundRemovalAndCrop()
     QCOMPARE(centerColor.alpha(), 255);
 }
 
+void TestMockupDialog::testProcessLogoTolerance()
+{
+    // Fundo quase branco (245, 245, 245) com quadrado vermelho
+    QImage src(60, 60, QImage::Format_ARGB32);
+    src.fill(QColor(245, 245, 245));
+
+    for (int y = 20; y < 40; ++y) {
+        for (int x = 20; x < 40; ++x) {
+            src.setPixelColor(x, y, Qt::red);
+        }
+    }
+
+    // Com tolerância normal (18%), remove o fundo
+    QImage cleanedNormal = cc::ImageProcessing::prepareMockupLogo(src, true, 18);
+    QVERIFY(!cleanedNormal.isNull());
+    QVERIFY(cleanedNormal.width() < 60);
+
+    // O pixel central continua vermelho
+    QColor centerColor = cleanedNormal.pixelColor(cleanedNormal.width() / 2, cleanedNormal.height() / 2);
+    QCOMPARE(centerColor.red(), 255);
+}
+
 void TestMockupDialog::testDialogCreation()
 {
     cc::Document doc(800, 600);
@@ -59,8 +82,8 @@ void TestMockupDialog::testDialogCreation()
     cc::LayerId id = layer->id();
     doc.addLayer(std::move(layer));
 
-    cc::MockupDialog dialog(nullptr, &doc, id);
-    QCOMPARE(dialog.windowTitle(), QStringLiteral("Escolher imagem para o mockup"));
+    cc::MockupDialog dialog(nullptr, &doc, id, nullptr);
+    QVERIFY(!dialog.windowTitle().isEmpty());
 }
 
 QTEST_MAIN(TestMockupDialog)

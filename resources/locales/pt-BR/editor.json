@@ -19,6 +19,19 @@
       "orientation": "Orientação",
       "orientation.portrait": "Retrato",
       "orientation.landscape": "Paisagem"
+    },
+    "mockup": {
+      "title": "Escolher imagem para o mockup",
+      "source": "Imagem fonte",
+      "importNew": "Importar uma imagem...",
+      "browse": "Procurar...",
+      "existing": "Imagem existente",
+      "mode": "Modo",
+      "modePerspective": "Perspectiva (4 cantos) — como Photoshop Distort",
+      "modeFreeShape": "Forma livre (qualquer formato — contorno inteiro)",
+      "removeBg": "Remover fundo uniforme (Varinha Mágica)",
+      "tolerance": "Tolerância",
+      "preview": "Prévia"
     }
   },
   "import": {

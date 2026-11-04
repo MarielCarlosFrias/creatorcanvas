@@ -19,6 +19,19 @@
       "orientation": "Orientation",
       "orientation.portrait": "Portrait",
       "orientation.landscape": "Landscape"
+    },
+    "mockup": {
+      "title": "Choose image for mockup",
+      "source": "Source image",
+      "importNew": "Import an image...",
+      "browse": "Browse...",
+      "existing": "Existing image",
+      "mode": "Mode",
+      "modePerspective": "Perspective (4 corners) — like Photoshop Distort",
+      "modeFreeShape": "Free shape (any contour)",
+      "removeBg": "Remove uniform background (Magic Wand)",
+      "tolerance": "Tolerance",
+      "preview": "Preview"
     }
   },
   "import": {

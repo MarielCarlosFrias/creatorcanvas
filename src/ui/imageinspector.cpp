@@ -1113,7 +1113,7 @@ void ImageInspector::openMockupDialog()
         return;
     }
 
-    MockupDialog dialog(this, m_document, m_id);
+    MockupDialog dialog(this, m_document, m_id, m_i18n);
     const MockupDialogResult res = dialog.execute();
     if (!res.accepted || res.logo.isNull())
         return;
