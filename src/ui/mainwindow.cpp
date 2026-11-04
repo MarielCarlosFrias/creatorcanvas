@@ -1512,9 +1512,13 @@ void MainWindow::updateSelectionMenuEnabled()
 void MainWindow::buildStatusBar()
 {
     m_zoomLabel = new QLabel(this);
+    m_zoomLabel->setObjectName(QStringLiteral("StatusChip"));
     m_positionLabel = new QLabel(this);
-    m_versionLabel = new QLabel(this);
+    m_positionLabel->setObjectName(QStringLiteral("StatusChip"));
     m_languageLabel = new QLabel(this);
+    m_languageLabel->setObjectName(QStringLiteral("StatusChip"));
+    m_versionLabel = new QLabel(this);
+    m_versionLabel->setObjectName(QStringLiteral("StatusChip"));
     statusBar()->addPermanentWidget(m_zoomLabel);
     statusBar()->addPermanentWidget(m_positionLabel);
     statusBar()->addPermanentWidget(m_languageLabel);

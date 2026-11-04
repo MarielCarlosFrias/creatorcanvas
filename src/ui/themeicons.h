@@ -40,6 +40,17 @@ public:
     static QIcon layerTypeGroup();
     static QIcon layerTypeAdjustment();
 
+    // --- Granular Locks & Mask ---
+    static QIcon iconClipMask(const QColor& color = QColor(220, 220, 220));
+    static QIcon iconLockTransparency(const QColor& color = QColor(220, 220, 220));
+    static QIcon iconLockPixels(const QColor& color = QColor(220, 220, 220));
+    static QIcon iconLockPosition(const QColor& color = QColor(220, 220, 220));
+    static QIcon iconLockAll(const QColor& color = QColor(220, 220, 220));
+
+    // --- Chevrons & UI ---
+    static QIcon iconChevronDown(const QColor& color = QColor(200, 205, 215));
+    static QIcon iconChevronRight(const QColor& color = QColor(200, 205, 215));
+
     // --- Actions ---
     static QIcon actionAdd();
     static QIcon actionDuplicate();

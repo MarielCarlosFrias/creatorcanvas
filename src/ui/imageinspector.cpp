@@ -572,7 +572,7 @@ void ImageInspector::buildUi()
     m_chromaKeyColorBtn = new QPushButton(this);
     m_chromaKeyColorBtn->setFixedSize(36, 24);
     m_chromaKeyColorBtn->setToolTip(QStringLiteral("Clique para escolher uma cor no diálogo"));
-    m_chromaKeyColorBtn->setStyleSheet(QStringLiteral("background: #00ff00; border: 1px solid #555; border-radius: 3px;"));
+    m_chromaKeyColorBtn->setStyleSheet(QStringLiteral("background: #00ff00; border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 6px;"));
 
     m_chromaPipetteBtn = new QPushButton(QStringLiteral(" Pipeta"), this);
     m_chromaPipetteBtn->setIcon(ThemeIcons::toolEyedropper());
@@ -580,13 +580,13 @@ void ImageInspector::buildUi()
     m_chromaPipetteBtn->setObjectName(QStringLiteral("PresetChip"));
 
     auto* greenBtn = new QPushButton(QStringLiteral("Verde"), this);
-    greenBtn->setStyleSheet(QStringLiteral("background: #00ff00; color: black; font-size: 10px; font-weight: bold; border-radius: 3px; padding: 2px 4px;"));
+    greenBtn->setStyleSheet(QStringLiteral("background: #00ff00; color: black; font-size: 10px; font-weight: bold; border-radius: 5px; padding: 2px 6px;"));
     auto* blueBtn = new QPushButton(QStringLiteral("Azul"), this);
-    blueBtn->setStyleSheet(QStringLiteral("background: #0044ff; color: white; font-size: 10px; font-weight: bold; border-radius: 3px; padding: 2px 4px;"));
+    blueBtn->setStyleSheet(QStringLiteral("background: #0044ff; color: white; font-size: 10px; font-weight: bold; border-radius: 5px; padding: 2px 6px;"));
     auto* whiteBtn = new QPushButton(QStringLiteral("Branco"), this);
-    whiteBtn->setStyleSheet(QStringLiteral("background: #ffffff; color: black; font-size: 10px; font-weight: bold; border-radius: 3px; padding: 2px 4px;"));
+    whiteBtn->setStyleSheet(QStringLiteral("background: #ffffff; color: black; font-size: 10px; font-weight: bold; border-radius: 5px; padding: 2px 6px;"));
     auto* blackBtn = new QPushButton(QStringLiteral("Preto"), this);
-    blackBtn->setStyleSheet(QStringLiteral("background: #000000; color: white; font-size: 10px; font-weight: bold; border-radius: 3px; padding: 2px 4px;"));
+    blackBtn->setStyleSheet(QStringLiteral("background: #000000; color: white; font-size: 10px; font-weight: bold; border-radius: 5px; padding: 2px 6px;"));
 
     chromaColorRow->addWidget(m_chromaKeyColorBtn);
     chromaColorRow->addWidget(m_chromaPipetteBtn);
@@ -1091,7 +1091,7 @@ void ImageInspector::setChromaKeyColor(const QColor& color)
     if (!color.isValid()) return;
     m_chromaKeyColor = color;
     if (m_chromaKeyColorBtn) {
-        m_chromaKeyColorBtn->setStyleSheet(QStringLiteral("background: %1; border: 1px solid #555; border-radius: 3px;").arg(color.name()));
+        m_chromaKeyColorBtn->setStyleSheet(QStringLiteral("background: %1; border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 6px;").arg(color.name()));
     }
     if (m_chromaPipetteBtn) {
         m_chromaPipetteBtn->setProperty("active", false);

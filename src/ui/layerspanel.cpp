@@ -360,21 +360,22 @@ void LayersPanel::buildUi()
     lockRowLayout->setContentsMargins(0, 0, 0, 0);
     lockRowLayout->setSpacing(2);
 
-    auto makeLockBtn = [controlsFrame](const QString& objectName) {
+    auto makeLockBtn = [controlsFrame](const QString& objectName, const QIcon& icon) {
         auto* btn = new QToolButton(controlsFrame);
         btn->setObjectName(objectName);
         btn->setCheckable(true);
         btn->setAutoRaise(true);
-        btn->setFixedSize(26, 22);
+        btn->setFixedSize(26, 24);
+        btn->setIcon(icon);
+        btn->setIconSize(QSize(15, 15));
         return btn;
     };
-    m_lockTransparencyBtn = makeLockBtn(QStringLiteral("LockTransparencyBtn"));
-    m_lockPixelsBtn = makeLockBtn(QStringLiteral("LockPixelsBtn"));
-    m_lockPositionBtn = makeLockBtn(QStringLiteral("LockPositionBtn"));
-    m_lockAllBtn = makeLockBtn(QStringLiteral("LockAllBtn"));
-    m_clippedBtn = makeLockBtn(QStringLiteral("ClippedBtn"));
-    m_clippedBtn->setText(QStringLiteral("\u2193")); // seta para baixo = clip
-    m_clippedBtn->setFixedSize(30, 22);
+    m_clippedBtn = makeLockBtn(QStringLiteral("ClippedBtn"), ThemeIcons::iconClipMask());
+    m_clippedBtn->setFixedSize(28, 24);
+    m_lockTransparencyBtn = makeLockBtn(QStringLiteral("LockTransparencyBtn"), ThemeIcons::iconLockTransparency());
+    m_lockPixelsBtn = makeLockBtn(QStringLiteral("LockPixelsBtn"), ThemeIcons::iconLockPixels());
+    m_lockPositionBtn = makeLockBtn(QStringLiteral("LockPositionBtn"), ThemeIcons::iconLockPosition());
+    m_lockAllBtn = makeLockBtn(QStringLiteral("LockAllBtn"), ThemeIcons::iconLockAll());
 
     lockRowLayout->addWidget(m_clippedBtn);
     lockRowLayout->addStretch();

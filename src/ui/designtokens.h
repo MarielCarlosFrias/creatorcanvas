@@ -32,38 +32,38 @@ inline int fontSizeTitle(int width) { return width < BreakXS ? 18 : width < Brea
 inline int fontSizeBody(int width) { return width < BreakXS ? 10 : 11; }
 
 // ===== ELEVACAO DARK — 5 superficies + 1 hover + 1 UNICA borda =====
-inline QColor Base0()  { return {0x0e,0x10,0x13}; }  // 0: fundo da janela
-inline QColor Base1()  { return {0x14,0x16,0x1a}; }  // 1: chrome (toolbars)
-inline QColor Base2()  { return {0x1a,0x1d,0x21}; }  // 2: paineis, listas
-inline QColor Base3()  { return {0x22,0x25,0x2b}; }  // 3: cartoes, inputs
-inline QColor Hover()  { return {0x2a,0x2e,0x36}; }  // UNICO hover do app
-inline QColor Press()  { return {0x22,0x25,0x2b}; }
-inline QColor Line()   { return {0x2e,0x32,0x3b}; }  // UNICA borda do app
-inline QColor TextHi() { return {0xe8,0xea,0xee}; }
-inline QColor TextMd() { return {0x9a,0xa2,0xae}; }
-inline QColor TextLo() { return {0x64,0x6b,0x76}; }
+inline QColor Base0()  { return {0x0d,0x0e,0x11}; }  // 0: fundo da janela / canvas workspace
+inline QColor Base1()  { return {0x15,0x17,0x1c}; }  // 1: chrome (toolbars, menu)
+inline QColor Base2()  { return {0x1c,0x1f,0x26}; }  // 2: paineis, listas, docks
+inline QColor Base3()  { return {0x25,0x29,0x33}; }  // 3: cartoes, inputs, botões
+inline QColor Hover()  { return {0x2f,0x35,0x43}; }  // UNICO hover do app
+inline QColor Press()  { return {0x21,0x24,0x2e}; }
+inline QColor Line()   { return {0x2d,0x32,0x3e}; }  // UNICA borda do app
+inline QColor TextHi() { return {0xf0,0xf2,0xf5}; }
+inline QColor TextMd() { return {0x9e,0xa6,0xb5}; }
+inline QColor TextLo() { return {0x63,0x6c,0x7c}; }
 
 // ===== ELEVACAO LIGHT =====
-inline QColor LBase0() { return {0xe9,0xec,0xf1}; }  // 0: fundo da janela
-inline QColor LBase1() { return {0xf3,0xf5,0xf8}; }  // 1: chrome
+inline QColor LBase0() { return {0xe8,0xec,0xf2}; }  // 0: fundo da janela
+inline QColor LBase1() { return {0xf1,0xf4,0xf8}; }  // 1: chrome
 inline QColor LBase2() { return {0xff,0xff,0xff}; }  // 2: paineis, listas
-inline QColor LBase3() { return {0xff,0xff,0xff}; }  // 3: cartoes, inputs
-inline QColor LHover() { return {0xe9,0xee,0xf6}; }
-inline QColor LPress() { return {0xdf,0xe4,0xec}; }
-inline QColor LLine()  { return {0xd4,0xd9,0xe0}; }
-inline QColor LTextHi(){ return {0x1a,0x1e,0x24}; }
-inline QColor LTextMd(){ return {0x4f,0x57,0x63}; }
-inline QColor LTextLo(){ return {0x98,0xa0,0xab}; }
+inline QColor LBase3() { return {0xf7,0xf9,0xfc}; }  // 3: cartoes, inputs
+inline QColor LHover() { return {0xe6,0xeb,0xf4}; }
+inline QColor LPress() { return {0xdc,0xe2,0xee}; }
+inline QColor LLine()  { return {0xd0,0xd6,0xe0}; }
+inline QColor LTextHi(){ return {0x14,0x17,0x1c}; }
+inline QColor LTextMd(){ return {0x49,0x52,0x60}; }
+inline QColor LTextLo(){ return {0x8c,0x95,0xa2}; }
 
 // ===== ESTADOS (ações destrutivas/confirmadas) =====
-inline QColor Success()      { return {0x2e,0x7d,0x32}; }
-inline QColor SuccessHover() { return {0x38,0x8e,0x3c}; }
-inline QColor Danger()       { return {0xc6,0x28,0x28}; }
+inline QColor Success()      { return {0x22,0xc5,0x5e}; }
+inline QColor SuccessHover() { return {0x16,0xa3,0x4a}; }
+inline QColor Danger()       { return {0xef,0x44,0x44}; }
 
 // ===== ACCENT (compartilhado dark/light) =====
-inline QColor Accent()      { return {0x3d,0x7e,0xff}; }
-inline QColor AccentHover() { return {0x55,0x8e,0xff}; }
-inline QColor AccentPress() { return {0x2f,0x66,0xd4}; }
+inline QColor Accent()      { return {0x43,0x78,0xff}; }
+inline QColor AccentHover() { return {0x5c,0x8c,0xff}; }
+inline QColor AccentPress() { return {0x32,0x64,0xd9}; }
 
 // ===== ALIASES de compatibilidade (codigo existente continua compilando) =====
 inline QColor DWindow()      { return Base0(); }

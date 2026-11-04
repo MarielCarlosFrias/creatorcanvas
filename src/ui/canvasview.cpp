@@ -588,9 +588,13 @@ void CanvasView::paintEvent(QPaintEvent*)
     painter.resetTransform();
     const QRectF canvasOnDevice = docToDevice().mapRect(
         QRectF(0, 0, m_document->width(), m_document->height()));
-    for (int spread = 8; spread >= 2; spread -= 2) {
-        const int alpha = 10 + (8 - spread) * 3;
-        painter.fillRect(canvasOnDevice.adjusted(-spread, -spread, spread, spread),
+
+    // Sombra suave profissional de prancheta (ambient shadow + key light shadow)
+    for (int spread = 16; spread >= 1; --spread) {
+        const qreal factor = 1.0 - (static_cast<qreal>(spread) / 16.0);
+        const int alpha = static_cast<int>(3 + factor * factor * (dark ? 36 : 22));
+        const qreal yShift = spread > 3 ? 2.0 : 1.0;
+        painter.fillRect(canvasOnDevice.adjusted(-spread, -spread + yShift, spread, spread + yShift),
                          QColor(0, 0, 0, alpha));
     }
     painter.restore();

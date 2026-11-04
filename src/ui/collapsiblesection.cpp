@@ -1,4 +1,5 @@
 #include "collapsiblesection.h"
+#include "themeicons.h"
 
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -21,6 +22,7 @@ CollapsibleSection::CollapsibleSection(const QString& title, bool expanded, QWid
     m_headerButton->setChecked(expanded);
     m_headerButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     m_headerButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_headerButton->setIconSize(QSize(12, 12));
 
     connect(m_headerButton, &QToolButton::toggled, this, &CollapsibleSection::setExpanded);
 
@@ -71,8 +73,8 @@ void CollapsibleSection::setContentLayout(QLayout* layout)
 
 void CollapsibleSection::updateHeader()
 {
-    const QString arrow = m_expanded ? QStringLiteral("▼  ") : QStringLiteral("▶  ");
-    m_headerButton->setText(arrow + m_title);
+    m_headerButton->setIcon(m_expanded ? ThemeIcons::iconChevronDown() : ThemeIcons::iconChevronRight());
+    m_headerButton->setText(m_title);
 }
 
 } // namespace cc

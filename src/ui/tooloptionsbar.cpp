@@ -37,6 +37,14 @@ int toolOptionsPageIndex(CanvasTool tool)
     }
 }
 
+QString swatchStyle(const QColor& color, bool dashed = false)
+{
+    const QString border = dashed ? QStringLiteral("1px dashed rgba(255, 255, 255, 0.35)")
+                                  : QStringLiteral("1px solid rgba(255, 255, 255, 0.22)");
+    return QStringLiteral("background-color: %1; border: %2; border-radius: 6px; min-width: 24px; min-height: 20px;")
+        .arg(color.name(), border);
+}
+
 } // namespace
 
 ToolOptionsBar::ToolOptionsBar(QWidget* parent)
@@ -73,9 +81,9 @@ void ToolOptionsBar::setPaintColor(const QColor& color)
 {
     m_currentPaintColor = color;
     if (m_paintColorBtn)
-        m_paintColorBtn->setStyleSheet(QStringLiteral("background-color: %1; border: 1px solid #555; border-radius: 3px;").arg(color.name()));
+        m_paintColorBtn->setStyleSheet(swatchStyle(color));
     if (m_floodColorBtn)
-        m_floodColorBtn->setStyleSheet(QStringLiteral("background-color: %1; border: 1px solid #555; border-radius: 3px;").arg(color.name()));
+        m_floodColorBtn->setStyleSheet(swatchStyle(color));
     if (m_canvas)
         m_canvas->setPaintColor(color);
 }
@@ -328,14 +336,14 @@ void ToolOptionsBar::buildUi()
 
     m_paintColorBtn = new QPushButton(this);
     m_paintColorBtn->setFixedSize(28, 24);
-    m_paintColorBtn->setStyleSheet(QStringLiteral("background-color: %1; border: 1px solid #555; border-radius: 3px;").arg(m_currentPaintColor.name()));
+    m_paintColorBtn->setStyleSheet(swatchStyle(m_currentPaintColor));
     connect(m_paintColorBtn, &QPushButton::clicked, this, [this] {
         const QColor chosen = QColorDialog::getColor(m_currentPaintColor, this);
         if (chosen.isValid()) {
             m_currentPaintColor = chosen;
-            m_paintColorBtn->setStyleSheet(QStringLiteral("background-color: %1; border: 1px solid #555; border-radius: 3px;").arg(chosen.name()));
+            m_paintColorBtn->setStyleSheet(swatchStyle(chosen));
             if (m_floodColorBtn)
-                m_floodColorBtn->setStyleSheet(QStringLiteral("background-color: %1; border: 1px solid #555; border-radius: 3px;").arg(chosen.name()));
+                m_floodColorBtn->setStyleSheet(swatchStyle(chosen));
             if (m_canvas) m_canvas->setPaintColor(chosen);
         }
     });
@@ -384,14 +392,14 @@ void ToolOptionsBar::buildUi()
 
     m_floodColorBtn = new QPushButton(this);
     m_floodColorBtn->setFixedSize(28, 24);
-    m_floodColorBtn->setStyleSheet(QStringLiteral("background-color: %1; border: 1px solid #555; border-radius: 3px;").arg(m_currentPaintColor.name()));
+    m_floodColorBtn->setStyleSheet(swatchStyle(m_currentPaintColor));
     connect(m_floodColorBtn, &QPushButton::clicked, this, [this] {
         const QColor chosen = QColorDialog::getColor(m_currentPaintColor, this);
         if (chosen.isValid()) {
             m_currentPaintColor = chosen;
-            m_floodColorBtn->setStyleSheet(QStringLiteral("background-color: %1; border: 1px solid #555; border-radius: 3px;").arg(chosen.name()));
+            m_floodColorBtn->setStyleSheet(swatchStyle(chosen));
             if (m_paintColorBtn)
-                m_paintColorBtn->setStyleSheet(QStringLiteral("background-color: %1; border: 1px solid #555; border-radius: 3px;").arg(chosen.name()));
+                m_paintColorBtn->setStyleSheet(swatchStyle(chosen));
             if (m_canvas) m_canvas->setPaintColor(chosen);
         }
     });
@@ -479,9 +487,7 @@ void ToolOptionsBar::buildUi()
     m_gradientStartColorBtn = new QPushButton(this);
     m_gradientStartColorBtn->setFixedSize(34, 24);
     m_gradientStartColorBtn->setToolTip(QStringLiteral("Start color"));
-    m_gradientStartColorBtn->setStyleSheet(
-        QStringLiteral("background-color: %1; border: 1px solid #555; border-radius: 3px;")
-            .arg(m_gradientStartColor.name()));
+    m_gradientStartColorBtn->setStyleSheet(swatchStyle(m_gradientStartColor));
     connect(m_gradientStartColorBtn, &QPushButton::clicked, this, [this] {
         const QColor chosen = QColorDialog::getColor(
             m_gradientStartColor, this,
@@ -491,9 +497,7 @@ void ToolOptionsBar::buildUi()
         if (!chosen.isValid())
             return;
         m_gradientStartColor = chosen;
-        m_gradientStartColorBtn->setStyleSheet(
-            QStringLiteral("background-color: %1; border: 1px solid #555; border-radius: 3px;")
-                .arg(chosen.name()));
+        m_gradientStartColorBtn->setStyleSheet(swatchStyle(chosen));
         if (m_canvas) m_canvas->setGradientStartColor(chosen);
     });
 
@@ -503,9 +507,7 @@ void ToolOptionsBar::buildUi()
     {
         QColor end = m_gradientEndColor;
         end.setAlpha(255);
-        m_gradientEndColorBtn->setStyleSheet(
-            QStringLiteral("background-color: %1; border: 1px dashed #555; border-radius: 3px;")
-                .arg(end.name()));
+        m_gradientEndColorBtn->setStyleSheet(swatchStyle(end, true));
     }
     connect(m_gradientEndColorBtn, &QPushButton::clicked, this, [this] {
         const QColor chosen = QColorDialog::getColor(
@@ -516,11 +518,7 @@ void ToolOptionsBar::buildUi()
         if (!chosen.isValid())
             return;
         m_gradientEndColor = chosen;
-        m_gradientEndColorBtn->setStyleSheet(
-            (chosen.alpha() < 255
-                 ? QStringLiteral("background-color: %1; border: 1px dashed #555; border-radius: 3px;")
-                 : QStringLiteral("background-color: %1; border: 1px solid #555; border-radius: 3px;"))
-                .arg(chosen.name()));
+        m_gradientEndColorBtn->setStyleSheet(swatchStyle(chosen, chosen.alpha() < 255));
         if (m_canvas) m_canvas->setGradientEndColor(chosen);
     });
 
