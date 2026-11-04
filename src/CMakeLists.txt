@@ -192,6 +192,8 @@ add_executable(creatorcanvas
     ui/canvascontextmenu.cpp
     ui/inlinetexteditor.h
     ui/inlinetexteditor.cpp
+    ui/canvasgesturehandler.h
+    ui/canvasgesturehandler.cpp
     ui/actionmanager.h
     ui/actionmanager.cpp
     ui/menubuilder.h

@@ -80,20 +80,6 @@ QImage alphaMaskFromImage(const QImage& image)
 constexpr double kMinZoom = 0.05;
 constexpr double kMaxZoom = 32.0;
 constexpr double kZoomStep = 1.2;
-constexpr double kHandleRadius = 7.0;
-constexpr double kRotateOffset = 26.0;
-
-Qt::CursorShape handleCursor(int handle)
-{
-    switch (handle) {
-    case 0: case 2: return Qt::SizeFDiagCursor;
-    case 1: case 3: return Qt::SizeBDiagCursor;
-    case 4: case 6: return Qt::SizeVerCursor;
-    case 5: case 7: return Qt::SizeHorCursor;
-    case 8:         return Qt::CrossCursor;
-    }
-    return Qt::ArrowCursor;
-}
 
 } // namespace
 
@@ -537,25 +523,9 @@ Layer* CanvasView::hitTestLayer(const QPointF& docPos, bool includeLocked) const
 
 CanvasView::HandleSet CanvasView::handlePositions(const Layer& layer) const
 {
-    HandleSet set;
     if (!m_document)
-        return set;
-    const QRectF bounds = layer.contentBounds();
-    if (bounds.isEmpty())
-        return set;
-
-    const QTransform toScreen = layer.transform.matrix(bounds) * docToDevice();
-    set.points[0] = toScreen.map(bounds.topLeft());
-    set.points[1] = toScreen.map(bounds.topRight());
-    set.points[2] = toScreen.map(bounds.bottomRight());
-    set.points[3] = toScreen.map(bounds.bottomLeft());
-    set.points[4] = (set.points[0] + set.points[1]) / 2;
-    set.points[5] = (set.points[1] + set.points[2]) / 2;
-    set.points[6] = (set.points[2] + set.points[3]) / 2;
-    set.points[7] = (set.points[3] + set.points[0]) / 2;
-    set.points[8] = set.points[4] + QPointF(0, -kRotateOffset);
-    set.valid = true;
-    return set;
+        return HandleSet();
+    return CanvasGestureHandler::computeHandles(layer, docToDevice());
 }
 
 int CanvasView::handleAt(const QPointF& widgetPos) const
@@ -566,22 +536,17 @@ int CanvasView::handleAt(const QPointF& widgetPos) const
     if (!layer)
         return -1;
     const HandleSet set = handlePositions(*layer);
-    if (!set.valid)
-        return -1;
-    for (int i = 0; i < 9; ++i)
-        if (QLineF(widgetPos, set.points[i]).length() <= kHandleRadius)
-            return i;
-    return -1;
+    return CanvasGestureHandler::hitTestHandle(widgetPos, set);
 }
 
 void CanvasView::updateCursor(const QPointF& widgetPos)
 {
-    if (m_panning || m_gesture != Gesture::None)
+    if (m_panning || m_gestureHandler.isInteracting())
         return;
 
     if (m_tool == CanvasTool::Crop && m_cropTool) {
         const int ch = m_cropTool->cropHandleAt(widgetPos, makeToolContext());
-        setCursor(ch >= 0 ? (ch == 8 ? Qt::SizeAllCursor : handleCursor(ch)) : Qt::CrossCursor);
+        setCursor(ch >= 0 ? (ch == 8 ? Qt::SizeAllCursor : CanvasGestureHandler::handleCursor(ch)) : Qt::CrossCursor);
         return;
     }
 
@@ -592,17 +557,17 @@ void CanvasView::updateCursor(const QPointF& widgetPos)
         return;
     }
 
-    const int handle = handleAt(widgetPos);
-    if (handle >= 0) {
-        if (m_document && !m_selectedId.isNull()) {
+    if (m_document && !m_selectedId.isNull()) {
+        if (const Layer* layer = m_document->findLayer(m_selectedId)) {
+            const HandleSet set = handlePositions(*layer);
             const auto locks = m_document->effectiveLocks(m_selectedId);
-            if (locks.position || locks.all) {
-                setCursor(Qt::ForbiddenCursor);
+            const bool isLocked = (locks.position || locks.all);
+            const Qt::CursorShape shape = CanvasGestureHandler::determineCursor(widgetPos, set, isLocked);
+            if (shape != Qt::ArrowCursor) {
+                setCursor(shape);
                 return;
             }
         }
-        setCursor(handleCursor(handle));
-        return;
     }
     setCursor(Qt::ArrowCursor);
 }
@@ -636,7 +601,7 @@ void CanvasView::paintEvent(QPaintEvent*)
     // Interativo também quando uma ferramenta tem prévia ativa (pincel,
     // gradiente, retoque): sem isso cada frame redesenha TODAS as camadas
     // em full-res e fotos pesadas travam com qualquer ferramenta.
-    options.interactive = (m_gesture != Gesture::None) || m_panning
+    options.interactive = m_gestureHandler.isInteracting() || m_panning
                           || !m_previewLayerId.isNull();
     options.checkerLight = dark ? QColor(0x38, 0x3b, 0x44) : QColor(0xe5, 0xe9, 0xef);
     options.checkerDark = dark ? QColor(0x24, 0x26, 0x2c) : QColor(0xff, 0xff, 0xff);
@@ -837,38 +802,11 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
                     event->accept();
                     return;
                 }
-                m_gestureStart = layer->transform;
-                m_gestureBounds = layer->contentBounds();
-                if (layer->type() == LayerType::Text)
-                    m_gestureStartBox = static_cast<TextLayer*>(layer)->box;
-                else
-                    m_gestureStartBox = QSizeF();
-                const QTransform matrix = m_gestureStart.matrix(m_gestureBounds);
-                m_gestureStartDoc = docPos;
-                m_localPress = matrix.inverted().map(docPos);
 
                 if (handle == 8) {
-                    m_rotateCenter = matrix.map(m_gestureBounds.center());
-                    m_rotateStartAngle = std::atan2(
-                        m_gestureStartDoc.y() - m_rotateCenter.y(),
-                        m_gestureStartDoc.x() - m_rotateCenter.x());
-                    m_gesture = Gesture::Rotate;
+                    m_gestureHandler.startRotate(*layer, docPos);
                 } else {
-                    m_activeHandle = handle;
-                    static const int opposite[8] = {2, 3, 0, 1, 6, 7, 4, 5};
-                    const QRectF b = m_gestureBounds;
-                    switch (opposite[m_activeHandle]) {
-                    case 0: m_fixedLocal = b.topLeft(); break;
-                    case 1: m_fixedLocal = b.topRight(); break;
-                    case 2: m_fixedLocal = b.bottomRight(); break;
-                    case 3: m_fixedLocal = b.bottomLeft(); break;
-                    case 4: m_fixedLocal = (b.topLeft() + b.topRight()) / 2; break;
-                    case 5: m_fixedLocal = (b.topRight() + b.bottomRight()) / 2; break;
-                    case 6: m_fixedLocal = (b.bottomRight() + b.bottomLeft()) / 2; break;
-                    default: m_fixedLocal = (b.bottomLeft() + b.topLeft()) / 2; break;
-                    }
-                    m_fixedDoc = matrix.map(m_fixedLocal);
-                    m_gesture = Gesture::Scale;
+                    m_gestureHandler.startScale(*layer, handle, docPos);
                 }
                 event->accept();
                 return;
@@ -901,18 +839,13 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
                 return;
             }
 
-            m_gestureStart = layer->transform;
-            m_gestureStartDoc = docPos;
+            QList<Layer*> multiLayers;
             if (m_multiSelection.size() > 1) {
-                m_multiGestureStarts.clear();
                 for (const auto& lid : m_multiSelection) {
-                    if (Layer* l = m_document->findLayer(lid))
-                        m_multiGestureStarts.append(l->transform);
-                    else
-                        m_multiGestureStarts.append(AffineTransform());
+                    multiLayers.append(m_document->findLayer(lid));
                 }
             }
-            m_gesture = Gesture::Move;
+            m_gestureHandler.startMove(*layer, docPos, multiLayers);
             event->accept();
             return;
         }
@@ -974,7 +907,7 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event)
 
     const QPointF docPos = deviceToDoc().map(QPointF(event->pos()));
 
-    if (m_tool != CanvasTool::Select && m_gesture == Gesture::None && !m_rubberBanding) {
+    if (m_tool != CanvasTool::Select && !m_gestureHandler.isInteracting() && !m_rubberBanding) {
         if (m_activeTool) {
             m_activeTool->mouseMove(event, docPos, makeToolContext());
         }
@@ -986,7 +919,7 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event)
         m_activeTool->mouseMove(event, docPos, makeToolContext());
     }
 
-    if (m_gesture != Gesture::None && m_document) {
+    if (m_gestureHandler.isInteracting() && m_document) {
         if (m_document && !m_selectedId.isNull()) {
             Layer* layer = m_document->findLayer(m_selectedId);
             if (!layer) {
@@ -994,71 +927,22 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event)
                 return;
             }
             const QPointF docNow = deviceToDoc().map(QPointF(event->pos()));
-            AffineTransform t = m_gestureStart;
+            AffineTransform t = m_gestureHandler.updateTransform(docNow);
 
-            if (m_gesture == Gesture::Move) {
-                const QPointF delta = docNow - m_gestureStartDoc;
-                t.position += delta;
+            if (m_gestureHandler.gestureType() == CanvasGestureType::Move) {
                 if (m_multiSelection.size() > 1) {
+                    const QPointF delta = m_gestureHandler.computeMoveDelta(docNow);
+                    const auto& multiStarts = m_gestureHandler.multiGestureStarts();
                     for (int i = 0; i < m_multiSelection.size(); ++i) {
                         if (m_multiSelection[i] == m_selectedId) continue;
-                        if (i < m_multiGestureStarts.size()) {
-                            AffineTransform mt = m_multiGestureStarts[i];
+                        if (i < multiStarts.size()) {
+                            AffineTransform mt = multiStarts[i];
                             mt.position += delta;
                             m_document->setLayerTransform(m_multiSelection[i], mt);
                         }
                     }
                 }
-            } else if (m_gesture == Gesture::Rotate) {
-                const double angle = std::atan2(docNow.y() - m_rotateCenter.y(),
-                                                docNow.x() - m_rotateCenter.x());
-                t.rotationDeg = m_gestureStart.rotationDeg
-                                + qRadiansToDegrees(angle - m_rotateStartAngle);
-                t.position = m_gestureStart.position;
-            } else {
-                // Scale-based resize for all layer types (images, text, shapes).
-                const QTransform inv =
-                    m_gestureStart.matrix(m_gestureBounds).inverted();
-                const QPointF localNow = inv.map(docNow);
-                const QPointF center = m_gestureBounds.center();
-                const double dx = localNow.x() - m_fixedLocal.x();
-                const double dy = localNow.y() - m_fixedLocal.y();
-                const double px = m_localPress.x() - m_fixedLocal.x();
-                const double py = m_localPress.y() - m_fixedLocal.y();
 
-                if (m_activeHandle == 5 || m_activeHandle == 7) {
-                    if (qAbs(px) > 1e-6)
-                        t.scaleX = m_gestureStart.scaleX * (dx / px);
-                } else if (m_activeHandle == 4 || m_activeHandle == 6) {
-                    if (qAbs(py) > 1e-6)
-                        t.scaleY = m_gestureStart.scaleY * (dy / py);
-                } else {
-                    double ratio = 1.0;
-                    if (qAbs(px) >= qAbs(py) && qAbs(px) > 1e-6)
-                        ratio = dx / px;
-                    else if (qAbs(py) > 1e-6)
-                        ratio = dy / py;
-                    t.scaleX = m_gestureStart.scaleX * ratio;
-                    t.scaleY = m_gestureStart.scaleY * ratio;
-                }
-
-                if (qAbs(t.scaleX) < 0.01)
-                    t.scaleX = t.scaleX < 0 ? -0.01 : 0.01;
-                if (qAbs(t.scaleY) < 0.01)
-                    t.scaleY = t.scaleY < 0 ? -0.01 : 0.01;
-
-                const double rad = qDegreesToRadians(m_gestureStart.rotationDeg);
-                const double cosR = std::cos(rad);
-                const double sinR = std::sin(rad);
-                const QPointF v(m_fixedLocal.x() - center.x(),
-                                m_fixedLocal.y() - center.y());
-                const QPointF scaled(v.x() * t.scaleX, v.y() * t.scaleY);
-                const QPointF rotated(scaled.x() * cosR - scaled.y() * sinR,
-                                      scaled.x() * sinR + scaled.y() * cosR);
-                t.position = m_fixedDoc - rotated;
-            }
-
-            if (m_gesture == Gesture::Move) {
                 // Se o usuário segurar Alt durante o movimento, desativa temporariamente o snap magnético
                 // para permitir ajustes finos manuais sem interferência das guias.
                 const bool snapDisabled = (event->modifiers() & Qt::AltModifier);
@@ -1113,7 +997,7 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event)
         return;
     }
 
-    if (m_gesture == Gesture::None)
+    if (!m_gestureHandler.isInteracting())
         updateCursor(QPointF(event->pos()));
 
     if (m_document)
@@ -1134,7 +1018,7 @@ void CanvasView::mouseReleaseEvent(QMouseEvent* event)
 
     const QPointF docPos = deviceToDoc().map(QPointF(event->pos()));
 
-    if (m_tool != CanvasTool::Select && m_gesture == Gesture::None && !m_rubberBanding) {
+    if (m_tool != CanvasTool::Select && !m_gestureHandler.isInteracting() && !m_rubberBanding) {
         if (m_activeTool) {
             m_activeTool->mouseRelease(event, docPos, makeToolContext());
         }
@@ -1162,7 +1046,7 @@ void CanvasView::mouseReleaseEvent(QMouseEvent* event)
         return;
     }
 
-    if (event->button() == Qt::LeftButton && m_gesture != Gesture::None) {
+    if (event->button() == Qt::LeftButton && m_gestureHandler.isInteracting()) {
         if (m_document && !m_selectedId.isNull()) {
             if (m_multiSelection.size() > 1) {
                 // A3: UM passo de undo para o gesto inteiro — antes cada
@@ -1172,14 +1056,15 @@ void CanvasView::mouseReleaseEvent(QMouseEvent* event)
                 if (m_history) {
                     auto compound = std::make_unique<CompoundCommand>(
                         QStringLiteral("layer.transform"));
+                    const auto& multiStarts = m_gestureHandler.multiGestureStarts();
                     for (int i = 0; i < m_multiSelection.size(); ++i) {
                         Layer* ml = m_document->findLayer(m_multiSelection[i]);
                         if (!ml) continue;
                         const AffineTransform oldT =
                             (m_multiSelection[i] == m_selectedId)
-                                ? m_gestureStart
-                                : (i < m_multiGestureStarts.size()
-                                       ? m_multiGestureStarts[i]
+                                ? m_gestureHandler.gestureStart()
+                                : (i < multiStarts.size()
+                                       ? multiStarts[i]
                                        : ml->transform);
                         if (oldT != ml->transform)
                             compound->addCommand(
@@ -1190,12 +1075,13 @@ void CanvasView::mouseReleaseEvent(QMouseEvent* event)
                     if (!compound->isEmpty())
                         m_history->execute(std::move(compound));
                 } else {
+                    const auto& multiStarts = m_gestureHandler.multiGestureStarts();
                     for (int i = 0; i < m_multiSelection.size(); ++i) {
                         if (m_multiSelection[i] == m_selectedId) continue;
                         if (Layer* ml = m_document->findLayer(m_multiSelection[i])) {
-                            if (i < m_multiGestureStarts.size())
+                            if (i < multiStarts.size())
                                 emit transformCommitted(m_multiSelection[i],
-                                                        m_multiGestureStarts[i], ml->transform);
+                                                        multiStarts[i], ml->transform);
                         }
                     }
                 }
@@ -1203,25 +1089,24 @@ void CanvasView::mouseReleaseEvent(QMouseEvent* event)
                 if (Layer* layer = m_document->findLayer(m_selectedId)) {
                     if (layer->type() == LayerType::Text) {
                         const QSizeF newBox = static_cast<TextLayer*>(layer)->box;
-                        if (newBox != m_gestureStartBox)
-                            emit textBoxCommitted(m_selectedId, m_gestureStartBox,
+                        if (newBox != m_gestureHandler.gestureStartBox())
+                            emit textBoxCommitted(m_selectedId, m_gestureHandler.gestureStartBox(),
                                                   newBox);
                     }
                 }
             } else if (Layer* layer = m_document->findLayer(m_selectedId)) {
-                emit transformCommitted(m_selectedId, m_gestureStart,
+                emit transformCommitted(m_selectedId, m_gestureHandler.gestureStart(),
                                         layer->transform);
                 if (layer->type() == LayerType::Text) {
                     const QSizeF newBox = static_cast<TextLayer*>(layer)->box;
-                    if (newBox != m_gestureStartBox)
-                        emit textBoxCommitted(m_selectedId, m_gestureStartBox,
+                    if (newBox != m_gestureHandler.gestureStartBox())
+                        emit textBoxCommitted(m_selectedId, m_gestureHandler.gestureStartBox(),
                                               newBox);
                 }
             }
         }
         // Finaliza o gesto interativo e limpa o handle ativo
-        m_gesture = Gesture::None;
-        m_activeHandle = -1;
+        m_gestureHandler.finish();
 
         // Limpa as guias inteligentes da tela assim que o usuário solta o botão do mouse
         // e solicita uma repintura imediata para remover as linhas de guia

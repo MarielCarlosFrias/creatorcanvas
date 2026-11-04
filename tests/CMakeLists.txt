@@ -37,6 +37,7 @@ cc_add_test(test_tools unit/test_tools.cpp)
 cc_add_test(test_tools_extras unit/test_tools_extras.cpp)
 cc_add_test(test_ai_quick unit/test_ai_quick.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/inlinetexteditor.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvasgesturehandler.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvascontextmenu.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasview.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasoverlayrenderer.cpp
@@ -57,6 +58,7 @@ cc_add_test(test_selection_engine unit/test_selection_engine.cpp)
 cc_add_test(test_layer_render unit/test_layer_render.cpp)
 cc_add_test(test_hit_alpha unit/test_hit_alpha.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/inlinetexteditor.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvasgesturehandler.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvascontextmenu.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasview.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasoverlayrenderer.cpp
@@ -65,6 +67,7 @@ cc_add_test(test_hit_alpha unit/test_hit_alpha.cpp
 )
 cc_add_test(test_canvas_zoom unit/test_canvas_zoom.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/inlinetexteditor.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvasgesturehandler.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvascontextmenu.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasview.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasoverlayrenderer.cpp
@@ -73,6 +76,7 @@ cc_add_test(test_canvas_zoom unit/test_canvas_zoom.cpp
 )
 cc_add_test(test_undo_render unit/test_undo_render.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/inlinetexteditor.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvasgesturehandler.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvascontextmenu.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasview.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasoverlayrenderer.cpp
@@ -85,6 +89,7 @@ cc_add_test(test_alignment        unit/test_alignment.cpp)
 cc_add_test(test_layer_operations unit/test_layer_operations.cpp)
 cc_add_test(test_canvas_context_menu unit/test_canvas_context_menu.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/inlinetexteditor.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvasgesturehandler.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvascontextmenu.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasview.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasoverlayrenderer.cpp
@@ -98,3 +103,7 @@ cc_add_test(test_export_dialog unit/test_export_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/exportdialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/themeicons.cpp
 )
+cc_add_test(test_canvas_gesture_handler unit/test_canvas_gesture_handler.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvasgesturehandler.cpp
+)
+

@@ -12,6 +12,7 @@
 #include "core/DocumentController.h"
 #include "core/snap/SnapEngine.h"
 #include "canvasoverlayrenderer.h"
+#include "canvasgesturehandler.h"
 #include "tools/CanvasTool.h"
 
 namespace cc {
@@ -189,8 +190,7 @@ protected:
 
 private:
     using HandleSet = CanvasHandles;
-
-    enum class Gesture { None, Move, Scale, Rotate };
+    using Gesture = CanvasGestureType;
 
 public:
     /// Conversão de coordenadas (exposta para testes e sincronia de UI).
@@ -234,17 +234,7 @@ private:
     bool m_autoFit = true;
 
     LayerId m_selectedId;
-    Gesture m_gesture = Gesture::None;
-    int m_activeHandle = -1;
-    AffineTransform m_gestureStart;
-    QRectF m_gestureBounds;
-    QPointF m_gestureStartDoc;
-    QPointF m_fixedDoc;
-    QPointF m_fixedLocal;
-    QPointF m_localPress;
-    QPointF m_rotateCenter;
-    double m_rotateStartAngle = 0.0;
-    QSizeF m_gestureStartBox;
+    CanvasGestureHandler m_gestureHandler;
 
     InlineTextEditor* m_inlineTextEditor = nullptr;
     I18nService* m_i18n = nullptr;
