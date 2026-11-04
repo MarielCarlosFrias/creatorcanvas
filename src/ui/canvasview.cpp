@@ -7,6 +7,7 @@
 #include "core/selection/SelectionOperations.h"
 #include "core/history/CommandStack.h"
 #include "canvascontextmenu.h"
+#include "inlinetexteditor.h"
 #include "rendering/CanvasRenderer.h"
 #include "tools/SelectTool.h"
 #include "tools/MarqueeTool.h"
@@ -115,6 +116,15 @@ CanvasView::CanvasView(QWidget* parent)
     m_retouchTool = std::make_unique<RetouchTool>();
     m_healingTool = std::make_unique<HealingTool>();
     m_activeTool = m_selectTool.get();
+
+    m_inlineTextEditor = new InlineTextEditor(this);
+    connect(m_inlineTextEditor, &InlineTextEditor::textCommitted, this,
+            [this](const LayerId& id, const QString& oldContent, const QString& newContent) {
+                if (m_document) {
+                    m_document->setLayerTextContent(id, newContent);
+                }
+                emit textCommitted(id, oldContent, newContent);
+            });
 }
 
 ToolContext CanvasView::makeToolContext() const
@@ -187,7 +197,7 @@ void CanvasView::setHistory(CommandStack* history)
 
 void CanvasView::clearSelection()
 {
-    if (m_textEditor && m_textEditor->isVisible())
+    if (m_inlineTextEditor && m_inlineTextEditor->isEditing())
         commitTextEdit();
     selectLayer(LayerId());
 }
@@ -218,27 +228,14 @@ void CanvasView::setSelectedLayer(const LayerId& id)
 
 void CanvasView::beginTextEdit(const LayerId& id)
 {
-    if (!m_document)
+    if (!m_document || !m_inlineTextEditor)
         return;
     Layer* layer = m_document->findLayer(id);
     if (!layer || layer->type() != LayerType::Text)
         return;
 
     selectLayer(id);
-    m_editingTextId = id;
-    auto* textLayer = static_cast<TextLayer*>(layer);
 
-    if (!m_textEditor) {
-        m_textEditor = new QLineEdit(this);
-        m_textEditor->installEventFilter(this);
-        connect(m_textEditor, &QLineEdit::returnPressed,
-                this, [this] { commitTextEdit(); });
-        connect(m_textEditor, &QLineEdit::editingFinished,
-                this, [this] { commitTextEdit(); });
-    }
-
-    // Position the editor over the text using the SAME math as the
-    // selection overlay.
     const HandleSet set = handlePositions(*layer);
     if (!set.valid)
         return;
@@ -247,73 +244,19 @@ void CanvasView::beginTextEdit(const LayerId& id)
                                   .united(QRectF(set.points[3], set.points[1])
                                               .normalized());
 
-    // WYSIWYG: style the editor with the text's own attributes (a widget
-    // with a stylesheet resolves its font from the STYLE, not setFont).
-    const QString hex = textLayer->color.name(QColor::HexRgb);
-    const double px = qMax(6.0, textLayer->sizePt * (96.0 / 72.0) * m_zoom);
-    // Light text on a light editor backdrop is unreadable while typing:
-    // darken the editor background when the text color is light.
-    const QColor textColor = textLayer->color;
-    const double luminance = 0.299 * textColor.red()
-                           + 0.587 * textColor.green()
-                           + 0.114 * textColor.blue();
-    const QString editorBg = luminance > 150 ? QStringLiteral("#26272b")
-                                             : QStringLiteral("white");
-    m_textEditor->setStyleSheet(QStringLiteral(
-        "QLineEdit { background: %7; color: %1;"
-        " border: 1px solid #2f6fed; padding: 0px;"
-        " font-family: \"%2\"; font-size: %3px;"
-        " font-weight: %4; font-style: %5; text-decoration: %6; }"
-        "QLineEdit { selection-background-color: #2f6fed;"
-        " selection-color: %1; }")
-        .arg(hex)
-        .arg(textLayer->fontFamily)
-        .arg(QString::number(px, 'f', 0))
-        .arg(textLayer->bold ? QStringLiteral("bold")
-                             : QStringLiteral("normal"))
-        .arg(textLayer->italic ? QStringLiteral("italic")
-                               : QStringLiteral("normal"))
-        .arg(textLayer->underline ? QStringLiteral("underline")
-                                  : QStringLiteral("none"))
-        .arg(editorBg));
-
-    m_textEditor->setAlignment(
-        textLayer->align == TextAlignment::Center
-            ? Qt::AlignCenter
-            : (textLayer->align == TextAlignment::Right ? Qt::AlignRight
-                                                        : Qt::AlignLeft));
-
-    m_textEditor->setGeometry(screenRect.toRect().adjusted(-2, -2, 2, 2));
-    m_textEditor->setText(textLayer->content);
-    m_textEditor->show();
-    m_textEditor->raise();
-    m_textEditor->setFocus();
-    m_textEditor->selectAll();
+    m_inlineTextEditor->startEdit(id, *static_cast<TextLayer*>(layer), screenRect, m_zoom);
 }
 
 void CanvasView::commitTextEdit()
 {
-    if (!m_textEditor || !m_textEditor->isVisible() || !m_document)
-        return;
-    Layer* layer = m_document->findLayer(m_editingTextId);
-    if (!layer || layer->type() != LayerType::Text) {
-        m_textEditor->hide();
-        return;
-    }
-    const QString oldContent = static_cast<TextLayer*>(layer)->content;
-    const QString newContent = m_textEditor->text();
-    m_textEditor->hide();
-    if (newContent == oldContent)
-        return;
-    m_document->setLayerTextContent(m_editingTextId, newContent);
-    emit textCommitted(m_editingTextId, oldContent, newContent);
+    if (m_inlineTextEditor)
+        m_inlineTextEditor->commit();
 }
 
 void CanvasView::hideTextEdit()
 {
-    if (m_textEditor)
-        m_textEditor->hide();
-    m_editingTextId = LayerId();
+    if (m_inlineTextEditor)
+        m_inlineTextEditor->cancel();
 }
 
 void CanvasView::centerOn(const QPointF& documentPos)
@@ -326,7 +269,7 @@ void CanvasView::centerOn(const QPointF& documentPos)
 
 void CanvasView::selectLayer(const LayerId& id)
 {
-    if (m_textEditor && m_textEditor->isVisible() && id != m_editingTextId)
+    if (m_inlineTextEditor && m_inlineTextEditor->isEditing() && id != m_inlineTextEditor->editingLayerId())
         commitTextEdit();
     if (m_selectedId == id)
         return;
@@ -1319,14 +1262,6 @@ void CanvasView::mouseDoubleClickEvent(QMouseEvent* event)
 
 bool CanvasView::eventFilter(QObject* watched, QEvent* event)
 {
-    if (watched == m_textEditor && event->type() == QEvent::KeyPress) {
-        auto* keyEvent = static_cast<QKeyEvent*>(event);
-        if (keyEvent->key() == Qt::Key_Escape) {
-            m_textEditor->hide(); // cancel: no commit
-            m_editingTextId = LayerId();
-            return true;
-        }
-    }
     return QWidget::eventFilter(watched, event);
 }
 

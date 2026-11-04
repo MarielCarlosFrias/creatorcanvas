@@ -14,10 +14,9 @@
 #include "canvasoverlayrenderer.h"
 #include "tools/CanvasTool.h"
 
-class QLineEdit;
-
 namespace cc {
 
+class InlineTextEditor;
 class I18nService;
 class CommandStack;
 class SelectTool;
@@ -247,8 +246,7 @@ private:
     double m_rotateStartAngle = 0.0;
     QSizeF m_gestureStartBox;
 
-    QLineEdit* m_textEditor = nullptr;
-    LayerId m_editingTextId;
+    InlineTextEditor* m_inlineTextEditor = nullptr;
     I18nService* m_i18n = nullptr;
 
     // Multi-selection
