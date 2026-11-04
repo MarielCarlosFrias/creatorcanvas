@@ -107,5 +107,9 @@ cc_add_test(test_canvas_gesture_handler unit/test_canvas_gesture_handler.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasgesturehandler.cpp
 )
 cc_add_test(test_image_presets unit/test_image_presets.cpp)
+cc_add_test(test_mockup_dialog unit/test_mockup_dialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/mockupdialog.cpp
+)
+
 
 

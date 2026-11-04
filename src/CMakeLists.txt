@@ -202,6 +202,8 @@ add_executable(creatorcanvas
     ui/menubuilder.cpp
     ui/recoverydialog.h
     ui/recoverydialog.cpp
+    ui/mockupdialog.h
+    ui/mockupdialog.cpp
 )
 target_link_libraries(creatorcanvas
     PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets

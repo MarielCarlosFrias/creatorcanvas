@@ -1,6 +1,7 @@
 #include "imageinspector.h"
 #include "collapsiblesection.h"
 #include "puppetwarpdialog.h"
+#include "mockupdialog.h"
 #include "themeicons.h"
 #include "core/history/CommandStack.h"
 #include "core/history/DocumentCommands.h"
@@ -1112,136 +1113,13 @@ void ImageInspector::openMockupDialog()
         return;
     }
 
-    QDialog sourceDialog(this);
-    sourceDialog.setWindowTitle(QStringLiteral("Escolher imagem para o mockup"));
-    auto* sourceForm = new QFormLayout(&sourceDialog);
-    auto* sourceCombo = new QComboBox(&sourceDialog);
-    sourceCombo->addItem(QStringLiteral("Importar uma imagem..."), QString());
-    for (const auto& child : m_document->rootGroup()->children) {
-        if (!child || child->type() != LayerType::Image || child->id() == m_id)
-            continue;
-        const auto* imageLayer = static_cast<const ImageLayer*>(child.get());
-        sourceCombo->addItem(imageLayer->name.isEmpty() ? QStringLiteral("Imagem existente") : imageLayer->name,
-                             imageLayer->id().toString(QUuid::WithoutBraces));
-    }
-    sourceForm->addRow(QStringLiteral("Imagem fonte"), sourceCombo);
-    // Modo do warp (Photoshop): Distort (4 cantos, perspectiva) ou Forma
-    // livre (contorno inteiro, qualquer formato).
-    auto* modeCombo = new QComboBox(&sourceDialog);
-    modeCombo->addItem(QStringLiteral("Perspectiva (4 cantos) — como Photoshop Distort"), false);
-    modeCombo->addItem(QStringLiteral("Forma livre (qualquer formato — contorno inteiro)"), true);
-    modeCombo->setToolTip(
-        QStringLiteral("Perspectiva: marque os 4 cantos da área; a imagem é encaixada em "
-                       "perspectiva exata (ideal para estradas/placas).\n"
-                       "Forma livre: marque o contorno inteiro (5+ pontos, qualquer "
-                       "formato); a imagem preenche a forma, seguindo as arestas."));
-    sourceForm->addRow(QStringLiteral("Modo"), modeCombo);
-    auto* removeBackground = new QCheckBox(QStringLiteral("Remover fundo uniforme (Varinha Mágica)"), &sourceDialog);
-    removeBackground->setToolTip(QStringLiteral("Útil para logos com fundo sólido (branco, magenta, etc.). Removido antes do warp para que só o conteúdo siga os pontos. O ficheiro original não é alterado."));
-    // Ligado por defeito: um logo com fundo sólido warpado SEM remoção
-    // produz exatamente "um retângulo" no canvas (a moldura vai junto).
-    removeBackground->setChecked(true);
-    sourceForm->addRow(removeBackground);
-    auto* sourceButtons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &sourceDialog);
-    sourceForm->addRow(sourceButtons);
-    connect(sourceButtons, &QDialogButtonBox::accepted, &sourceDialog, &QDialog::accept);
-    connect(sourceButtons, &QDialogButtonBox::rejected, &sourceDialog, &QDialog::reject);
-    if (sourceDialog.exec() != QDialog::Accepted)
+    MockupDialog dialog(this, m_document, m_id);
+    const MockupDialogResult res = dialog.execute();
+    if (!res.accepted || res.logo.isNull())
         return;
 
-    QImage logo;
-    const QString existingId = sourceCombo->currentData().toString();
-    if (!existingId.isEmpty()) {
-        const LayerId sourceId(existingId);
-        if (auto* sourceLayer = m_document->findLayer(sourceId); sourceLayer && sourceLayer->type() == LayerType::Image)
-            logo = m_document->assets().decodedImage(static_cast<ImageLayer*>(sourceLayer)->assetId);
-    } else {
-        const QString logoPath = QFileDialog::getOpenFileName(this, QStringLiteral("Escolher logo"), QString(),
-            QStringLiteral("Imagens (*.png *.jpg *.jpeg *.webp *.bmp)"));
-        if (!logoPath.isEmpty())
-            logo = QImage(logoPath);
-    }
-    if (logo.isNull()) return;
-
-    if (removeBackground->isChecked() && !logo.isNull()) {
-        // Cor de fundo: amostra o canto (0,0) ANTES de qualquer remoção
-        // (usada depois para suavizar o halo anti-aliased do recorte).
-        const QColor bgColor = logo.pixelColor(QPoint(0, 0));
-
-        // Ferrinha a partir de TODOS os 4 cantos: só o canto (0,0) falha
-        // quando o conteúdo (logo) toca esse canto e o fundo fica pela metade.
-        QImage cleaned = logo;
-        const QPoint corners[4] = {
-            QPoint(0, 0),
-            QPoint(cleaned.width() - 1, 0),
-            QPoint(0, cleaned.height() - 1),
-            QPoint(cleaned.width() - 1, cleaned.height() - 1)
-        };
-        for (const QPoint& corner : corners)
-            cleaned = ImageProcessing::removeBackground(cleaned, corner, 18, true);
-
-        // Suaviza o halo anti-aliased: pixels encostados a zonas transparentes
-        // ganham alpha proporcional à distância da cor de fundo. Duas passadas
-        // cobrem halos de 1-2 px sem precisar de uma ferrinha mais agressiva.
-        if (bgColor.isValid()) {
-            if (cleaned.format() != QImage::Format_ARGB32)
-                cleaned = cleaned.convertToFormat(QImage::Format_ARGB32);
-            const double threshold = (18 / 100.0) * 441.67295593;
-            for (int pass = 0; pass < 2; ++pass) {
-                QImage haloFree = cleaned;
-                for (int y = 0; y < haloFree.height(); ++y) {
-                    QRgb* line = reinterpret_cast<QRgb*>(haloFree.scanLine(y));
-                    for (int x = 0; x < haloFree.width(); ++x) {
-                        const QRgb px = line[x];
-                        if (qAlpha(px) == 0)
-                            continue;
-                        bool touchesTransparent = false;
-                        if (x > 0 && qAlpha(line[x - 1]) == 0) touchesTransparent = true;
-                        if (x + 1 < haloFree.width() && qAlpha(line[x + 1]) == 0) touchesTransparent = true;
-                        if (y > 0 && qAlpha(reinterpret_cast<const QRgb*>(haloFree.constScanLine(y - 1))[x]) == 0) touchesTransparent = true;
-                        if (y + 1 < haloFree.height() && qAlpha(reinterpret_cast<const QRgb*>(haloFree.constScanLine(y + 1))[x]) == 0) touchesTransparent = true;
-                        if (!touchesTransparent)
-                            continue;
-                        const double dr = qRed(px) - bgColor.red();
-                        const double dg = qGreen(px) - bgColor.green();
-                        const double db = qBlue(px) - bgColor.blue();
-                        const double dist = qSqrt(dr * dr + dg * dg + db * db);
-                        if (dist < threshold)
-                            line[x] = qRgba(qRed(px), qGreen(px), qBlue(px), 0);
-                        else if (dist < 2.0 * threshold)
-                            line[x] = qRgba(qRed(px), qGreen(px), qBlue(px),
-                                            qRound(qAlpha(px) * ((dist - threshold) / threshold)));
-                    }
-                }
-                cleaned = haloFree;
-            }
-        }
-
-        // Recorta para o bounding box do conteúdo visível: o warp deve
-        // mapear o CONTEÚDO (o mago) no quad marcado, não a moldura
-        // retangular do ficheiro — é isto que gera o "retângulo".
-        QRect content(0, 0, -1, -1);
-        for (int y = 0; y < cleaned.height(); ++y) {
-            const QRgb* line = reinterpret_cast<const QRgb*>(cleaned.constScanLine(y));
-            for (int x = 0; x < cleaned.width(); ++x) {
-                if (qAlpha(line[x]) > 8) {
-                    if (!content.isValid()) content = QRect(x, y, 1, 1);
-                    else content = content.united(QRect(x, y, 1, 1));
-                }
-            }
-        }
-        if (content.isValid() && content != cleaned.rect()) {
-            const QImage cropped = ImageProcessing::cropImage(cleaned, content);
-            if (!cropped.isNull())
-                cleaned = cropped;
-        }
-
-        if (!cleaned.isNull())
-            logo = cleaned;
-    }
-
-    m_pendingMockupLogo = logo;
-    m_pendingMockupFreeShape = modeCombo->currentData().toBool();
+    m_pendingMockupLogo = res.logo;
+    m_pendingMockupFreeShape = res.freeShape;
     if (m_mockupHint) {
         m_mockupHint->setText(m_pendingMockupFreeShape
             ? QStringLiteral("Modo FORMA LIVRE: marque o contorno inteiro da área (5+ pontos). A imagem preencherá a forma. Duplo clique ou Enter confirma.")
