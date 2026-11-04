@@ -235,35 +235,58 @@ jobs:
       - name: Smoke Test (NSIS Installer - silent install/uninstall)
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Continue"
+          function Note($t, $m) { Write-Host "::error title=$t::$m" }
           $setup = $env:SETUP
           if (-not $setup) { throw "SETUP env var missing" }
           $installDir = "$env:ProgramFiles\CreatorCanvas"
+          Write-Host "SETUP=$setup  INSTALL=$installDir  CWD=$(Get-Location)"
 
-          # Silent install
+          # Silent install (captura o código de retorno — instaladores NSIS
+          # silenciosos devolvem 0 em sucesso).
           Write-Host "Installing silently..."
-          Start-Process -FilePath $setup -ArgumentList "/S" -Wait -NoNewWindow
+          $p = Start-Process -FilePath $setup -ArgumentList "/S" -Wait -NoNewWindow -PassThru
+          Write-Host "installer exit code: $($p.ExitCode)"
+          if ($p.ExitCode -ne 0) { Note "NSIS install" "installer exit code $($p.ExitCode)" }
 
           # Verify installed binary exists
           $installedExe = Join-Path $installDir "CreatorCanvas.exe"
           if (-not (Test-Path $installedExe)) {
+            Get-ChildItem "$env:ProgramFiles" -Filter "*Creator*" -ErrorAction SilentlyContinue |
+              ForEach-Object { Note "install dir missing" $_.FullName }
+            Note "install dir missing" $installedExe
             throw "Installation failed: $installedExe not found"
           }
           Write-Host "Installation verified: $installedExe"
 
           # Smoke-test the installed binary
           $env:QT_QPA_PLATFORM = "offscreen"
-          & $installedExe --version
-          & $installedExe --smoke-test
+          $out = & $installedExe --version 2>&1
+          Write-Host "version rc=$LASTEXITCODE :: $out"
+          if ($LASTEXITCODE -ne 0) { Note "installed --version" "rc=$LASTEXITCODE $out" }
+          $out = & $installedExe --smoke-test 2>&1
+          Write-Host "smoke rc=$LASTEXITCODE"
+          $out | Select-Object -Last 25 | ForEach-Object { Write-Host $_ }
+          if ($LASTEXITCODE -ne 0) {
+            Note "installed smoke" "rc=$LASTEXITCODE"
+            $out | Select-String -Pattern "FAIL|error|cannot" |
+              ForEach-Object { Note "installed smoke detail" "$_" }
+          }
 
           # Silent uninstall
           $uninstaller = Join-Path $installDir "Uninstall.exe"
           if (Test-Path $uninstaller) {
             Write-Host "Uninstalling silently..."
-            Start-Process -FilePath $uninstaller -ArgumentList "/S" -Wait -NoNewWindow
+            $u = Start-Process -FilePath $uninstaller -ArgumentList "/S" -Wait -NoNewWindow -PassThru
+            Write-Host "uninstaller exit code: $($u.ExitCode)"
+            if ($u.ExitCode -ne 0) { Note "NSIS uninstall" "exit code $($u.ExitCode)" }
+          } else {
+            Note "uninstaller missing" $uninstaller
           }
 
           # Verify uninstall removed the binary
           if (Test-Path $installedExe) {
+            Note "uninstall failed" "$installedExe still exists"
             throw "Uninstall failed: $installedExe still exists"
           }
           Write-Host "Uninstall verified: binary removed successfully."
