@@ -39,9 +39,9 @@ constexpr auto kDocumentKey = "document";
 constexpr auto kLayersKey   = "layers";
 constexpr auto kAssetsKey   = "assets";
 
-constexpr mz_uint kMaxProjectEntries           = 1000;
-constexpr mz_uint64 kMaxSingleAssetSize        = 64ULL * 1024ULL * 1024ULL;  // 64 MB
-constexpr mz_uint64 kMaxTotalUncompressedBytes = 256ULL * 1024ULL * 1024ULL; // 256 MB
+constexpr mz_uint kMaxProjectEntries           = 2000;
+constexpr mz_uint64 kMaxSingleAssetSize        = 128ULL * 1024ULL * 1024ULL;  // 128 MB
+constexpr mz_uint64 kMaxTotalUncompressedBytes = 1024ULL * 1024ULL * 1024ULL; // 1024 MB (1 GB)
 
 QString blendModeToString(BlendMode mode)
 {

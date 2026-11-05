@@ -16,6 +16,11 @@ bool exportDocumentToImage(const Document& doc, const QString& filePath,
     const int height = qMax(1, static_cast<int>(doc.height() * scale));
 
     QImage image(width, height, QImage::Format_ARGB32);
+    if (image.isNull()) {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Failed to allocate memory for export (image dimensions too large).");
+        return false;
+    }
     image.fill(Qt::transparent);
 
     {
@@ -34,6 +39,11 @@ bool exportDocumentToImage(const Document& doc, const QString& filePath,
     if (format == QLatin1String("jpeg")) {
         // JPEG has no alpha: flatten onto white.
         QImage flat(toSave.size(), QImage::Format_RGB32);
+        if (flat.isNull()) {
+            if (errorMessage)
+                *errorMessage = QStringLiteral("Failed to allocate memory for JPEG flattening.");
+            return false;
+        }
         flat.fill(Qt::white);
         QPainter p(&flat);
         p.drawImage(0, 0, toSave);
@@ -65,6 +75,11 @@ bool exportLayerToImage(const Document& doc, const QUuid& layerId,
     const int height = qMax(1, static_cast<int>(doc.height() * scale));
 
     QImage image(width, height, QImage::Format_ARGB32);
+    if (image.isNull()) {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Failed to allocate memory for layer export.");
+        return false;
+    }
     image.fill(Qt::transparent);
 
     {
@@ -82,6 +97,11 @@ bool exportLayerToImage(const Document& doc, const QUuid& layerId,
     QImage toSave = image;
     if (format == QLatin1String("jpeg")) {
         QImage flat(toSave.size(), QImage::Format_RGB32);
+        if (flat.isNull()) {
+            if (errorMessage)
+                *errorMessage = QStringLiteral("Failed to allocate memory for JPEG flattening.");
+            return false;
+        }
         flat.fill(Qt::white);
         QPainter p(&flat);
         p.drawImage(0, 0, toSave);
@@ -106,6 +126,11 @@ bool exportSliceToImage(const Document& doc, const QRectF& sliceRect,
     const int h = qMax(1, static_cast<int>(sliceRect.height() * scale));
 
     QImage image(w, h, QImage::Format_ARGB32);
+    if (image.isNull()) {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Failed to allocate memory for slice export.");
+        return false;
+    }
     image.fill(Qt::transparent);
 
     {
@@ -124,6 +149,11 @@ bool exportSliceToImage(const Document& doc, const QRectF& sliceRect,
     QImage toSave = image;
     if (format == QLatin1String("jpeg")) {
         QImage flat(toSave.size(), QImage::Format_RGB32);
+        if (flat.isNull()) {
+            if (errorMessage)
+                *errorMessage = QStringLiteral("Failed to allocate memory for JPEG flattening.");
+            return false;
+        }
         flat.fill(Qt::white);
         QPainter p(&flat);
         p.drawImage(0, 0, toSave);

@@ -1390,8 +1390,13 @@ void renderDocument(const Document& doc, QPainter* painter,
         // Acumulamos tudo num buffer em coordenadas de documento e
         // recortamos cada camada clipped com DestinationIn contra o
         // acumulado (o PhotoCraft faz o mesmo no engine).
+        if (doc.width() <= 0 || doc.height() <= 0)
+            return;
+
         QImage acc(doc.width(), doc.height(),
                    QImage::Format_ARGB32_Premultiplied);
+        if (acc.isNull())
+            return;
         acc.fill(Qt::transparent);
         QImage temp;
         {
@@ -1425,6 +1430,8 @@ void renderDocument(const Document& doc, QPainter* painter,
                     if (temp.size() != QSize(doc.width(), doc.height()) || temp.format() != QImage::Format_ARGB32_Premultiplied) {
                         temp = QImage(doc.width(), doc.height(), QImage::Format_ARGB32_Premultiplied);
                     }
+                    if (temp.isNull())
+                        continue;
                     temp.fill(Qt::transparent);
                     {
                         QPainter tp(&temp);
