@@ -115,14 +115,27 @@ void CanvasOverlayRenderer::drawGrid(QPainter* painter,
     painter->setPen(gridPen);
     painter->setBrush(Qt::NoBrush);
 
-    for (int x = 0; x <= docW; x += gridSpacing) {
-        const QPointF p1 = toDevice.map(QPointF(x, 0));
-        const QPointF p2 = toDevice.map(QPointF(x, docH));
+    // Culling do viewport: desenha apenas as linhas que intersectam a tela
+    const QTransform inv = toDevice.inverted();
+    const QRectF visibleDoc = inv.mapRect(QRectF(painter->viewport())).intersected(QRectF(0, 0, docW, docH));
+    if (visibleDoc.isEmpty()) {
+        painter->restore();
+        return;
+    }
+
+    const int startX = qMax(0, static_cast<int>(std::floor(visibleDoc.left() / gridSpacing)) * gridSpacing);
+    const int endX = qMin(docW, static_cast<int>(std::ceil(visibleDoc.right() / gridSpacing)) * gridSpacing);
+    const int startY = qMax(0, static_cast<int>(std::floor(visibleDoc.top() / gridSpacing)) * gridSpacing);
+    const int endY = qMin(docH, static_cast<int>(std::ceil(visibleDoc.bottom() / gridSpacing)) * gridSpacing);
+
+    for (int x = startX; x <= endX; x += gridSpacing) {
+        const QPointF p1 = toDevice.map(QPointF(x, visibleDoc.top()));
+        const QPointF p2 = toDevice.map(QPointF(x, visibleDoc.bottom()));
         painter->drawLine(p1, p2);
     }
-    for (int y = 0; y <= docH; y += gridSpacing) {
-        const QPointF p1 = toDevice.map(QPointF(0, y));
-        const QPointF p2 = toDevice.map(QPointF(docW, y));
+    for (int y = startY; y <= endY; y += gridSpacing) {
+        const QPointF p1 = toDevice.map(QPointF(visibleDoc.left(), y));
+        const QPointF p2 = toDevice.map(QPointF(visibleDoc.right(), y));
         painter->drawLine(p1, p2);
     }
     painter->restore();
