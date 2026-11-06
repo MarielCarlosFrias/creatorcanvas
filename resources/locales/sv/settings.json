@@ -1,0 +1,16 @@
+{
+    "dialog": {
+        "title": "Inställningar",
+        "language": "Språk",
+        "autosave": "Autospara (minuter)",
+        "gpuAcceleration": "GPU-acceleration",
+        "gpuAccelerationHint": "Att byta till GPU-acceleration kräver att programmet startas om.",
+        "appearance": "Utseende",
+        "darkMode": "Använd mörkt läge",
+        "confirmExit": "Bekräfta innan du stänger om du har osparade ändringar",
+        "canvas": "Arbetsyta",
+        "showGrid": "Visa ett rutnät när du öppnar ett dokument",
+        "snapToGrid": "Fäst objekt till rutnätet",
+        "historyLimit": "Gräns för historik"
+    }
+}
