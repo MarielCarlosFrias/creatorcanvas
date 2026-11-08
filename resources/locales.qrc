@@ -9,5 +9,9 @@
         <file>locales/pt-BR/editor.json</file>
         <file>locales/pt-BR/templates.json</file>
         <file>locales/pt-BR/settings.json</file>
+        <file>locales/sv/common.json</file>
+        <file>locales/sv/editor.json</file>
+        <file>locales/sv/templates.json</file>
+        <file>locales/sv/settings.json</file>
     </qresource>
 </RCC>
