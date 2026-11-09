@@ -21,17 +21,17 @@
       "orientation.landscape": "Landskap"
     },
     "mockup": {
-      "title": "Choose image for mockup",
-      "source": "Source image",
-      "importNew": "Import an image...",
-      "browse": "Browse...",
-      "existing": "Existing image",
-      "mode": "Mode",
-      "modePerspective": "Perspective (4 corners) — like Photoshop Distort",
-      "modeFreeShape": "Free shape (any contour)",
-      "removeBg": "Remove uniform background (Magic Wand)",
-      "tolerance": "Tolerance",
-      "preview": "Preview"
+      "title": "Välj bild för prototyp",
+      "source": "Bildkälla",
+      "importNew": "Importera bild...",
+      "browse": "Bläddra...",
+      "existing": "Nuvarande bild",
+      "mode": "Läge",
+      "modePerspective": "Perspektiv (4 hörnen) — likt förvrängning i Photoshop",
+      "modeFreeShape": "Fri figur (valfri kontur)",
+      "removeBg": "Ta bort sammanhängande bakgrund (Trollstav)",
+      "tolerance": "Tolerans",
+      "preview": "Förhandsvisning"
     }
   },
   "import": {
