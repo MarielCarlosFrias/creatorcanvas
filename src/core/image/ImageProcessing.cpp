@@ -511,42 +511,83 @@ QImage ImageProcessing::floodFill(const QImage& source, const QPoint& seedPoint,
     const double tolDistance = (tolerance / 100.0) * maxDist;
     const double tolDistanceSq = tolDistance * tolDistance;
 
-    std::vector<bool> visited(w * h, false);
-    std::vector<QPoint> queue;
-    queue.reserve(std::min(w * h, 65536));
-    queue.push_back(seedPoint);
-    visited[seedPoint.y() * w + seedPoint.x()] = true;
+    // Máscara de visitados como bytes (std::vector<bool> é um proxy
+    // lentíssimo em acesso aleatório) e pilha de índices planos (4 bytes
+    // por pixel em vez de 8 do QPoint).
+    std::vector<uint8_t> visited(static_cast<std::size_t>(w) * h, 0);
+    std::vector<int> stack;
+    stack.reserve(static_cast<std::size_t>(w) * h);
 
     auto colorMatch = [&](QRgb px) -> bool {
-        const double dr = qRed(px) - tr;
-        const double dg = qGreen(px) - tg;
-        const double db = qBlue(px) - tb;
-        const double da = qAlpha(px) - ta;
-        const double distSq = dr * dr + dg * dg + db * db + da * da;
+        const int dr = qRed(px) - tr;
+        const int dg = qGreen(px) - tg;
+        const int db = qBlue(px) - tb;
+        const int da = qAlpha(px) - ta;
+        const int distSq = dr * dr + dg * dg + db * db + da * da;
         return distSq <= tolDistanceSq;
     };
 
-    size_t head = 0;
-    while (head < queue.size()) {
-        const QPoint p = queue[head++];
-        reinterpret_cast<QRgb*>(result.scanLine(p.y()))[p.x()] = replacementRgb;
+    // Scanline fill: preenche a linha inteira de uma vez (em vez de
+    // visitar pixel a pixel). Reduz drasticamente o número de operações
+    // em regiões grandes — o balde de tinta ficava 3,7 s em 3000x2000.
+    const int seedIdx = seedPoint.y() * w + seedPoint.x();
+    stack.push_back(seedIdx);
+    visited[static_cast<std::size_t>(seedIdx)] = 1;
 
-        const QPoint neighbors[4] = {
-            QPoint(p.x() + 1, p.y()),
-            QPoint(p.x() - 1, p.y()),
-            QPoint(p.x(), p.y() + 1),
-            QPoint(p.x(), p.y() - 1)
-        };
+    while (!stack.empty()) {
+        const int idx = stack.back();
+        stack.pop_back();
+        const int y = idx / w;
+        const int x = idx % w;
 
-        for (const QPoint& n : neighbors) {
-            if (n.x() >= 0 && n.x() < w && n.y() >= 0 && n.y() < h) {
-                const int idx = n.y() * w + n.x();
-                if (!visited[idx]) {
-                    visited[idx] = true;
-                    const QRgb neighborColor = reinterpret_cast<const QRgb*>(result.constScanLine(n.y()))[n.x()];
-                    if (colorMatch(neighborColor)) {
-                        queue.push_back(n);
-                    }
+        // Expande para a esquerda e para a direita na mesma linha.
+        int left = x;
+        while (left > 0) {
+            const int i = y * w + (left - 1);
+            if (visited[static_cast<std::size_t>(i)])
+                break;
+            const QRgb px = reinterpret_cast<const QRgb*>(
+                result.constScanLine(y))[left - 1];
+            if (!colorMatch(px))
+                break;
+            visited[static_cast<std::size_t>(i)] = 1;
+            --left;
+        }
+        int right = x;
+        while (right < w - 1) {
+            const int i = y * w + (right + 1);
+            if (visited[static_cast<std::size_t>(i)])
+                break;
+            const QRgb px = reinterpret_cast<const QRgb*>(
+                result.constScanLine(y))[right + 1];
+            if (!colorMatch(px))
+                break;
+            visited[static_cast<std::size_t>(i)] = 1;
+            ++right;
+        }
+
+        // Escreve o preenchimento de uma vez.
+        QRgb* row = reinterpret_cast<QRgb*>(result.scanLine(y));
+        for (int i = left; i <= right; ++i)
+            row[i] = replacementRgb;
+
+        // Enfileira as linhas vizinhas que ainda não foram visitadas.
+        for (int ny = y - 1; ny <= y + 1; ny += 2) {
+            if (ny < 0 || ny >= h)
+                continue;
+            bool seedPending = false;
+            for (int nx = left; nx <= right; ++nx) {
+                const int i = ny * w + nx;
+                if (visited[static_cast<std::size_t>(i)])
+                    continue;
+                const QRgb px = reinterpret_cast<const QRgb*>(
+                    result.constScanLine(ny))[nx];
+                if (!colorMatch(px))
+                    continue;
+                visited[static_cast<std::size_t>(i)] = 1;
+                if (!seedPending) {
+                    stack.push_back(i);
+                    seedPending = true;
                 }
             }
         }
