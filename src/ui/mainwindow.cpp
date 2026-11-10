@@ -761,6 +761,10 @@ void MainWindow::buildLayersDock()
             this, &MainWindow::addAdjustmentLayer);
     connect(m_layersPanel, &LayersPanel::mergeRequested, this, &MainWindow::mergeSelectedLayers);
     connect(m_layersPanel, &LayersPanel::flattenRequested, this, &MainWindow::flattenDocument);
+    // Explica ao utilizador quando uma máscara de recorte é recusada.
+    connect(m_layersPanel, &LayersPanel::clippingRejected, this, [this](const QString& reason) {
+        statusBar()->showMessage(reason, 6000);
+    });
 
     m_textInspector = new TextInspector(m_i18n, m_document, m_history.get(), this);
     m_textDock = new QDockWidget(QString(), this);

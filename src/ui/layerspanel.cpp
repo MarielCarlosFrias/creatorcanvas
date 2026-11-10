@@ -757,12 +757,19 @@ void LayersPanel::buildUi()
             m_document->setLayerClipped(m_selectedId, on);
         }
         // O Document pode recusar (sem camada base visível abaixo, ou
-        // camada de ajuste): devolve o botão ao estado real da camada.
+        // camada de ajuste): devolve o botão ao estado real da camada e
+        // explica porquê — sem isto o clique parece não fazer nada.
         const Layer* current = m_document->findLayer(m_selectedId);
         const bool actual = current && current->clipped;
         if (actual != on) {
             QSignalBlocker blocker(m_clippedBtn);
             m_clippedBtn->setChecked(actual);
+            const QString reason = !on
+                ? (m_i18n ? m_i18n->t("common", "action.createClippingMaskNoBase")
+                          : QStringLiteral("A clipping mask needs a visible layer below to clip to."))
+                : (m_i18n ? m_i18n->t("common", "action.clippingMaskNotAllowed")
+                          : QStringLiteral("This layer cannot be clipped."));
+            emit clippingRejected(reason);
         }
     });
 

@@ -54,6 +54,9 @@ signals:
     void quickExportRequested(const cc::LayerId& id);
     void mergeRequested();
     void flattenRequested();
+    /// Emitido quando uma operação de recorte é recusada (sem base visível
+    /// abaixo, ou camada de ajuste) — usado para explicar ao utilizador.
+    void clippingRejected(const QString& reason);
 
 private:
     void buildUi();

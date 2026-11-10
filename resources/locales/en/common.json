@@ -211,5 +211,6 @@
   "action.clippingMaskAlready": "This layer is already clipped.",
   "action.noClippingMask": "This layer is not clipped.",
   "action.createClippingMaskNoBase": "A clipping mask needs a visible layer below to clip to.",
+  "action.clippingMaskNotAllowed": "This layer cannot be clipped (adjustment layers act on the whole stack).",
   "action.selectAll": "Select All"
 }

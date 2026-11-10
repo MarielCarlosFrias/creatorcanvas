@@ -207,5 +207,6 @@
   "action.clippingMaskAlready": "Esta camada já está recortada.",
   "action.noClippingMask": "Esta camada não está recortada.",
   "action.createClippingMaskNoBase": "Uma máscara de recorte precisa de uma camada visível abaixo para recortar.",
+  "action.clippingMaskNotAllowed": "Esta camada não pode ser recortada (camadas de ajuste atuam sobre toda a pilha).",
   "action.selectAll": "Selecionar Tudo"
 }

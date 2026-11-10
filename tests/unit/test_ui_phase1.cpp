@@ -153,6 +153,59 @@ private slots:
         QVERIFY(doc.rootGroup()->children.size() >= 2);
     }
 
+    void testClipButtonTogglesClippingMask()
+    {
+        QTemporaryDir tmpDir;
+        SettingsService settings(tmpDir.path() + "/settings.json");
+        I18nService i18n(&settings, {":/locales"});
+        i18n.loadAvailableLanguages();
+
+        CommandStack history;
+        Document doc(800, 600, 96);
+
+        // Base: camada de imagem (a base do recorte).
+        auto base = std::make_unique<ImageLayer>();
+        base->naturalWidth = 200;
+        base->naturalHeight = 200;
+        base->transform.position = QPointF(400, 300);
+        const LayerId baseId = base->id();
+        QVERIFY(doc.addLayer(std::move(base)));
+
+        // Topo: a camada que será recortada.
+        auto top = std::make_unique<ImageLayer>();
+        top->naturalWidth = 200;
+        top->naturalHeight = 200;
+        top->transform.position = QPointF(400, 300);
+        const LayerId topId = top->id();
+        QVERIFY(doc.addLayer(std::move(top)));
+
+        LayersPanel panel(&i18n, &history);
+        panel.setDocument(&doc);
+        panel.setSelectedLayer(topId);
+        panel.refresh();
+
+        // O botão de recorte existe e está habilitado.
+        auto* clipBtn = panel.findChild<QToolButton*>(QStringLiteral("ClippedBtn"));
+        QVERIFY(clipBtn != nullptr);
+        QVERIFY(clipBtn->isEnabled());
+        QVERIFY(!clipBtn->isChecked());
+
+        // Clicar no botão recorta a camada (e o undo desfaz).
+        QTest::mouseClick(clipBtn, Qt::LeftButton);
+        QVERIFY2(doc.findLayer(topId)->clipped,
+                 "o clique no botão Clip devia recortar a camada");
+        QCOMPARE(history.undoCount(), 1);
+
+        // Clicar de novo liberta.
+        QTest::mouseClick(clipBtn, Qt::LeftButton);
+        QVERIFY(!doc.findLayer(topId)->clipped);
+
+        // Sem base visível abaixo, o recorte é recusado.
+        doc.setLayerVisible(baseId, false);
+        QTest::mouseClick(clipBtn, Qt::LeftButton);
+        QVERIFY(!doc.findLayer(topId)->clipped);
+    }
+
     void testTemplatesCreationAndLayerLoading()
     {
         QTemporaryDir tmpDir;

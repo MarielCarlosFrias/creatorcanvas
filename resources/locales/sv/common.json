@@ -207,5 +207,6 @@
   "action.clippingMaskAlready": "Detta lager är redan klippt.",
   "action.noClippingMask": "Detta lager är inte klippt.",
   "action.createClippingMaskNoBase": "En urklippsmask behöver ett synligt lager under att klippa till.",
+  "action.clippingMaskNotAllowed": "Detta lager kan inte klippas (justeringslager verkar på hela stapeln).",
   "action.selectAll": "Markera allt"
 }
