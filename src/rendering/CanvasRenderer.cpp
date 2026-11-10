@@ -904,6 +904,26 @@ void applyImageInnerShadow(QImage& target, const ImageInnerShadow& shadow)
 /// Declaração antecipada de applyAdjustment (definida mais abaixo no arquivo).
 QImage applyAdjustment(const QImage& acc, const AdjustmentLayer& adj);
 
+/// Declarações antecipadas: composeLayers e drawLayer são mutuamente
+/// recursivas (um grupo pode conter camadas recortadas e vice-versa).
+void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
+               const QRectF& canvasRect, float parentOpacity,
+               const RenderOptions& options);
+
+/// Compõe uma lista de camadas (filhos de um grupo) num buffer em espaço
+/// de documento, aplicando máscaras de recorte (clipped) e camadas de
+/// ajuste. `baseTransform` posiciona os filhos dentro do buffer.
+QImage composeLayers(const std::vector<std::unique_ptr<Layer>>& layers,
+                     const Document& doc, const QRectF& canvasRect,
+                     const RenderOptions& options,
+                     const QTransform& baseTransform,
+                     const QSize& bufferSize);
+
+/// Algum descendente do grupo exige o caminho de composição (máscara de
+/// recorte ou camada de ajuste)? Usado para decidir entre o caminho
+/// rápido (desenho direto) e o caminho com buffer.
+bool subtreeNeedsCompositing(const GroupLayer* group);
+
 void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
                const QRectF& canvasRect, float parentOpacity,
                const RenderOptions& options)
@@ -914,6 +934,60 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
     const float effectiveOpacity = parentOpacity * layer.opacity();
     if (effectiveOpacity <= 0.0f)
         return;
+
+    // Grupo: tratado ANTES de aplicar o transform da camada, para que a
+    // composição interna use o espaço local do grupo (sem o transform do
+    // grupo já embutido).
+    if (layer.type() == LayerType::Group) {
+        const auto& group = static_cast<const GroupLayer&>(layer);
+        if (!subtreeNeedsCompositing(&group)) {
+            // Sem máscara de recorte nem ajuste interno: caminho direto.
+            painter->save();
+            painter->setOpacity(effectiveOpacity);
+            painter->setCompositionMode(compositionMode(layer.blendMode));
+            painter->setTransform(layer.transform.matrix(layer.contentBounds()),
+                                  /*combine=*/true);
+            for (const auto& child : group.children)
+                drawLayer(painter, *child, doc, canvasRect, effectiveOpacity, options);
+            painter->restore();
+            return;
+        }
+
+        // Com recorte/ajuste interno: compõe os filhos num buffer no ESPAÇO
+        // LOCAL DO GRUPO (as máscaras valem entre irmãos do mesmo grupo) e
+        // depois aplica o transform do grupo ao resultado — exatamente a
+        // mesma matemática do caminho direto (grupo ∘ filho).
+        const QRectF groupBounds = group.contentBounds();
+        if (groupBounds.isEmpty()) {
+            painter->save();
+            painter->setOpacity(effectiveOpacity);
+            painter->setCompositionMode(compositionMode(layer.blendMode));
+            painter->setTransform(layer.transform.matrix(layer.contentBounds()),
+                                  /*combine=*/true);
+            for (const auto& child : group.children)
+                drawLayer(painter, *child, doc, canvasRect, effectiveOpacity, options);
+            painter->restore();
+            return;
+        }
+
+        const QSizeF groupSize = groupBounds.size();
+        // Origem do buffer = canto do grupo em espaço local: o pixel (0,0) do
+        // buffer corresponde a groupBounds.topLeft() do grupo.
+        const QTransform childBase = QTransform::fromTranslate(-groupBounds.x(),
+                                                              -groupBounds.y());
+        QImage composed = composeLayers(group.children, doc, canvasRect, options,
+                                        childBase, groupSize.toSize());
+        if (composed.isNull())
+            return;
+        painter->save();
+        painter->setOpacity(effectiveOpacity);
+        painter->setCompositionMode(compositionMode(layer.blendMode));
+        painter->setTransform(layer.transform.matrix(layer.contentBounds()),
+                              /*combine=*/true);
+        painter->drawImage(groupBounds.topLeft(), composed);
+        painter->restore();
+        return;
+    }
 
     painter->save();
     painter->setOpacity(effectiveOpacity);
@@ -928,12 +1002,6 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
                               gradientBrush(background.gradient, canvasRect));
         else
             painter->fillRect(canvasRect, background.fill);
-        break;
-    }
-    case LayerType::Group: {
-        const auto& group = static_cast<const GroupLayer&>(layer);
-        for (const auto& child : group.children)
-            drawLayer(painter, *child, doc, canvasRect, effectiveOpacity, options);
         break;
     }
     case LayerType::Shape:
@@ -1303,20 +1371,30 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
 
 namespace {
 
-/// Precisa do caminho de composição com buffer? Sim quando há camada
-/// recortada (clipped) OU camada de ajuste visível na raiz — ambas exigem
-/// acesso ao acumulado das camadas abaixo.
-bool needsCompositing(const GroupLayer* root)
+/// Algum descendente do grupo exige o caminho de composição (máscara de
+/// recorte ou camada de ajuste)?
+bool subtreeNeedsCompositing(const GroupLayer* group)
 {
-    for (const auto& child : root->children) {
+    for (const auto& child : group->children) {
         if (!child->visible)
             continue;
         if (child->clipped)
             return true;
         if (child->type() == LayerType::Adjustment)
             return true;
+        if (child->type() == LayerType::Group
+            && subtreeNeedsCompositing(static_cast<const GroupLayer*>(child.get())))
+            return true;
     }
     return false;
+}
+
+/// Precisa do caminho de composição com buffer? Sim quando há camada
+/// recortada (clipped) OU camada de ajuste visível na raiz — ambas exigem
+/// acesso ao acumulado das camadas abaixo.
+bool needsCompositing(const GroupLayer* root)
+{
+    return subtreeNeedsCompositing(root);
 }
 
 /// Busca parâmetro da camada de ajuste por chave (com default).
@@ -1398,6 +1476,104 @@ QImage applyAdjustment(const QImage& acc, const AdjustmentLayer& adj)
     return blended;
 }
 
+/// Compõe uma lista de camadas (filhos de um grupo) num buffer, aplicando
+/// o semântica de máscara de recorte do Photoshop:
+///
+///  * uma camada com `clipped=true` só aparece onde as camadas ABAIXO
+///    dela (dentro do mesmo grupo) têm alfa — é recortada com
+///    CompositionMode_DestinationIn contra o acumulado;
+///  * uma camada de ajuste (Adjustment) processa o acumulado até ali;
+///  * camadas normais são desenhadas direto no acumulado.
+///
+/// `baseTransform` posiciona as camadas dentro do buffer e `bufferSize` dá
+/// as dimensões do buffer (o grupo pode ter origem negativa, por isso o
+/// buffer é relativo ao bounds do grupo, não à origem do documento).
+QImage composeLayers(const std::vector<std::unique_ptr<Layer>>& layers,
+                     const Document& doc, const QRectF& canvasRect,
+                     const RenderOptions& options,
+                     const QTransform& baseTransform,
+                     const QSize& bufferSize)
+{
+    if (bufferSize.isEmpty())
+        return {};
+
+    QImage acc(bufferSize, QImage::Format_ARGB32_Premultiplied);
+    if (acc.isNull())
+        return {};
+    acc.fill(Qt::transparent);
+
+    // O buffer vive no espaço do grupo pai (ver `baseTransform`), então o
+    // "canvas" dos filhos é o retângulo do próprio buffer — não o canvas do
+    // documento (que só coincide no nível raiz).
+    const QRectF localRect(0, 0, bufferSize.width(), bufferSize.height());
+
+    QImage temp;
+    {
+        QPainter accPainter(&acc);
+        accPainter.setRenderHint(QPainter::Antialiasing, true);
+        accPainter.setRenderHint(QPainter::TextAntialiasing, true);
+        if (!options.interactive)
+            accPainter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+        accPainter.setClipRect(localRect);
+        accPainter.setTransform(baseTransform);
+
+        for (const auto& child : layers) {
+            if (!child->visible)
+                continue;
+
+            if (child->type() == LayerType::Adjustment) {
+                // Camada de ajuste: processa o ACUMULADO (tudo abaixo
+                // dela na pilha), como o engine do PhotoCraft. O
+                // painter precisa ser encerrado antes de substituir o
+                // buffer — QPainter segura os bits da QImage antiga.
+                accPainter.end();
+                acc = applyAdjustment(
+                    acc, static_cast<const AdjustmentLayer&>(*child));
+                accPainter.begin(&acc);
+                accPainter.setRenderHint(QPainter::Antialiasing, true);
+                accPainter.setRenderHint(QPainter::TextAntialiasing, true);
+                if (!options.interactive)
+                    accPainter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+                accPainter.setClipRect(localRect);
+                accPainter.setTransform(baseTransform);
+                continue;
+            }
+
+            if (child->clipped) {
+                // Renderiza a camada ISOLADA e recorta com o alfa do
+                // acumulado (tudo o que está abaixo dela no grupo).
+                if (temp.size() != bufferSize
+                    || temp.format() != QImage::Format_ARGB32_Premultiplied) {
+                    temp = QImage(bufferSize, QImage::Format_ARGB32_Premultiplied);
+                }
+                if (temp.isNull())
+                    continue;
+                temp.fill(Qt::transparent);
+                {
+                    QPainter tp(&temp);
+                    tp.setRenderHint(QPainter::Antialiasing, true);
+                    tp.setRenderHint(QPainter::TextAntialiasing, true);
+                    if (!options.interactive)
+                        tp.setRenderHint(QPainter::SmoothPixmapTransform, true);
+                    tp.setClipRect(localRect);
+                    tp.setTransform(baseTransform);
+                    drawLayer(&tp, *child, doc, localRect, 1.0f, options);
+                }
+                QPainter masker(&temp);
+                masker.setCompositionMode(
+                    QPainter::CompositionMode_DestinationIn);
+                masker.drawImage(0, 0, acc);
+                masker.end();
+                accPainter.drawImage(0, 0, temp);
+                continue;
+            }
+
+            drawLayer(&accPainter, *child, doc, localRect, 1.0f, options);
+        }
+    }
+    return acc;
+}
+
 } // namespace
 
 void renderDocument(const Document& doc, QPainter* painter,
@@ -1433,63 +1609,12 @@ void renderDocument(const Document& doc, QPainter* painter,
         if (doc.width() <= 0 || doc.height() <= 0)
             return;
 
-        QImage acc(doc.width(), doc.height(),
-                   QImage::Format_ARGB32_Premultiplied);
+        const QImage acc = composeLayers(
+            root->children, doc, canvasRect, options, QTransform(),
+            QSize(doc.width(), doc.height()));
         if (acc.isNull())
             return;
-        acc.fill(Qt::transparent);
-        QImage temp;
-        {
-            QPainter accPainter(&acc);
-            accPainter.setRenderHint(QPainter::Antialiasing, true);
-            accPainter.setRenderHint(QPainter::TextAntialiasing, true);
-            if (!options.interactive)
-                accPainter.setRenderHint(QPainter::SmoothPixmapTransform, true);
-            accPainter.setClipRect(canvasRect);
 
-            for (const auto& child : root->children) {
-                if (!child->visible)
-                    continue;
-                if (child->type() == LayerType::Adjustment) {
-                    // Camada de ajuste: processa o ACUMULADO (tudo abaixo
-                    // dela na pilha), como o engine do PhotoCraft. O
-                    // painter precisa ser encerrado antes de substituir o
-                    // buffer — QPainter segura os bits da QImage antiga.
-                    accPainter.end();
-                    acc = applyAdjustment(
-                        acc, static_cast<const AdjustmentLayer&>(*child));
-                    accPainter.begin(&acc);
-                    accPainter.setRenderHint(QPainter::Antialiasing, true);
-                    accPainter.setRenderHint(QPainter::TextAntialiasing, true);
-                    if (!options.interactive)
-                        accPainter.setRenderHint(QPainter::SmoothPixmapTransform, true);
-                    accPainter.setClipRect(canvasRect);
-                } else if (child->clipped) {
-                    // Renderiza a camada isolada e recorta com o alfa do
-                    // acumulado (tudo o que está abaixo dela).
-                    if (temp.size() != QSize(doc.width(), doc.height()) || temp.format() != QImage::Format_ARGB32_Premultiplied) {
-                        temp = QImage(doc.width(), doc.height(), QImage::Format_ARGB32_Premultiplied);
-                    }
-                    if (temp.isNull())
-                        continue;
-                    temp.fill(Qt::transparent);
-                    {
-                        QPainter tp(&temp);
-                        tp.setRenderHint(QPainter::Antialiasing, true);
-                        tp.setRenderHint(QPainter::TextAntialiasing, true);
-                        drawLayer(&tp, *child, doc, canvasRect, 1.0f, options);
-                    }
-                    QPainter masker(&temp);
-                    masker.setCompositionMode(
-                        QPainter::CompositionMode_DestinationIn);
-                    masker.drawImage(0, 0, acc);
-                    masker.end();
-                    accPainter.drawImage(0, 0, temp);
-                } else {
-                    drawLayer(&accPainter, *child, doc, canvasRect, 1.0f, options);
-                }
-            }
-        }
         painter->save();
         painter->setTransform(docToDevice);
         painter->setClipRect(canvasRect);

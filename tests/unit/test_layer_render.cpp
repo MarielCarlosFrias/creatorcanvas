@@ -85,6 +85,62 @@ private slots:
                                 .arg(outside, 0, 16)));
     }
 
+    void clippedLayerInsideGroupOnlyShowsOverGroupBase()
+    {
+        Document doc(20, 10);
+        // Grupo com uma base (metade esquerda em vermelho) e uma camada
+        // recortada (azul cobrindo tudo). A máscara de recorte deve
+        // funcionar DENTRO do grupo, não só na raiz.
+        auto group = std::make_unique<GroupLayer>();
+        group->name = QStringLiteral("Group");
+        // A posição de um grupo ancora o CENTRO do seu conteúdo
+        // (AffineTransform::matrix usa o centro de contentBounds).
+        group->transform.position = QPointF(10, 5);
+
+        QImage base(20, 10, QImage::Format_ARGB32_Premultiplied);
+        base.fill(Qt::transparent);
+        {
+            QPainter bp(&base);
+            bp.fillRect(0, 0, 10, 10, QColor(255, 0, 0));
+        }
+        auto baseLayer = std::make_unique<ImageLayer>();
+        baseLayer->name = QStringLiteral("Base");
+        baseLayer->assetId = doc.assets().addImage(base);
+        baseLayer->naturalWidth = 20;
+        baseLayer->naturalHeight = 10;
+        baseLayer->transform.position = QPointF(10, 5);
+        group->children.push_back(std::move(baseLayer));
+
+        QImage over(20, 10, QImage::Format_ARGB32_Premultiplied);
+        over.fill(QColor(0, 0, 255));
+        auto clipLayer = std::make_unique<ImageLayer>();
+        clipLayer->name = QStringLiteral("Clip");
+        clipLayer->assetId = doc.assets().addImage(over);
+        clipLayer->naturalWidth = 20;
+        clipLayer->naturalHeight = 10;
+        clipLayer->transform.position = QPointF(10, 5);
+        clipLayer->clipped = true;
+        group->children.push_back(std::move(clipLayer));
+
+        QVERIFY(doc.addLayer(std::move(group)));
+
+        const QImage out = render(doc);
+
+        // Sobre a base (esquerda): azul do clipped por cima do vermelho.
+        const QRgb overBase = unmult(out, 5, 5);
+        QVERIFY2(qBlue(overBase) > 200 && qRed(overBase) < 60,
+                 qPrintable(QStringLiteral("sobre a base dentro do grupo "
+                                           "deveria ser azul (rgb=%1)")
+                                .arg(overBase, 0, 16)));
+
+        // Fora da base (direita): transparente — o clipped foi recortado.
+        const QRgb outside = unmult(out, 15, 5);
+        QVERIFY2(qAlpha(outside) == 0,
+                 qPrintable(QStringLiteral("fora da base dentro do grupo "
+                                           "deveria ser transparente (rgb=%1)")
+                                .arg(outside, 0, 16)));
+    }
+
     void fillOpacityAppliesToContent()
     {
         Document doc(10, 10);
