@@ -96,6 +96,7 @@ private:
     QToolButton* m_lockPositionBtn = nullptr;
     QToolButton* m_lockAllBtn = nullptr;
     QToolButton* m_clippedBtn = nullptr;
+    QLabel* m_clippedLabel = nullptr;
     QWidget* m_lockRow = nullptr;
     float m_fillOpacityBeforeSlide = 1.0f;
     bool m_clippedBefore = false;

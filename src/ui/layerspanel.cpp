@@ -363,11 +363,16 @@ void LayersPanel::buildUi()
     };
     m_clippedBtn = makeLockBtn(QStringLiteral("ClippedBtn"), ThemeIcons::iconClipMask());
     m_clippedBtn->setFixedSize(28, 24);
+    // Rótulo visível: o botão sozinho (seta pequena) é fácil de perder
+    // no meio dos ícones de bloqueio.
+    m_clippedLabel = new QLabel(controlsFrame);
+    m_clippedLabel->setBuddy(m_clippedBtn);
     m_lockTransparencyBtn = makeLockBtn(QStringLiteral("LockTransparencyBtn"), ThemeIcons::iconLockTransparency());
     m_lockPixelsBtn = makeLockBtn(QStringLiteral("LockPixelsBtn"), ThemeIcons::iconLockPixels());
     m_lockPositionBtn = makeLockBtn(QStringLiteral("LockPositionBtn"), ThemeIcons::iconLockPosition());
     m_lockAllBtn = makeLockBtn(QStringLiteral("LockAllBtn"), ThemeIcons::iconLockAll());
 
+    lockRowLayout->addWidget(m_clippedLabel);
     lockRowLayout->addWidget(m_clippedBtn);
     lockRowLayout->addStretch();
     lockRowLayout->addWidget(m_lockTransparencyBtn);
@@ -1641,6 +1646,8 @@ void LayersPanel::retranslateUi()
     if (m_clippedBtn)
         m_clippedBtn->setToolTip(
             m_i18n->t("common", "panel.clipped"));
+    if (m_clippedLabel)
+        m_clippedLabel->setText(m_i18n->t("common", "panel.clippedLabel"));
 
     if (m_addLayerBtn) m_addLayerBtn->setToolTip(m_i18n->t("common", "panel.addLayer"));
     if (m_addAdjustBtn) m_addAdjustBtn->setToolTip(m_i18n ? m_i18n->t("editor", "layer.newAdjustmentLayer") : QStringLiteral("New Adjustment Layer..."));

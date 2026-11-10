@@ -185,6 +185,7 @@
   "panel.lockPosition": "Lås position",
   "panel.lockAll": "Lås allt",
   "panel.clipped": "Urklippsmask: klipp till lagret under",
+  "panel.clippedLabel": "Klipp:",
   "menu.image": "Bild",
   "menu.filter": "Filter",
   "menu.select": "Markera",

@@ -185,6 +185,7 @@
   "panel.lockPosition": "Trancar posição",
   "panel.lockAll": "Trancar tudo",
   "panel.clipped": "Máscara de recorte: recortar pela camada de baixo",
+  "panel.clippedLabel": "Recorte:",
   "menu.image": "Imagem",
   "menu.filter": "Filtro",
   "menu.select": "Selecionar",

@@ -995,6 +995,9 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
     painter->setTransform(layer.transform.matrix(layer.contentBounds()),
                           /*combine=*/true);
     switch (layer.type()) {
+    case LayerType::Group:
+        //tratado antes do switch (compose/direto) — nada a desenhar aqui.
+        break;
     case LayerType::Background: {
         const auto& background = static_cast<const BackgroundLayer&>(layer);
         if (background.gradient.isValid())
@@ -1494,6 +1497,7 @@ QImage composeLayers(const std::vector<std::unique_ptr<Layer>>& layers,
                      const QTransform& baseTransform,
                      const QSize& bufferSize)
 {
+    Q_UNUSED(canvasRect); // o recorte local do buffer é localRect, abaixo
     if (bufferSize.isEmpty())
         return {};
 

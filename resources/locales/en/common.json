@@ -189,6 +189,7 @@
   "panel.lockPosition": "Lock position",
   "panel.lockAll": "Lock all",
   "panel.clipped": "Clipping mask: clip to layer below",
+  "panel.clippedLabel": "Clip:",
   "menu.image": "Image",
   "menu.filter": "Filter",
   "menu.select": "Select",
