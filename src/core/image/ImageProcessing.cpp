@@ -97,43 +97,61 @@ QImage ImageProcessing::removeBackground(const QImage& source, const QPoint& see
         return result;
     }
 
-    // Modo contiguo: flood-fill baseado em pilha (DFS) com pop_back para consumo minimo de memoria
-    std::vector<uint8_t> visited(w * h, 0);
-    std::vector<QPoint> stack;
-    stack.reserve(std::min(w * h, 65536));
+    // Modo contiguo: scanline fill (DFS por linha). Preenche a linha inteira
+    // de uma vez em vez de pixel a pixel — a varinha mágica ficava 1,4 s
+    // em 3000x2000 e travava a UI.
+    std::vector<uint8_t> visited(static_cast<std::size_t>(w) * h, 0);
+    std::vector<int> stack;
+    stack.reserve(static_cast<std::size_t>(w) * 8);
 
-    stack.push_back(seedPoint);
-    visited[seedPoint.y() * w + seedPoint.x()] = 1;
+    const int seedIdx = seedPoint.y() * w + seedPoint.x();
+    stack.push_back(seedIdx);
+    visited[static_cast<std::size_t>(seedIdx)] = 1;
 
     while (!stack.empty()) {
-        const QPoint pt = stack.back();
+        const int idx = stack.back();
         stack.pop_back();
-        const int px = pt.x();
-        const int py = pt.y();
+        const int y = idx / w;
+        const int x = idx % w;
 
-        QRgb* scanline = reinterpret_cast<QRgb*>(result.scanLine(py));
-        if (!matches(scanline[px]))
+        QRgb* row = reinterpret_cast<QRgb*>(result.scanLine(y));
+        if (!matches(row[x]))
             continue;
 
-        // Limpa o pixel para transparencia total
-        scanline[px] = 0x00000000;
+        // Expande a linha para a esquerda e para a direita.
+        int left = x;
+        while (left > 0 && !visited[static_cast<std::size_t>(y * w + (left - 1))]
+            && matches(reinterpret_cast<const QRgb*>(result.constScanLine(y))[left - 1])) {
+            --left;
+        }
+        int right = x;
+        while (right < w - 1 && !visited[static_cast<std::size_t>(y * w + (right + 1))]
+            && matches(reinterpret_cast<const QRgb*>(result.constScanLine(y))[right + 1])) {
+            ++right;
+        }
 
-        // 4 vizinhos conectados (cima, baixo, esquerda, direita)
-        static const int dx[4] = { 1, -1, 0, 0 };
-        static const int dy[4] = { 0, 0, 1, -1 };
+        // Limpa a linha e marca como visitada.
+        for (int i = left; i <= right; ++i) {
+            row[i] = 0x00000000;
+            visited[static_cast<std::size_t>(y * w + i)] = 1;
+        }
 
-        for (int i = 0; i < 4; ++i) {
-            const int nx = px + dx[i];
-            const int ny = py + dy[i];
-
-            if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
-                const int idx = ny * w + nx;
-                if (!visited[idx]) {
-                    visited[idx] = 1;
-                    const QRgb neighborPixel = reinterpret_cast<const QRgb*>(result.constScanLine(ny))[nx];
-                    if (matches(neighborPixel)) {
-                        stack.push_back(QPoint(nx, ny));
-                    }
+        // Enfileira as linhas vizinhas que casam com a cor.
+        for (int ny = y - 1; ny <= y + 1; ny += 2) {
+            if (ny < 0 || ny >= h)
+                continue;
+            const QRgb* nrow = reinterpret_cast<const QRgb*>(result.constScanLine(ny));
+            bool seedPending = false;
+            for (int nx = left; nx <= right; ++nx) {
+                const int nidx = ny * w + nx;
+                if (visited[static_cast<std::size_t>(nidx)])
+                    continue;
+                if (!matches(nrow[nx]))
+                    continue;
+                visited[static_cast<std::size_t>(nidx)] = 1;
+                if (!seedPending) {
+                    stack.push_back(nidx);
+                    seedPending = true;
                 }
             }
         }
