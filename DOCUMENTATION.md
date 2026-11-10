@@ -220,6 +220,23 @@ Image Inspector live preview writes a temporary asset via `Document::setImageLay
 - **Overlays:** selection, multi-selection bounds, snap guides, grid, safe zones (`0` none, `1` YouTube, `2` Instagram, `3` TikTok), crop/scissors/clone previews, brush cursor.
 - **Inline text:** double-click a text layer.
 - **DnD:** dropped image files import as layers.
+- **Clipping mask (Photoshop-style):**
+  - `Layer::clipped` marks a layer as clipped to the layer below it. The
+    renderer composes the layer in isolation and masks it with the alpha of
+    the accumulated content below (`CompositionMode_DestinationIn`).
+  - **Works inside groups** too: `composeLayers()` (`CanvasRenderer.cpp`)
+    is recursive — a group whose subtree needs compositing is rendered into
+    its own buffer so masks apply between siblings of that group.
+  - **UI:** the layers panel has a clip toggle button; `Layer ▸ Create
+    Clipping Mask` (`Ctrl+Alt+G`) and `Layer ▸ Release Clipping Mask`
+    (`Ctrl+Shift+Alt+G`) are also available. Clipped rows show a `↳`
+    prefix, like Photoshop.
+  - **Rules enforced by `Document::setLayerClipped()`:** a clipped layer
+    needs a visible, non-clipped layer below it in the same group, and
+    adjustment layers cannot be clipped in isolation (they already act on
+    the accumulated result).
+  - **Export:** exporting a clipped layer (`renderSiblingLayers`) applies
+    the same mask, so the exported image matches what is on screen.
 - **`CanvasTool` & `ICanvasTool` architecture:**
   - Located in `src/tools/` compiled as static library `cc_tools`.
   - `ICanvasTool` lifecycle: `activate(ctx)`, `deactivate(ctx)`, `drawOverlay(painter, ctx)`, `cursor()`.

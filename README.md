@@ -60,6 +60,7 @@ Most photo editing tools are either overly basic web canvas tools or intimidatin
 ### 🗂️ Layer Engine & Compositing
 - **Layer Types**: Image, Text, Shape (Rect, Ellipse, Triangle, Star, Polygon), and Group folders.
 - **Organization**: Drag-and-drop reordering, color tags (8 colors), blend modes, lock, and opacity.
+- **Clipping Masks**: Clip a layer to the one below it (Photoshop-style) — works inside groups too, via `Layer ▸ Create Clipping Mask` (`Ctrl+Alt+G`).
 - **Alpha Masking**: Non-destructive persistent layer masks saved directly inside project files with render-caching for instant movement.
 
 ### ✂️ Centralized Selection & Cut Suite
