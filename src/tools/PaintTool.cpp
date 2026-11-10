@@ -92,7 +92,12 @@ void PaintTool::mousePress(QMouseEvent* event, const QPointF& docPos, const Tool
     m_origHeight = img->naturalHeight;
     m_origTransform = layer->transform;
 
+    // Cópia DETACHED do bitmap: decodedImage() devolve a imagem
+    // compartilhada com o cache do AssetStore — pintar nela corromperia o
+    // cache (e o QPainter só desfaria o compartilhamento por acidente).
     m_workingImage = ctx.document->assets().decodedImage(img->assetId);
+    if (!m_workingImage.isNull())
+        m_workingImage = m_workingImage.copy();
     if (m_workingImage.isNull()) {
         m_workingImage = QImage(img->naturalWidth > 0 ? img->naturalWidth : ctx.document->width(),
                                 img->naturalHeight > 0 ? img->naturalHeight : ctx.document->height(),

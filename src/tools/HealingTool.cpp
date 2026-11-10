@@ -80,6 +80,8 @@ void HealingTool::mousePress(QMouseEvent* event, const QPointF& docPos, const To
             const QPoint dstLocal = matrix.inverted().map(docPos).toPoint();
 
             m_workingImage = ctx.document->assets().decodedImage(img->assetId);
+            if (!m_workingImage.isNull())
+                m_workingImage = m_workingImage.copy(); // detached: não corrompe o cache
             if (!m_workingImage.isNull()) {
                 m_isHealing = true;
                 m_workingImage = ImageProcessing::removeRedEye(
@@ -158,6 +160,8 @@ void HealingTool::mousePress(QMouseEvent* event, const QPointF& docPos, const To
             m_origTransform = layer->transform;
 
             m_workingImage = ctx.document->assets().decodedImage(img->assetId);
+            if (!m_workingImage.isNull())
+                m_workingImage = m_workingImage.copy(); // detached: não corrompe o cache
             if (!m_workingImage.isNull()) {
                 m_isHealing = true;
                 const QTransform matrix = layer->transform.matrix(layer->contentBounds());

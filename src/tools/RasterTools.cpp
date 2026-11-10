@@ -198,6 +198,8 @@ void CloneStampTool::mousePress(QMouseEvent* event, const QPointF& docPos, const
             m_origTransform = layer->transform;
 
             m_workingImage = ctx.document->assets().decodedImage(img->assetId);
+            if (!m_workingImage.isNull())
+                m_workingImage = m_workingImage.copy(); // detached: não corrompe o cache do asset
             if (!m_workingImage.isNull()) {
                 m_isCloning = true;
                 const QTransform matrix = layer->transform.matrix(layer->contentBounds());
