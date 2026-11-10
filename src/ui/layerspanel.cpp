@@ -1197,7 +1197,7 @@ void LayersPanel::rebuild()
             const bool isCurrentlyLocked = layer->locked || layer->locks.all;
 
             // Layer Name Label
-            auto* nameLabel = new QLabel(fallbackName(*layer, m_i18n), rowWidget);
+            auto* nameLabel = new QLabel(rowWidget);
             nameLabel->setObjectName(QStringLiteral("rowNameLabel"));
             nameLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
             nameLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
@@ -1213,6 +1213,14 @@ void LayersPanel::rebuild()
                     : QStringLiteral("color: #1e293b; background: transparent;"));
             }
             nameLabel->setFont(nf);
+            // Camada recortada: prefixo "↳" como no Photoshop, ligando
+            // visualmente a camada à base do recorte.
+            if (layer->clipped) {
+                nameLabel->setText(QStringLiteral("↳ ") + fallbackName(*layer, m_i18n));
+                nameLabel->setToolTip(
+                    m_i18n ? m_i18n->t("common", "panel.clipped")
+                           : QStringLiteral("Clipping mask: clip to layer below"));
+            }
 
             auto* colorTag = new QLabel(rowWidget);
             colorTag->setFixedSize(8, 22);

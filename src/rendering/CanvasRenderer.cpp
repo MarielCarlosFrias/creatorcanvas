@@ -1646,16 +1646,72 @@ void renderSiblingLayers(const Document& doc, const QList<QUuid>& layerIds,
 
     // Keep document paint order, rather than the row-click order.
     GroupLayer* parent = doc.parentOf(layerIds.first());
-    if (parent == doc.rootGroup()) {
-        for (const auto& child : parent->children) {
-            if (layerIds.contains(child->id()))
-                drawLayer(painter, *child, doc, canvasRect, 1.0f, options);
+    if (!parent) {
+        painter->restore();
+        return;
+    }
+
+    for (const auto& child : parent->children) {
+        if (!layerIds.contains(child->id()))
+            continue;
+
+        if (!child->clipped) {
+            drawLayer(painter, *child, doc, canvasRect, 1.0f, options);
+            continue;
         }
-    } else if (parent) {
-        for (const auto& child : parent->children) {
-            if (layerIds.contains(child->id()))
-                drawLayer(painter, *child, doc, canvasRect, 1.0f, options);
+
+        // Camada recortada: o conteúdo exportado é o da própria camada,
+        // mas recortado pelo ALFA da camada base (a primeira camada não
+        // recortada abaixo dela no mesmo grupo) — como no Photoshop.
+        const int index = parent->children.size()
+            - [&] {
+                int idx = 0;
+                for (int i = 0; i < static_cast<int>(parent->children.size()); ++i) {
+                    if (parent->children[static_cast<std::size_t>(i)]->id() == child->id()) {
+                        idx = i;
+                        break;
+                    }
+                }
+                return idx;
+            }();
+        const Layer* base = nullptr;
+        for (int i = index - 1; i >= 0; --i) {
+            const auto* candidate = parent->children[static_cast<std::size_t>(i)].get();
+            if (!candidate->visible || candidate->clipped)
+                continue;
+            base = candidate;
+            break;
         }
+        if (!base)
+            continue; // sem base visível: nada a recortar
+
+        const QSize bufSize(doc.width(), doc.height());
+        QImage baseAlpha(bufSize, QImage::Format_ARGB32_Premultiplied);
+        baseAlpha.fill(Qt::transparent);
+        {
+            QPainter bp(&baseAlpha);
+            bp.setRenderHint(QPainter::Antialiasing, true);
+            bp.setRenderHint(QPainter::TextAntialiasing, true);
+            bp.setClipRect(canvasRect);
+            drawLayer(&bp, *base, doc, canvasRect, 1.0f, options);
+        }
+
+        QImage clipped(bufSize, QImage::Format_ARGB32_Premultiplied);
+        clipped.fill(Qt::transparent);
+        {
+            QPainter cp(&clipped);
+            cp.setRenderHint(QPainter::Antialiasing, true);
+            cp.setRenderHint(QPainter::TextAntialiasing, true);
+            cp.setClipRect(canvasRect);
+            drawLayer(&cp, *child, doc, canvasRect, 1.0f, options);
+        }
+
+        QPainter masker(&clipped);
+        masker.setCompositionMode(QPainter::CompositionMode_DestinationIn);
+        masker.drawImage(0, 0, baseAlpha);
+        masker.end();
+
+        painter->drawImage(0, 0, clipped);
     }
     painter->restore();
 }
