@@ -49,20 +49,11 @@ QString fallbackName(const Layer& layer, I18nService* i18n)
         case LayerType::Background: return QStringLiteral("Background");
         case LayerType::Adjustment: return QStringLiteral("Adjustment");
         case LayerType::Fill:       return QStringLiteral("Fill");
+        case LayerType::Vector:   return QStringLiteral("Vector");
         }
         return QStringLiteral("Layer");
     }
-
-    switch (layer.type()) {
-    case LayerType::Group:      return i18n->t("common", "layer.typeGroup");
-    case LayerType::Image:      return i18n->t("common", "layer.typeImage");
-    case LayerType::Text:       return i18n->t("common", "layer.typeText");
-    case LayerType::Shape:      return i18n->t("common", "layer.typeShape");
-    case LayerType::Background: return i18n->t("common", "layer.typeBackground");
-    case LayerType::Adjustment: return i18n->t("common", "layer.typeAdjustment");
-    case LayerType::Fill:       return i18n->t("common", "layer.typeFill");
-    }
-    return i18n->t("common", "layer.typeImage");
+    return i18n->t("common", "layer.typeLayer");
 }
 
 QColor colorTagColor(LayerColorTag tag)
@@ -1185,6 +1176,7 @@ void LayersPanel::rebuild()
             case LayerType::Background: badgeIcon = ThemeIcons::layerTypeShape(); break;
             case LayerType::Adjustment: badgeIcon = ThemeIcons::layerTypeAdjustment(); break;
             case LayerType::Fill:       badgeIcon = ThemeIcons::layerTypeShape(); break;
+            case LayerType::Vector:     badgeIcon = ThemeIcons::layerTypeShape(); break;
             }
             typeIcon->setPixmap(badgeIcon.pixmap(14, 14));
             typeIcon->setFixedSize(14, 14);

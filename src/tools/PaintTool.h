@@ -26,20 +26,25 @@ public:
     void drawOverlay(QPainter* painter, const ToolContext& ctx) override;
     void cancel(const ToolContext& ctx) override;
 
-    void setBrushType(int type) { m_brushType = static_cast<ImageProcessing::BrushType>(type); }
-    ImageProcessing::BrushType brushType() const { return m_brushType; }
-    void setColor(const QColor& color) { m_color = color; }
-    QColor color() const { return m_color; }
-    void setSize(int size) { m_size = size; }
-    int size() const { return m_size; }
-    void setOpacity(qreal opacity) { m_opacity = opacity; }
-    qreal opacity() const { return m_opacity; }
+    void setBrushType(int type) { m_params.type = static_cast<ImageProcessing::BrushType>(type); }
+    ImageProcessing::BrushType brushType() const { return m_params.type; }
+    void setColor(const QColor& color) { m_params.color = color; }
+    QColor color() const { return m_params.color; }
+    void setSize(int size) { m_params.size = size; }
+    int size() const { return m_params.size; }
+    void setOpacity(qreal opacity) { m_params.opacity = opacity; }
+    qreal opacity() const { return m_params.opacity; }
+    void setPressure(qreal pressure) { m_params.pressure = pressure; }
+    qreal pressure() const { return m_params.pressure; }
+    void setSpacing(qreal spacing) { m_params.spacing = spacing; }
+    qreal spacing() const { return m_params.spacing; }
+    void setJitter(qreal jitter) { m_params.jitter = jitter; }
+    qreal jitter() const { return m_params.jitter; }
+    void setTexture(const QImage& texture) { m_params.texture = texture; }
+    const QImage& texture() const { return m_params.texture; }
 
 private:
-    ImageProcessing::BrushType m_brushType = ImageProcessing::BrushType::Brush;
-    QColor m_color = QColor(47, 111, 237);
-    int m_size = 12;
-    qreal m_opacity = 1.0;
+    ImageProcessing::BrushParams m_params;
 
     bool m_isPainting = false;
     bool m_hoverValid = false;

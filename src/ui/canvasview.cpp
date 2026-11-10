@@ -12,6 +12,7 @@
 #include "tools/SelectTool.h"
 #include "tools/MarqueeTool.h"
 #include "tools/PaintExtras.h"
+#include "tools/HealingTool.h"
 #include "tools/CropTool.h"
 #include "tools/ScissorsTool.h"
 #include "tools/PaintTool.h"
@@ -1374,6 +1375,9 @@ void CanvasView::setTool(CanvasTool tool)
         break;
     case CanvasTool::Healing:
         m_activeTool = m_healingTool.get();
+        break;
+    case CanvasTool::Vector:
+        m_activeTool = m_paintTool.get();
         break;
     }
 

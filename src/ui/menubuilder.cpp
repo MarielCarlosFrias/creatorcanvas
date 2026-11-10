@@ -27,6 +27,8 @@ void MenuBuilder::buildMenus(I18nService* i18n)
     fileMenu->addSeparator();
     fileMenu->addAction(m_actions->importAction);
     fileMenu->addAction(m_actions->exportAction);
+    fileMenu->addAction(m_actions->batchAction);
+    fileMenu->addAction(m_actions->workspaceLayoutAction);
     fileMenu->addSeparator();
     fileMenu->addAction(m_actions->quitAction);
 

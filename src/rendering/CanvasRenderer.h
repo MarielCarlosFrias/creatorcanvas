@@ -51,4 +51,11 @@ void renderSiblingLayers(const Document& doc,
 /// Limpa os caches internos de silhuetas e efeitos pré-renderizados (outline, drop shadow).
 void clearRendererCaches();
 
+/// Invalida o cache de renderização de uma camada específica. Chamado quando
+/// uma camada muda para forçar re-renderização na próxima vez.
+void invalidateLayerCache(const QUuid& layerId);
+
+/// Invalida todo o cache de camadas renderizadas.
+void invalidateAllLayerCaches();
+
 } // namespace cc

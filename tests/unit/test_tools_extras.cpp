@@ -8,6 +8,7 @@
 #include "core/layers/Layer.h"
 #include "tools/MarqueeTool.h"
 #include "tools/PaintExtras.h"
+#include "tools/HealingTool.h"
 
 using namespace cc;
 
@@ -330,7 +331,7 @@ private slots:
             for (int x = 12; x <= 20; ++x)
                 base.setPixelColor(x, y, QColor(240, 30, 30));
 
-        const QImage fixed = ImageProcessing::redEyeRemove(base, QPoint(16, 16), 10);
+        const QImage fixed = ImageProcessing::removeRedEye(base, QPoint(16, 16), 10);
         const QColor center = QColor::fromRgba(qUnpremultiply(fixed.pixel(16, 16)));
         QVERIFY(center.red() < 120);
         QVERIFY(center.green() > 20);

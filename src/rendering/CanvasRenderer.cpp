@@ -901,6 +901,9 @@ void applyImageInnerShadow(QImage& target, const ImageInnerShadow& shadow)
 }
 
 
+/// Declaração antecipada de applyAdjustment (definida mais abaixo no arquivo).
+QImage applyAdjustment(const QImage& acc, const AdjustmentLayer& adj);
+
 void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
                const QRectF& canvasRect, float parentOpacity,
                const RenderOptions& options)
@@ -1207,6 +1210,22 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
                 maskedPixels = applyBlendIf(maskedPixels, image.blendIf);
             }
 
+            // Conversão de espaço de cor: se a camada tem um espaço de cor
+            /// diferente do documento, converte os pixels antes de aplicar
+            // ajustes e efeitos visuais.
+            if (image.colorSpace != doc.colorSpace() && isColorConversionSupported(image.colorSpace, doc.colorSpace())) {
+                maskedPixels = convertColorSpace(maskedPixels, image.colorSpace, doc.colorSpace());
+            }
+
+            // Ajuste não destrutivo vinculado a esta camada de imagem.
+            // Os parâmetros do AdjustmentLayer são aplicados sobre os pixels
+            // em tempo real, sem modificar o asset subjacente.
+            if (image.adjustmentLayerId) {
+                if (const auto* adj = doc.findAdjustmentLayer(*image.adjustmentLayerId)) {
+                    maskedPixels = applyAdjustment(maskedPixels, *adj);
+                }
+            }
+
             const QRectF targetRect(0, 0, image.naturalWidth, image.naturalHeight);
 
             // Efeito Sombra Projetada (Drop Shadow)
@@ -1252,6 +1271,27 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
                 QRectF(0, 0, image.naturalWidth, image.naturalHeight),
                 QColor(0x3a, 0x3b, 0x40));
         }
+        break;
+    }
+
+    case LayerType::Vector: {
+        const auto& vector = static_cast<const VectorLayer&>(layer);
+        if (vector.path.isEmpty())
+            break;
+        QPainterPath transformedPath = vector.path;
+        transformedPath = vector.transform.matrix(vector.contentBounds()).map(transformedPath);
+        QPen pen(vector.stroke, vector.strokeWidth);
+        pen.setCosmetic(false);
+        if (vector.strokeEnabled)
+            painter->setPen(pen);
+        else
+            painter->setPen(Qt::NoPen);
+        if (vector.fillEnabled)
+            painter->setBrush(vector.fill);
+        else
+            painter->setBrush(Qt::NoBrush);
+        painter->setRenderHint(QPainter::Antialiasing, true);
+        painter->drawPath(transformedPath);
         break;
     }
     }

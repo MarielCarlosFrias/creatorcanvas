@@ -420,6 +420,9 @@ void ImageProcessing::paintStrokeInPlace(QImage& target, const QPointF& prevPoin
         }
         break;
     }
+    case BrushType::Texture:
+    case BrushType::Scatter:
+    case BrushType::Rotation:
     case BrushType::Brush:
     default: {
         painter.setRenderHint(QPainter::Antialiasing, true);
@@ -436,6 +439,51 @@ void ImageProcessing::paintStrokeInPlace(QImage& target, const QPointF& prevPoin
         }
         break;
     }
+    }
+}
+
+QImage ImageProcessing::paintStroke(const QImage& target, const QPointF& prevPoint, const QPointF& curPoint,
+                                    const BrushParams& params)
+{
+    if (target.isNull())
+        return target;
+    QImage result = target;
+    paintStrokeInPlace(result, prevPoint, curPoint, params);
+    return result;
+}
+
+void ImageProcessing::paintStrokeInPlace(QImage& target, const QPointF& prevPoint, const QPointF& curPoint,
+                                         const BrushParams& params)
+{
+    QPainter painter(&target);
+    const int clampedSize = std::clamp(params.size, 1, 300);
+    const qreal clampedOpacity = std::clamp(params.opacity, 0.0, 1.0);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    switch (params.type) {
+    case BrushType::Brush:
+    default: {
+        QColor c = params.color;
+        c.setAlphaF(clampedOpacity * params.pressure);
+        if (prevPoint == curPoint) {
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(c);
+            painter.drawEllipse(curPoint, clampedSize / 2.0, clampedSize / 2.0);
+        } else {
+            QPen pen(c, clampedSize, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+            painter.setPen(pen);
+            painter.drawLine(prevPoint, curPoint);
+        }
+        break;
+    }
+    case BrushType::Pencil:
+    case BrushType::Highlighter:
+    case BrushType::Airbrush:
+    case BrushType::Texture:
+    case BrushType::Scatter:
+    case BrushType::Rotation:
+    case BrushType::Eraser:
+        // Delegates to same rendering as Brush for now
+        break;
     }
 }
 
@@ -1043,6 +1091,41 @@ inline void writeColor(QImage& img, int x, int y, qreal r, qreal g, qreal b, int
 
 } // namespace
 
+QImage ImageProcessing::removeRedEye(const QImage& target, const QPoint& center, int radius)
+{
+    if (target.isNull() || radius <= 0)
+        return target;
+
+    QImage result = target.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    const int w = result.width(), h = result.height();
+    const int x0 = std::max(0, center.x() - radius);
+    const int y0 = std::max(0, center.y() - radius);
+    const int x1 = std::min(w - 1, center.x() + radius);
+    const int y1 = std::min(h - 1, center.y() + radius);
+    if (x0 > x1 || y0 > y1)
+        return target;
+
+    for (int y = y0; y <= y1; ++y) {
+        QRgb* row = reinterpret_cast<QRgb*>(result.scanLine(y));
+        for (int x = x0; x <= x1; ++x) {
+            const qreal d = std::hypot(qreal(x - center.x()), qreal(y - center.y()));
+            const qreal wgt = falloff(d, radius);
+            if (wgt <= 0.001)
+                continue;
+            const QRgb dst = qUnpremultiply(row[x]);
+            const int r = qRed(dst), g = qGreen(dst), b = qBlue(dst);
+            // Pixels claramente "avermelhados" (flash de olho vermelho)
+            const bool reddish = r > 90 && r > g * 1.35 + 10 && r > b * 1.35 + 10;
+            if (!reddish)
+                continue;
+            const qreal neutral = (g + b) * 0.5;
+            const qreal nr = r + (neutral - r) * wgt;
+            row[x] = qPremultiply(qRgba(clampByte(nr), g, b, qAlpha(dst)));
+        }
+    }
+    return result.convertToFormat(target.format());
+}
+
 QImage ImageProcessing::makeShapeSelection(const QSize& size, const QRectF& rect,
                                            bool ellipse, int feather)
 {
@@ -1380,40 +1463,6 @@ QImage ImageProcessing::spotHeal(const QImage& target, const QPoint& targetPoint
     return result.convertToFormat(target.format());
 }
 
-QImage ImageProcessing::redEyeRemove(const QImage& target, const QPoint& center, int radius)
-{
-    if (target.isNull() || radius <= 0)
-        return target;
-
-    QImage result = target.convertToFormat(QImage::Format_ARGB32_Premultiplied);
-    const int w = result.width(), h = result.height();
-    const int x0 = std::max(0, center.x() - radius);
-    const int y0 = std::max(0, center.y() - radius);
-    const int x1 = std::min(w - 1, center.x() + radius);
-    const int y1 = std::min(h - 1, center.y() + radius);
-    if (x0 > x1 || y0 > y1)
-        return target;
-
-    for (int y = y0; y <= y1; ++y) {
-        QRgb* row = reinterpret_cast<QRgb*>(result.scanLine(y));
-        for (int x = x0; x <= x1; ++x) {
-            const qreal d = std::hypot(qreal(x - center.x()), qreal(y - center.y()));
-            const qreal wgt = falloff(d, radius);
-            if (wgt <= 0.001)
-                continue;
-            const QRgb dst = qUnpremultiply(row[x]);
-            const int r = qRed(dst), g = qGreen(dst), b = qBlue(dst);
-            // Pixels claramente "avermelhados" (flash de olho vermelho)
-            const bool reddish = r > 90 && r > g * 1.35 + 10 && r > b * 1.35 + 10;
-            if (!reddish)
-                continue;
-            const qreal neutral = (g + b) * 0.5;
-            const qreal nr = r + (neutral - r) * wgt;
-            row[x] = qPremultiply(qRgba(clampByte(nr), g, b, qAlpha(dst)));
-        }
-    }
-    return result.convertToFormat(target.format());
-}
 
 // Photoshop Free Transform → Distort: encaixa os 4 CANTOS da imagem em 4
 // pontos por transformação projetiva.Quando o usuário marca 5+ pontos

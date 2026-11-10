@@ -75,6 +75,8 @@ add_library(cc_core STATIC
     core/image/ImagePresets.cpp
     core/image/BackgroundRemover.h
     core/image/BackgroundRemover.cpp
+    core/color/ColorSpace.h
+    core/color/ColorSpace.cpp
     imageio/ImageImporter.h
     imageio/ImageImporter.cpp
     imageio/DocumentExporter.h
@@ -144,6 +146,10 @@ add_library(cc_tools STATIC
     tools/MarqueeTool.cpp
     tools/PaintExtras.h
     tools/PaintExtras.cpp
+    tools/HealingTool.h
+    tools/HealingTool.cpp
+    tools/PenTool.h
+    tools/PenTool.cpp
 )
 target_link_libraries(cc_tools PUBLIC Qt6::Core Qt6::Gui cc_core cc_localization)
 target_include_directories(cc_tools PUBLIC ${PROJECT_SOURCE_DIR}/src)
@@ -204,6 +210,12 @@ add_executable(creatorcanvas
     ui/recoverydialog.cpp
     ui/mockupdialog.h
     ui/mockupdialog.cpp
+    ui/batchdialog.h
+    ui/batchdialog.cpp
+    ui/shortcutdialog.h
+    ui/shortcutdialog.cpp
+    ui/workspacelayout.h
+    ui/workspacelayout.cpp
 )
 target_link_libraries(creatorcanvas
     PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets

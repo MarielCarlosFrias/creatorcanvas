@@ -468,6 +468,31 @@ QJsonObject writeLayer(const Layer& layer)
         o.insert(QStringLiteral("patternOffsetY"), fill.patternOffset.y());
         break;
     }
+
+    case LayerType::Vector: {
+        o.insert(QStringLiteral("type"), QStringLiteral("vector"));
+        const auto& vec = static_cast<const VectorLayer&>(layer);
+        o.insert(QStringLiteral("fill"), colorToString(vec.fill));
+        o.insert(QStringLiteral("stroke"), colorToString(vec.stroke));
+        o.insert(QStringLiteral("strokeWidth"), vec.strokeWidth);
+        o.insert(QStringLiteral("fillEnabled"), vec.fillEnabled);
+        o.insert(QStringLiteral("strokeEnabled"), vec.strokeEnabled);
+        o.insert(QStringLiteral("closed"), vec.closed);
+        QJsonArray nodesArray;
+        for (const auto& node : vec.nodes) {
+            QJsonObject n;
+            n.insert(QStringLiteral("x"), node.position.x());
+            n.insert(QStringLiteral("y"), node.position.y());
+            n.insert(QStringLiteral("handleInX"), node.handleIn.x());
+            n.insert(QStringLiteral("handleInY"), node.handleIn.y());
+            n.insert(QStringLiteral("handleOutX"), node.handleOut.x());
+            n.insert(QStringLiteral("handleOutY"), node.handleOut.y());
+            n.insert(QStringLiteral("smooth"), node.smooth);
+            nodesArray.append(n);
+        }
+        o.insert(QStringLiteral("nodes"), nodesArray);
+        break;
+    }
     }
     return o;
 }

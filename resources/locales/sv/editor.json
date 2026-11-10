@@ -329,6 +329,10 @@
     "status.retouchHelp": "Retuschera: dra över bilden. Välj läge, storlek och styrka ovan.",
     "status.retouchNoLayer": "Välj först ett bildlager.",
     "status.healingHelp": "Reparera fläck: måla över fläcken — verktyget utgår från pixlar i närheten.",
+    "status.healHelp": "Reparera fläck: Alt+Klicka för att ange källa, klicka sedan för att reparera.",
+    "status.healSourceSet": "Reparenskälla angiven vid (%1, %2). Klicka för att reparera.",
+    "status.penHelp": "Pennverktyg: Klicka för att skapa fästpunkter, dra för Bézier-handtag.",
+    "status.penComplete": "Vektorbana skapad.",
     "status.redEyeHelp": "Röda ögon: klicka på en röd pupill för att neutralisera den.",
     "command.gradient": "Gradient",
     "command.retouch": "Retuschera",
@@ -411,5 +415,13 @@
   "puppet.reset": "Återställ häftstift",
   "puppet.apply": "Verkställ",
   "puppet.cancel": "Avbryt",
-  "tools.eyedropper": "Pipett"
+  "tools.eyedropper": "Pipett",
+  "batch.processing.title": "Batchbearbetning",
+  "batch.processing": "Bearbetar bilder...",
+  "batch.processing.file": "Bearbetar: %1",
+  "batch.error.notfound": "Filen hittades inte: %1",
+  "batch.error.exists": "Filen finns redan: %1",
+  "batch.error.process": "Kunde inte bearbeta %1: %2",
+  "batch.done.title": "Batchbearbetning klar",
+  "batch.done.message": "%1 av %2 filer bearbetades utan problem."
 }

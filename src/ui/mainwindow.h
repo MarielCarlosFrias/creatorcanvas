@@ -98,6 +98,9 @@ private:
     void importImageViaDialog();
     void importImage(const QString& filePath);
     void exportImage();
+    void openBatchDialog();
+    void openWorkspaceLayoutDialog();
+    bool processBatchFile(const QString& inputPath, const QString& outputPath, const QStringList& operations, bool overwrite);
     void quickExportLayerPng(const LayerId& id);
     void flipLayer(bool horizontal);
     void rotateLayer(double degrees);
@@ -156,6 +159,7 @@ private:
     QDockWidget* m_historyDock = nullptr;
     LayerId m_selectedId;
     QString m_currentFilePath;
+    bool m_overwriteExisting = false;
     /// Sugestão de caminho para o próximo "Salvar Como" (ex.: origem de uma
     /// recuperação aberta como cópia) — pré-preenche o diálogo.
     QString m_suggestedSavePath;

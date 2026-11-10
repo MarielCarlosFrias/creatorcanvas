@@ -84,6 +84,8 @@ std::unique_ptr<Layer> ImageLayer::deepCopy() const
     copy->alphaMask = alphaMask.copy();
     copy->vectorMask = vectorMask.copy();
     copy->effects = effects;
+    copy->adjustmentLayerId = adjustmentLayerId;
+    copy->colorSpace = colorSpace;
     return copy;
 }
 
@@ -214,6 +216,7 @@ std::unique_ptr<Layer> AdjustmentLayer::deepCopy() const
     copy->parameters = parameters;
     copy->useLegacy = useLegacy;
     copy->preserveLuminosity = preserveLuminosity;
+    copy->sourceLayerId = sourceLayerId;
     return copy;
 }
 
@@ -232,8 +235,32 @@ std::unique_ptr<Layer> makeLayer(LayerType type)
     case LayerType::Background: return std::make_unique<BackgroundLayer>();
     case LayerType::Adjustment: return std::make_unique<AdjustmentLayer>();
     case LayerType::Fill:       return std::make_unique<FillLayer>();
+    case LayerType::Vector:     return std::make_unique<VectorLayer>();
     }
     return nullptr;
+}
+
+VectorLayer::VectorLayer()
+    : Layer(LayerType::Vector) {}
+
+std::unique_ptr<Layer> VectorLayer::deepCopy() const
+{
+    auto copy = std::make_unique<VectorLayer>();
+    copy->copyCommonFrom(*this);
+    copy->path = path;
+    copy->nodes = nodes;
+    copy->closed = closed;
+    copy->fill = fill;
+    copy->stroke = stroke;
+    copy->strokeWidth = strokeWidth;
+    copy->fillEnabled = fillEnabled;
+    copy->strokeEnabled = strokeEnabled;
+    return copy;
+}
+
+QRectF VectorLayer::contentBounds() const
+{
+    return path.boundingRect();
 }
 
 } // namespace cc

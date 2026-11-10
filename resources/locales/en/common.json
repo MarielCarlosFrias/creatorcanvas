@@ -6,7 +6,7 @@
   "app": {
     "title": "CreatorCanvas",
     "tagline": "Create something amazing",
-    "aboutBody": "A fast, layer-based image editor for content creators.\nMilestone M0 — application skeleton."
+    "aboutBody": "A fast, layer-based image editor for content creators.\nMilestone M0 \u2014 application skeleton."
   },
   "menu": {
     "file": "&File",
@@ -22,8 +22,8 @@
     "layer": "&Layer",
     "layer.flipH": "Flip &Horizontal",
     "layer.flipV": "Flip &Vertical",
-    "layer.rotateLeft": "Rotate 90° &Left",
-    "layer.rotateRight": "Rotate 90° &Right",
+    "layer.rotateLeft": "Rotate 90\u00b0 &Left",
+    "layer.rotateRight": "Rotate 90\u00b0 &Right",
     "layer.delete": "&Delete",
     "file.open": "&Open...",
     "file.openRecent": "Open &Recent",
@@ -32,7 +32,11 @@
     "file.saveAs": "Save &As...",
     "settings": "&Settings",
     "settings.open": "&Preferences...",
-    "file.export": "E&xport..."
+    "file.export": "E&xport...",
+    "file.batch": "Ba&tch...",
+    "file.batch.tooltip": "Process multiple images at once",
+    "workspace.layout": "&Workspace Layout",
+    "workspace.layout.tooltip": "Save and restore workspace layouts"
   },
   "statusbar": {
     "version": "Version %1",
@@ -115,7 +119,7 @@
     "recovery.discard": "Discard",
     "recovery.source": "Source project:",
     "recovery.newerTitle": "The project file is newer",
-    "recovery.newerBody": "The file \"%1\" was saved on %2 — AFTER the recovery snapshot (%3). Saving the recovery over it may discard the newer work. Continue with the recovery?"
+    "recovery.newerBody": "The file \"%1\" was saved on %2 \u2014 AFTER the recovery snapshot (%3). Saving the recovery over it may discard the newer work. Continue with the recovery?"
   },
   "start": {
     "createNew": "Create new",
@@ -141,8 +145,8 @@
   "menu.layer.distribute.horizontal": "Distribute &Horizontally",
   "menu.layer.distribute.vertical": "Distribute &Vertically",
   "menu.layer.group": "&Group Layers (Ctrl+G)",
-  "menu.layer.rotateLeft": "Rotate 90° &Left",
-  "menu.layer.rotateRight": "Rotate 90° &Right",
+  "menu.layer.rotateLeft": "Rotate 90\u00b0 &Left",
+  "menu.layer.rotateRight": "Rotate 90\u00b0 &Right",
   "menu.layer.ungroup": "&Ungroup Layers (Ctrl+Shift+G)",
   "menu.view": "&View",
   "menu.view.panels": "Panels",
@@ -174,6 +178,11 @@
   "menu.view.history": "&History Panel",
   "layer.typeAdjustment": "Adjustment Layer",
   "layer.typeFill": "Fill Layer",
+  "layer.typeLayer": "Layer",
+  "menu.file.batch": "&Batch Processing...",
+  "menu.file.batch.tooltip": "Apply the same operations to several images at once",
+  "menu.workspace.layout": "&Workspace Layout...",
+  "menu.workspace.layout.tooltip": "Save and restore the arrangement of panels and tools",
   "panel.fillOpacity": "Fill",
   "panel.lockTransparency": "Lock transparent pixels",
   "panel.lockPixels": "Lock image pixels",

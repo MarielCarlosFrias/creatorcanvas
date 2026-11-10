@@ -330,6 +330,10 @@
     "status.retouchNoLayer": "Select an image layer first.",
     "status.healingHelp": "Spot Healing: paint over the blemish — the repair samples nearby pixels.",
     "status.redEyeHelp": "Red Eye: click the red pupil to neutralize it.",
+    "status.healHelp": "Spot Healing: Alt+Click to set source, then click to heal.",
+    "status.healSourceSet": "Healing source set at (%1, %2). Click to heal.",
+    "status.penHelp": "Pen Tool: Click to create anchor points, drag for Bézier handles.",
+    "status.penComplete": "Vector path created.",
     "command.gradient": "Gradient",
     "command.retouch": "Retouch",
     "command.healing": "Spot Healing",
@@ -411,5 +415,13 @@
   "puppet.reset": "Reset Pins",
   "puppet.apply": "Apply",
   "puppet.cancel": "Cancel",
-  "tools.eyedropper": "Eyedropper"
+  "tools.eyedropper": "Eyedropper",
+  "batch.processing.title": "Batch Processing",
+  "batch.processing": "Processing images...",
+  "batch.processing.file": "Processing: %1",
+  "batch.error.notfound": "File not found: %1",
+  "batch.error.exists": "File already exists: %1",
+  "batch.error.process": "Failed to process %1: %2",
+  "batch.done.title": "Batch Processing Complete",
+  "batch.done.message": "%1 of %2 files processed successfully."
 }

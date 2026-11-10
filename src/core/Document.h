@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QObject>
+#include <QVariant>
+#include <QDateTime>
 #include <QtGlobal>
 
 #include <memory>
@@ -11,6 +13,7 @@
 #include "document/LayerComps.h"
 #include "document/WebSlice.h"
 #include "layers/Layer.h"
+#include "color/ColorSpace.h"
 
 namespace cc {
 
@@ -34,6 +37,9 @@ public:
     int width() const { return m_width; }
     int height() const { return m_height; }
     int dpi() const { return m_dpi; }
+
+    ColorSpace colorSpace() const { return m_colorSpace; }
+    void setColorSpace(ColorSpace space);
 
     AssetStore& assets() { return m_assets; }
     const AssetStore& assets() const { return m_assets; }
@@ -72,6 +78,16 @@ public:
     bool setLayerClipped(const LayerId& id, bool clipped);
     bool setLayerLinkGroup(const LayerId& id, std::optional<qint64> linkGroup);
     bool setLayerVectorMask(const LayerId& id, QImage mask);
+    /// Vincula uma camada de ajuste a uma camada de imagem (ajuste não destrutivo).
+    /// Se |adjustmentLayerId| for nulo, remove o vínculo existente.
+    bool setLayerAdjustmentLayerId(const LayerId& imageLayerId,
+                                   const std::optional<LayerId>& adjustmentLayerId);
+    /// Cria uma nova camada de ajuste vinculada (opcionalmente) a uma camada de imagem.
+    /// Retorna o id da nova camada ou inválido em caso de falha.
+    LayerId createAdjustmentLayer(AdjustmentType type,
+                                  const std::optional<LayerId>& sourceLayerId = {});
+    /// Retorna a camada de ajuste com o id dado, ou nullptr se não existir ou não for ajuste.
+    AdjustmentLayer* findAdjustmentLayer(const LayerId& id) const;
     /// Parâmetros de uma camada de ajuste (chave → valor). Usado pelo
     /// LayerPropertyCommand para undo/redo dos sliders do painel.
     bool setAdjustmentParameters(
@@ -136,6 +152,34 @@ public:
 
     quint64 revision() const { return m_revision; }
 
+    // ---------- Version History ----------
+    /// Versão do documento (snapshot do estado em um momento).
+    struct DocumentVersion {
+        QUuid id;
+        QString name;
+        QString description;
+        QDateTime createdAt;
+        quint64 revision = 0;
+        QByteArray snapshot; // Serialized document state
+    };
+
+    /// Cria uma versão do estado atual do documento.
+    /// Retorna o id da versão criada.
+    QUuid createDocumentVersion(const QString& name, const QString& description = QString());
+
+    /// Lista todas as versões salvas (mais recente primeiro).
+    std::vector<DocumentVersion> documentVersions() const;
+
+    /// Restaura o documento para a versão com o id dado.
+    /// Retorna true se bem-sucedido.
+    bool restoreDocumentVersion(const QUuid& versionId);
+
+    /// Remove uma versão pelo id.
+    bool removeDocumentVersion(const QUuid& versionId);
+
+    /// Limpa todas as versões.
+    void clearDocumentVersions();
+
 signals:
     void structureChanged();
     void layerPropertyChanged(const LayerId& id);
@@ -149,12 +193,16 @@ private:
     int m_width;
     int m_height;
     int m_dpi;
+    ColorSpace m_colorSpace = ColorSpace::sRGB;
     std::unique_ptr<GroupLayer> m_root;
     quint64 m_revision = 0;
     AssetStore m_assets;
     QImage m_pixelSelection;
     std::vector<LayerComp> m_layerComps;
     std::vector<WebSlice> m_webSlices;
+
+    // Version History
+    std::vector<DocumentVersion> m_documentVersions;
 };
 
 } // namespace cc

@@ -37,23 +37,24 @@ ImageLayer* activeImageLayer(const ToolContext& ctx)
     return static_cast<ImageLayer*>(layer);
 }
 
+/// Localiza a camada de imagem pelo id (sem depender da seleção atual,
+/// que pode mudar durante o gesto).
+ImageLayer* imageLayerById(const ToolContext& ctx, const LayerId& id)
+{
+    if (!ctx.document || id.isNull())
+        return nullptr;
+    Layer* layer = ctx.document->findLayer(id);
+    if (!layer || layer->type() != LayerType::Image)
+        return nullptr;
+    return static_cast<ImageLayer*>(layer);
+}
+
 QPointF toLocal(const ImageLayer* img, const QPointF& docPos)
 {
     const QRectF bounds = img->contentBounds();
     if (bounds.isEmpty())
         return docPos;
     return img->transform.matrix(bounds).inverted().map(docPos);
-}
-
-/// Converte coordenadas de documento para coordenadas locais de um QImage.
-QPointF toLocalPoint(const QImage& image, const QPointF& docPos)
-{
-    QRectF bounds(0, 0, image.width(), image.height());
-    if (bounds.isEmpty())
-        return docPos;
-    QTransform t;
-    t.translate(bounds.width() / 2.0, bounds.height() / 2.0);
-    return t.inverted().map(docPos);
 }
 
 } // namespace
@@ -163,14 +164,19 @@ void GradientTool::mouseMove(QMouseEvent* event, const QPointF& docPos, const To
 
     // Aplica o gradiente em tempo real para prévia durante o arrasto
     if (!m_origBitmap.isNull() && ctx.setLayerPreview) {
-        const QImage mask = ctx.document->pixelSelection();
-        QImage previewMask;
-        if (!mask.isNull()) {
-            previewMask = mask.convertToFormat(QImage::Format_Alpha8);
-        }
+        // Usa a MESMA conversão de coordenadas do commit final, senão a
+        // prévia aparece deslocada do resultado definitivo.
+        const ImageLayer* img = imageLayerById(ctx, m_layerId);
+        if (!img)
+            return;
 
-        const QPointF localStart = m_origBitmap.width() > 0 ? toLocalPoint(m_origBitmap, m_startDoc) : m_startDoc;
-        const QPointF localEnd = m_origBitmap.width() > 0 ? toLocalPoint(m_origBitmap, m_endDoc) : m_endDoc;
+        QImage previewMask;
+        const QImage mask = ctx.document->pixelSelection();
+        if (!mask.isNull() && mask.size() == m_origBitmap.size())
+            previewMask = mask.convertToFormat(QImage::Format_Alpha8);
+
+        const QPointF localStart = toLocal(img, m_startDoc);
+        const QPointF localEnd = toLocal(img, m_endDoc);
 
         const QImage result = ImageProcessing::paintGradient(
             m_origBitmap, localStart, localEnd, m_startColor, m_endColor, m_radial,
@@ -204,7 +210,8 @@ void GradientTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const
     }
     auto* img = static_cast<ImageLayer*>(layer);
 
-    // Usa o bitmap original já armazenado (evita reler do asset)
+    // Usa o bitmap original já armazenado (evita reler do asset) e a MESMA
+    // conversão de coordenadas usada na prévia.
     const QImage bitmap = m_origBitmap.isNull()
         ? ctx.document->assets().decodedImage(m_origAssetId)
         : m_origBitmap;
@@ -429,151 +436,9 @@ void RetouchTool::cancel(const ToolContext& ctx)
 
 // ============================================================================
 // HealingTool
+// A implementação vive em tools/HealingTool.cpp (fonte manual via Alt+clique
+// + modo Olho Vermelho). Esta seção foi removida para eliminar a definição
+// duplicada da classe cc::HealingTool (violação de ODR).
 // ============================================================================
-
-void HealingTool::activate(const ToolContext& ctx)
-{
-    m_active = false;
-    if (ctx.requestStatusMessage) {
-        ctx.requestStatusMessage(
-            m_mode == Mode::RedEye
-                ? trOr(ctx, "canvas.status.redEyeHelp",
-                       QStringLiteral("Red Eye: click the red pupil to neutralize it."))
-                : trOr(ctx, "canvas.status.healingHelp",
-                       QStringLiteral("Spot Healing: paint over the blemish — the repair is sampled from nearby pixels.")));
-    }
-    if (ctx.requestUpdate)
-        ctx.requestUpdate();
-}
-
-void HealingTool::deactivate(const ToolContext& ctx)
-{
-    cancel(ctx);
-}
-
-void HealingTool::mousePress(QMouseEvent* event, const QPointF& docPos, const ToolContext& ctx)
-{
-    if (event->button() != Qt::LeftButton || !ctx.document)
-        return;
-    // Photocraft: locks granulares — pixels trancados bloqueiam a edição.
-    ImageLayer* img = activeImageLayer(ctx);
-    if (!img || !SelectionOperations::canEditPixels(*ctx.document, img->id())) {
-        reportPixelsLocked(ctx);
-        event->accept();
-        return;
-    }
-    if (!img) {
-        if (ctx.requestStatusMessage) {
-            ctx.requestStatusMessage(trOr(ctx, "canvas.status.retouchNoLayer",
-                QStringLiteral("Healing: select an image layer first.")));
-        }
-        event->accept();
-        return;
-    }
-    const QImage bitmap = ctx.document->assets().decodedImage(img->assetId);
-    if (bitmap.isNull())
-        return;
-
-    m_layerId = img->id();
-    m_origAssetId = img->assetId;
-    m_origWidth = img->naturalWidth;
-    m_origHeight = img->naturalHeight;
-    m_origTransform = img->transform;
-    m_workingImage = bitmap;
-    m_active = true;
-    m_currentDoc = docPos;
-
-    // Origem automática do reparo: à direita, dentro dos limites do bitmap.
-    m_sourceOffset = QPoint(m_radius * 2 + 2, 0);
-    const QPoint local = toLocal(img, docPos).toPoint();
-    const QPoint src = local + m_sourceOffset;
-    if (src.x() >= bitmap.width() || src.x() < 0)
-        m_sourceOffset = QPoint(-m_sourceOffset.x(), m_sourceOffset.y());
-
-    applyAt(toLocal(img, docPos), true, ctx);
-    event->accept();
-}
-
-void HealingTool::applyAt(const QPointF& local, bool firstSample, const ToolContext& ctx)
-{
-    Q_UNUSED(firstSample);
-    if (!m_active || m_workingImage.isNull())
-        return;
-
-    if (m_mode == Mode::RedEye) {
-        m_workingImage = ImageProcessing::redEyeRemove(
-            m_workingImage, local.toPoint(), m_radius);
-    } else {
-        const int w = m_workingImage.width();
-        const int h = m_workingImage.height();
-        QPoint src = local.toPoint() + m_sourceOffset;
-        src.setX(std::clamp(src.x(), 0, std::max(0, w - 1)));
-        src.setY(std::clamp(src.y(), 0, std::max(0, h - 1)));
-        m_workingImage = ImageProcessing::spotHeal(
-            m_workingImage, local.toPoint(), src, m_radius, m_strength);
-    }
-    if (ctx.setLayerPreview)
-        ctx.setLayerPreview(m_layerId, m_workingImage);
-    if (ctx.requestUpdate)
-        ctx.requestUpdate();
-}
-
-void HealingTool::mouseMove(QMouseEvent* event, const QPointF& docPos, const ToolContext& ctx)
-{
-    Q_UNUSED(event);
-    m_currentDoc = docPos;
-    m_hoverValid = true;
-    if (!m_active || !ctx.document)
-        return;
-    Layer* layer = ctx.document->findLayer(m_layerId);
-    if (!layer || layer->type() != LayerType::Image)
-        return;
-    applyAt(toLocal(static_cast<ImageLayer*>(layer), docPos), false, ctx);
-}
-
-void HealingTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const ToolContext& ctx)
-{
-    Q_UNUSED(event);
-    Q_UNUSED(docPos);
-    if (!m_active || m_workingImage.isNull()) {
-        m_active = false;
-        return;
-    }
-    m_active = false;
-    commitImageBitmap(ctx, m_layerId, m_origAssetId, m_origWidth, m_origHeight,
-                      m_origTransform, m_workingImage,
-                      m_mode == Mode::RedEye
-                          ? trOr(ctx, "canvas.command.redEye", QStringLiteral("Red Eye"))
-                          : trOr(ctx, "canvas.command.healing", QStringLiteral("Spot Healing")));
-    m_workingImage = QImage();
-    if (ctx.requestUpdate)
-        ctx.requestUpdate();
-}
-
-void HealingTool::drawOverlay(QPainter* painter, const ToolContext& ctx)
-{
-    if (!m_hoverValid)
-        return;
-    painter->save();
-    painter->setRenderHint(QPainter::Antialiasing, true);
-    const QPointF p = ctx.docToDevice.map(m_currentDoc);
-    const double radius = std::max(2.0, m_radius * ctx.zoom);
-    painter->setPen(QPen(QColor(255, 255, 255, 210), 1.0));
-    painter->setBrush(Qt::NoBrush);
-    painter->drawEllipse(p, radius, radius);
-    painter->setPen(QPen(QColor(0, 0, 0, 120), 1.0, Qt::DotLine));
-    painter->drawEllipse(p, radius + 1.0, radius + 1.0);
-    painter->restore();
-}
-
-void HealingTool::cancel(const ToolContext& ctx)
-{
-    if (ctx.clearLayerPreview)
-        ctx.clearLayerPreview();
-    m_active = false;
-    m_workingImage = QImage();
-    if (ctx.requestUpdate)
-        ctx.requestUpdate();
-}
 
 } // namespace cc

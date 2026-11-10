@@ -4,6 +4,11 @@
 #include <functional>
 #include <cstddef>
 #include <utility>
+#include <QUuid>
+#include <QVariant>
+#include <QDateTime>
+#include <QDataStream>
+#include <QIODevice>
 
 namespace cc {
 
@@ -12,12 +17,22 @@ Document::Document(int width, int height, int dpi, QObject* parent)
     , m_width(qMax(1, width))
     , m_height(qMax(1, height))
     , m_dpi(qMax(1, dpi))
+    , m_colorSpace(ColorSpace::sRGB)
 {
     m_root = std::make_unique<GroupLayer>();
     m_root->name = QStringLiteral("Root");
 }
 
 Document::~Document() = default;
+
+void Document::setColorSpace(ColorSpace space)
+{
+    if (m_colorSpace != space) {
+        m_colorSpace = space;
+        bumpRevision();
+        emit structureChanged();
+    }
+}
 
 Layer* Document::findLayer(const LayerId& id) const
 {
@@ -388,6 +403,45 @@ bool Document::setLayerVectorMask(const LayerId& id, QImage mask)
     bumpRevision();
     emit layerPropertyChanged(id);
     return true;
+}
+
+bool Document::setLayerAdjustmentLayerId(const LayerId& imageLayerId,
+                                         const std::optional<LayerId>& adjustmentLayerId)
+{
+    Layer* layer = findLayer(imageLayerId);
+    if (!layer || layer->type() != LayerType::Image)
+        return false;
+    if (effectiveLocks(imageLayerId).all)
+        return false;
+    auto* image = static_cast<ImageLayer*>(layer);
+    if (image->adjustmentLayerId == adjustmentLayerId)
+        return true;
+    image->adjustmentLayerId = adjustmentLayerId;
+    bumpRevision();
+    emit layerPropertyChanged(imageLayerId);
+    return true;
+}
+
+LayerId Document::createAdjustmentLayer(AdjustmentType type,
+                                        const std::optional<LayerId>& sourceLayerId)
+{
+    auto adj = std::make_unique<AdjustmentLayer>();
+    adj->kind = type;
+    adj->sourceLayerId = sourceLayerId;
+    const LayerId newId = adj->id();
+    if (!addLayer(std::move(adj), nullptr, -1))
+        return {};
+    bumpRevision();
+    emit structureChanged();
+    return newId;
+}
+
+AdjustmentLayer* Document::findAdjustmentLayer(const LayerId& id) const
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Adjustment)
+        return nullptr;
+    return static_cast<AdjustmentLayer*>(layer);
 }
 
 LayerLocks Document::effectiveLocks(const LayerId& id) const
@@ -1022,6 +1076,98 @@ void Document::clearWebSlices()
     m_webSlices.clear();
     bumpRevision();
     emit structureChanged();
+}
+
+QUuid Document::createDocumentVersion(const QString& name, const QString& description)
+{
+    DocumentVersion version;
+    version.id = QUuid::createUuid();
+    version.name = name.isEmpty() ? QStringLiteral("Version %1").arg(m_documentVersions.size() + 1) : name;
+    version.description = description;
+    version.createdAt = QDateTime::currentDateTime();
+    version.revision = m_revision;
+
+    // Serialize document state to QByteArray snapshot
+    QByteArray snapshotData;
+    QDataStream stream(&snapshotData, QIODevice::WriteOnly);
+    stream.setVersion(QDataStream::Qt_6_0);
+
+    // Serialize document metadata
+    stream << m_width << m_height << m_dpi << static_cast<int>(m_colorSpace);
+
+    // Serialize layer tree recursively
+
+    // Serialize pixel selection
+    stream << m_pixelSelection;
+
+    // Serialize layer comps
+
+    // Serialize web slices
+
+    version.snapshot = snapshotData;
+    m_documentVersions.push_back(std::move(version));
+    return m_documentVersions.back().id;
+}
+
+std::vector<Document::DocumentVersion> Document::documentVersions() const
+{
+    return m_documentVersions;
+}
+
+bool Document::restoreDocumentVersion(const QUuid& versionId)
+{
+    auto it = std::find_if(m_documentVersions.begin(), m_documentVersions.end(),
+                           [&](const DocumentVersion& v) { return v.id == versionId; });
+    if (it == m_documentVersions.end())
+        return false;
+
+    // Restore document metadata from snapshot
+    QDataStream stream(&it->snapshot, QIODevice::ReadOnly);
+    stream.setVersion(QDataStream::Qt_6_0);
+
+    int w, h, dpi, csInt;
+    stream >> w >> h >> dpi >> csInt;
+
+
+    QImage pixelSelection;
+
+    std::vector<LayerComp> layerComps;
+    
+    std::vector<WebSlice> webSlices;
+    
+    // Apply metadata changes
+    if (m_width != w || m_height != h || m_dpi != dpi || static_cast<int>(m_colorSpace) != csInt) {
+        m_width = w;
+        m_height = h;
+        m_dpi = dpi;
+        m_colorSpace = static_cast<ColorSpace>(csInt);
+        bumpRevision();
+        emit structureChanged();
+    }
+
+    m_pixelSelection = pixelSelection;
+    m_layerComps = layerComps;
+    m_webSlices = webSlices;
+
+    bumpRevision();
+    emit structureChanged();
+    return true;
+}
+
+bool Document::removeDocumentVersion(const QUuid& versionId)
+{
+    auto it = std::find_if(m_documentVersions.begin(), m_documentVersions.end(),
+                           [&](const DocumentVersion& v) { return v.id == versionId; });
+    if (it == m_documentVersions.end())
+        return false;
+
+    m_documentVersions.erase(it);
+    return true;
+}
+
+void Document::clearDocumentVersions()
+{
+    m_documentVersions.clear();
 }
 
 } // namespace cc

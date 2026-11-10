@@ -329,6 +329,10 @@
     "status.retouchHelp": "Retoque: arraste sobre a imagem. Escolha modo, tamanho e intensidade acima.",
     "status.retouchNoLayer": "Selecione uma camada de imagem primeiro.",
     "status.healingHelp": "Reparo pontual: pinte sobre a imperfeição — o reparo amostra pixels próximos.",
+    "status.healHelp": "Reparo pontual: Alt+Clique para definir a origem, depois clique para reparar.",
+    "status.healSourceSet": "Origem do reparo definida em (%1, %2). Clique para reparar.",
+    "status.penHelp": "Caneta: clique para criar pontos de ancoragem, arraste para as alças Bézier.",
+    "status.penComplete": "Caminho vetorial criado.",
     "status.redEyeHelp": "Olho vermelho: clique na pupila avermelhada para neutralizar.",
     "command.gradient": "Gradiente",
     "command.retouch": "Retoque",
@@ -411,5 +415,13 @@
   "puppet.reset": "Redefinir Pinos",
   "puppet.apply": "Aplicar",
   "puppet.cancel": "Cancelar",
-  "tools.eyedropper": "Conta-gotas"
+  "tools.eyedropper": "Conta-gotas",
+  "batch.processing.title": "Processamento em Lote",
+  "batch.processing": "Processando imagens...",
+  "batch.processing.file": "Processando: %1",
+  "batch.error.notfound": "Arquivo não encontrado: %1",
+  "batch.error.exists": "Arquivo já existe: %1",
+  "batch.error.process": "Falha ao processar %1: %2",
+  "batch.done.title": "Processamento em Lote Concluído",
+  "batch.done.message": "%1 de %2 arquivos processados com sucesso."
 }

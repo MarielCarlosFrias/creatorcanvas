@@ -31,7 +31,8 @@ enum class CanvasTool {
     Marquee,   // seleção retangular/elíptica
     Gradient,  // preenchimento com gradiente
     Retouch,   // blur/sharpen/smudge/dodge/burn/sponge
-    Healing    // spot healing / red eye
+    Healing,
+    Vector     // caneta / curvas Bezier
 };
 
 using CanvasToolType = CanvasTool;

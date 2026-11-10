@@ -5,6 +5,8 @@
 #include <QList>
 #include <QObject>
 #include <QString>
+#include <QMap>
+#include <QKeySequence>
 #include <memory>
 
 #include "core/layers/Layer.h"
@@ -13,7 +15,6 @@ namespace cc {
 
 class I18nService;
 
-/// Definição de formas estendidas do Shape Power Pack
 struct NewShapeDef {
     ShapeKind kind;
     const char* key;
@@ -23,10 +24,9 @@ struct NewShapeDef {
 extern const NewShapeDef kNewShapeDefs[8];
 constexpr int kNewShapeCount = 8;
 
-/// Gerenciador centralizado de todas as QActions do CreatorCanvas.
-/// Desacopla criação, configuração de atalhos, ícones e re-tradução da MainWindow.
 class ActionManager final : public QObject {
     Q_OBJECT
+
 public:
     explicit ActionManager(QObject* parent = nullptr);
     ~ActionManager() override = default;
@@ -35,40 +35,23 @@ public:
     void retranslate(I18nService* i18n);
     void selectToolByName(const QString& name);
 
-    // --- Arquivo ---
     QAction* newAction = nullptr;
     QAction* openAction = nullptr;
     QAction* saveAction = nullptr;
     QAction* saveAsAction = nullptr;
     QAction* importAction = nullptr;
     QAction* exportAction = nullptr;
+    QAction* batchAction = nullptr;
+    QAction* workspaceLayoutAction = nullptr;
     QAction* quitAction = nullptr;
 
-    // --- Edição & Histórico ---
     QAction* undoAction = nullptr;
     QAction* redoAction = nullptr;
 
-    // --- Zoom & Exibição ---
     QAction* zoomInAction = nullptr;
     QAction* zoomOutAction = nullptr;
     QAction* zoomFitAction = nullptr;
-    QAction* toggleGridAction = nullptr;
-    QAction* toggleSnapAction = nullptr;
-    QAction* toggleHistoryAction = nullptr;
-    QAction* toggleToolsBarAction = nullptr;
-    QAction* toggleRightPanelAction = nullptr;
-    QAction* toggleLayersDockAction = nullptr;
-    QAction* toggleTextDockAction = nullptr;
-    QAction* toggleShapeDockAction = nullptr;
-    QAction* toggleImageDockAction = nullptr;
 
-    // --- Zonas Seguras ---
-    QAction* safeNoneAction = nullptr;
-    QAction* safeYouTubeAction = nullptr;
-    QAction* safeInstagramAction = nullptr;
-    QAction* safeTikTokAction = nullptr;
-
-    // --- Camadas: Criação ---
     QAction* addTextAction = nullptr;
     QAction* addFillLayerAction = nullptr;
     QAction* addAdjustmentLayerAction = nullptr;
@@ -82,9 +65,7 @@ public:
     QAction* addBadgeAction = nullptr;
     QAction* addSpeechBubbleAction = nullptr;
     QAction* addHeartAction = nullptr;
-    QList<QAction*> addNewShapeActions;
 
-    // --- Camadas: Alinhamento & Distribuição ---
     QAction* alignLeftAction = nullptr;
     QAction* alignCenterXAction = nullptr;
     QAction* alignRightAction = nullptr;
@@ -95,30 +76,26 @@ public:
     QAction* distributeHAction = nullptr;
     QAction* distributeVAction = nullptr;
 
-    // --- Camadas: Operações & Organização ---
     QAction* groupAction = nullptr;
     QAction* ungroupAction = nullptr;
     QAction* mergeSelectedAction = nullptr;
     QAction* mergeVisibleAction = nullptr;
     QAction* flattenAction = nullptr;
+
     QAction* textBehindSubjectAction = nullptr;
     QAction* flipHAction = nullptr;
     QAction* flipVAction = nullptr;
     QAction* rotateLeftAction = nullptr;
     QAction* rotateRightAction = nullptr;
+
     QAction* deleteAction = nullptr;
     QAction* lockLayerAction = nullptr;
-
-    // --- Seleção de Pixels ---
     QAction* selectAllAction = nullptr;
     QAction* deselectAction = nullptr;
     QAction* invertSelectionAction = nullptr;
     QAction* selectionOpsAction = nullptr;
     QAction* colorRangeAction = nullptr;
-    QList<QAction*> modifyActions; // Expand, Contract, Border, Smooth, Feather
 
-    // --- Ferramentas da Barra ---
-    QActionGroup* toolGroup = nullptr;
     QAction* toolSelectAction = nullptr;
     QAction* toolCropAction = nullptr;
     QAction* toolScissorsAction = nullptr;
@@ -127,22 +104,45 @@ public:
     QAction* toolPaintAction = nullptr;
     QAction* toolFloodAction = nullptr;
     QAction* toolEyedropperAction = nullptr;
-    QAction* toolMarqueeAction = nullptr;
-    QAction* toolGradientAction = nullptr;
     QAction* toolRetouchAction = nullptr;
     QAction* toolHealingAction = nullptr;
 
-    // --- Filtros & IA ---
     QAction* removeBgAiAction = nullptr;
     QAction* removeBgAiQuickAction = nullptr;
     QAction* mockupAction = nullptr;
+
+    QList<QAction*> addNewShapeActions;
+    QList<QAction*> modifyActions;
+    QActionGroup* toolGroup = nullptr;
+    QAction* toolMarqueeAction = nullptr;
+    QAction* toolGradientAction = nullptr;
+
     QList<QAction*> filterActions;
 
-    // --- Janela, Ajuda & Preferências ---
     QAction* settingsAction = nullptr;
     QAction* startScreenAction = nullptr;
     QAction* aboutAction = nullptr;
     QAction* aboutQtAction = nullptr;
+
+    QAction* toggleGridAction = nullptr;
+    QAction* toggleSnapAction = nullptr;
+    QAction* toggleHistoryAction = nullptr;
+    QAction* toggleToolsBarAction = nullptr;
+    QAction* toggleRightPanelAction = nullptr;
+    QAction* toggleLayersDockAction = nullptr;
+    QAction* toggleTextDockAction = nullptr;
+    QAction* toggleShapeDockAction = nullptr;
+    QAction* toggleImageDockAction = nullptr;
+
+    QAction* safeNoneAction = nullptr;
+    QAction* safeYouTubeAction = nullptr;
+    QAction* safeInstagramAction = nullptr;
+    QAction* safeTikTokAction = nullptr;
+
+    QMap<QString, QKeySequence> getAllShortcuts() const;
+    bool setShortcut(const QString& actionName, const QKeySequence& key);
+    QKeySequence getShortcut(const QString& actionName) const;
+    void resetAllShortcuts();
 };
 
 } // namespace cc

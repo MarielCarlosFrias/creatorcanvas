@@ -33,13 +33,11 @@ void PaintTool::mousePress(QMouseEvent* event, const QPointF& docPos, const Tool
 
     m_currentDocPos = docPos;
 
-    // Resolve the target layer: selected layer first, then hit-test, then create.
     Layer* layer = nullptr;
     if (!ctx.selectedLayerId.isNull())
         layer = ctx.document->findLayer(ctx.selectedLayerId);
 
     if (!layer || layer->type() != LayerType::Image) {
-        // Try hit-testing
         const auto& children = ctx.document->rootGroup()->children;
         for (auto it = children.rbegin(); it != children.rend(); ++it) {
             Layer* l = it->get();
@@ -56,7 +54,6 @@ void PaintTool::mousePress(QMouseEvent* event, const QPointF& docPos, const Tool
         }
     }
 
-    // If still no image layer, create a new transparent layer automatically
     if (!layer || layer->type() != LayerType::Image) {
         auto newImgLayer = std::make_unique<ImageLayer>();
         newImgLayer->name = ctx.i18n ? ctx.i18n->t("editor", "canvas.layer.paint") : QStringLiteral("Painting");
@@ -76,12 +73,8 @@ void PaintTool::mousePress(QMouseEvent* event, const QPointF& docPos, const Tool
         layer = ctx.document->findLayer(createdId);
     }
 
-    // Photocraft: locks granulares — pixels trancados bloqueiam a edição.
-    // Verifica locks na camada ALVO (não apenas na selecionada via
-    // ctx.selectedLayerId), pois o hit-testing pode pintar numa camada
-    // diferente da selecionada no painel.
     if (!layer || layer->type() != LayerType::Image)
-        return; // nenhuma camada de imagem alvo
+        return;
 
     if (!SelectionOperations::canEditPixels(*ctx.document, layer->id())) {
         reportPixelsLocked(ctx);
@@ -110,15 +103,10 @@ void PaintTool::mousePress(QMouseEvent* event, const QPointF& docPos, const Tool
     m_prevPointLocal = localPos;
     m_isPainting = true;
 
-    // Paint first dot — IN-PLACE: sem cópia profunda do bitmap por evento.
     ImageProcessing::paintStrokeInPlace(
         m_workingImage, m_prevPointLocal, localPos,
-        m_brushType, m_color, m_size, m_opacity);
+        m_params);
 
-    // A5: durante o gesto NAO criamos assets — antes eram addImage()
-    // por mouse-move (cada um ~1x a imagem inteira, retidos para
-        // sempre no AssetStore e no arquivo salvo). A prévia vai pelo
-        // overlay do CanvasView; um único asset nasce no release.
     if (ctx.setLayerPreview)
         ctx.setLayerPreview(m_activeLayerId, m_workingImage);
 
@@ -139,10 +127,9 @@ void PaintTool::mouseMove(QMouseEvent* event, const QPointF& docPos, const ToolC
             const QTransform matrix = layer->transform.matrix(layer->contentBounds());
             const QPointF localPos = matrix.inverted().map(docPos);
 
-            // Traço incremental IN-PLACE: sem cópia profunda por mouse-move.
             ImageProcessing::paintStrokeInPlace(
                 m_workingImage, m_prevPointLocal, localPos,
-                m_brushType, m_color, m_size, m_opacity);
+                m_params);
 
             m_prevPointLocal = localPos;
 
@@ -168,8 +155,6 @@ void PaintTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const To
         if (layer && layer->type() == LayerType::Image) {
             auto* img = static_cast<ImageLayer*>(layer);
 
-            // Se a imagem de trabalho não mudou nada em relação ao original,
-            // não há nada para commitar — apenas limpa a prévia.
             const QImage original = ctx.document->assets().decodedImage(m_origAssetId);
             if (!original.isNull() && m_workingImage.size() == original.size()
                 && m_workingImage.format() == original.format()) {
@@ -197,20 +182,15 @@ void PaintTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const To
 
             const LayerId finalAssetId = ctx.document->assets().addImage(m_workingImage);
             if (finalAssetId.isNull()) {
-                // Se não conseguiu criar o asset, mantém a prévia na tela
-                // para não perder a edição do usuário.
                 if (ctx.requestUpdate)
                     ctx.requestUpdate();
                 return;
             }
             const QString cmdName = ctx.i18n ? ctx.i18n->t("editor", "canvas.layer.paint") : QStringLiteral("Painting");
 
-            // Só limpa a prévia DEPOIS de criar o asset com sucesso.
             if (ctx.clearLayerPreview)
                 ctx.clearLayerPreview();
 
-            // O documento nunca foi mutado durante o gesto (prévia via
-            // overlay), então não há "revert" — só o commit final.
             if (ctx.history) {
                 ctx.history->execute(std::make_unique<ModifyImageLayerCommand>(
                     *ctx.document, img->id(),
@@ -219,8 +199,6 @@ void PaintTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const To
                     cmdName
                 ));
             } else {
-                // Sem histórico o traço não pode se perder (regressão do
-                // refactoring da prévia): aplica direto.
                 ctx.document->setImageLayerAsset(img->id(), finalAssetId,
                                                  img->naturalWidth, img->naturalHeight);
             }
@@ -241,7 +219,7 @@ void PaintTool::drawOverlay(QPainter* painter, const ToolContext& ctx)
     painter->setRenderHint(QPainter::Antialiasing, true);
 
     const QPointF devP = ctx.docToDevice.map(m_currentDocPos);
-    const double radius = std::max(2.0, m_size * ctx.zoom);
+    const double radius = std::max(2.0, m_params.size * ctx.zoom);
 
     QPen cursorPen(QColor(255, 255, 255, 200), 1.0);
     painter->setPen(cursorPen);
@@ -259,7 +237,7 @@ void PaintTool::drawOverlay(QPainter* painter, const ToolContext& ctx)
 void PaintTool::cancel(const ToolContext& ctx)
 {
     if (m_isPainting && ctx.clearLayerPreview && !m_activeLayerId.isNull())
-        ctx.clearLayerPreview(); // documento nunca foi mutado
+        ctx.clearLayerPreview();
     m_isPainting = false;
     m_workingImage = QImage();
     if (ctx.requestUpdate)

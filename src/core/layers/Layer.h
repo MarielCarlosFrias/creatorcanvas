@@ -2,6 +2,7 @@
 
 #include <QColor>
 #include <QImage>
+#include <QPainterPath>
 #include <QPolygonF>
 #include <QRectF>
 #include <QSizeF>
@@ -17,6 +18,7 @@
 #include "ImageEffects.h"
 #include "ShapeEffects.h"
 #include "TextEffects.h"
+#include "../color/ColorSpace.h"
 
 namespace cc {
 
@@ -26,7 +28,7 @@ using LayerId = QUuid;
 
 inline LayerId newLayerId() { return QUuid::createUuid(); }
 
-enum class LayerType { Group, Image, Text, Shape, Background, Adjustment, Fill };
+enum class LayerType { Group, Image, Text, Shape, Background, Adjustment, Fill, Vector };
 enum class BlendMode {
     Normal,
     Multiply,
@@ -79,6 +81,26 @@ public:
 
     LayerType type() const { return m_type; }
     const LayerId& id() const { return m_id; }
+
+    // ---------- Setters (API adicional — campos públicos mantidos para compatibilidade) ----------
+    void setName(const QString& n) { name = n; }
+    void setVisible(bool v) { visible = v; }
+    void setLocked(bool v) { locked = v; }
+    void setLocks(const LayerLocks& l) { locks = l; }
+    void setBlendMode(BlendMode m) { blendMode = m; }
+    void setBlendIf(const BlendIf& b) { blendIf = b; }
+    void setColorTag(LayerColorTag t) { colorTag = t; }
+    void setTransient(bool t) { transient = t; }
+    void setTransform(const AffineTransform& t) { transform = t; }
+    void setClipped(bool c) { clipped = c; }
+    void setLinkGroup(std::optional<qint64> g) { linkGroup = g; }
+    void setVectorMask(const QImage& mask) { vectorMask = mask; }
+
+    // ---------- Getters onde não há conflito de nome com campo público ----------
+    bool isVisible() const { return visible; }
+    bool isLocked() const { return locked; }
+    bool isTransient() const { return transient; }
+    bool isClipped() const { return clipped; }
 
     QString name;
     bool visible = true;
@@ -155,6 +177,13 @@ public:
     // Máscara alfa opcional, não destrutiva. Branco mantém, preto oculta.
     QImage alphaMask;
     ImageEffects effects;
+    /// Ajuste não destrutivo vinculado a esta camada. Quando definido, o
+    /// renderer aplica os parâmetros do AdjustmentLayer referenciado sobre
+    /// esta imagem em tempo real, sem modificar o asset subjacente.
+    std::optional<LayerId> adjustmentLayerId;
+    /// Espaço de cor desta camada de imagem. Quando diferente do espaço do
+    /// documento, o renderer aplica conversão automática durante a renderização.
+    ColorSpace colorSpace = ColorSpace::sRGB;
 
     // Cache transitória usada pelo renderizador durante gestos interativos.
     // Não é serializada: é reconstruída quando a imagem/máscara muda.
@@ -256,11 +285,45 @@ public:
     QRectF contentBounds() const override;
 
     AdjustmentType kind = AdjustmentType::Levels;
+    /// Camada de imagem que este ajuste modifica (quando vinculado a uma
+    /// camada específica em vez de afetar todo o acumulado abaixo).
+    std::optional<LayerId> sourceLayerId;
     /// Parâmetros serializados como pares chave/valor (ex.: "brightness": 20).
     /// Mantém o formato simples e extensível sem depender de um schema fixo.
     std::vector<std::pair<QString, double>> parameters;
     bool useLegacy = false;
     bool preserveLuminosity = true;
+};
+
+// Getter conveniente para ImageLayer::adjustmentLayerId
+inline bool hasAdjustmentLayer(const ImageLayer& img) {
+    return img.adjustmentLayerId.has_value();
+}
+
+/// Nó de caminho vetorial com handles de Bézier (curva cúbica).
+struct VectorNode {
+    QPointF position;   ///< Ponto âncora
+    QPointF handleIn;   ///< Handle de entrada (control point da curva anterior)
+    QPointF handleOut;  ///< Handle de saída (control point da próxima curva)
+    bool smooth = true; ///< Se true, handles são espelhados (curva suave)
+};
+
+/// Camada vetorial com caminho Bézier cúbico. Pode ser preenchida e/ou ter contorno.
+class VectorLayer final : public Layer
+{
+public:
+    VectorLayer();
+    std::unique_ptr<Layer> deepCopy() const override;
+    QRectF contentBounds() const override;
+
+    QPainterPath path;        ///< Caminho vetorial completo
+    std::vector<VectorNode> nodes;  ///< Nós para edição interativa
+    bool closed = false;      ///< Se o caminho está fechado
+    QColor fill = Qt::transparent;
+    QColor stroke = Qt::black;
+    double strokeWidth = 2.0;
+    bool fillEnabled = true;
+    bool strokeEnabled = true;
 };
 
 std::unique_ptr<Layer> makeLayer(LayerType type);
