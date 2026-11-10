@@ -274,7 +274,17 @@ void TestImageProcessing::testAssetStoreAddImage()
     QVERIFY(asset != nullptr);
     QCOMPARE(asset->width, 64);
     QCOMPARE(asset->height, 48);
-    QVERIFY(!asset->encoded.isEmpty());
+    // Codificação é preguiçosa: os bytes só existem após o pedido
+    // explícito (no salvamento do projeto).
+    QVERIFY(asset->encoded.isEmpty());
+    QVERIFY(asset->needsEncoding());
+
+    // Pedir os bytes dispara a codificação sob demanda.
+    const QByteArray& bytes = store.encodedBytes(id);
+    QVERIFY(!bytes.isEmpty());
+    QCOMPARE(store.find(id)->sha256.size(), 64); // SHA-256 em hex
+    QVERIFY(!store.find(id)->encoded.isEmpty());
+    QVERIFY(!store.find(id)->needsEncoding());
 
     QImage decoded = store.decodedImage(id);
     QCOMPARE(decoded.size(), QSize(64, 48));

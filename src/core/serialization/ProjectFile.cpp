@@ -583,6 +583,11 @@ QJsonObject buildProjectJson(const Document& doc)
     for (const Asset& asset : doc.assets().assets()) {
         if (!persistedAssets.contains(asset.id))
             continue;
+        // Garante o SHA-256: assets com codificação preguiçosa ainda não
+        // foram codificados neste ponto.
+        const QByteArray& bytes = doc.assets().encodedBytes(asset.id);
+        if (bytes.isEmpty())
+            continue;
         QJsonObject o;
         o.insert(QStringLiteral("id"),
                  asset.id.toString(QUuid::WithoutBraces));
@@ -704,12 +709,19 @@ bool writeArchive(const QString& filePath, const QByteArray& jsonBytes,
         for (const Asset& asset : doc.assets().assets()) {
             if (!persistedAssets.contains(asset.id))
                 continue;
+            // Codificação sob demanda: assets criados por pincel/gradiente
+            // só são codificados para PNG no momento de salvar.
+            const QByteArray& bytes = doc.assets().encodedBytes(asset.id);
+            if (bytes.isEmpty()) {
+                assetsOk = false;
+                break;
+            }
             const QString entry = QStringLiteral("media/%1.%2")
                                       .arg(asset.id.toString(QUuid::WithoutBraces),
                                            asset.format);
             if (!mz_zip_writer_add_mem(&zip, entry.toUtf8().constData(),
-                                       asset.encoded.constData(),
-                                       static_cast<size_t>(asset.encoded.size()),
+                                       bytes.constData(),
+                                       static_cast<size_t>(bytes.size()),
                                        MZ_DEFAULT_LEVEL)) {
                 assetsOk = false;
                 break;

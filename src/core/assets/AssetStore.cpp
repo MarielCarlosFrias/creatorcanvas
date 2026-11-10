@@ -10,23 +10,40 @@ LayerId AssetStore::addImage(const QImage& image, const QString& format)
     if (image.isNull())
         return {};
 
-    QByteArray encoded;
-    QBuffer buffer(&encoded);
-    buffer.open(QIODevice::WriteOnly);
-    image.save(&buffer, format.toLatin1().constData());
-
     Asset asset;
     asset.id = newLayerId();
     asset.format = format;
     asset.width = image.width();
     asset.height = image.height();
-    asset.encoded = encoded;
-    asset.sha256 = QString::fromLatin1(
-        QCryptographicHash::hash(encoded, QCryptographicHash::Sha256).toHex());
+    // Codificação PREGUIÇOSA: guardar o bitmap e codificar só quando o
+    // projeto é salvo. Codificar PNG a cada pincel (3000×2000 ≈ 300 ms)
+    // congelava a UI ao soltar o mouse.
+    asset.source = image;
     asset.decoded = image;
 
     m_assets.append(asset);
     return asset.id;
+}
+
+const QByteArray& AssetStore::encodedBytes(const LayerId& id) const
+{
+    static const QByteArray empty;
+    for (Asset& asset : m_assets) {
+        if (asset.id != id)
+            continue;
+        if (asset.encoded.isEmpty() && !asset.source.isNull()) {
+            QByteArray encoded;
+            QBuffer buffer(&encoded);
+            buffer.open(QIODevice::WriteOnly);
+            asset.source.save(&buffer, asset.format.toLatin1().constData());
+            asset.encoded = encoded;
+            asset.sha256 = QString::fromLatin1(
+                QCryptographicHash::hash(asset.encoded, QCryptographicHash::Sha256).toHex());
+            asset.source = QImage(); // libera a memória: bytes já codificados
+        }
+        return asset.encoded;
+    }
+    return empty;
 }
 
 bool AssetStore::remove(const LayerId& id)
