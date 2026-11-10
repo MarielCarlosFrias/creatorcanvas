@@ -5,6 +5,8 @@
 #include <QLabel>
 #include <QPlainTextEdit>
 #include <QMenu>
+#include <QPainter>
+#include <QImage>
 
 #include "ui/themeicons.h"
 #include "ui/collapsiblesection.h"
@@ -22,6 +24,7 @@
 #include "core/Document.h"
 #include "core/layers/Layer.h"
 #include "core/templates/TemplateFactory.h"
+#include "rendering/CanvasRenderer.h"
 
 using namespace cc;
 
@@ -204,6 +207,64 @@ private slots:
         doc.setLayerVisible(baseId, false);
         QTest::mouseClick(clipBtn, Qt::LeftButton);
         QVERIFY(!doc.findLayer(topId)->clipped);
+    }
+
+    void testClippingMaskWithTextBaseAndImportedImage()
+    {
+        // Cenário real: cria um TEXTO, depois importa uma IMAGEM por cima.
+        // No Photoshop a camada de cima é recortada pela de baixo — a
+        // imagem recortada pelo texto.
+        Document doc(200, 100);
+
+        auto text = std::make_unique<TextLayer>();
+        text->content = QStringLiteral("CLIP");
+        text->sizePt = 48;
+        text->align = TextAlignment::Center;
+        text->transform.position = QPointF(100, 50);
+        QVERIFY(doc.addLayer(std::move(text)));
+
+        QImage blue(200, 100, QImage::Format_ARGB32_Premultiplied);
+        blue.fill(QColor(0, 120, 255));
+        auto imported = std::make_unique<ImageLayer>();
+        imported->name = QStringLiteral("imported.png");
+        imported->assetId = doc.assets().addImage(blue);
+        imported->naturalWidth = 200;
+        imported->naturalHeight = 100;
+        imported->transform.position = QPointF(100, 50);
+        const LayerId imageId = imported->id();
+        QVERIFY(doc.addLayer(std::move(imported)));
+
+        // A imagem (topo) é recortada pelo texto (base).
+        QVERIFY(doc.setLayerClipped(imageId, true));
+
+        QImage out(200, 100, QImage::Format_ARGB32_Premultiplied);
+        out.fill(Qt::transparent);
+        {
+            QPainter p(&out);
+            RenderOptions options;
+            options.drawCheckerboard = false;
+            renderDocument(doc, &p, QTransform(), options);
+        }
+
+        int bluePixels = 0;
+        int transparentPixels = 0;
+        for (int y = 0; y < out.height(); ++y) {
+            for (int x = 0; x < out.width(); ++x) {
+                const QRgb c = qUnpremultiply(out.pixel(x, y));
+                if (qAlpha(c) == 0)
+                    ++transparentPixels;
+                else if (qBlue(c) > 150)
+                    ++bluePixels;
+            }
+        }
+        QVERIFY2(bluePixels > 100,
+                 qPrintable(QStringLiteral("a imagem recortada devia mostrar "
+                                           "azul sobre as letras (%1 px)")
+                                .arg(bluePixels)));
+        QVERIFY2(transparentPixels > 100,
+                 qPrintable(QStringLiteral("fora das letras devia ficar "
+                                           "transparente (%1 px)")
+                                .arg(transparentPixels)));
     }
 
     void testTemplatesCreationAndLayerLoading()
