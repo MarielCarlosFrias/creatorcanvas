@@ -354,6 +354,32 @@ bool Document::setLayerClipped(const LayerId& id, bool clipped)
         return layer != nullptr;
     if (effectiveLocks(id).all)
         return false;
+
+    // Uma camada de ajuste é recortada pela base no renderizador, mas
+    // recortá-la isolada não tem efeito: o ajuste já é aplicado ao
+    // acumulado. Mantém a coerência com o painel de camadas.
+    if (clipped && layer->type() == LayerType::Adjustment)
+        return false;
+
+    // Recortar exige uma camada BASE abaixo: a primeira não-recortada e
+    // visível do mesmo grupo. Sem base, o recorte não teria efeito.
+    if (clipped) {
+        GroupLayer* parent = parentOf(id);
+        if (!parent)
+            return false;
+        const int index = indexOf(id);
+        bool hasBase = false;
+        for (int i = index - 1; i >= 0; --i) {
+            const Layer* candidate = parent->children[static_cast<std::size_t>(i)].get();
+            if (!candidate->visible || candidate->clipped)
+                continue;
+            hasBase = true;
+            break;
+        }
+        if (!hasBase)
+            return false;
+    }
+
     layer->clipped = clipped;
     bumpRevision();
     emit layerPropertyChanged(id);

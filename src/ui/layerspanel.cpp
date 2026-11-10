@@ -751,6 +751,14 @@ void LayersPanel::buildUi()
         } else {
             m_document->setLayerClipped(m_selectedId, on);
         }
+        // O Document pode recusar (sem camada base visível abaixo, ou
+        // camada de ajuste): devolve o botão ao estado real da camada.
+        const Layer* current = m_document->findLayer(m_selectedId);
+        const bool actual = current && current->clipped;
+        if (actual != on) {
+            QSignalBlocker blocker(m_clippedBtn);
+            m_clippedBtn->setChecked(actual);
+        }
     });
 
     // ===== Parâmetros da camada de ajuste (undoable) =====

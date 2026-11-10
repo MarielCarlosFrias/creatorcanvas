@@ -2408,21 +2408,6 @@ void MainWindow::setSelectedLayerClipped(bool clipped)
     if (!layer)
         return;
 
-    // Uma camada de recorte precisa de uma camada base ABAIXO dela com
-    // conteúdo — sem isso o recorte não tem efeito visível.
-    if (clipped && layer->type() != LayerType::Background
-        && layer->type() != LayerType::Group) {
-        GroupLayer* parent = m_document->parentOf(m_selectedId);
-        const int index = m_document->indexOf(m_selectedId);
-        const bool hasBase = parent && index > 0
-            && parent->children[static_cast<std::size_t>(index - 1)]->visible;
-        if (!hasBase && m_i18n) {
-            statusBar()->showMessage(
-                m_i18n->t("common", "action.createClippingMaskNoBase"), 5000);
-            return;
-        }
-    }
-
     if (layer->clipped == clipped) {
         if (m_i18n) {
             statusBar()->showMessage(
@@ -2433,12 +2418,25 @@ void MainWindow::setSelectedLayerClipped(bool clipped)
         return;
     }
 
+    // O Document valida: existe uma camada base visível abaixo? A camada é
+    // de ajuste (não pode ser recortada isolada)? Se recusar, avisa.
+    // O comando aplica via redo() e fica no histórico para desfazer.
     if (m_history) {
         m_history->execute(std::make_unique<LayerClippedCommand>(
             *m_document, m_selectedId, QStringLiteral("layer.clipped"),
             &Document::setLayerClipped, layer->clipped, clipped));
     } else {
         m_document->setLayerClipped(m_selectedId, clipped);
+    }
+
+    // Se o Document recusou, a camada continua sem recorte: avisa e sai.
+    const Layer* after = m_document->findLayer(m_selectedId);
+    if (after && after->clipped != clipped) {
+        if (m_i18n) {
+            statusBar()->showMessage(
+                m_i18n->t("common", "action.createClippingMaskNoBase"), 5000);
+        }
+        return;
     }
 
     if (m_i18n) {

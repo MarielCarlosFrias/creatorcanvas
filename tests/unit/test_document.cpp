@@ -118,6 +118,45 @@ private slots:
         QCOMPARE(doc.indexOf(pb->id()), 1);
     }
 
+    void clippingRequiresVisibleBaseLayer()
+    {
+        Document doc(100, 100);
+        auto top = makeText("Top");
+        const LayerId topId = top->id();
+        QVERIFY(doc.addLayer(std::move(top)));
+
+        // Sem camada abaixo, o recorte é recusado.
+        QVERIFY(!doc.setLayerClipped(topId, true));
+        QVERIFY(!doc.findLayer(topId)->clipped);
+
+        // Com uma base visível abaixo, o recorte é aceito.
+        auto base = makeText("Base");
+        const LayerId baseId = base->id();
+        QVERIFY(doc.addLayer(std::move(base), nullptr, 0));
+        QVERIFY(doc.setLayerClipped(topId, true));
+        QVERIFY(doc.findLayer(topId)->clipped);
+
+        // Base oculta: o recorte deixa de ter efeito — liberar é recusado
+        // enquanto não houver base visível, mas o estado é preservado.
+        QVERIFY(doc.setLayerVisible(baseId, false));
+        QVERIFY(doc.findLayer(topId)->clipped);
+    }
+
+    void adjustmentLayerCannotBeClipped()
+    {
+        Document doc(100, 100);
+        auto base = makeText("Base");
+        auto adj = std::make_unique<AdjustmentLayer>();
+        const LayerId adjId = adj->id();
+        QVERIFY(doc.addLayer(std::move(base)));
+        QVERIFY(doc.addLayer(std::move(adj)));
+
+        // Camada de ajuste não é recortada isolada (o ajuste já atua sobre
+        // o acumulado).
+        QVERIFY(!doc.setLayerClipped(adjId, true));
+        QVERIFY(!doc.findLayer(adjId)->clipped);
+    }
+
     void addAtBottomIndex()
     {
         Document doc(100, 100);
