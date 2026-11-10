@@ -119,6 +119,10 @@ private:
     void addAdjustmentLayer(cc::AdjustmentType type);
     void textBehindSubject();
     void deleteSelectedLayer();
+
+    /// Cria (true) ou libera (false) a máscara de recorte da camada
+    /// selecionada — equivale ao botão de recorte do painel de camadas.
+    void setSelectedLayerClipped(bool clipped);
     bool saveDocument();
     bool saveDocumentAs();
     void openDocument();
@@ -227,6 +231,8 @@ private:
     QAction* m_rotateRightAction = nullptr;
     QAction* m_deleteAction = nullptr;
     QAction* m_lockLayerAction = nullptr;
+    QAction* m_createClippingMaskAction = nullptr;
+    QAction* m_releaseClippingMaskAction = nullptr;
     QAction* m_selectAllAction = nullptr;
     QAction* m_settingsAction = nullptr;
     QAction* m_startScreenAction = nullptr;

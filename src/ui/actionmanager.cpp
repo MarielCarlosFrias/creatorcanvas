@@ -257,6 +257,15 @@ void ActionManager::createActions(I18nService* i18n)
     lockLayerAction->setIcon(ThemeIcons::layerLock(true));
     lockLayerAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+/")));
 
+    createClippingMaskAction = new QAction(this);
+    createClippingMaskAction->setIcon(ThemeIcons::iconClipMask());
+    createClippingMaskAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+Alt+G")));
+
+    releaseClippingMaskAction = new QAction(this);
+    releaseClippingMaskAction->setIcon(ThemeIcons::iconClipMask());
+    releaseClippingMaskAction->setShortcut(
+        QKeySequence(QStringLiteral("Ctrl+Shift+Alt+G")));
+
     // --- Seleção ---
     selectAllAction = new QAction(this);
     selectAllAction->setShortcut(QKeySequence::SelectAll);
@@ -456,6 +465,12 @@ void ActionManager::retranslate(I18nService* i18n)
     deleteAction->setText(i18n->t("common", "menu.layer.delete"));
     lockLayerAction->setText(i18n->t("common", "action.toggleLayerLock"));
     lockLayerAction->setToolTip(lockLayerAction->text() + QStringLiteral(" (Ctrl+/)"));
+    createClippingMaskAction->setText(i18n->t("common", "action.createClippingMask"));
+    createClippingMaskAction->setToolTip(createClippingMaskAction->text()
+                                         + QStringLiteral(" (Ctrl+Alt+G)"));
+    releaseClippingMaskAction->setText(i18n->t("common", "action.releaseClippingMask"));
+    releaseClippingMaskAction->setToolTip(releaseClippingMaskAction->text()
+                                         + QStringLiteral(" (Ctrl+Shift+Alt+G)"));
 
     // --- Seleção ---
     selectAllAction->setText(i18n->t("common", "action.selectAll"));
@@ -605,6 +620,8 @@ QMap<QString, QKeySequence> ActionManager::getAllShortcuts() const
     addAction(rotateRightAction);
     addAction(deleteAction);
     addAction(lockLayerAction);
+    addAction(createClippingMaskAction);
+    addAction(releaseClippingMaskAction);
     addAction(selectAllAction);
     addAction(deselectAction);
     addAction(invertSelectionAction);
@@ -690,6 +707,8 @@ bool ActionManager::setShortcut(const QString& actionName, const QKeySequence& k
         actionMap[flipVAction->text()] = flipVAction;
         actionMap[rotateLeftAction->text()] = rotateLeftAction;
         actionMap[rotateRightAction->text()] = rotateRightAction;
+        actionMap[createClippingMaskAction->text()] = createClippingMaskAction;
+        actionMap[releaseClippingMaskAction->text()] = releaseClippingMaskAction;
         actionMap[deleteAction->text()] = deleteAction;
         actionMap[lockLayerAction->text()] = lockLayerAction;
         actionMap[selectAllAction->text()] = selectAllAction;

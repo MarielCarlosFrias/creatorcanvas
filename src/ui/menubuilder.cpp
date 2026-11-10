@@ -128,6 +128,9 @@ void MenuBuilder::buildMenus(I18nService* i18n)
     layerMenu->addAction(m_actions->textBehindSubjectAction);
     layerMenu->addSeparator();
     layerMenu->addAction(m_actions->lockLayerAction);
+    layerMenu->addAction(m_actions->createClippingMaskAction);
+    layerMenu->addAction(m_actions->releaseClippingMaskAction);
+    layerMenu->addSeparator();
     layerMenu->addAction(m_actions->deleteAction);
 
     // --- Exibir ---

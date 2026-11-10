@@ -199,5 +199,12 @@
   "action.flatten": "Achatar imagem",
   "action.textBehindSubject": "Texto atrás do personagem",
   "action.toggleLayerLock": "Alternar Bloqueio da Camada",
+  "action.createClippingMask": "Criar Máscara de Recorte",
+  "action.releaseClippingMask": "Liberar Máscara de Recorte",
+  "action.clippingMaskCreated": "Máscara de recorte criada — a camada foi recortada pela camada de baixo.",
+  "action.clippingMaskReleased": "Máscara de recorte liberada.",
+  "action.clippingMaskAlready": "Esta camada já está recortada.",
+  "action.noClippingMask": "Esta camada não está recortada.",
+  "action.createClippingMaskNoBase": "Uma máscara de recorte precisa de uma camada visível abaixo para recortar.",
   "action.selectAll": "Selecionar Tudo"
 }

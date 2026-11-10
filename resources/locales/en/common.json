@@ -203,5 +203,12 @@
   "action.flatten": "Flatten image",
   "action.textBehindSubject": "Text behind subject",
   "action.toggleLayerLock": "Toggle Layer Lock",
+  "action.createClippingMask": "Create Clipping Mask",
+  "action.releaseClippingMask": "Release Clipping Mask",
+  "action.clippingMaskCreated": "Clipping mask created — the layer is clipped to the layer below.",
+  "action.clippingMaskReleased": "Clipping mask released.",
+  "action.clippingMaskAlready": "This layer is already clipped.",
+  "action.noClippingMask": "This layer is not clipped.",
+  "action.createClippingMaskNoBase": "A clipping mask needs a visible layer below to clip to.",
   "action.selectAll": "Select All"
 }

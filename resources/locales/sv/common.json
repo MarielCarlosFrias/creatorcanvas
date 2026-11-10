@@ -199,5 +199,12 @@
   "action.flatten": "Platta till bild",
   "action.textBehindSubject": "Text bakom subjekt",
   "action.toggleLayerLock": "(De)aktivera lås",
+  "action.createClippingMask": "Skapa urklippsmask",
+  "action.releaseClippingMask": "Ta bort urklippsmask",
+  "action.clippingMaskCreated": "Urklippsmask skapad — lagret klipps till lagret under.",
+  "action.clippingMaskReleased": "Urklippsmasken borttagen.",
+  "action.clippingMaskAlready": "Detta lager är redan klippt.",
+  "action.noClippingMask": "Detta lager är inte klippt.",
+  "action.createClippingMaskNoBase": "En urklippsmask behöver ett synligt lager under att klippa till.",
   "action.selectAll": "Markera allt"
 }

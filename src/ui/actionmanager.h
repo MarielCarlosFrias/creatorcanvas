@@ -90,6 +90,8 @@ public:
 
     QAction* deleteAction = nullptr;
     QAction* lockLayerAction = nullptr;
+    QAction* createClippingMaskAction = nullptr;
+    QAction* releaseClippingMaskAction = nullptr;
     QAction* selectAllAction = nullptr;
     QAction* deselectAction = nullptr;
     QAction* invertSelectionAction = nullptr;
