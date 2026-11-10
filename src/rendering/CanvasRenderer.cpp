@@ -1512,6 +1512,11 @@ QImage composeLayers(const std::vector<std::unique_ptr<Layer>>& layers,
     const QRectF localRect(0, 0, bufferSize.width(), bufferSize.height());
 
     QImage temp;
+    // Alfa da camada BASE do grupo de recorte: a última camada não-recortada
+    // visível desenhada abaixo. É o que o Photoshop usa — usar o alfa de
+    // TODO o acumulado daria o resultado errado (uma camada de fundo opaca
+    // abaixo tornaria o recorte inútil).
+    QImage baseAlpha;
     {
         QPainter accPainter(&acc);
         accPainter.setRenderHint(QPainter::Antialiasing, true);
@@ -1521,7 +1526,14 @@ QImage composeLayers(const std::vector<std::unique_ptr<Layer>>& layers,
         accPainter.setClipRect(localRect);
         accPainter.setTransform(baseTransform);
 
-        for (const auto& child : layers) {
+        // Camadas recortadas consecutively partilham a MESMA base: a
+        // primeira não-recortada visível imediatamente abaixo do grupo de
+        // recorte. Mantém o índice da última camada não-recortada para
+        // saber onde termina o grupo.
+        int lastNonClippedIndex = -1;
+
+        for (int index = 0; index < static_cast<int>(layers.size()); ++index) {
+            const auto& child = layers[static_cast<std::size_t>(index)];
             if (!child->visible)
                 continue;
 
@@ -1544,8 +1556,13 @@ QImage composeLayers(const std::vector<std::unique_ptr<Layer>>& layers,
             }
 
             if (child->clipped) {
-                // Renderiza a camada ISOLADA e recorta com o alfa do
-                // acumulado (tudo o que está abaixo dela no grupo).
+                // Recorta pela alfa da camada BASE: a última camada
+                // não-recortada visível desenhada abaixo. Sem base, a
+                // camada recortada fica invisível — como no Photoshop.
+                if (baseAlpha.isNull())
+                    continue;
+
+                // Renderiza a camada ISOLADA e recorta com a alfa da base.
                 if (temp.size() != bufferSize
                     || temp.format() != QImage::Format_ARGB32_Premultiplied) {
                     temp = QImage(bufferSize, QImage::Format_ARGB32_Premultiplied);
@@ -1566,14 +1583,34 @@ QImage composeLayers(const std::vector<std::unique_ptr<Layer>>& layers,
                 QPainter masker(&temp);
                 masker.setCompositionMode(
                     QPainter::CompositionMode_DestinationIn);
-                masker.drawImage(0, 0, acc);
+                masker.drawImage(0, 0, baseAlpha);
                 masker.end();
                 accPainter.drawImage(0, 0, temp);
                 continue;
             }
 
+            // Camada normal: desenha no acumulado. Se for a última
+            // não-recortada antes de um grupo de recorte, guarda a sua
+            // alfa como base (é a máscara do recorte, como no Photoshop).
+            QImage rendered(bufferSize, QImage::Format_ARGB32_Premultiplied);
+            if (!rendered.isNull()) {
+                rendered.fill(Qt::transparent);
+                {
+                    QPainter rp(&rendered);
+                    rp.setRenderHint(QPainter::Antialiasing, true);
+                    rp.setRenderHint(QPainter::TextAntialiasing, true);
+                    if (!options.interactive)
+                        rp.setRenderHint(QPainter::SmoothPixmapTransform, true);
+                    rp.setClipRect(localRect);
+                    rp.setTransform(baseTransform);
+                    drawLayer(&rp, *child, doc, localRect, 1.0f, options);
+                }
+                baseAlpha = rendered;
+            }
+            lastNonClippedIndex = index;
             drawLayer(&accPainter, *child, doc, localRect, 1.0f, options);
         }
+        Q_UNUSED(lastNonClippedIndex);
     }
     return acc;
 }

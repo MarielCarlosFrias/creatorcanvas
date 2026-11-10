@@ -267,6 +267,62 @@ private slots:
                                 .arg(transparentPixels)));
     }
 
+    void testClippingMaskIgnoresOpaqueLayersBelowBase()
+    {
+        // Regressão: a máscara de recorte usa o alfa da camada BASE
+        // (imediatamente abaixo da recortada), NÃO o alfa de todo o
+        // acumulado. Com um BackgroundLayer opaco por baixo, o recorte
+        // tem de continuar a usar só o texto.
+        Document doc(200, 100);
+
+        auto bg = std::make_unique<BackgroundLayer>();
+        bg->fill = QColor(0x1a, 0x1d, 0x24);
+        QVERIFY(doc.addLayer(std::move(bg)));
+
+        auto text = std::make_unique<TextLayer>();
+        text->content = QStringLiteral("CLIP");
+        text->sizePt = 48;
+        text->align = TextAlignment::Center;
+        text->transform.position = QPointF(100, 50);
+        QVERIFY(doc.addLayer(std::move(text)));
+
+        QImage blue(200, 100, QImage::Format_ARGB32_Premultiplied);
+        blue.fill(QColor(0, 120, 255));
+        auto imported = std::make_unique<ImageLayer>();
+        imported->assetId = doc.assets().addImage(blue);
+        imported->naturalWidth = 200;
+        imported->naturalHeight = 100;
+        imported->transform.position = QPointF(100, 50);
+        const LayerId imageId = imported->id();
+        QVERIFY(doc.addLayer(std::move(imported)));
+
+        QVERIFY(doc.setLayerClipped(imageId, true));
+
+        QImage out(200, 100, QImage::Format_ARGB32_Premultiplied);
+        out.fill(Qt::transparent);
+        {
+            QPainter p(&out);
+            RenderOptions options;
+            options.drawCheckerboard = false;
+            renderDocument(doc, &p, QTransform(), options);
+        }
+
+        // O azul (recortado) só pode aparecer sobre as letras.
+        int bluePixels = 0;
+        for (int y = 0; y < out.height(); ++y) {
+            for (int x = 0; x < out.width(); ++x) {
+                const QRgb c = qUnpremultiply(out.pixel(x, y));
+                if (qAlpha(c) > 0 && qBlue(c) > 150 && qRed(c) < 100)
+                    ++bluePixels;
+            }
+        }
+        QVERIFY2(bluePixels > 100 && bluePixels < 6000,
+                 qPrintable(QStringLiteral(
+                     "o recorte devia mostrar azul SÓ sobre as letras "
+                     "(%1 px — se cobre quase tudo, a base errada foi usada)")
+                                .arg(bluePixels)));
+    }
+
     void testTemplatesCreationAndLayerLoading()
     {
         QTemporaryDir tmpDir;
