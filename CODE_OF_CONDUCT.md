@@ -34,7 +34,7 @@ Este Código de Conduta se aplica tanto aos espaços do projeto quanto aos espa�
 
 ## Aplicação
 
-Casos de comportamento abusivo, assediador ou inaceitável podem ser relatados entrando em contato com a equipe do projeto pelo [e-mail ou link de contato do projeto]. Todas as reclamações serão revisadas e investigadas prontamente e justamente.
+Casos de comportamento abusivo, assediador ou inaceitável podem ser relatados abrindo uma issue em <https://github.com/MarielCarlosFrias/creatorcanvas/issues> marcada como `conduct` (ou contatando diretamente os mantenedores pelo GitHub, se o relato não puder ser público). Todas as reclamações serão revisadas e investigadas prontamente e justamente.
 
 Todos os mantenedores são obrigados a respeitar a privacidade e a segurança do repórter de qualquer incidente.
 

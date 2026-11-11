@@ -25,14 +25,14 @@ Por favor, leia e siga o nosso [Código de Conduta](CODE_OF_CONDUCT.md) em todas
    ctest --test-dir build/linux-debug --output-on-failure
    ```
 
-   Todos os 31 testes devem passar em um checkout limpo.
+   Todos os 38 testes devem passar em um checkout limpo.
 
 ---
 
 ## 📜 Regras de ouro
 
 1. **Toda mutação de documento vai através de um `Command`** (`src/core/history/`). Se seu código de UI toca no estado do `Document`, adicione ou estenda um comando em vez de chamar um setter diretamente — isso mantém o desfazer/refazer correto.
-2. **Não hardcode strings visíveis ao usuário.** Use `I18nService::t(namespace, key)` e adicione a chave a **ambos** `resources/locales/en/` e `resources/locales/pt-BR/` no mesmo PR. (Ao adicionar um novo idioma, veja "Adicionando ou atualizando uma tradução" abaixo.)
+2. **Não hardcode strings visíveis ao usuário.** Use `I18nService::t(namespace, key)` e adicione a chave a **todos** os catálogos embarcados — `resources/locales/en/`, `resources/locales/pt-BR/` e `resources/locales/sv/` — no mesmo PR (o teste `test_i18n` falha se uma chave usada em `src/` faltar em um catálogo). (Ao adicionar um novo idioma, veja "Adicionando ou atualizando uma tradução" abaixo.)
 3. **`core/` não depende de QtWidgets.** Apenas QtCore/QtGui. Isso permite que a lógica central seja testada sem display (`QT_QPA_PLATFORM=offscreen`).
 4. **Prefira `QStandardPaths` / `QDir` sobre `#ifdef`.** Não existe `src/platform/` ainda. Ramificações específicas de SO devem ficar no CMake ou em um helper claramente isolado — não espalhe `#ifdef _WIN32` pelo UI/core.
 5. **`std::unique_ptr<T>` membros de uma classe `Q_OBJECT` precisam de um `#include` completo de `T`**, não uma declaração antecipada — o destruidor gerado pelo compilador precisa do tipo completo. Isto já quebrou o build mais de uma vez (M12, M13); verifique duas vezes ao adicionar um novo membro `unique_ptr` a um cabeçalho.
@@ -86,7 +86,7 @@ Por exemplo, um valor como `"language": "Language: %1"` deve reter `%1` na tradu
 - [ ] Li o `CONTRIBUTING.md` e o `DOCUMENTATION.md`
 - [ ] Todos os testes existentes passam (`ctest --output-on-failure`)
 - [ ] Adicionei ou atualizei testes para a mudança (se aplicável)
-- [ ] Não há strings de usuário hardcoded — tudo vai via `I18nService::t()` para `en` e `pt-BR`
+- [ ] Não há strings de usuário hardcoded — tudo vai via `I18nService::t()` para `en`, `pt-BR` e `sv`
 - [ ] `core/` não depende de QtWidgets (apenas QtCore/QtGui)
 - [ ] Commit segue o padrão (`M<n>: ...` ou Conventional Commits)
 - [ ] Testado em: [Linux / Windows / outro]

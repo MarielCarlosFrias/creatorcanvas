@@ -28,7 +28,7 @@ Se aplicável, adicione capturas de tela para explicar o problema.
 ## 🖥️ Ambiente
 
 - **Sistema operacional:** [ex. Ubuntu 24.04, Windows 11, macOS Sonoma]
-- **Versão do CreatorCanvas:** [ex. v0.2.0, commit abc123]
+- **Versão do CreatorCanvas:** [ex. v0.2.1, commit abc123]
 - **Compilador:** [ex. GCC 15.2, MSVC 2022]
 - **Qt:** [ex. 6.8.x]
 - **CMake preset usado:** [ex. linux-debug, windows-release]

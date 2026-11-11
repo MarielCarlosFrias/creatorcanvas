@@ -16,7 +16,11 @@ CreatorCanvas uses Qt 6 (Core, Gui, Widgets, Test) under the **GNU Lesser Genera
 
 ## miniz — Public Domain (Unlicense-style)
 
-CreatorCanvas vendors a single-file copy of **miniz** (used for reading/writing the `.creatorcanvas` ZIP container) under its public-domain / permissive terms. No attribution or copyleft obligation applies, but the original notice is retained in the vendored source file for provenance.
+CreatorCanvas vendors a modular copy of **miniz** under `3rdparty/miniz/` (used for reading/writing the `.creatorcanvas` ZIP container). The base (`miniz.c`: crc32, adler32, default allocators) plus the `tinfl`, `tdef` and `miniz_zip` modules are compiled; miniz's own example program (`miniz_tester.cpp`) is excluded. No attribution or copyleft obligation applies, but the original notice is retained in the vendored source files for provenance.
+
+## ONNX Runtime — MIT
+
+CreatorCanvas links against **ONNX Runtime** (v1.19.0, fetched by `scripts/fetch_onnx.sh` or by the CI workflow) under the **MIT License**, loaded dynamically at runtime (`libonnxruntime.so` / `onnxruntime.dll`; the DEB and AppImage bundle it under `lib/creatorcanvas/`). It provides the local, offline `u2netp` inference used by the AI background-removal feature. Source and license: <https://github.com/microsoft/onnxruntime> and `3rdparty/onnxruntime/LICENSE`.
 
 ## Fonts / icons
 

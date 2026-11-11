@@ -10,9 +10,9 @@ Create high-impact YouTube thumbnails, social media posts, stories, banners, and
 [![Qt 6.8 LTS](https://img.shields.io/badge/Qt-6.8%20LTS-41CD52?style=for-the-badge&logo=qt&logoColor=white)](https://www.qt.io/)
 [![CMake](https://img.shields.io/badge/CMake-%E2%89%A5%203.24-064F8C?style=for-the-badge&logo=cmake&logoColor=white)](https://cmake.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-blue?style=for-the-badge)](https://github.com/theking1x/creatorcanvas)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-blue?style=for-the-badge)](https://github.com/MarielCarlosFrias/creatorcanvas)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen?style=for-the-badge)](#)
-[![Tests](https://img.shields.io/badge/tests-31%2F31_passing-brightgreen?style=for-the-badge)](#)
+[![Tests](https://img.shields.io/badge/tests-38%2F38_passing-brightgreen?style=for-the-badge)](#)
 
 <br/>
 
@@ -58,38 +58,45 @@ Most photo editing tools are either overly basic web canvas tools or intimidatin
 ## 🚀 Key Features
 
 ### 🗂️ Layer Engine & Compositing
-- **Layer Types**: Image, Text, Shape (Rect, Ellipse, Triangle, Star, Polygon), and Group folders.
-- **Organization**: Drag-and-drop reordering, color tags (8 colors), blend modes, lock, and opacity.
+- **Layer Types**: Image, Text, Shape (Rect, Rounded Rect, Ellipse, Triangle, Star, Polygon, Badge, Speech Bubble, Heart, Arrows and more — 18 kinds), Fill, Adjustment, Vector (Bézier), and Group folders.
+- **Organization**: Drag-and-drop reordering, color tags (8 colors), blend modes (12), opacity + fill opacity, granular per-pixel locks, and layer link groups.
 - **Clipping Masks**: Clip a layer to the one below it (Photoshop-style) — works inside groups too, via `Layer ▸ Create Clipping Mask` (`Ctrl+Alt+G`).
 - **Alpha Masking**: Non-destructive persistent layer masks saved directly inside project files with render-caching for instant movement.
+- **Adjustment Layers**: Levels, Curves, Brightness/Contrast, Hue/Saturation, Color Balance, Photo Filter, Channel Mixer, Invert, Threshold, Posterize and Gradient Map — applied non-destructively at render time.
 
 ### ✂️ Centralized Selection & Cut Suite
 - **Selection Tools**: Rectangular/Elliptical Marquee (Shift adds, Alt subtracts, feather), Polygonal Scissors, and Magic Wand with adjustable color tolerance.
+- **Select Subject (AI)**: one click turns the local ONNX model into a pixel selection of the subject — the background is kept, so you can copy the subject to a new layer, feather the edge or composite it over another image (`Ctrl+Alt+S`).
 - **Smart Operations**: Invert selection, clean contour visualization, Copy to new layer, and Cut (creates isolated layer and hides original cleanly).
 
 ### ✍️ Typography & Graphic Styling
-- Rich text inspector with real-time tracking, bold/italic, drop shadows, multi-stop linear/radial gradients, outline/stroke, texture fills, and hollow knockout text.
+- Rich text inspector with real-time tracking, bold/italic, drop shadows, two-stop linear/radial gradients, outline/stroke, texture fills, and hollow knockout text.
 
 ### 🎨 Modular Tool Suite (`cc_tools`)
 - Selection & Transform (shear, rotate, scale, flip).
 - Crop tool with standard aspect presets.
 - Raster Brush, Pencil, Airbrush, Eraser, Clone Stamp, and Flood Fill.
+- **Pen tool** — cubic Bézier paths with editable nodes and handles.
 - **Gradient** — linear/radial, two colors with alpha, respects the active pixel selection.
 - **Retouch brush** — Blur, Sharpen, Smudge, Dodge, Burn and Sponge with size/strength controls.
 - **Spot Healing & Red Eye** — automatic nearby-source repair, one undo step per stroke.
+- **Perspective Mockup** — 4-point warp with live preview and free-form mode (`Esc` cancels).
 - Grouped toolbar with flyout-free organization: selection, cut, paint, retouch, utility and create groups.
 
-### 🖥️ Responsive Layout
+### 🖥️ Responsive Layout & Workspace
 - Breakpoint-driven chrome (620 / 980 / 1440 px): the vertical tool rail turns into a compact horizontal bar on narrow or short windows, tool options compact themselves, and inspectors auto-hide with their previous visibility restored.
 - Canvas keeps `auto-fit` until you zoom/pan manually; after that, resizing preserves your zoom instead of resetting it.
+- **Workspace layouts** — save, restore and delete named dock layouts (`Window ▸ Workspace Layout`).
+- **Customizable shortcuts** — reassign any action in `Help ▸ Keyboard Shortcuts`; overrides persist across sessions.
 
 ### 💾 Document Lifecycle & Safety
 - **DocumentController**: Centralized engine synchronizing canvas, layers, inspectors, history, and background services.
 - **Smart Autosave & Recovery**: Auto-save with dirty-state checks, atomic writes (`.tmp` to target), and interactive crash recovery dialog (Open, Open as Copy, Discard).
+- **Batch processing**: apply a set of operations to many files at once (`File ▸ Batch`).
 
 ### 🌍 Internationalization & Accessibility
-- Native multi-language support (English and Portuguese `pt-BR`) with on-the-fly switching.
-- New language folders under `resources/locales/` are discovered automatically, but every JSON file must also be listed in `resources/locales.qrc` for the embedded application resource. Translation contributions are welcome; see [Adding or updating a translation](CONTRIBUTING.md#adding-or-updating-a-translation).
+- Native multi-language support (English, Portuguese `pt-BR` and Swedish `sv`) with on-the-fly switching.
+- New language folders under `resources/locales/` are discovered automatically, but every JSON file must also be listed in `resources/locales.qrc` for the embedded application resource. Translation contributions are welcome; see [Adding or updating a translation](CONTRIBUTING.md#-adicionando-ou-atualizando-uma-tradução).
 - High-contrast dark theme optimized for long editing sessions.
 
 ---
@@ -98,22 +105,22 @@ Most photo editing tools are either overly basic web canvas tools or intimidatin
 
 ```
 CreatorCanvas Architecture
- ├── cc_core          → Document, Layers, History, Serialization, SelectionOps, SnapEngine
- ├── cc_tools         → Modular ICanvasTool suite (Select, Marquee, Crop, Paint, Gradient, Retouch, Healing, Scissors, Wand)
+ ├── cc_core          → Document, Layers, History, Serialization, SelectionOps, SnapEngine, ImageProcessing, ONNX
+ ├── cc_tools         → Modular ICanvasTool suite (Select, Marquee, Crop, Paint, Pen, Gradient, Retouch, Healing, Scissors, Wand, Clone, Flood)
  ├── cc_rendering     → Software QPainter compositor, effects & layer filters
  ├── cc_services      → DocumentController, Autosave, Settings, PresetStore, Logging
- ├── cc_localization  → Dynamic JSON-based i18n service (en, pt-BR)
+ ├── cc_localization  → Dynamic JSON-based i18n service (en, pt-BR, sv)
  └── UI Layer         → MainWindow, CanvasView, Inspectors, History & Recovery Dialogs
 ```
 
 | Component | Technology | Description |
 |---|---|---|
 | **Language** | C++20 | Modern idioms, RAII, strict `-Werror` compliance |
-| **Framework** | Qt 6 (6.8 LTS) | Qt Widgets, Core, Gui, Test |
-| **Build System** | CMake ≥ 3.24 | Presets for Linux (`linux-debug`, `linux-release`) and Windows |
+| **Framework** | Qt 6 (6.8 LTS reference) | Qt Widgets, Core, Gui, Test — builds with Qt ≥ 6.2 |
+| **Build System** | CMake ≥ 3.24 | Presets for Linux (`linux-debug`, `linux-release`, `linux-asan`) and Windows |
 | **Machine Learning** | ONNX Runtime | Local, offline inference (`u2netp.onnx`) |
 | **Archive Engine** | miniz | Clean project bundling into `.creatorcanvas` containers |
-| **Testing** | QTest / CTest | 31 automated test suites with 100% pass rate |
+| **Testing** | QTest / CTest | 38 automated test suites with 100% pass rate |
 
 ---
 
@@ -167,12 +174,17 @@ build\windows-release\bin\Release\CreatorCanvas.exe
 
 Every commit passes a comprehensive verification pipeline:
 
-- **Unit Test Suites**: 31/31 test executables passing (`test_document`, `test_layers`, `test_tools`, `test_serialization`, `test_effects`, etc.).
+- **Unit Test Suites**: 38/38 test executables passing (`test_document`, `test_layers`, `test_tools`, `test_serialization`, `test_effects`, etc.).
 - **Self-Diagnostic Smoke Test**:
   ```bash
   ./build/linux-debug/bin/CreatorCanvas --smoke-test
   ```
   *Validates locales, ONNX AI inference, ZIP save/load roundtrip, thumbnail generation, and headless UI initialization.*
+- **UI Snapshot** (layout regression):
+  ```bash
+  QT_QPA_PLATFORM=offscreen ./build/linux-debug/bin/CreatorCanvas --ui-snapshot /tmp/shots
+  ```
+  *Renders the editor at five window sizes for every tool so responsive layout regressions can be reviewed headlessly.*
 
 ---
 
@@ -183,8 +195,8 @@ Contribuições são bem-vindas! Comece por aqui:
 1. **Leia o guia completo**: [`CONTRIBUTING.md`](CONTRIBUTING.md) e [`DOCUMENTATION.md`](DOCUMENTATION.md)
 2. **Verifique o estado atual**: abra uma issue antes de começar a implementar algo grande
 3. **Faça o fork**, crie uma branch (`git checkout -b feat/minha-mudanca`), faça suas alterações e envie um PR
-4. **Testes**: todos os 31 testes devem passar (`ctest --output-on-failure`)
-5. **Strings de usuário**: nada hardcoded — use `I18nService::t("namespace", "chave")` e adicione à chave tanto em `en` quanto em `pt-BR`
+4. **Testes**: todos os 38 testes devem passar (`ctest --output-on-failure`)
+5. **Strings de usuário**: nada hardcoded — use `I18nService::t("namespace", "chave")` e adicione a chave em todos os catálogos embarcados (`en`, `pt-BR`, `sv`)
 6. **Commits**: use Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, etc.) ou marque com milestone (`M<n>: <descrição>`)
 
 Leia o [Código de Conduta](CODE_OF_CONDUCT.md) antes de participar.

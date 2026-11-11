@@ -2,7 +2,7 @@
 
 Technical reference for CreatorCanvas: architecture, data model, rendering, persistence, i18n, testing, build/packaging, conventions, and known limitations.
 
-**Scope of this document:** current **`main`**. Last tagged release is **v0.2.0** (milestones M0–M20). `main` additionally includes multi-select, alignment/distribution/grouping, grid and safe-zone overlays, layout templates, extra raster tools (crop, scissors, magic wand, clone stamp), modular `cc_tools` architecture (`ICanvasTool`), and Photoshop-style layer drag-and-drop reordering with full undo/redo. CMake `project()` version is still `0.2.0` until the next tag.
+**Scope of this document:** current **`main`**. Last tagged release is **v0.2.1** (2026-11-04), which bundles milestones M0–M23 plus the M21–M23 feature work (multi-select, alignment/distribution/grouping, grid and safe-zone overlays, layout templates, extra raster tools — crop, scissors, magic wand, clone stamp, flood fill, gradient, retouch, healing, marquee —, the modular `cc_tools` architecture (`ICanvasTool`), and Photoshop-style layer drag-and-drop reordering with full undo/redo). The CMake `project()` version (`0.2.1`) matches the tag. `main` after the tag adds: Photoshop-style clipping masks (also inside groups, honoured by export), perspective mockups (4-point warp, free-form mode), the pen (Bézier) tool, batch processing, workspace layout save/restore, customizable keyboard shortcuts, performance work (scanline flood fill / magic wand, lazy asset encoding), and the Swedish (`sv`) translation contributed by the community.
 
 ## Table of contents
 
@@ -29,9 +29,7 @@ Technical reference for CreatorCanvas: architecture, data model, rendering, pers
 
 CreatorCanvas is a layer-based image editor aimed at digital content creators. Typical flow: *pick a platform preset or layout template → compose images, shapes, and brush strokes → style text (outline, shadow, gradient) → crop / cut out / adjust color / remove background → export PNG, JPEG, or WebP*.
 
-**Shipped in v0.2.0 (M0–M20):** document model, command stack, ZIP+JSON projects, software canvas renderer, transform gestures, layers panel, text + shape tools, settings, export, autosave, start screen, packaging, snapping, paint/fill, text gradients, shear, image inspector, ONNX background removal.
-
-**On `main` after the tag (M21–M22):** multi-layer selection, align/distribute/group, grid + snap-to-grid, YouTube/Instagram/TikTok safe-zone overlays, `TemplateFactory` start-screen templates, modular `cc_tools` architecture (`ICanvasTool`), and Photoshop-style layer drag-and-drop reordering with full undo/redo.
+**Shipped in v0.2.1 (M0–M23):** document model, command stack, ZIP+JSON projects, software canvas renderer, transform gestures, layers panel, text + shape tools, settings, export, autosave, start screen, packaging, snapping, paint/fill, text gradients, shear, image inspector, ONNX background removal, multi-select, group/align/distribute, grid, safe zones, templates, crop/scissors/wand/clone/flood-fill/gradient/retouch/healing/marquee tools, the modular `cc_tools` architecture, Photoshop-style layer drag-and-drop, clipping masks, perspective mockups, pen (Bézier) tool, batch processing, workspace layouts, and customizable shortcuts.
 
 **Stack:** C++20, Qt 6 Widgets, ONNX Runtime (C API), CMake presets, QTest, ZIP archives via vendored `miniz`.
 
@@ -61,6 +59,8 @@ CreatorCanvas is a layer-based image editor aimed at digital content creators. T
 | `m21-composer` | Multi-select, align/distribute/group, grid, safe zones, templates, crop/scissors/wand/clone |
 | `m22-tools-dnd` | Modular tool system (`ICanvasTool`, `ToolContext`, `cc_tools` library) & Photoshop-style layer drag-and-drop with undo/redo |
 | `m23-photocraft-tools` | Marquee selection (rect/ellipse, Shift add/Alt subtract, feather), Gradient (linear/radial, selection mask), Retouch brush (blur/sharpen/smudge/dodge/burn/sponge), Spot Healing + Red Eye, tool grouping and responsive toolbars |
+| `v0.2.1` (tag, 2026-11-04) | Ships M0–M23 plus 147 fix/perf/CI commits: mockup perspective (real 4-corner warp, free-form, click order, live preview, Esc cancel), clipping masks (also inside groups, export-aware), pen (Bézier) tool, batch processing, workspace layouts, shortcut customization, scanline flood fill / magic wand, lazy asset encoding, and packaging/CI repairs (DEB smoke test, NSIS) |
+| post-`v0.2.1` (`main`) | Responsive layout refactor (docks auto-hide/restore, compact toolbars), ActionManager shortcut registry with `QSettings` persistence and per-action reset, Swedish (`sv`) translation, clipping-mask fixes (base-layer alpha, refusal feedback) |
 
 ## 3. Architecture
 
@@ -76,15 +76,18 @@ CreatorCanvas is a layer-based image editor aimed at digital content creators. T
         │                       ┌─── tools/ ───┐            │
         │                       │ ICanvasTool  │            │
         │                       │ SelectTool   │            │
+        │                       │ MarqueeTool  │            │
         │                       │ CropTool     │            │
-        │                       │ PaintTool    │            │
         │                       │ ScissorsTool │            │
+        │                       │ PenTool      │            │
+        │                       │ PaintTool    │            │
         │                       │ RasterTools  │            │
+        │                       │ PaintExtras  │            │
         │                       └───────┬──────┘            │
         │                               │ delegate ops      │
 ┌───────┴──────────── core/ ────────────▼───────────────────┴─────── rendering/ ──┐
-│  Document · Layer tree · CommandStack                                    │
-│  ProjectFile (ZIP+JSON+Thumbnail) · AssetStore                           │
+│  Document · Layer tree · CommandStack · LayerComps · WebSlice            │
+│  ProjectFile (ZIP+JSON+Thumbnail) · AssetStore · ColorSpace              │
 │  AffineTransform · SnapEngine · TemplateFactory                          │
 │  ImageProcessing (raster ops) · BackgroundRemover (ONNX)                 │
 │  renderDocument() — QPainter compositor (no GPU path)                    │
@@ -118,23 +121,33 @@ There is **no** `src/platform/` tree and **no** `IRenderer` / `core/paint/` modu
 
 ### Document
 
-`src/core/Document.h` owns the root `GroupLayer`, `AssetStore`, canvas width/height/DPI, and a monotonically increasing `revision()`.
+`src/core/Document.h` owns the root `GroupLayer`, `AssetStore`, canvas width/height/DPI, the document color space (`ColorSpace`), the pixel selection, Layer Comps (`LayerComp`), Web Slices (`WebSlice`), and a monotonically increasing `revision()`.
 
 ### Layer types
 
-All types derive from `cc::Layer` (`src/core/layers/Layer.h`):
+All types derive from `cc::Layer` (`src/core/layers/Layer.h`) — **eight** types in total:
 
 - `GroupLayer` — children in paint order (index 0 = bottom).
-- `ImageLayer` — `assetId` into `AssetStore` plus `naturalWidth` / `naturalHeight`. No separate adjustment object; color filters replace the asset.
+- `ImageLayer` — `assetId` into `AssetStore` plus `naturalWidth` / `naturalHeight`, an optional non-destructive `alphaMask`, `ImageEffects` (outline, drop shadow, inner shadow, color overlay), an optional `adjustmentLayerId` link (non-destructive adjustments), a per-layer `colorSpace`, and transient render caches (never serialized).
 - `TextLayer` — content, font, box, alignment, `TextEffects` (outline, shadow, gradient).
-- `ShapeLayer` — rectangle, rounded rect, ellipse, line, polygon; fill/stroke/corner radius/points.
-- `BackgroundLayer` — solid fill.
+- `ShapeLayer` — 18 kinds (rectangle, rounded rect, ellipse, line, polygon/arrow/star/badge/speech bubble/heart/triangle/diamond/pentagon/hexagon/cross/checkmark/cloud/explosion); fill or gradient, stroke, corner radius, dashed stroke, star tuning, `ShapeShadow`.
+- `BackgroundLayer` — solid fill or gradient.
+- `FillLayer` — procedural solid/gradient/pattern fill with dither and layer-alignment options.
+- `AdjustmentLayer` — procedural adjustment applied to everything below it (or to the linked image layer when used as a clipping mask): Levels, Curves, Brightness/Contrast, Hue/Saturation, Color Balance, Photo Filter, Channel Mixer, Invert, Threshold, Posterize, Gradient Map. Parameters are serialized as key/value pairs.
+- `VectorLayer` — cubic Bézier path with editable nodes (`VectorNode`), optional fill and/or stroke.
 
 ### Shared properties
 
-- `name`, `visible`, `locked` (public fields)
+- `name`, `visible`, `locked` (public fields; `LayerLocks` adds granular transparency/pixels/position/all locks, with group locks inherited by descendants)
 - `opacity` — `[0, 1]`, via getter/setter
+- `fillOpacity` — `[0, 1]`, affects content only (not effects), like Photoshop
 - `blendMode` — see below
+- `blendIf` — `BlendIf`: per-channel blend ranges (under/over) applied by the renderer
+- `colorTag` — 8 organizing colors
+- `clipped` — clipping mask: the layer is masked by the alpha of the accumulated content below it (see §6)
+- `linkGroup` — layers sharing a link group move together
+- `vectorMask` — optional mask image applied together with `alphaMask`
+- `transient` — in-memory only (dialog previews); never serialized
 - `transform` — `AffineTransform`: translation, rotation (deg), scale X/Y, shear X/Y
 
 ### Blend modes (implemented)
@@ -151,7 +164,7 @@ All types derive from `cc::Layer` (`src/core/layers/Layer.h`):
 | `Lighten` | `Lighten` |
 | `Add` | `Plus` |
 
-There are **twelve** blend modes defined in the enum; seven are currently mapped to `QPainter` composition modes (Normal, Multiply, Screen, Overlay, Darken, Lighten, Add). Dodge, burn, hard/soft light, difference, and exclusion are defined but not yet mapped.
+All **twelve** blend modes defined in the enum are currently mapped to `QPainter` composition modes (the seven above plus ColorDodge, ColorBurn, HardLight, SoftLight, Difference and Exclusion), and all twelve are offered by the Layers panel combo. (Older revisions of this document listed only seven as mapped.)
 
 ### Text effects
 
@@ -172,19 +185,32 @@ There are **twelve** blend modes defined in the enum; seven are currently mapped
 | Instagram promo | 1080×1080 |
 | TikTok / Reels | 1080×1920 |
 
+### Layer Comps & Web Slices (data model)
+
+Both are modelled in `core/document/` (`LayerComps.h`, `WebSlice.h`), stored on the `Document`, and round-tripped by `ProjectFile` (manifest keys `layerComps` / `webSlices`). They follow the PhotoCraft schema:
+
+- `LayerComp` — named snapshot of per-layer state flags (`applyVisibility`, `applyPosition`, `applyAppearance`) plus `CompLayerState` deltas (visibility, position, opacity, blend mode). `Document::applyLayerComp()` restores a comp through the normal document API.
+- `WebSlice` — named rectangle (`SliceKind::Image` / `NoImage`) with a target `exportFormat` (`png`, `jpg`, `webp`).
+
+**No UI and no export integration yet** — these are serialization-level features only (see §16).
+
 ## 5. Rendering & raster processing
 
 ### Software compositor
 
 `cc::renderDocument()` in `src/rendering/CanvasRenderer.cpp`:
 
-1. Walks the layer tree bottom-up.
-2. Multiplies group opacity down the tree.
+1. Walks the layer tree bottom-up (`composeLayers()` is recursive: a group that needs compositing is rendered into its own buffer, so masks apply between siblings of that group).
+2. Multiplies group opacity down the tree; applies `fillOpacity` to content only.
 3. Sets `QPainter` transform from `AffineTransform::matrix(contentBounds)`.
-4. Sets composition mode from `BlendMode`.
-5. Draws background fill, shapes, text (with effects), or the image asset.
+4. Sets composition mode from `BlendMode` and applies `BlendIf` ranges.
+5. Applies clipping masks: a clipped layer is composed in isolation and masked with the alpha of the accumulated content below (`CompositionMode_DestinationIn`).
+6. Draws background fill, procedural fills, shapes, text (with effects), Bézier paths, or the image asset — with alpha/vector masks, and converting the layer's `colorSpace` to the document space when `isColorConversionSupported()` allows.
+7. `AdjustmentLayer` parameters are applied to the accumulated result (or to the linked image layer) at render time.
 
-The renderer header still documents **full recomposition every call** — there is no per-layer pixmap cache. Export and the viewport share this function; `CanvasView` then draws editor overlays (handles, guides, grid, safe zones, tool cursors) on top.
+Export and the viewport share this function; `CanvasView` then draws editor overlays (handles, guides, grid, safe zones, tool cursors) on top.
+
+The compositor still recomposes the full tree on every paint of a dirty document — there is no general per-layer pixmap cache. `ImageLayer` keeps two **transient** caches (full-res and interactive ≤2048 px preview) for masked bitmaps, keyed by asset/mask revisions; interactive gestures reuse them, but a structural change still triggers a full walk.
 
 ### Raster engine
 
@@ -204,7 +230,7 @@ The renderer header still documents **full recomposition every call** — there 
 | `spotHeal` / `redEyeRemove` | Auto-source healing brush with color transfer; red-pupil neutralization |
 | `adjustColors` | Brightness, contrast, saturation, temperature |
 | `applyBlur` / `applySharpen` | Spatial filters |
-| `applyPresetFilter` | Grayscale, Sepia, Vintage, High Contrast |
+| `applyPresetFilter` | 11 presets: Grayscale, Sepia, Vintage, High Contrast, Vivid Pop, Cyberpunk, Golden Hour, Dramatic Noir, Invert, Posterize, Threshold (`ImagePresets`) |
 
 Paint strokes are sampled from pointer movement (line segments between previous and current point). There is no Catmull-Rom stroke spline.
 
@@ -216,6 +242,7 @@ Image Inspector live preview writes a temporary asset via `Document::setImageLay
 
 - **Pan & zoom:** Space+drag or middle-click; wheel / `+` `-` `1` / `F` fit. Zoom range is implemented in the view (about 10%–3200%).
 - **Select:** click, Shift-add, rubber-band; transform handles (scale, rotate, move) for the primary or multi-selection.
+- **Select Subject (AI):** `Select ▸ Select Subject (AI)` (`Ctrl+Alt+S`) turns the ONNX silhouette into a pixel selection instead of a cutout — the layer keeps its background and the subject can be copied to a new layer, feathered, inverted or composited. See §7.
 - **Snap:** `SnapEngine` against canvas edges/centers and sibling bounds; optional snap-to-grid.
 - **Overlays:** selection, multi-selection bounds, snap guides, grid, safe zones (`0` none, `1` YouTube, `2` Instagram, `3` TikTok), crop/scissors/clone previews, brush cursor.
 - **Inline text:** double-click a text layer.
@@ -242,9 +269,9 @@ Image Inspector live preview writes a temporary asset via `Document::setImageLay
   - `ICanvasTool` lifecycle: `activate(ctx)`, `deactivate(ctx)`, `drawOverlay(painter, ctx)`, `cursor()`.
   - Input event dispatch: `mousePress`, `mouseMove`, `mouseRelease`, `mouseDoubleClick`, `keyPress`.
   - `ToolContext` encapsulates references to `Document`, `CommandStack`, viewport zoom/pan transforms, selection, and active tool settings.
-  - Tools implemented: `SelectTool`, `CropTool`, `PaintTool`, `ScissorsTool`, `MagicWandTool`, `CloneStampTool`, `FloodFillTool`, `MarqueeTool` (rect/ellipse), `GradientTool`, `RetouchTool` (6 modes), `HealingTool` (spot heal / red eye).
+  - Tools implemented: `SelectTool`, `CropTool`, `PaintTool`, `ScissorsTool`, `PenTool` (cubic Bézier paths), `MagicWandTool`, `CloneStampTool`, `FloodFillTool` (all in `RasterTools.h`), `MarqueeTool` (rect/ellipse), `GradientTool` and `RetouchTool` (6 modes) (both in `PaintExtras.h`), `HealingTool` (spot heal / red eye). The eyedropper is handled by the view, not a tool class.
   - Every raster tool previews through `ToolContext::setLayerPreview` and commits **one** undo step (`ModifyImageLayerCommand`, via `tools/ToolCommit.h`); without a `CommandStack` the edit is applied directly so it can never be lost.
-  - Selection convention: the pixel selection (`Document::pixelSelection`) lives in the **active layer bitmap space** (same as wand/scissors), so masking/`applyMask` stays consistent; with no image layer selected the marquee uses document space.
+  - Selection convention: the pixel selection (`Document::pixelSelection`) lives in the **active layer bitmap space** (same as wand/scissors), so masking/`applyMask` stays consistent; with no image layer selected the marquee uses document space. The AI subject selection (§7) produces its mask in the same space through `SelectionEngine::fromAlphaMask()`.
   - Shortcuts: `V` select, `M` marquee, `X` scissors, `W` wand, `C` crop, `B` brush, `G` gradient, `Shift+G` bucket, `S` clone, `U` retouch, `J` healing, `I` eyedropper.
   - Tool groups are separated in the toolbar (selection / cut / paint / retouch / utility / create) and mirrored in the **Tools** menu.
   - Viewport delegates mouse and paint events to `m_activeTool` before legacy fallback handlers.
@@ -252,8 +279,13 @@ Image Inspector live preview writes a temporary asset via `Document::setImageLay
   - `LayerRowWidget` captures mouse drag exceeding `QApplication::startDragDistance()`, generates a semi-transparent drag pixmap of the row, and sets MIME data `application/x-creatorcanvas-layer-id`.
   - `LayerListWidget` provides dynamic drop indicator and computes target index based on cursor position relative to item vertical midpoint.
   - Layer reordering executes through `ReorderLayerCommand` on the `CommandStack`, preserving non-destructive undo/redo history.
+- **Workspace layouts:** `Window ▸ Workspace Layout` (`WorkspaceLayoutDialog`) saves the current dock geometry/state under a user-chosen name and restores or deletes saved layouts; layouts persist in `SettingsService`.
+- **Customizable shortcuts:** every registered action is listed in `Help ▸ Keyboard Shortcuts` (`ShortcutDialog`); individual shortcuts can be reassigned, reset to default, or reset in bulk. Defaults are captured at startup and user overrides persist in `QSettings` (`ActionManager::persistShortcut`).
+- **Perspective mockup:** `ImageInspector` → Mockup (`MockupDialog`) projects the layer onto a 4-point perspective warp (Photoshop-Distort semantics, click order preserved, free-form mode, live preview, `Esc` cancels). Transient layer, never serialized.
+- **Batch processing:** `File ▸ Batch` (`BatchDialog`) applies a set of operations to a list of input files into an output directory, with overwrite protection.
+- **Puppet warp:** `PuppetWarpDialog` for mesh-based deformation.
 
-`MainWindow` wires menus, docks, tool option bars, align/distribute/group, and start-screen templates.
+`MainWindow` wires menus, docks, tool option bars, align/distribute/group, start-screen templates, mockups, batch processing, and workspace layouts.
 
 ### Responsive layout
 
@@ -277,6 +309,17 @@ Breakpoints and tokens live in `src/ui/designtokens.h` (`BreakXS` 620, `BreakSM`
 - **Cancellation:** `cancelFlag` checked around inference and mask scaling.
 - **UI:** dialog controls locked while a run is in flight; quick-AI uses a worker `QThread` and a shared atomic flag.
 
+### Two result modes
+
+The same inference drives two outcomes, selected by the caller (`AiBackgroundDialog`'s `selectionMode` flag):
+
+| Mode | Entry point | Result |
+|---|---|---|
+| Remove background | `Layer ▸ Remove Background with AI` (canvas context menu, inspector) | The layer receives a non-destructive alpha mask (`LayerPropertyCommand`, one undo step) |
+| Select Subject | `Select ▸ Select Subject (AI)` (`Ctrl+Alt+S`) | `Document::pixelSelection` receives the subject as an Alpha8 selection (`SetPixelSelectionCommand`, one undo step) — the layer itself is untouched |
+
+In selection mode the background-color preview control is hidden (irrelevant) and the apply button becomes *Create Selection*. The dialog still exposes the mask touch-up brush (restore/erase), cut level and speck removal, so the silhouette can be refined before it becomes a selection. Conversion from the neural mask to layer space goes through `SelectionEngine::fromAlphaMask()` — smooth-rescale to the layer bitmap plus the usual `SelectionMode` combination semantics.
+
 Setup scripts: `scripts/fetch_onnx.sh` (Linux), `scripts/fetch_onnx.bat` (Windows).
 
 ## 8. Internationalization
@@ -284,9 +327,9 @@ Setup scripts: `scripts/fetch_onnx.sh` (Linux), `scripts/fetch_onnx.bat` (Window
 `src/localization/i18nservice.{h,cpp}`:
 
 - Namespaces: `common`, `editor`, `settings`, `templates` under `resources/locales/<lang>/`.
-- Languages: `en`, `pt-BR`.
+- Languages: `en` (reference), `pt-BR` (complete), `sv` (community contribution; 38 of 384 editor keys — mostly export presets, tools and filters — are still English placeholders pending translation).
 - New language directories under `resources/locales/` are discovered automatically by `I18nService`; every JSON file must also be listed in `resources/locales.qrc` so it is embedded in the application.
-- Translation contributions are welcome. See [Adding or updating a translation](CONTRIBUTING.md#adding-or-updating-a-translation).
+- Translation contributions are welcome. See [Adding or updating a translation](CONTRIBUTING.md#-adicionando-ou-atualizando-uma-tradução).
 - Runtime switch in Preferences; UI calls `retranslateUi`.
 - Missing key → English catalog → humanized fallback + log warning.
 
@@ -304,11 +347,13 @@ media/<uuid>.png     embedded image assets
 
 Saves write a temporary file and rename into place (atomic replace on the same volume).
 
+The manifest also carries the document color space, the pixel selection, and the `layerComps` / `webSlices` arrays (data model only — see §4 and §16).
+
 ### Zip-bomb / integrity
 
-- Max entries: 1,024
-- Max single entry: 100 MB
-- Max total uncompressed: 500 MB
+- Max entries: 2,000
+- Max single entry: 128 MB
+- Max total uncompressed: 1 GB
 - Reject `..` and absolute entry paths
 - Each media asset must match the SHA-256 stored in the manifest
 
@@ -319,19 +364,22 @@ Saves write a temporary file and rename into place (atomic replace on the same v
 - PNG (lossless), JPEG (flattened onto background), WebP
 - Scale multiplier and JPEG/WebP quality
 - Calls `renderDocument()` off-screen without editor overlays
+- Exporting a clipped layer applies the same mask (`renderSiblingLayers`), so the file matches the screen
+
+Batch runs over many files at once are driven by `BatchDialog` (UI layer), which reuses the same import/render/export pipeline.
 
 ## 11. Commands and undo/redo
 
 `src/core/history/`:
 
 - `Command` / `CommandStack`
-- Typed helpers in `DocumentCommands.h` (layer properties, blend mode, image asset swap, …)
+- Typed helpers in `DocumentCommands.h` (layer properties, blend mode, image asset swap, …) and `SelectionCommands.h` (`SetPixelSelectionCommand` — selection is a first-class history citizen: create/clear/invert all undo with `Ctrl+Z`)
 - Continuous edits (inspector sliders, live preview) can merge while dragging
 - Raster tools commit a new asset + optional transform when the gesture ends
 
 ## 12. Testing & Verification
 
-**31** QTest executables in `tests/CMakeLists.txt` (all run with `QT_QPA_PLATFORM=offscreen`):
+**38** QTest executables in `tests/CMakeLists.txt` (all run with `QT_QPA_PLATFORM=offscreen`), in registration order:
 
 1. `test_settings` — preferences persistence
 2. `test_i18n` — catalogs, key symmetry, fallback, and a **source scan** that fails if any `t("section", "key")` used in `src/` is missing from either catalog (regression: the status bar showed the raw key `editor.canvas.status.paintHelp`)
@@ -351,19 +399,28 @@ Saves write a temporary file and rename into place (atomic replace on the same v
 16. `test_snap` — guide math
 17. `test_image_processing` — filters and raster helpers
 18. `test_tools` — modular tool activation, event delegation, and context handling
-19. `test_ai_quick` — quick AI / canvas-adjacent paths (`canvasview`, AI dialog, mask canvas compiled in)
-20. `test_ui_phase1` — start screen, layers panel, theme icons, collapsible sections
-21. `test_photocraft` — pixel selection, layer comps and web slices round-trip
-22. `test_hit_alpha` — alpha-aware hit testing
-23. `test_tools_extras` — marquee/gradient/retouch/healing behaviour, undo steps and raster ops
-24. `test_canvas_zoom` — fit mode refits on resize, manual zoom is preserved
-25. `test_template_textfit` — template text fit rules
-26. `test_command_locks` — command stack locking semantics
-27. `test_alignment` — layer alignment/distribution
-28. `test_layer_operations` — layer add/remove/duplicate
-29. `test_layer_render` — per-layer raster rendering
-30. `test_undo_render` — undo/redo render consistency
-31. `test_hit_alpha` — alpha-aware hit testing
+19. `test_tools_extras` — marquee/gradient/retouch/healing behaviour, undo steps and raster ops
+20. `test_ai_quick` — quick AI / canvas-adjacent paths (`canvasview`, AI dialog, mask canvas compiled in)
+21. `test_ui_phase1` — start screen, layers panel, theme icons, collapsible sections
+22. `test_photocraft` — pixel selection, layer comps and web slices round-trip
+23. `test_selection_engine` — magic wand contiguous vs global, feathering, selection combination, and the AI subject-mask → Alpha8 selection conversion (`fromAlphaMask`)
+24. `test_layer_render` — per-layer raster rendering
+25. `test_hit_alpha` — alpha-aware hit testing
+26. `test_canvas_zoom` — fit mode refits on resize, manual zoom is preserved
+27. `test_undo_render` — undo/redo render consistency
+28. `test_template_textfit` — template text fit rules
+29. `test_command_locks` — command stack locking semantics
+30. `test_alignment` — layer alignment/distribution
+31. `test_layer_operations` — layer add/remove/duplicate
+32. `test_canvas_context_menu` — context-menu target resolution per layer type
+33. `test_inline_text_editor` — inline text editor initial state and commit
+34. `test_export_dialog` — export dialog presets/chips synchronization
+35. `test_canvas_gesture_handler` — transform handle computation and hit testing
+36. `test_image_presets` — preset filter pixel behaviour
+37. `test_mockup_dialog` — mockup dialog state (logo disabled until a source is set)
+38. `test_mainwindow_tabs` — selecting a layer keeps the active inspector tab
+
+Several UI tests compile the corresponding `src/ui/*.cpp` file directly into the test executable instead of linking `creatorcanvas` (e.g. `test_mainwindow_tabs` compiles `mainwindow.cpp` and its dialog dependencies). When adding a test, keep this pattern and keep the symbols single-defined — a duplicated non-inline definition across translation units is an ODR violation (this bit `HealingTool` once already).
 
 ### Smoke test
 
@@ -402,7 +459,7 @@ Install rules also stage locales, presets, desktop/AppStream files, and the SVG 
 
 ## 14. Roadmap
 
-Already on `main` (do not treat as future work): multi-select, group/align/distribute, grid, safe zones, templates, extra raster tools, modular `cc_tools` architecture, Photoshop-style layer drag-and-drop.
+Already on `main` (do not treat as future work): multi-select, group/align/distribute, grid, safe zones, templates, extra raster tools, modular `cc_tools` architecture, Photoshop-style layer drag-and-drop, clipping masks, perspective mockups, pen (Bézier) tool, batch processing, workspace layouts, customizable shortcuts.
 
 Still ahead:
 
@@ -410,13 +467,14 @@ Still ahead:
 2. **Layer raster cache + `IRenderer`** — skip full recomposition; give a GPU backend a real seam (none exists today).
 3. **GPU viewport** — optional Vulkan/Direct3D (or Qt RHI) behind that interface.
 4. **Richer blend modes** — only if compositing moves beyond the current seven `QPainter` modes.
-5. **Non-destructive adjustments** — store filter parameters on `ImageLayer` instead of baking pixels.
-6. **macOS** — real bundle, notarization, and CI; `MACOSX_BUNDLE` on the target is not a shipping product.
+5. **Adjustment stack for the inspector path** — `AdjustmentLayer` already renders non-destructively; the image inspector still bakes a new asset on commit.
+6. **Layer Comps / Web Slices UI** — the data model and serialization exist; there is no panel, and slices do not drive export yet.
+7. **macOS** — real bundle, notarization, and CI; `MACOSX_BUNDLE` on the target is not a shipping product.
 
 ## 15. Conventions
 
 - Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`) and/or milestone-tagged messages.
-- No hardcoded user-visible strings; both `en` and `pt-BR` catalogs in the same change.
+- No hardcoded user-visible strings; every catalog shipped with the app (`en`, `pt-BR`, `sv`) gets the key in the same change.
 - Include-what-you-use; complete types for `std::unique_ptr` members of `Q_OBJECT` classes.
 - Cross-platform paths via `QStandardPaths` / `QDir`. Keep new `#ifdef _WIN32` rare until a `platform/` module exists.
 - Qualify `cc::` free functions when a class method of the same name would shadow them.
@@ -425,17 +483,17 @@ Logs live under the OS application data directory used by `LogService` / `Settin
 
 ## 16. Known limitations
 
-- **sRGB only** — no wide-gamut or CMYK pipeline.
+- **No ICC profile pipeline** — the document and layers *model* a color space (`sRGB`, Adobe RGB, Display P3, CMYK, Grayscale, Lab) and the renderer converts when `isColorConversionSupported()` allows it, but there is no ICC profile loading or colour management engine.
 - **Still images only** — no timeline or video export.
-- **Software compositor, no cache** — every paint walks the full tree; large documents will hitch.
-- **Image adjustments are destructive** — inspector preview is live, but the stored document holds a new raster asset, not an adjustment stack (`ImageAdjustments` does not exist as a type).
+- **Software compositor, no general cache** — every paint of a dirty document walks the full tree (masked image layers have transient caches); large documents will hitch.
+- **The inspector adjustment path is destructive** — preview is live, but committing bakes a new raster asset. The non-destructive `AdjustmentLayer` type exists and renders at render time; there is no inspector integration.
+- **Layer Comps / Web Slices have no UI** — stored and round-tripped only.
 - **Public `Layer` fields** — UI or tests can mutate `visible` / `transform` / etc. without a `Command`. That bypasses undo.
 - **UI concentration** — most interaction lives in `canvasview.cpp` and `mainwindow.cpp`.
 - **Marquee + transformed layers** — the marquee is mapped through the layer inverse transform and collapsed to a bounding rectangle, so a rotated layer gets an axis-aligned selection in its own bitmap space.
 - **Retouch/Healing run on the UI thread** — the brush patch is small, but each stroke event still converts/duplicates the full layer bitmap; multi-megapixel layers can feel heavy.
 - **Spot Healing auto-source** — the source is sampled from a fixed offset to the right (clamped to bounds); there is no Alt-click source picking or patch-match synthesis.
-- **UBSan noise from miniz** — the smoke test's zip path reports misaligned loads/stores inside vendored `3rdparty/miniz` (benign on x86-64); no project code is implicated.
-- **Blend/gradient surface smaller than older README copy** — 7 blends, linear+radial two-stop gradients, no conical.
+- **Blend/gradient surface** — all 12 blend modes are mapped, but gradients are two-stop linear/radial only, no conical.
 - **No `platform/` isolation** — Windows vs Unix still appears in CMake and isolated `#ifdef`s (e.g. ONNX).
 - **`Q_OBJECT` + `unique_ptr`** — incomplete type in the header still breaks the generated destructor; include the full type.
 - **macOS** — not a supported distribution target yet.

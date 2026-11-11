@@ -20,7 +20,7 @@ Closes # (número da issue, se houver)
 - [ ] Eu li o `CONTRIBUTING.md` e o `DOCUMENTATION.md`
 - [ ] Todos os testes existentes passam (`ctest --output-on-failure`)
 - [ ] Adicionei ou atualizei testes para a mudança (se aplicável)
-- [ ] Não há strings de usuário hardcoded — tudo vai via `I18nService::t()` para `en` e `pt-BR`
+- [ ] Não há strings de usuário hardcoded — tudo vai via `I18nService::t()` para `en`, `pt-BR` e `sv`
 - [ ] `core/` não depende de QtWidgets (apenas QtCore/QtGui)
 - [ ] Commit segue o padrão: `M<n>: <descrição>` ou `feat:`/`fix:`/`docs:` etc.
 - [ ] Testado em: [Linux / Windows / outro]

@@ -11,13 +11,23 @@
     Instagram, TikTok and Facebook, real layer control without
     bloat, and reliable export in PNG/JPEG/WebP.</p>
     <p>Features include: visual template picker, drag-and-drop image
-    import, vector shapes, editable text, undo/redo, autosave with
-    session recovery, and a clean dark UI.</p>
+    import, vector shapes and Bézier paths, editable text with
+    gradients/outline/shadow/knockout, adjustment and fill layers,
+    selection and cut tools, painting, retouching, AI background removal,
+    perspective mockups, batch processing, undo/redo, autosave with
+    session recovery, layout templates and a clean dark UI.</p>
   </description>
   <launchable type="desktop-id">creatorcanvas.desktop</launchable>
-  <url type="homepage">https://example.com/creatorcanvas</url>
+  <url type="homepage">https://github.com/MarielCarlosFrias/creatorcanvas</url>
   <content_rating type="oars-1.0"/>
   <releases>
+    <release version="0.2.1" date="2026-11-04">
+      <description>M21–M23 feature work and hardening: clipping masks
+      (also inside groups), perspective mockups with free-form mode, pen
+      (Bézier) tool, marquee/gradient/retouch/healing tools, batch
+      processing, workspace layouts, customizable shortcuts, scanline
+      flood fill and magic wand, and DEB/NSIS packaging fixes.</description>
+    </release>
     <release version="0.2.0" date="2026-09-08">
       <description>Phase 2 release: AI background removal, raster tools (Crop, Scissors, Wand, Clone Stamp), Paint &amp; Flood Fill brushes, text gradients, 3D tilt perspective, and color adjustments.</description>
     </release>
