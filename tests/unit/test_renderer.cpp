@@ -219,5 +219,82 @@ private slots:
     }
 };
 
+    void adjustmentLayerAppliesLevelsAndCurves()
+    {
+        // Fundo cinza médio + camada de ajuste por cima: o ajuste processa
+        // o acumulado abaixo dela.
+        Document doc(40, 20);
+        auto bg = std::make_unique<BackgroundLayer>();
+        bg->fill = QColor(128, 128, 128);
+        QVERIFY(doc.addLayer(std::move(bg)));
+
+        // Identidade primeira: render não muda.
+        QImage base(40, 20, QImage::Format_ARGB32);
+        renderTo(base, doc);
+        const QColor identity = base.pixelColor(10, 10);
+        QCOMPARE(identity, QColor(128, 128, 128));
+
+        // Levels: inWhite em 0.5 comprime a faixa -> tudo mais escuro.
+        const LayerId levelsId = doc.createAdjustmentLayer(AdjustmentType::Levels);
+        QVERIFY(!levelsId.isNull());
+        QVERIFY(doc.setAdjustmentParameters(levelsId, {
+            {QStringLiteral("levels.master.inBlack"), 0.0},
+            {QStringLiteral("levels.master.inWhite"), 0.5},
+            {QStringLiteral("levels.master.gamma"), 1.0},
+        }));
+        QImage withLevels(40, 20, QImage::Format_ARGB32);
+        renderTo(withLevels, doc);
+        const QColor levelsColor = withLevels.pixelColor(10, 10);
+        QVERIFY2(levelsColor.red() < identity.red(),
+                 qPrintable(QStringLiteral("levels deveria escurecer: %1")
+                            .arg(levelsColor.red())));
+
+        // Curves: S escurecendo o meio (0.5 -> 0.2).
+        const LayerId curvesId = doc.createAdjustmentLayer(AdjustmentType::Curves);
+        QVERIFY(!curvesId.isNull());
+        QVERIFY(doc.setAdjustmentParameters(curvesId, {
+            {QStringLiteral("curves.master.count"), 3.0},
+            {QStringLiteral("curves.master.0.in"), 0.0},
+            {QStringLiteral("curves.master.0.out"), 0.0},
+            {QStringLiteral("curves.master.1.in"), 0.5},
+            {QStringLiteral("curves.master.1.out"), 0.2},
+            {QStringLiteral("curves.master.2.in"), 1.0},
+            {QStringLiteral("curves.master.2.out"), 1.0},
+        }));
+        QImage withCurves(40, 20, QImage::Format_ARGB32);
+        renderTo(withCurves, doc);
+        const QColor curvesColor = withCurves.pixelColor(10, 10);
+        QVERIFY2(curvesColor.red() < levelsColor.red(),
+                 qPrintable(QStringLiteral("curvas deveriam escurecer mais: %1")
+                            .arg(curvesColor.red())));
+
+        // Parâmetros corrompidos/insuficientes contam como identidade:
+        // sem pontos válidos a curva não quebra o render.
+        QVERIFY(doc.setAdjustmentParameters(curvesId, {
+            {QStringLiteral("curves.master.count"), 1.0},
+            {QStringLiteral("curves.master.0.in"), 0.0},
+            {QStringLiteral("curves.master.0.out"), 0.0},
+        }));
+        QImage backToIdentity(40, 20, QImage::Format_ARGB32);
+        renderTo(backToIdentity, doc);
+        QCOMPARE(backToIdentity.pixelColor(10, 10), levelsColor);
+
+        // Channel mixer: ganho 2 no verde dobra o canal.
+        const LayerId mixerId = doc.createAdjustmentLayer(AdjustmentType::ChannelMixer);
+        QVERIFY(!mixerId.isNull());
+        QVERIFY(doc.setAdjustmentParameters(mixerId, {
+            {QStringLiteral("redGain"), 1.0},
+            {QStringLiteral("greenGain"), 2.0},
+            {QStringLiteral("blueGain"), 1.0},
+        }));
+        QImage withMixer(40, 20, QImage::Format_ARGB32);
+        renderTo(withMixer, doc);
+        const QColor mixerColor = withMixer.pixelColor(10, 10);
+        QCOMPARE(mixerColor.green(), 255);
+        QCOMPARE(mixerColor.red(), levelsColor.red());
+
+        clearRendererCaches();
+    }
+
 QTEST_GUILESS_MAIN(TestRenderer)
 #include "test_renderer.moc"

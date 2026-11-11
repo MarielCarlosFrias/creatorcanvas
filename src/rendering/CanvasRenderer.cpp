@@ -3,6 +3,7 @@
 
 #include "core/Document.h"
 #include "core/layers/Layer.h"
+#include "core/layers/ToneAdjustments.h"
 
 #include <QBrush>
 #include <QFont>
@@ -1410,6 +1411,48 @@ double adjParam(const AdjustmentLayer& adj, const QString& key, double def)
     return def;
 }
 
+/// Lê um canal de níveis (níveis) dos parâmetros da camada. O prefixo é
+/// "levels.master", "levels.r", "levels.g" ou "levels.b"; qualquer valor
+/// ausente cai no default identidade, que `LevelsChannel::isIdentity()`
+/// reconhece e o motor ignora.
+LevelsChannel levelsFromParams(const AdjustmentLayer& adj, const QString& prefix)
+{
+    LevelsChannel ch;
+    ch.inBlack = static_cast<float>(adjParam(adj, prefix + QStringLiteral(".inBlack"), 0.0));
+    ch.inWhite = static_cast<float>(adjParam(adj, prefix + QStringLiteral(".inWhite"), 1.0));
+    ch.gamma = static_cast<float>(adjParam(adj, prefix + QStringLiteral(".gamma"), 1.0));
+    ch.outBlack = static_cast<float>(adjParam(adj, prefix + QStringLiteral(".outBlack"), 0.0));
+    ch.outWhite = static_cast<float>(adjParam(adj, prefix + QStringLiteral(".outWhite"), 1.0));
+    return ch;
+}
+
+/// Reconstrói os pontos de uma curva a partir dos parâmetros serializados.
+/// Formato: "curves.<canal>.count" seguido de "curves.<canal>.<i>.in/out"
+/// para i em [0, count). Menos de 2 pontos = curva identidade (o motor
+/// devolve a LUT linear).
+std::vector<CurvePoint> curveFromParams(const AdjustmentLayer& adj,
+                                        const QString& prefix)
+{
+    const int count = static_cast<int>(adjParam(adj, prefix + QStringLiteral(".count"), 0.0));
+    if (count < 2 || count > 64)
+        return {};
+    std::vector<CurvePoint> points;
+    points.reserve(static_cast<size_t>(count));
+    for (int i = 0; i < count; ++i) {
+        CurvePoint p;
+        p.input = static_cast<float>(adjParam(
+            adj, QStringLiteral("%1.%2.in").arg(prefix).arg(i), -1.0));
+        p.output = static_cast<float>(adjParam(
+            adj, QStringLiteral("%1.%2.out").arg(prefix).arg(i), -1.0));
+        // Ponto inválido (valor sentinela) interrompe: parâmetro corrompido
+        // não deve estourar o render.
+        if (p.input < 0.0f || p.input > 1.0f || p.output < 0.0f || p.output > 1.0f)
+            return {};
+        points.push_back(p);
+    }
+    return points;
+}
+
 /// Aplica o efeito da camada de ajuste ao acumulado (Photocraft: a camada
 /// de ajuste processa tudo abaixo dela na pilha). A opacidade da camada
 /// modula a força do efeito (Photoshop: 100% = efeito total, 0% = nada).
@@ -1451,10 +1494,22 @@ QImage applyAdjustment(const QImage& acc, const AdjustmentLayer& adj)
             acc, Qt::black, Qt::white);
         break;
     case AdjustmentType::ChannelMixer:
+        adjusted = ImageProcessing::applyChannelMixer(
+            acc, param("redGain", 1.0), param("greenGain", 1.0), param("blueGain", 1.0));
+        break;
     case AdjustmentType::Curves:
+        adjusted = ImageProcessing::applyCurves(
+            acc, curveFromParams(adj, QStringLiteral("curves.master")),
+            curveFromParams(adj, QStringLiteral("curves.r")),
+            curveFromParams(adj, QStringLiteral("curves.g")),
+            curveFromParams(adj, QStringLiteral("curves.b")));
+        break;
     case AdjustmentType::Levels:
-        // Ainda não implementados no engine: passam direto (a camada
-        // existe e serializa, mas não altera o render).
+        adjusted = ImageProcessing::applyLevels(
+            acc, levelsFromParams(adj, QStringLiteral("levels.master")),
+            levelsFromParams(adj, QStringLiteral("levels.r")),
+            levelsFromParams(adj, QStringLiteral("levels.g")),
+            levelsFromParams(adj, QStringLiteral("levels.b")));
         break;
     }
 

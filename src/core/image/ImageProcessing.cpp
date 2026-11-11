@@ -850,6 +850,43 @@ QImage ImageProcessing::applyCurves(const QImage& source, const std::vector<Curv
     return result;
 }
 
+QImage ImageProcessing::applyChannelMixer(const QImage& source, double redGain,
+                                        double greenGain, double blueGain)
+{
+    if (source.isNull())
+        return source;
+    // Identidade: devolve a própria imagem sem copiar nem percorrer pixels.
+    if (qFuzzyCompare(redGain, 1.0) && qFuzzyCompare(greenGain, 1.0)
+        && qFuzzyCompare(blueGain, 1.0))
+        return source;
+
+    quint8 lutR[256];
+    quint8 lutG[256];
+    quint8 lutB[256];
+    for (int i = 0; i < 256; ++i) {
+        lutR[i] = static_cast<quint8>(std::lround(
+            std::clamp(i * redGain, 0.0, 255.0)));
+        lutG[i] = static_cast<quint8>(std::lround(
+            std::clamp(i * greenGain, 0.0, 255.0)));
+        lutB[i] = static_cast<quint8>(std::lround(
+            std::clamp(i * blueGain, 0.0, 255.0)));
+    }
+
+    QImage result = source.convertToFormat(QImage::Format_ARGB32);
+    const int w = result.width();
+    const int h = result.height();
+    for (int y = 0; y < h; ++y) {
+        QRgb* line = reinterpret_cast<QRgb*>(result.scanLine(y));
+        for (int x = 0; x < w; ++x) {
+            const QRgb px = line[x];
+            const int a = qAlpha(px);
+            if (a == 0) continue;
+            line[x] = qRgba(lutR[qRed(px)], lutG[qGreen(px)], lutB[qBlue(px)], a);
+        }
+    }
+    return result;
+}
+
 QImage ImageProcessing::applyPresetFilter(const QImage& source, PresetFilter preset)
 {
     if (source.isNull())

@@ -97,6 +97,13 @@ public:
     static QImage applyGradientMap(const QImage& source, const QColor& color1,
                                    const QColor& color2, bool reverse = false);
 
+    /// Channel Mixer simplificado: ganho por canal de saída
+    /// (saída = clamp(canal × ganho)). O mixer completo do Photoshop soma
+    /// contribuições de todos os canais de entrada em cada saída; este cobre
+    /// o caso de uso dominante (correcção de ganho por canal).
+    static QImage applyChannelMixer(const QImage& source, double redGain,
+                                    double greenGain, double blueGain);
+
     static QImage chromaKey(const QImage& source, const QColor& keyColor,
                             int tolerance = 40, double transparency = 0.0);
     static QImage colorToAlpha(const QImage& source, const QColor& keyColor,
