@@ -399,6 +399,22 @@ bool Document::setLayerLinkGroup(const LayerId& id, std::optional<qint64> linkGr
     return true;
 }
 
+bool Document::setAdjustmentKind(const LayerId& id, AdjustmentType kind)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Adjustment)
+        return false;
+    if (effectiveLocks(id).all)
+        return false;
+    auto* adj = static_cast<AdjustmentLayer*>(layer);
+    if (adj->kind == kind)
+        return true;
+    adj->kind = kind;
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
 bool Document::setAdjustmentParameters(
     const LayerId& id, std::vector<std::pair<QString, double>> parameters)
 {

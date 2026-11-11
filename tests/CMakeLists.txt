@@ -35,6 +35,8 @@ cc_add_test(test_snap unit/test_snap.cpp)
 cc_add_test(test_image_processing unit/test_image_processing.cpp)
 cc_add_test(test_tools unit/test_tools.cpp)
 cc_add_test(test_tools_extras unit/test_tools_extras.cpp)
+cc_add_test(test_adjustments    unit/test_adjustments.cpp)
+
 cc_add_test(test_ai_quick unit/test_ai_quick.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/inlinetexteditor.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasgesturehandler.cpp
@@ -132,6 +134,8 @@ cc_add_test(test_mainwindow_tabs unit/test_mainwindow_tabs.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/inlinetexteditor.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/maskeditcanvas.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/aibackgrounddialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/adjustmentsdialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/curveeditor.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/recoverydialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/mockupdialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/batchdialog.cpp

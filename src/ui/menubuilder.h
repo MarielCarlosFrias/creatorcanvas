@@ -25,6 +25,7 @@ public:
     QMenu* openRecentMenu = nullptr;
     QMenu* editMenu = nullptr;
     QMenu* imageMenu = nullptr;
+    QMenu* adjustmentsMenu = nullptr;
     QMenu* filterMenu = nullptr;
     QMenu* artisticMenu = nullptr;
     QMenu* toneMenu = nullptr;

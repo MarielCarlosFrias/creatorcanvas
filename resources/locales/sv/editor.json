@@ -350,7 +350,10 @@
     "status.fillHelp": "Fyll: klicka på ett område för att fylla det med vald färg.",
     "status.paintHelp": "Måla: dra för att måla. Välj pensel, storlek och opacitet ovan.",
     "status.scissorsHelp": "Sax: klicka eller dra för att skapa en kontur, dubbelklicka eller tryck på Enter för att klippa.",
-    "status.layerLocked": "Lagret är låst (bildpixlar)."
+    "status.layerLocked": "Lagret är låst (bildpixlar).",
+    "command": {
+      "adjustment": "Justering"
+    }
   },
   "filters": {
     "title": "Filter",
@@ -431,5 +434,19 @@
   "batch.error.exists": "Filen finns redan: %1",
   "batch.error.process": "Kunde inte bearbeta %1: %2",
   "batch.done.title": "Batchbearbetning klar",
-  "batch.done.message": "%1 av %2 filer bearbetades utan problem."
+  "batch.done.message": "%1 av %2 filer bearbetades utan problem.",
+  "adjustments": {
+    "title": "Bildjusteringar - CreatorCanvas",
+    "brightnessContrast": "Ljusstyrka / Kontrast",
+    "hueSaturation": "Nyans / Mättnad",
+    "invert": "Invertera färger",
+    "posterize": "Posterisera",
+    "threshold": "Tröskel (S&V)",
+    "levels": "Nivåer",
+    "curves": "Kurvor",
+    "gradientMap": "Gradientkarta",
+    "nonDestructive": "Icke-destruktiv (justeringslager)",
+    "nonDestructiveTip": "Skapar ett justeringslager kopplat till detta bildlager. Parametrarna går att redigera och ångra återställer originalet.",
+    "noParams": "Denna justering har inga parametrar — den tillämpas direkt."
+  }
 }

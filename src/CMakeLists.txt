@@ -75,6 +75,8 @@ add_library(cc_core STATIC
     core/image/ImagePresets.cpp
     core/image/BackgroundRemover.h
     core/image/BackgroundRemover.cpp
+    core/image/AdjustmentEngine.h
+    core/image/AdjustmentEngine.cpp
     core/color/ColorSpace.h
     core/color/ColorSpace.cpp
     imageio/ImageImporter.h
@@ -188,6 +190,10 @@ add_executable(creatorcanvas
     ui/maskeditcanvas.cpp
     ui/aibackgrounddialog.h
     ui/aibackgrounddialog.cpp
+    ui/adjustmentsdialog.h
+    ui/adjustmentsdialog.cpp
+    ui/curveeditor.h
+    ui/curveeditor.cpp
     ui/themeicons.h
     ui/themeicons.cpp
     ui/collapsiblesection.h

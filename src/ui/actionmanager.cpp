@@ -331,6 +331,13 @@ void ActionManager::createActions(I18nService* i18n)
         filterActions.append(new QAction(this));
     }
 
+    // Ajustes (submenu Image ▸ Adjustments), na ordem de kAdjustmentTypes
+    // do diálogo.
+    adjustmentActions.clear();
+    for (int i = 0; i < 8; ++i) {
+        adjustmentActions.append(new QAction(this));
+    }
+
     // --- Janela & Ajuda ---
     settingsAction = new QAction(this);
     settingsAction->setIcon(ThemeIcons::actionSettings());
@@ -543,6 +550,15 @@ void ActionManager::retranslate(I18nService* i18n)
         filterActions[i]->setText(i18n->t("editor", QString::fromLatin1(filterKeys[i])));
     }
 
+    static const char* const adjustmentKeys[] = {
+        "adjustments.brightnessContrast", "adjustments.hueSaturation",
+        "adjustments.invert", "adjustments.posterize", "adjustments.threshold",
+        "adjustments.levels", "adjustments.curves", "adjustments.gradientMap",
+    };
+    for (int i = 0; i < adjustmentActions.size() && i < 8; ++i) {
+        adjustmentActions[i]->setText(i18n->t("editor", QString::fromLatin1(adjustmentKeys[i])));
+    }
+
     // --- Janela, Ajuda & Configurações ---
     settingsAction->setText(i18n->t("common", "menu.settings.open"));
     shortcutsAction->setText(i18n->t("common", "menu.settings.shortcuts"));
@@ -674,6 +690,13 @@ void ActionManager::registerShortcutActions()
     add("tool.scissors", toolScissorsAction); add("tool.wand", toolWandAction); add("tool.clone", toolCloneAction);
     add("tool.paint", toolPaintAction); add("tool.gradient", toolGradientAction); add("tool.flood", toolFloodAction);
     add("tool.eyedropper", toolEyedropperAction); add("tool.retouch", toolRetouchAction); add("tool.healing", toolHealingAction);
+    static const char* const adjustmentRegistry[] = {
+        "adjustments.brightnessContrast", "adjustments.hueSaturation",
+        "adjustments.invert", "adjustments.posterize", "adjustments.threshold",
+        "adjustments.levels", "adjustments.curves", "adjustments.gradientMap",
+    };
+    for (int i = 0; i < adjustmentActions.size() && i < 8; ++i)
+        add(adjustmentRegistry[i], adjustmentActions[i]);
     add("ai.removeBackground", removeBgAiAction); add("ai.quickRemoveBackground", removeBgAiQuickAction);
     add("ai.mockup", mockupAction); add("settings.open", settingsAction); add("settings.shortcuts", shortcutsAction);
     add("help.startScreen", startScreenAction); add("help.about", aboutAction); add("help.aboutQt", aboutQtAction);

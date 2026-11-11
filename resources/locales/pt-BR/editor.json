@@ -350,7 +350,10 @@
     "status.fillHelp": "Preenchimento: clique em uma região para preencher com a cor atual.",
     "status.paintHelp": "Pintura: arraste para pintar. Escolha pincel, tamanho e opacidade acima.",
     "status.scissorsHelp": "Tesoura: clique ou arraste para contornar; dê dois cliques ou Enter para cortar.",
-    "status.layerLocked": "A camada está trancada (pixels da imagem)."
+    "status.layerLocked": "A camada está trancada (pixels da imagem).",
+    "command": {
+      "adjustment": "Ajuste"
+    }
   },
   "filters": {
     "title": "Filtro",
@@ -431,5 +434,19 @@
   "batch.error.exists": "Arquivo já existe: %1",
   "batch.error.process": "Falha ao processar %1: %2",
   "batch.done.title": "Processamento em Lote Concluído",
-  "batch.done.message": "%1 de %2 arquivos processados com sucesso."
+  "batch.done.message": "%1 de %2 arquivos processados com sucesso.",
+  "adjustments": {
+    "title": "Ajustes de Imagem - CreatorCanvas",
+    "brightnessContrast": "Brilho / Contraste",
+    "hueSaturation": "Matiz / Saturação",
+    "invert": "Inverter Cores",
+    "posterize": "Posterizar",
+    "threshold": "Threshold (P&B)",
+    "levels": "Níveis (Levels)",
+    "curves": "Curvas (Curves)",
+    "gradientMap": "Mapa de Gradiente",
+    "nonDestructive": "Não-destrutivo (camada de ajuste)",
+    "nonDestructiveTip": "Cria uma camada de ajuste ligada a esta camada de imagem. Os parâmetros ficam editáveis e o undo recupera o original.",
+    "noParams": "Este ajuste não tem parâmetros — aplica-se diretamente."
+  }
 }

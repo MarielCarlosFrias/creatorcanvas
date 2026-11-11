@@ -93,6 +93,10 @@ public:
     bool setAdjustmentParameters(
         const LayerId& id,
         std::vector<std::pair<QString, double>> parameters);
+    /// Muda o tipo de uma camada de ajuste (ex.: o utilizador aplica Curves
+    /// onde havia Levels). Parâmetros existentes ficam como estavam — a UI
+    /// reescreve-os de seguida quando o diálogo é confirmado.
+    bool setAdjustmentKind(const LayerId& id, AdjustmentType kind);
     bool setLayerLocks(const LayerId& id, LayerLocks locks);
     /// Locks efetivos: os da camada UNIDOS aos de todos os grupos
     /// ancestrais (Photocraft locks_at: trancar um grupo tranca o

@@ -135,6 +135,9 @@ private:
     void refreshRecentMenu();
     bool confirmDiscardUnsavedChanges();
     void openSettings();
+    /// Abre o diálogo de ajustes para a camada de imagem selecionada.
+    /// `type` escolhe a página inicial (brilho/contraste, curvas, …).
+    void openAdjustments(cc::AdjustmentType type);
     void checkForRecoveryFile();
     void updateWindowTitle();
     void retranslateUi();
@@ -299,6 +302,7 @@ private:
     QList<QAction*> m_modifyActions;
     QAction* m_colorRangeAction = nullptr;
     QAction* m_selectSubjectAction = nullptr;
+    QList<QAction*> m_adjustmentActions;
     QAction* m_selectionOpsAction = nullptr;
     QMenu* m_selectionToolsMenu = nullptr;
     QMenu* m_retouchToolsMenu = nullptr;

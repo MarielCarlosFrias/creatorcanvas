@@ -5,6 +5,7 @@
 #include "core/selection/SelectionEngine.h"
 #include "core/templates/TemplateFactory.h"
 #include "core/history/DocumentCommands.h"
+#include "core/commands/AdjustmentLayerCommands.h"
 #include "core/commands/LayerPropertyCommands.h"
 #include "core/layers/Layer.h"
 #include "core/serialization/ProjectFile.h"
@@ -13,6 +14,7 @@
 #include "core/operations/LayerOperations.h"
 #include "rendering/CanvasRenderer.h"
 #include "localization/i18nservice.h"
+#include "ui/adjustmentsdialog.h"
 #include "ui/canvasview.h"
 #include "ui/exportdialog.h"
 #include "ui/layerspanel.h"
@@ -537,6 +539,9 @@ void MainWindow::buildCentralWidget()
                 const bool imageSelected = selected && selected->type() == LayerType::Image;
                 if (m_removeBgAiAction) m_removeBgAiAction->setEnabled(imageSelected);
                 if (m_removeBgAiQuickAction) m_removeBgAiQuickAction->setEnabled(imageSelected);
+                for (QAction* act : m_adjustmentActions) {
+                    if (act) act->setEnabled(imageSelected);
+                }
                 if (m_selectSubjectAction) m_selectSubjectAction->setEnabled(imageSelected);
                 if (m_mockupAction) m_mockupAction->setEnabled(imageSelected);
                 bool canMergeDown = false;
@@ -975,6 +980,7 @@ void MainWindow::buildActions()
     m_toolGradientAction = m_actions->toolGradientAction;
     m_toolRetouchAction = m_actions->toolRetouchAction;
     m_toolHealingAction = m_actions->toolHealingAction;
+    m_adjustmentActions = m_actions->adjustmentActions;
     m_removeBgAiAction = m_actions->removeBgAiAction;
     m_removeBgAiQuickAction = m_actions->removeBgAiQuickAction;
     m_mockupAction = m_actions->mockupAction;
@@ -1317,6 +1323,24 @@ void MainWindow::connectActionSignals()
         if (m_canvas && m_document && !m_selectedId.isNull())
             m_canvas->removeBackgroundAiQuick(m_selectedId);
     });
+
+    // Ajustes (Image ▸ Adjustments): um tipo por ação, na mesma ordem do
+    // dialogo.
+    static const cc::AdjustmentType kAdjustmentTypes[] = {
+        cc::AdjustmentType::BrightnessContrast,
+        cc::AdjustmentType::HueSaturation,
+        cc::AdjustmentType::Invert,
+        cc::AdjustmentType::Posterize,
+        cc::AdjustmentType::Threshold,
+        cc::AdjustmentType::Levels,
+        cc::AdjustmentType::Curves,
+        cc::AdjustmentType::GradientMap,
+    };
+    for (int i = 0; i < m_adjustmentActions.size() && i < 8; ++i) {
+        connect(m_adjustmentActions[i], &QAction::triggered, this, [this, i]() {
+            openAdjustments(kAdjustmentTypes[i]);
+        });
+    }
     connect(m_selectSubjectAction, &QAction::triggered, this, [this] {
         if (m_canvas && m_document && !m_selectedId.isNull())
             m_canvas->selectSubjectWithAi(m_selectedId);
@@ -2647,6 +2671,37 @@ void MainWindow::checkForRecoveryFile()
         // e mantém a trilha de onde veio o conteúdo.
         m_suggestedSavePath = sourcePath;
         saveDocumentAs();
+    }
+}
+
+void MainWindow::openAdjustments(cc::AdjustmentType type)
+{
+    if (!m_canvas || !m_document || m_selectedId.isNull())
+        return;
+    Layer* layer = m_document->findLayer(m_selectedId);
+    if (!layer || layer->type() != LayerType::Image)
+        return;
+    const auto* img = static_cast<ImageLayer*>(layer);
+    const QImage src = m_document->assets().decodedImage(img->assetId);
+    if (src.isNull())
+        return;
+
+    cc::AdjustmentsDialog dlg(src, type, m_i18n, this);
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+    const cc::AdjustmentRequest req = dlg.request();
+    if (!req.valid)
+        return;
+
+    const QString cmdName = m_i18n ? m_i18n->t("editor", "canvas.command.adjustment")
+                                   : QStringLiteral("Adjustment");
+    if (cc::executeApplyAdjustment(*m_document, m_history.get(), m_selectedId, req.type,
+                                   req.params, req.nonDestructive, cmdName)) {
+        if (m_canvas)
+            m_canvas->update();
+        if (m_imageInspector)
+            m_imageInspector->setSelectedLayer(m_selectedId);
+        updateWindowTitle();
     }
 }
 

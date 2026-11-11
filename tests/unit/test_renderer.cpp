@@ -217,8 +217,6 @@ private slots:
 
         clearRendererCaches();
     }
-};
-
     void adjustmentLayerAppliesLevelsAndCurves()
     {
         // Fundo cinza médio + camada de ajuste por cima: o ajuste processa
@@ -234,12 +232,12 @@ private slots:
         const QColor identity = base.pixelColor(10, 10);
         QCOMPARE(identity, QColor(128, 128, 128));
 
-        // Levels: inWhite em 0.5 comprime a faixa -> tudo mais escuro.
+        // Levels: ponto preto a 0.5 empurra os meios para baixo -> escurece.
         const LayerId levelsId = doc.createAdjustmentLayer(AdjustmentType::Levels);
         QVERIFY(!levelsId.isNull());
         QVERIFY(doc.setAdjustmentParameters(levelsId, {
-            {QStringLiteral("levels.master.inBlack"), 0.0},
-            {QStringLiteral("levels.master.inWhite"), 0.5},
+            {QStringLiteral("levels.master.inBlack"), 0.5},
+            {QStringLiteral("levels.master.inWhite"), 1.0},
             {QStringLiteral("levels.master.gamma"), 1.0},
         }));
         QImage withLevels(40, 20, QImage::Format_ARGB32);
@@ -290,11 +288,17 @@ private slots:
         QImage withMixer(40, 20, QImage::Format_ARGB32);
         renderTo(withMixer, doc);
         const QColor mixerColor = withMixer.pixelColor(10, 10);
-        QCOMPARE(mixerColor.green(), 255);
+        // O ganho só mexe no verde (o vermelho fica igual ao passo anterior);
+        // os valores absolutos já vinham escurecidos pelos níveis.
+        QVERIFY2(mixerColor.green() > levelsColor.green(),
+                 qPrintable(QStringLiteral("ganho 2 devia duplicar o verde: %1 -> %2")
+                            .arg(levelsColor.green()).arg(mixerColor.green())));
         QCOMPARE(mixerColor.red(), levelsColor.red());
 
         clearRendererCaches();
     }
+};
 
 QTEST_GUILESS_MAIN(TestRenderer)
 #include "test_renderer.moc"
+

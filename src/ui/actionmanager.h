@@ -121,6 +121,8 @@ public:
     QAction* toolGradientAction = nullptr;
 
     QList<QAction*> filterActions;
+    /// Ações do submenu Image ▸ Adjustments (na ordem de kAdjustmentTypes).
+    QList<QAction*> adjustmentActions;
 
     QAction* settingsAction = nullptr;
     QAction* shortcutsAction = nullptr;

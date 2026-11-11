@@ -379,7 +379,7 @@ Batch runs over many files at once are driven by `BatchDialog` (UI layer), which
 
 ## 12. Testing & Verification
 
-**38** QTest executables in `tests/CMakeLists.txt` (all run with `QT_QPA_PLATFORM=offscreen`), in registration order:
+**39** QTest executables in `tests/CMakeLists.txt` (all run with `QT_QPA_PLATFORM=offscreen`), in registration order:
 
 1. `test_settings` — preferences persistence
 2. `test_i18n` — catalogs, key symmetry, fallback, and a **source scan** that fails if any `t("section", "key")` used in `src/` is missing from either catalog (regression: the status bar showed the raw key `editor.canvas.status.paintHelp`)
@@ -388,7 +388,7 @@ Batch runs over many files at once are driven by `BatchDialog` (UI layer), which
 5. `test_document` — lifecycle, queries, bounds
 6. `test_history` — undo/redo
 7. `test_serialization` — round-trip and corrupt archives
-8. `test_renderer` — off-screen `renderDocument`
+8. `test_renderer` — off-screen `renderDocument`, adjustments rendering (levels/curves/channel mixer)
 9. `test_newdocument` — presets
 10. `test_import` — sniff/decode + SHA-256 on assets
 11. `test_transform` — affine math
@@ -399,26 +399,27 @@ Batch runs over many files at once are driven by `BatchDialog` (UI layer), which
 16. `test_snap` — guide math
 17. `test_image_processing` — filters and raster helpers
 18. `test_tools` — modular tool activation, event delegation, and context handling
-19. `test_tools_extras` — marquee/gradient/retouch/healing behaviour, undo steps and raster ops
-20. `test_ai_quick` — quick AI / canvas-adjacent paths (`canvasview`, AI dialog, mask canvas compiled in)
-21. `test_ui_phase1` — start screen, layers panel, theme icons, collapsible sections
-22. `test_photocraft` — pixel selection, layer comps and web slices round-trip
-23. `test_selection_engine` — magic wand contiguous vs global, feathering, selection combination, and the AI subject-mask → Alpha8 selection conversion (`fromAlphaMask`)
-24. `test_layer_render` — per-layer raster rendering
-25. `test_hit_alpha` — alpha-aware hit testing
-26. `test_canvas_zoom` — fit mode refits on resize, manual zoom is preserved
-27. `test_undo_render` — undo/redo render consistency
-28. `test_template_textfit` — template text fit rules
-29. `test_command_locks` — command stack locking semantics
-30. `test_alignment` — layer alignment/distribution
-31. `test_layer_operations` — layer add/remove/duplicate
-32. `test_canvas_context_menu` — context-menu target resolution per layer type
-33. `test_inline_text_editor` — inline text editor initial state and commit
-34. `test_export_dialog` — export dialog presets/chips synchronization
-35. `test_canvas_gesture_handler` — transform handle computation and hit testing
-36. `test_image_presets` — preset filter pixel behaviour
-37. `test_mockup_dialog` — mockup dialog state (logo disabled until a source is set)
-38. `test_mainwindow_tabs` — selecting a layer keeps the active inspector tab
+19. `test_adjustments` — adjustment engine (levels/curves params, strength blend), non-destructive apply through the command stack (create/link/undo/redo), reuse of a linked layer in one undo step, the destructive bake path, and rejection of non-image layers
+20. `test_tools_extras` — marquee/gradient/retouch/healing behaviour, undo steps and raster ops
+21. `test_ai_quick` — quick AI / canvas-adjacent paths (`canvasview`, AI dialog, mask canvas compiled in)
+22. `test_ui_phase1` — start screen, layers panel, theme icons, collapsible sections
+23. `test_photocraft` — pixel selection, layer comps and web slices round-trip
+24. `test_selection_engine` — magic wand contiguous vs global, feathering, selection combination, and the AI subject-mask → Alpha8 selection conversion (`fromAlphaMask`)
+25. `test_layer_render` — per-layer raster rendering
+26. `test_hit_alpha` — alpha-aware hit testing
+27. `test_canvas_zoom` — fit mode refits on resize, manual zoom is preserved
+28. `test_undo_render` — undo/redo render consistency
+29. `test_template_textfit` — template text fit rules
+30. `test_command_locks` — command stack locking semantics
+31. `test_alignment` — layer alignment/distribution
+32. `test_layer_operations` — layer add/remove/duplicate
+33. `test_canvas_context_menu` — context-menu target resolution per layer type
+34. `test_inline_text_editor` — inline text editor initial state and commit
+35. `test_export_dialog` — export dialog presets/chips synchronization
+36. `test_canvas_gesture_handler` — transform handle computation and hit testing
+37. `test_image_presets` — preset filter pixel behaviour
+38. `test_mockup_dialog` — mockup dialog state (logo disabled until a source is set)
+39. `test_mainwindow_tabs` — selecting a layer keeps the active inspector tab; adjustments dialog request contract (non-destructive by default)
 
 Several UI tests compile the corresponding `src/ui/*.cpp` file directly into the test executable instead of linking `creatorcanvas` (e.g. `test_mainwindow_tabs` compiles `mainwindow.cpp` and its dialog dependencies). When adding a test, keep this pattern and keep the symbols single-defined — a duplicated non-inline definition across translation units is an ODR violation (this bit `HealingTool` once already).
 

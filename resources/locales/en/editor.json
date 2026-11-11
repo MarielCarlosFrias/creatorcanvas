@@ -350,7 +350,10 @@
     "status.fillHelp": "Fill: click a region to fill it with the current color.",
     "status.paintHelp": "Paint: drag to paint. Choose brush, size and opacity above.",
     "status.scissorsHelp": "Scissors: click or drag to outline; double-click or Enter to cut.",
-    "status.layerLocked": "The layer is locked (image pixels)."
+    "status.layerLocked": "The layer is locked (image pixels).",
+    "command": {
+      "adjustment": "Adjustment"
+    }
   },
   "filters": {
     "title": "Filter",
@@ -431,5 +434,19 @@
   "batch.error.exists": "File already exists: %1",
   "batch.error.process": "Failed to process %1: %2",
   "batch.done.title": "Batch Processing Complete",
-  "batch.done.message": "%1 of %2 files processed successfully."
+  "batch.done.message": "%1 of %2 files processed successfully.",
+  "adjustments": {
+    "title": "Image Adjustments - CreatorCanvas",
+    "brightnessContrast": "Brightness / Contrast",
+    "hueSaturation": "Hue / Saturation",
+    "invert": "Invert Colors",
+    "posterize": "Posterize",
+    "threshold": "Threshold (B&W)",
+    "levels": "Levels",
+    "curves": "Curves",
+    "gradientMap": "Gradient Map",
+    "nonDestructive": "Non-destructive (adjustment layer)",
+    "nonDestructiveTip": "Creates an adjustment layer linked to this image layer. The parameters stay editable and undo restores the original.",
+    "noParams": "This adjustment has no parameters — it is applied directly."
+  }
 }

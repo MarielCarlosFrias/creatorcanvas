@@ -12,7 +12,7 @@ Create high-impact YouTube thumbnails, social media posts, stories, banners, and
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-blue?style=for-the-badge)](https://github.com/MarielCarlosFrias/creatorcanvas)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen?style=for-the-badge)](#)
-[![Tests](https://img.shields.io/badge/tests-38%2F38_passing-brightgreen?style=for-the-badge)](#)
+[![Tests](https://img.shields.io/badge/tests-39%2F39_passing-brightgreen?style=for-the-badge)](#)
 
 <br/>
 
@@ -120,7 +120,7 @@ CreatorCanvas Architecture
 | **Build System** | CMake ≥ 3.24 | Presets for Linux (`linux-debug`, `linux-release`, `linux-asan`) and Windows |
 | **Machine Learning** | ONNX Runtime | Local, offline inference (`u2netp.onnx`) |
 | **Archive Engine** | miniz | Clean project bundling into `.creatorcanvas` containers |
-| **Testing** | QTest / CTest | 38 automated test suites with 100% pass rate |
+| **Testing** | QTest / CTest | 39 automated test suites with 100% pass rate |
 
 ---
 
@@ -174,7 +174,7 @@ build\windows-release\bin\Release\CreatorCanvas.exe
 
 Every commit passes a comprehensive verification pipeline:
 
-- **Unit Test Suites**: 38/38 test executables passing (`test_document`, `test_layers`, `test_tools`, `test_serialization`, `test_effects`, etc.).
+- **Unit Test Suites**: 39/39 test executables passing (`test_document`, `test_layers`, `test_tools`, `test_serialization`, `test_effects`, etc.).
 - **Self-Diagnostic Smoke Test**:
   ```bash
   ./build/linux-debug/bin/CreatorCanvas --smoke-test
@@ -195,7 +195,7 @@ Contribuições são bem-vindas! Comece por aqui:
 1. **Leia o guia completo**: [`CONTRIBUTING.md`](CONTRIBUTING.md) e [`DOCUMENTATION.md`](DOCUMENTATION.md)
 2. **Verifique o estado atual**: abra uma issue antes de começar a implementar algo grande
 3. **Faça o fork**, crie uma branch (`git checkout -b feat/minha-mudanca`), faça suas alterações e envie um PR
-4. **Testes**: todos os 38 testes devem passar (`ctest --output-on-failure`)
+4. **Testes**: todos os 39 testes devem passar (`ctest --output-on-failure`)
 5. **Strings de usuário**: nada hardcoded — use `I18nService::t("namespace", "chave")` e adicione a chave em todos os catálogos embarcados (`en`, `pt-BR`, `sv`)
 6. **Commits**: use Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, etc.) ou marque com milestone (`M<n>: <descrição>`)
 

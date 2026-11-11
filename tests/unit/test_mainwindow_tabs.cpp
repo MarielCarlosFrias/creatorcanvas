@@ -8,6 +8,7 @@
 #include <QImage>
 
 #include "core/Document.h"
+#include "ui/adjustmentsdialog.h"
 #include "core/layers/Layer.h"
 #include "ui/mainwindow.h"
 #include "localization/i18nservice.h"
@@ -109,6 +110,23 @@ private slots:
                  textDock->windowTitle());
     }
 };
+
+    void adjustmentsDialogProvidesRequest()
+    {
+        // Diálogo em modo headless: sem inferência nem interacção, o pedido
+        // sai válido e não-destrutivo por omissão (contrato usado pelo
+        // MainWindow::openAdjustments).
+        QImage src(32, 24, QImage::Format_ARGB32);
+        src.fill(qRgba(110, 130, 150, 255));
+
+        AdjustmentsDialog dlg(src, AdjustmentType::Curves);
+        const AdjustmentRequest req = dlg.request();
+        QVERIFY(req.valid);
+        QVERIFY(req.nonDestructive);
+        QCOMPARE(req.type, AdjustmentType::Curves);
+        // Curvas identidade: os 4 canais estão codificados (count + pontos).
+        QVERIFY(!req.params.empty());
+    }
 
 QTEST_MAIN(TestMainWindowTabs)
 #include "test_mainwindow_tabs.moc"
