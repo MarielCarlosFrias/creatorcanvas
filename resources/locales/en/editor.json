@@ -465,7 +465,7 @@
   "webSlices": {
     "title": "Web Export Slices - CreatorCanvas",
     "menuOpen": "Web Slices...",
-    "fromSelection": "New from selection",
+    "fromSelection": "From selection",
     "add": "Add slice",
     "remove": "Delete",
     "exportAll": "Export all...",

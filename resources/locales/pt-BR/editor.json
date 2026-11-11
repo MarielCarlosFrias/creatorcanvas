@@ -465,7 +465,7 @@
   "webSlices": {
     "title": "Fatias de Exportação Web - CreatorCanvas",
     "menuOpen": "Fatias Web...",
-    "fromSelection": "Nova a partir da seleção",
+    "fromSelection": "Da selecção",
     "add": "Adicionar fatia",
     "remove": "Remover",
     "exportAll": "Exportar todas...",

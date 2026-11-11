@@ -674,6 +674,12 @@ void CanvasView::paintEvent(QPaintEvent*)
         CanvasOverlayRenderer::drawSafeZones(&painter, m_document->width(), m_document->height(), m_safeZoneMode, docToDevice());
     }
 
+    // Fatias de exportação web: sempre visíveis quando existirem — é o que
+    // dá sentido ao painel de fatias sem obrigar a adivinhar as coordenadas.
+    if (!m_document->webSlices().empty()) {
+        CanvasOverlayRenderer::drawWebSlices(&painter, m_document->webSlices(), docToDevice());
+    }
+
     if (m_mockupPlacementActive) {
         CanvasOverlayRenderer::drawMockupPlacement(&painter, m_mockupCorners, docToDevice(), m_mockupPlacementLogo, m_mockupPlacementFreeShape);
     }

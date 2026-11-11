@@ -465,7 +465,7 @@
   "webSlices": {
     "title": "Webbexportskivor - CreatorCanvas",
     "menuOpen": "Webbskivor...",
-    "fromSelection": "Ny från markering",
+    "fromSelection": "Från markering",
     "add": "Lägg till skiva",
     "remove": "Ta bort",
     "exportAll": "Exportera alla...",

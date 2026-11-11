@@ -249,7 +249,7 @@ Image Inspector live preview writes a temporary asset via `Document::setImageLay
 - **Select:** click, Shift-add, rubber-band; transform handles (scale, rotate, move) for the primary or multi-selection.
 - **Select Subject (AI):** `Select ▸ Select Subject (AI)` (`Ctrl+Alt+S`) turns the ONNX silhouette into a pixel selection instead of a cutout — the layer keeps its background and the subject can be copied to a new layer, feathered, inverted or composited. See §7.
 - **Snap:** `SnapEngine` against canvas edges/centers and sibling bounds; optional snap-to-grid.
-- **Overlays:** selection, multi-selection bounds, snap guides, grid, safe zones (`0` none, `1` YouTube, `2` Instagram, `3` TikTok), crop/scissors/clone previews, brush cursor.
+- **Overlays:** selection, multi-selection bounds, snap guides, grid, safe zones (`0` none, `1` YouTube, `2` Instagram, `3` TikTok), **web-slice rects with name/format labels** (drawn whenever the document has slices — the panel is the model, the canvas is the feedback), crop/scissors/clone previews, brush cursor.
 - **Inline text:** double-click a text layer.
 - **DnD:** dropped image files import as layers.
 - **Clipping mask (Photoshop-style):**
@@ -387,7 +387,7 @@ Batch runs over many files at once are driven by `BatchDialog` (UI layer), which
 
 ## 12. Testing & Verification
 
-**39** QTest executables in `tests/CMakeLists.txt` (all run with `QT_QPA_PLATFORM=offscreen`), in registration order:
+**40** QTest executables in `tests/CMakeLists.txt` (all run with `QT_QPA_PLATFORM=offscreen`), in registration order:
 
 1. `test_settings` — preferences persistence
 2. `test_i18n` — catalogs, key symmetry, fallback, and a **source scan** that fails if any `t("section", "key")` used in `src/` is missing from either catalog (regression: the status bar showed the raw key `editor.canvas.status.paintHelp`)
@@ -428,6 +428,7 @@ Batch runs over many files at once are driven by `BatchDialog` (UI layer), which
 37. `test_image_presets` — preset filter pixel behaviour
 38. `test_mockup_dialog` — mockup dialog state (logo disabled until a source is set)
 39. `test_mainwindow_tabs` — selecting a layer keeps the active inspector tab; adjustments dialog request contract (non-destructive by default)
+40. `test_overlays` — web-slice overlay: nothing drawn without slices, rect + label drawn with slices (clamped inside the view), multiple slices cycle colours and invalid rects are ignored
 
 Several UI tests compile the corresponding `src/ui/*.cpp` file directly into the test executable instead of linking `creatorcanvas` (e.g. `test_mainwindow_tabs` compiles `mainwindow.cpp` and its dialog dependencies). When adding a test, keep this pattern and keep the symbols single-defined — a duplicated non-inline definition across translation units is an ODR violation (this bit `HealingTool` once already).
 
@@ -477,7 +478,6 @@ Still ahead:
 3. **GPU viewport** — optional Vulkan/Direct3D (or Qt RHI) behind that interface.
 4. **Richer blend modes** — only if compositing moves beyond the current seven `QPainter` modes.
 5. **Inspector integration for adjustments** — the dialog edits parameters, but the image inspector has no live section bound to the linked `AdjustmentLayer`.
-6. **Slice overlays on canvas** — slices exist in the model, the panel and the exporter, but the canvas does not draw their rects.
 7. **macOS** — real bundle, notarization, and CI; `MACOSX_BUNDLE` on the target is not a shipping product.
 
 ## 15. Conventions

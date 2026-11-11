@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/document/WebSlice.h"
 #include "core/layers/Layer.h"
 #include "core/snap/SnapEngine.h"
 #include <QPainter>
@@ -7,6 +8,8 @@
 #include <QRectF>
 #include <QTransform>
 #include <QVector>
+
+#include <vector>
 
 namespace cc {
 
@@ -58,6 +61,13 @@ public:
                                const QList<GuideLine>& guides,
                                double zoom,
                                const QTransform& toDevice);
+
+    /// Desenha as fatias de exportação web: rectângulo tracejado + etiqueta
+    /// com o nome e o formato. É assim que o utilizador vê o que cada fatia
+    /// vai exportar.
+    static void drawWebSlices(QPainter* painter,
+                              const std::vector<WebSlice>& slices,
+                              const QTransform& toDevice);
 
     static void drawPixelSelectionOutline(QPainter* painter,
                                           const ImageLayer* layer,

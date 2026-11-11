@@ -364,6 +364,63 @@ void CanvasOverlayRenderer::drawSnapGuides(QPainter* painter,
     painter->restore();
 }
 
+void CanvasOverlayRenderer::drawWebSlices(QPainter* painter,
+                                           const std::vector<WebSlice>& slices,
+                                           const QTransform& toDevice)
+{
+    if (slices.empty())
+        return;
+
+    painter->save();
+    painter->resetTransform();
+
+    // Cor por fatia (cicla): rectângulo tracejado + etiqueta com nome e
+    // formato, para o utilizador perceber o que cada uma exporta.
+    static const QColor kPalette[] = {
+        QColor(0x43, 0x78, 0xff), QColor(0x22, 0xc5, 0x5e),
+        QColor(0xf5, 0x9e, 0x0b), QColor(0xec, 0x48, 0x99),
+        QColor(0x8b, 0x5c, 0xf6), QColor(0x14, 0xb8, 0xa6),
+    };
+
+    QFont labelFont = painter->font();
+    labelFont.setPointSize(9);
+    labelFont.setBold(true);
+
+    for (size_t i = 0; i < slices.size(); ++i) {
+        const WebSlice& slice = slices[i];
+        if (slice.rect.isNull() || slice.rect.isEmpty())
+            continue;
+
+        const QColor color = kPalette[i % (sizeof(kPalette) / sizeof(kPalette[0]))];
+        QPen pen(color, 1.5, Qt::DashLine);
+        painter->setPen(pen);
+        painter->setBrush(Qt::NoBrush);
+
+        const QRectF screenRect = toDevice.mapRect(slice.rect);
+        painter->drawRect(screenRect);
+
+        // Etiqueta com o nome (ou id) e o formato de exportação.
+        const QString label = QStringLiteral("%1 [%2]")
+                .arg(slice.name.isEmpty() ? slice.id.left(8) : slice.name,
+                     slice.exportFormat.toUpper());
+        painter->setFont(labelFont);
+        const QFontMetrics fm(labelFont);
+        const int textWidth = fm.horizontalAdvance(label) + 8;
+        QRectF labelRect(screenRect.left(), screenRect.top() - 16, textWidth, 16);
+        if (labelRect.top() < 0)
+            labelRect.moveTop(screenRect.top() + 2);   // não sai da vista
+        labelRect.setLeft(std::clamp<double>(labelRect.left(), 0.0,
+                                               painter->device()->width() - textWidth));
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(QColor(color.red(), color.green(), color.blue(), 190));
+        painter->drawRoundedRect(labelRect, 3, 3);
+        painter->setPen(Qt::white);
+        painter->drawText(labelRect, Qt::AlignCenter, label);
+    }
+
+    painter->restore();
+}
+
 void CanvasOverlayRenderer::drawPixelSelectionOutline(QPainter* painter,
                                                       const ImageLayer* layer,
                                                       const QImage& pixelSelection,

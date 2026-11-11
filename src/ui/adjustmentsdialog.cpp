@@ -115,6 +115,15 @@ void AdjustmentsDialog::buildUi()
     auto* rightColumn = new QVBoxLayout;
     rightColumn->setSpacing(8);
 
+    // O label da prévia é criado ANTES das páginas: construir uma página
+    // pode emitir valueChanged (ex.: setValue(255)), que chamaria
+    // updatePreview() sobre um label ainda nulo.
+    m_previewLabel = new QLabel(this);
+    m_previewLabel->setMinimumHeight(150);
+    m_previewLabel->setAlignment(Qt::AlignCenter);
+    m_previewLabel->setStyleSheet(QStringLiteral(
+        "background-color: #202227; border: 1px solid #2b303c; border-radius: 6px;"));
+
     m_pages = new QStackedWidget(this);
     m_pages->addWidget(buildSlidersPage(m_bcSliderA, m_bcSliderB)); // 0: brilho/contraste
     m_pages->addWidget(buildSlidersPage(m_hsSliderA, m_hsSliderB)); // 1: matiz/saturação
@@ -126,11 +135,6 @@ void AdjustmentsDialog::buildUi()
     m_pages->addWidget(buildGradientMapPage()); // 7
     rightColumn->addWidget(m_pages, 1);
 
-    m_previewLabel = new QLabel(this);
-    m_previewLabel->setMinimumHeight(150);
-    m_previewLabel->setAlignment(Qt::AlignCenter);
-    m_previewLabel->setStyleSheet(QStringLiteral(
-        "background-color: #202227; border: 1px solid #2b303c; border-radius: 6px;"));
     rightColumn->addWidget(m_previewLabel, 1);
 
     m_nonDestructiveCheck = new QCheckBox(
@@ -439,7 +443,8 @@ void AdjustmentsDialog::collectParams()
 
 void AdjustmentsDialog::updatePreview()
 {
-    if (m_source.isNull())
+    // O diálogo ainda está a ser construído (ou nada para mostrar).
+    if (m_source.isNull() || !m_previewLabel || !m_pages)
         return;
 
     collectParams();

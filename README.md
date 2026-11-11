@@ -12,7 +12,7 @@ Create high-impact YouTube thumbnails, social media posts, stories, banners, and
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-blue?style=for-the-badge)](https://github.com/MarielCarlosFrias/creatorcanvas)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen?style=for-the-badge)](#)
-[![Tests](https://img.shields.io/badge/tests-39%2F39_passing-brightgreen?style=for-the-badge)](#)
+[![Tests](https://img.shields.io/badge/tests-40%2F40_passing-brightgreen?style=for-the-badge)](#)
 
 <br/>
 
@@ -94,7 +94,7 @@ Most photo editing tools are either overly basic web canvas tools or intimidatin
 - **DocumentController**: Centralized engine synchronizing canvas, layers, inspectors, history, and background services.
 - **Smart Autosave & Recovery**: Auto-save with dirty-state checks, atomic writes (`.tmp` to target), and interactive crash recovery dialog (Open, Open as Copy, Discard).
 - **Batch processing**: apply a set of operations to many files at once (`File ▸ Batch`).
-- **Layer Comps & Web Slices**: save and apply named layer states (single undo step), and export named rectangles of the canvas for the web (`Layer ▸ Layer Comps`, `File ▸ Web Slices`).
+- **Layer Comps & Web Slices**: save and apply named layer states (single undo step), and export named rectangles of the canvas for the web — slices are drawn on the canvas with their name and format (`Layer ▸ Layer Comps`, `File ▸ Web Slices`).
 
 ### 🌍 Internationalization & Accessibility
 - Native multi-language support (English, Portuguese `pt-BR` and Swedish `sv`) with on-the-fly switching.
@@ -123,7 +123,7 @@ CreatorCanvas Architecture
 | **Machine Learning** | ONNX Runtime | Local, offline inference (`u2netp.onnx`) |
 | **Archive Engine** | miniz | Clean project bundling into `.creatorcanvas` containers |
 | **Compositor** | `IRenderer` seam | Software QPainter renderer + per-layer pixmap cache (text/shape/vector/fill, revision-keyed, LRU) |
-| **Testing** | QTest / CTest | 39 automated test suites with 100% pass rate |
+| **Testing** | QTest / CTest | 40 automated test suites with 100% pass rate |
 
 ---
 
@@ -177,7 +177,7 @@ build\windows-release\bin\Release\CreatorCanvas.exe
 
 Every commit passes a comprehensive verification pipeline:
 
-- **Unit Test Suites**: 39/39 test executables passing (`test_document`, `test_layers`, `test_tools`, `test_serialization`, `test_effects`, etc.).
+- **Unit Test Suites**: 40/40 test executables passing (`test_document`, `test_layers`, `test_tools`, `test_serialization`, `test_effects`, etc.).
 - **Self-Diagnostic Smoke Test**:
   ```bash
   ./build/linux-debug/bin/CreatorCanvas --smoke-test

@@ -37,6 +37,10 @@ cc_add_test(test_snap unit/test_snap.cpp)
 cc_add_test(test_image_processing unit/test_image_processing.cpp)
 cc_add_test(test_tools unit/test_tools.cpp)
 cc_add_test(test_tools_extras unit/test_tools_extras.cpp)
+cc_add_test(test_overlays       unit/test_overlays.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvasoverlayrenderer.cpp
+)
+
 cc_add_test(test_adjustments    unit/test_adjustments.cpp)
 
 cc_add_test(test_ai_quick unit/test_ai_quick.cpp

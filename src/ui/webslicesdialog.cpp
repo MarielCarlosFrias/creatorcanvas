@@ -34,7 +34,7 @@ WebSlicesDialog::WebSlicesDialog(Document& doc, CommandStack* history,
     , m_i18n(i18n)
 {
     setWindowTitle(tr("title", QStringLiteral("Fatias de Exportação Web - CreatorCanvas")));
-    setMinimumSize(520, 420);
+    setMinimumSize(540, 430);
 
     auto* layout = new QVBoxLayout(this);
 
@@ -42,32 +42,57 @@ WebSlicesDialog::WebSlicesDialog(Document& doc, CommandStack* history,
     layout->addWidget(m_list, 1);
 
     // --- Criação por valores ---
+    // Rótulos + larguras mínimas: sem eles o QHBoxLayout espreme os spins
+    // para ~4px e o utilizador vê "..." em vez de conseguir escrever.
     auto* formRow = new QHBoxLayout;
+    formRow->setSpacing(4);
     m_nameEdit = new QLineEdit(this);
     m_nameEdit->setPlaceholderText(tr("namePlaceholder", QStringLiteral("Nome da fatia")));
+    m_nameEdit->setMinimumWidth(120);
     m_xSpin = new QSpinBox(this); m_ySpin = new QSpinBox(this);
     m_wSpin = new QSpinBox(this); m_hSpin = new QSpinBox(this);
     for (QSpinBox* s : {m_xSpin, m_ySpin, m_wSpin, m_hSpin}) {
         s->setRange(0, 100000);
         s->setSuffix(QStringLiteral(" px"));
+        s->setMinimumWidth(72);
+        s->setMaximumWidth(96);
     }
     m_wSpin->setValue(640);
     m_hSpin->setValue(360);
     m_formatCombo = new QComboBox(this);
+    m_formatCombo->setMinimumWidth(78);
     m_formatCombo->addItem(QStringLiteral("PNG"), QStringLiteral("png"));
     m_formatCombo->addItem(QStringLiteral("JPEG"), QStringLiteral("jpeg"));
     m_formatCombo->addItem(QStringLiteral("WebP"), QStringLiteral("webp"));
+
+    auto fieldLabel = [this](const QString& text) {
+        auto* label = new QLabel(text, this);
+        label->setStyleSheet(QStringLiteral("color: #9aa3b2;"));
+        return label;
+    };
+
     formRow->addWidget(m_nameEdit, 1);
-    formRow->addWidget(m_xSpin);
-    formRow->addWidget(m_ySpin);
-    formRow->addWidget(m_wSpin);
-    formRow->addWidget(m_hSpin);
     formRow->addWidget(m_formatCombo);
     layout->addLayout(formRow);
 
+    // Segunda linha só com a geometria: numa linha única os campos e o
+    // nome disputavam espaço e o texto dos botões ficava cortado.
+    auto* geometryRow = new QHBoxLayout;
+    geometryRow->setSpacing(4);
+    geometryRow->addWidget(fieldLabel(QStringLiteral("X")));
+    geometryRow->addWidget(m_xSpin);
+    geometryRow->addWidget(fieldLabel(QStringLiteral("Y")));
+    geometryRow->addWidget(m_ySpin);
+    geometryRow->addWidget(fieldLabel(QStringLiteral("L")));
+    geometryRow->addWidget(m_wSpin);
+    geometryRow->addWidget(fieldLabel(QStringLiteral("A")));
+    geometryRow->addWidget(m_hSpin);
+    geometryRow->addStretch(1);
+    layout->addLayout(geometryRow);
+
     auto* buttons = new QHBoxLayout;
     auto* fromSelectionBtn = new QPushButton(
-        tr("fromSelection", QStringLiteral("Nova a partir da selecção")), this);
+        tr("fromSelection", QStringLiteral("Da selecção")), this);
     auto* addBtn = new QPushButton(tr("add", QStringLiteral("Adicionar fatia")), this);
     m_removeButton = new QPushButton(tr("remove", QStringLiteral("Remover")), this);
     m_exportButton = new QPushButton(tr("exportAll", QStringLiteral("Exportar todas…")), this);

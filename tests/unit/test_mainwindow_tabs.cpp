@@ -109,8 +109,6 @@ private slots:
         QCOMPARE(inspectorTabs->tabText(inspectorTabs->currentIndex()),
                  textDock->windowTitle());
     }
-};
-
     void adjustmentsDialogProvidesRequest()
     {
         // Diálogo em modo headless: sem inferência nem interacção, o pedido
@@ -127,6 +125,8 @@ private slots:
         // Curvas identidade: os 4 canais estão codificados (count + pontos).
         QVERIFY(!req.params.empty());
     }
+};
 
 QTEST_MAIN(TestMainWindowTabs)
 #include "test_mainwindow_tabs.moc"
+
