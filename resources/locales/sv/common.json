@@ -32,6 +32,7 @@
     "file.saveAs": "Spara &som...",
     "settings": "&Inställningar",
     "settings.open": "&Inställningar...",
+    "settings.shortcuts": "&Kortkommandon...",
     "file.export": "E&xportera..."
   },
   "statusbar": {

@@ -32,6 +32,7 @@
     "file.saveAs": "Salvar &como...",
     "settings": "&Configurações",
     "settings.open": "&Preferências...",
+    "settings.shortcuts": "&Atalhos de teclado...",
     "file.export": "&Exportar..."
   },
   "statusbar": {

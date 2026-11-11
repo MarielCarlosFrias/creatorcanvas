@@ -1,17 +1,39 @@
 #include "workspacelayout.h"
 
 #include <QDateTime>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMainWindow>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QScreen>
 #include <QVBoxLayout>
 #include <QComboBox>
 
 #include <QSettings>
 
 namespace cc {
+namespace {
+
+constexpr auto kLayoutsGroup = "WorkspaceLayouts";
+constexpr auto kGeometryKey = "geometry";
+constexpr auto kStateKey = "state";
+constexpr auto kSavedAtKey = "savedAt";
+
+bool fitsOnAvailableScreen(const QRect& rect)
+{
+    if (rect.isNull() || rect.isEmpty())
+        return false;
+    for (QScreen* screen : QGuiApplication::screens()) {
+        if (!screen->availableGeometry().intersected(rect).isEmpty())
+            return true;
+    }
+    return false;
+}
+
+} // namespace
 
 WorkspaceLayoutDialog::WorkspaceLayoutDialog(QWidget* parent)
     : QDialog(parent)
@@ -68,10 +90,10 @@ void WorkspaceLayoutDialog::updateLayoutList()
     m_layoutCombo->clear();
 
     QSettings settings;
-    settings.beginGroup("WorkspaceLayouts");
-    QStringList keys = settings.childKeys();
-    for (const QString& key : keys) {
-        m_layoutCombo->addItem(key);
+    settings.beginGroup(kLayoutsGroup);
+    const QStringList layouts = settings.childGroups();
+    for (const QString& layout : layouts) {
+        m_layoutCombo->addItem(layout);
     }
     settings.endGroup();
 }
@@ -83,11 +105,36 @@ void WorkspaceLayoutDialog::saveLayout()
         QMessageBox::warning(this, tr("Erro"), tr("Digite um nome para o layout."));
         return;
     }
+    if (name.contains(u'/') || name.contains(u'\\')) {
+        QMessageBox::warning(this, tr("Erro"),
+                             tr("O nome do layout não pode conter / ou \\."));
+        return;
+    }
+
+    QMainWindow* window = mainWindow();
+    if (!window) {
+        QMessageBox::warning(this, tr("Erro"),
+                             tr("Não foi possível encontrar a janela principal."));
+        return;
+    }
+
+    const QByteArray geometry = window->saveGeometry();
+    const QByteArray state = window->saveState();
+    if (geometry.isEmpty() || state.isEmpty()) {
+        QMessageBox::warning(this, tr("Erro"),
+                             tr("Não foi possível guardar o estado do workspace."));
+        return;
+    }
 
     QSettings settings;
-    settings.beginGroup("WorkspaceLayouts");
-    settings.setValue(name, QDateTime::currentDateTime().toString(Qt::ISODate));
+    settings.beginGroup(kLayoutsGroup);
+    settings.beginGroup(name);
+    settings.setValue(kGeometryKey, geometry);
+    settings.setValue(kStateKey, state);
+    settings.setValue(kSavedAtKey, QDateTime::currentDateTime().toString(Qt::ISODate));
     settings.endGroup();
+    settings.endGroup();
+    settings.sync();
 
     updateLayoutList();
     m_layoutCombo->setCurrentText(name);
@@ -102,17 +149,24 @@ void WorkspaceLayoutDialog::loadLayout()
     }
 
     QSettings settings;
-    settings.beginGroup("WorkspaceLayouts");
-    QString saved = settings.value(name).toString();
+    settings.beginGroup(kLayoutsGroup);
+    settings.beginGroup(name);
+    const QByteArray geometry = settings.value(kGeometryKey).toByteArray();
+    const QByteArray state = settings.value(kStateKey).toByteArray();
+    settings.endGroup();
     settings.endGroup();
 
-    if (saved.isEmpty()) {
+    if (geometry.isEmpty() || state.isEmpty()) {
         QMessageBox::warning(this, tr("Erro"), tr("Layout nao encontrado."));
         return;
     }
 
-    QMessageBox::information(this, tr("Layout Carregado"),
-                             tr("Layout '%1' carregado com sucesso.").arg(name));
+    if (!restoreLayout(geometry, state)) {
+        QMessageBox::warning(this, tr("Erro"),
+                             tr("Não foi possível aplicar este layout. Ele pode pertencer a outro ecrã."));
+        return;
+    }
+    accept();
 }
 
 void WorkspaceLayoutDialog::deleteLayout()
@@ -124,11 +178,31 @@ void WorkspaceLayoutDialog::deleteLayout()
     }
 
     QSettings settings;
-    settings.beginGroup("WorkspaceLayouts");
+    settings.beginGroup(kLayoutsGroup);
     settings.remove(name);
     settings.endGroup();
+    settings.sync();
 
     updateLayoutList();
+}
+
+QMainWindow* WorkspaceLayoutDialog::mainWindow() const
+{
+    return qobject_cast<QMainWindow*>(parentWidget());
+}
+
+bool WorkspaceLayoutDialog::restoreLayout(const QByteArray& geometry,
+                                          const QByteArray& state)
+{
+    QMainWindow* window = mainWindow();
+    if (!window)
+        return false;
+
+    // A geometria pode vir de um monitor que já não existe. Nesse caso não
+    // aplicamos nem o estado dos docks para não deixar a janela inacessível.
+    if (!window->restoreGeometry(geometry) || !fitsOnAvailableScreen(window->geometry()))
+        return false;
+    return window->restoreState(state);
 }
 
 } // namespace cc

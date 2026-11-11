@@ -6,6 +6,8 @@
 #include <QComboBox>
 #include <QLineEdit>
 
+class QMainWindow;
+
 namespace cc {
 
 class WorkspaceLayoutDialog : public QDialog
@@ -22,6 +24,8 @@ private:
     void loadLayout();
     void deleteLayout();
     void updateLayoutList();
+    QMainWindow* mainWindow() const;
+    bool restoreLayout(const QByteArray& geometry, const QByteArray& state);
 
     QComboBox* m_layoutCombo = nullptr;
     QLineEdit* m_layoutNameEdit = nullptr;

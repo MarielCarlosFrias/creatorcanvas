@@ -2,6 +2,7 @@
 
 #include <QAction>
 #include <QHeaderView>
+#include <QKeySequenceEdit>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -59,7 +60,7 @@ void ShortcutDialog::buildUi()
     btnLayout->addWidget(applyBtn);
     btnLayout->addWidget(closeBtn);
 
-    connect(resetBtn, &QPushButton::clicked, this, &ShortcutDialog::resetShortcut);
+    connect(resetBtn, &QPushButton::clicked, this, &ShortcutDialog::resetSelectedShortcut);
     connect(resetAllBtn, &QPushButton::clicked, this, &ShortcutDialog::resetAllShortcuts);
     connect(applyBtn, &QPushButton::clicked, this, &ShortcutDialog::applyChanges);
     connect(closeBtn, &QPushButton::clicked, this, &QDialog::accept);
@@ -70,27 +71,109 @@ void ShortcutDialog::buildUi()
 void ShortcutDialog::populateActions()
 {
     m_table->setRowCount(0);
+    if (!m_actionManager)
+        return;
+
+    m_originalShortcuts = m_actionManager->getAllShortcuts();
+    for (auto it = m_originalShortcuts.cbegin(); it != m_originalShortcuts.cend(); ++it) {
+        const int row = m_table->rowCount();
+        m_table->insertRow(row);
+        auto* actionItem = new QTableWidgetItem(it.key());
+        actionItem->setData(Qt::UserRole, it.key());
+        actionItem->setFlags(actionItem->flags() & ~Qt::ItemIsEditable);
+        m_table->setItem(row, 0, actionItem);
+
+        const QKeySequence current = m_changedShortcuts.value(it.key(), it.value());
+        const QString shortcutText = current.isEmpty()
+            ? tr("Sem atalho")
+            : current.toString(QKeySequence::NativeText);
+        auto* currentItem = new QTableWidgetItem(shortcutText);
+        currentItem->setFlags(currentItem->flags() & ~Qt::ItemIsEditable);
+        m_table->setItem(row, 1, currentItem);
+
+        auto* pendingItem = new QTableWidgetItem(
+            m_changedShortcuts.contains(it.key()) ? shortcutText : QString());
+        pendingItem->setFlags(pendingItem->flags() & ~Qt::ItemIsEditable);
+        m_table->setItem(row, 2, pendingItem);
+    }
+    m_table->resizeColumnsToContents();
 }
 
 void ShortcutDialog::editShortcut(int row)
 {
-    Q_UNUSED(row);
+    if (row < 0 || row >= m_table->rowCount())
+        return;
+    const QString actionName = m_table->item(row, 0)->data(Qt::UserRole).toString();
+    const QKeySequence current = m_changedShortcuts.value(
+        actionName, m_originalShortcuts.value(actionName));
+
+    QDialog editor(this);
+    editor.setWindowTitle(tr("Definir atalho"));
+    auto* layout = new QVBoxLayout(&editor);
+    layout->addWidget(new QLabel(tr("Pressione a combinação para %1.").arg(actionName), &editor));
+    auto* keyEdit = new QKeySequenceEdit(current, &editor);
+    layout->addWidget(keyEdit);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
+                                         Qt::Horizontal, &editor);
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &editor, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &editor, &QDialog::reject);
+    if (editor.exec() != QDialog::Accepted)
+        return;
+
+    const QKeySequence replacement = keyEdit->keySequence();
+    if (!replacement.isEmpty()) {
+        const auto effectiveShortcut = [this](const QString& name) {
+            return m_changedShortcuts.value(name, m_originalShortcuts.value(name));
+        };
+        for (auto it = m_originalShortcuts.cbegin(); it != m_originalShortcuts.cend(); ++it) {
+            if (it.key() != actionName && effectiveShortcut(it.key()) == replacement) {
+                QMessageBox::warning(this, tr("Atalho em uso"),
+                                     tr("%1 já usa %2.")
+                                         .arg(it.key(), replacement.toString(QKeySequence::NativeText)));
+                return;
+            }
+        }
+    }
+    m_changedShortcuts[actionName] = replacement;
+    populateActions();
 }
 
-void ShortcutDialog::resetShortcut(int row)
+void ShortcutDialog::resetSelectedShortcut()
 {
-    Q_UNUSED(row);
+    const int row = m_table->currentRow();
+    if (row < 0)
+        return;
+    const QString actionName = m_table->item(row, 0)->data(Qt::UserRole).toString();
+    m_changedShortcuts[actionName] = m_actionManager->defaultShortcut(actionName);
+    populateActions();
 }
 
 void ShortcutDialog::resetAllShortcuts()
 {
-    m_changedShortcuts.clear();
+    if (!m_actionManager)
+        return;
+    for (auto it = m_originalShortcuts.cbegin(); it != m_originalShortcuts.cend(); ++it)
+        m_changedShortcuts[it.key()] = m_actionManager->defaultShortcut(it.key());
     populateActions();
 }
 
 void ShortcutDialog::applyChanges()
 {
+    if (!m_actionManager)
+        return;
+    for (auto it = m_changedShortcuts.cbegin(); it != m_changedShortcuts.cend(); ++it) {
+        if (it.value() == m_actionManager->defaultShortcut(it.key()))
+            m_actionManager->resetShortcut(it.key());
+        else
+            m_actionManager->setShortcut(it.key(), it.value());
+    }
     accept();
+}
+
+QMap<QString, QKeySequence> ShortcutDialog::changedShortcuts() const
+{
+    return m_changedShortcuts;
 }
 
 } // namespace cc

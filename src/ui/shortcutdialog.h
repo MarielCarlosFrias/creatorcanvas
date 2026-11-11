@@ -28,7 +28,7 @@ private:
     void buildUi();
     void populateActions();
     void editShortcut(int row);
-    void resetShortcut(int row);
+    void resetSelectedShortcut();
     void resetAllShortcuts();
     void applyChanges();
 

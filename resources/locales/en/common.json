@@ -32,6 +32,7 @@
     "file.saveAs": "Save &As...",
     "settings": "&Settings",
     "settings.open": "&Preferences...",
+    "settings.shortcuts": "&Keyboard Shortcuts...",
     "file.export": "E&xport...",
     "file.batch": "Ba&tch...",
     "file.batch.tooltip": "Process multiple images at once",

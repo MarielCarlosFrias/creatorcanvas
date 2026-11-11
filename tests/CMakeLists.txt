@@ -110,6 +110,35 @@ cc_add_test(test_image_presets unit/test_image_presets.cpp)
 cc_add_test(test_mockup_dialog unit/test_mockup_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/mockupdialog.cpp
 )
-
-
+cc_add_test(test_mainwindow_tabs unit/test_mainwindow_tabs.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/mainwindow.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/newdocumentdialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/exportdialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/settingsdialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/themeicons.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/collapsiblesection.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/startscreen.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/layerspanel.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/historypanel.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/textinspector.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/shapeinspector.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/imageinspector.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/puppetwarpdialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/darktheme.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvasview.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvasoverlayrenderer.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvasgesturehandler.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvascontextmenu.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/inlinetexteditor.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/maskeditcanvas.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/aibackgrounddialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/recoverydialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/mockupdialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/batchdialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/workspacelayout.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/tooloptionsbar.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/actionmanager.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/menubuilder.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/shortcutdialog.cpp
+)
 
