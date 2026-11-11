@@ -335,7 +335,7 @@ void ActionManager::createActions(I18nService* i18n)
     // Ajustes (submenu Image ▸ Adjustments), na ordem de kAdjustmentTypes
     // do diálogo.
     adjustmentActions.clear();
-    for (int i = 0; i < 8; ++i) {
+    for (int i = 0; i < 11; ++i) {
         adjustmentActions.append(new QAction(this));
     }
 
@@ -556,10 +556,12 @@ void ActionManager::retranslate(I18nService* i18n)
 
     static const char* const adjustmentKeys[] = {
         "adjustments.brightnessContrast", "adjustments.hueSaturation",
+        "adjustments.shadowsHighlights", "adjustments.vignette",
         "adjustments.invert", "adjustments.posterize", "adjustments.threshold",
-        "adjustments.levels", "adjustments.curves", "adjustments.gradientMap",
+        "adjustments.levels", "adjustments.curves", "adjustments.channelMixer",
+        "adjustments.gradientMap",
     };
-    for (int i = 0; i < adjustmentActions.size() && i < 8; ++i) {
+    for (int i = 0; i < adjustmentActions.size() && i < 11; ++i) {
         adjustmentActions[i]->setText(i18n->t("editor", QString::fromLatin1(adjustmentKeys[i])));
     }
 
@@ -699,10 +701,12 @@ void ActionManager::registerShortcutActions()
     add("tool.eyedropper", toolEyedropperAction); add("tool.pen", toolPenAction); add("tool.retouch", toolRetouchAction); add("tool.healing", toolHealingAction);
     static const char* const adjustmentRegistry[] = {
         "adjustments.brightnessContrast", "adjustments.hueSaturation",
+        "adjustments.shadowsHighlights", "adjustments.vignette",
         "adjustments.invert", "adjustments.posterize", "adjustments.threshold",
-        "adjustments.levels", "adjustments.curves", "adjustments.gradientMap",
+        "adjustments.levels", "adjustments.curves", "adjustments.channelMixer",
+        "adjustments.gradientMap",
     };
-    for (int i = 0; i < adjustmentActions.size() && i < 8; ++i)
+    for (int i = 0; i < adjustmentActions.size() && i < 11; ++i)
         add(adjustmentRegistry[i], adjustmentActions[i]);
     add("ai.removeBackground", removeBgAiAction); add("ai.quickRemoveBackground", removeBgAiQuickAction);
     add("ai.mockup", mockupAction); add("settings.open", settingsAction); add("settings.shortcuts", shortcutsAction);

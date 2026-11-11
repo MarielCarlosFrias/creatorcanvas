@@ -9,6 +9,9 @@
 
 #include "core/Document.h"
 #include "ui/adjustmentsdialog.h"
+#include "ui/webslicesdialog.h"
+#include "core/document/WebSlice.h"
+#include "imageio/DocumentExporter.h"
 #include "core/layers/Layer.h"
 #include "ui/mainwindow.h"
 #include "localization/i18nservice.h"
@@ -129,4 +132,5 @@ private slots:
 
 QTEST_MAIN(TestMainWindowTabs)
 #include "test_mainwindow_tabs.moc"
+
 

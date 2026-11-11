@@ -448,7 +448,19 @@
     "gradientMap": "Mapa de Gradiente",
     "nonDestructive": "Não-destrutivo (camada de ajuste)",
     "nonDestructiveTip": "Cria uma camada de ajuste ligada a esta camada de imagem. Os parâmetros ficam editáveis e o undo recupera o original.",
-    "noParams": "Este ajuste não tem parâmetros — aplica-se diretamente."
+    "noParams": "Este ajuste não tem parâmetros — aplica-se diretamente.",
+    "shadowsHighlights": "Sombras / Realces",
+    "vignette": "Vinheta",
+    "channelMixer": "Misturador de Canais",
+    "brightness": "Brilho",
+    "contrast": "Contraste",
+    "hue": "Matiz",
+    "saturation": "Saturação",
+    "shadows": "Sombras",
+    "highlights": "Realces",
+    "vignetteStrength": "Intensidade",
+    "vignetteHint": "Positivo escurece as bordas; negativo clareia.",
+    "channelMixerHint": "Ganho por canal de saída (100% = original)."
   },
   "comps": {
     "title": "Composições de Camadas - CreatorCanvas",

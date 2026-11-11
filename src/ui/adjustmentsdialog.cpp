@@ -34,12 +34,31 @@ namespace {
 const AdjustmentType kTypes[] = {
     AdjustmentType::BrightnessContrast,
     AdjustmentType::HueSaturation,
+    AdjustmentType::ShadowsHighlights,
+    AdjustmentType::Vignette,
     AdjustmentType::Invert,
     AdjustmentType::Posterize,
     AdjustmentType::Threshold,
     AdjustmentType::Levels,
     AdjustmentType::Curves,
+    AdjustmentType::ChannelMixer,
     AdjustmentType::GradientMap,
+};
+
+/// Rótulos dos sliders simples, por tipo (mesma ordem de kTypes): chave i18n
+/// + texto de reserva legível (usado quando não há I18nService, como em
+/// testes). `nullptr` = o tipo usa página dedicada, não a de dois sliders.
+struct SliderLabels { const char* keyA; const char* fallbackA;
+                      const char* keyB; const char* fallbackB; };
+const SliderLabels kSliderLabels[] = {
+    {"adjustments.brightness", "Brilho", "adjustments.contrast", "Contraste"},
+    {"adjustments.hue", "Matiz", "adjustments.saturation", "Saturação"},
+    {"adjustments.shadows", "Sombras", "adjustments.highlights", "Realces"},
+    {nullptr, nullptr, nullptr, nullptr},                    // Vinheta: página própria
+    {nullptr, nullptr, nullptr, nullptr}, {nullptr, nullptr, nullptr, nullptr},
+    {nullptr, nullptr, nullptr, nullptr}, {nullptr, nullptr, nullptr, nullptr},
+    {nullptr, nullptr, nullptr, nullptr}, {nullptr, nullptr, nullptr, nullptr},
+    {nullptr, nullptr, nullptr, nullptr},
 };
 
 bool typeHasParams(AdjustmentType type)
@@ -97,11 +116,14 @@ void AdjustmentsDialog::buildUi()
     static const Entry entries[] = {
         {AdjustmentType::BrightnessContrast, "brightnessContrast", "Brilho / Contraste"},
         {AdjustmentType::HueSaturation, "hueSaturation", "Matiz / Saturação"},
+        {AdjustmentType::ShadowsHighlights, "shadowsHighlights", "Sombras / Realces"},
+        {AdjustmentType::Vignette, "vignette", "Vinheta"},
         {AdjustmentType::Invert, "invert", "Inverter Cores"},
         {AdjustmentType::Posterize, "posterize", "Posterizar"},
         {AdjustmentType::Threshold, "threshold", "Threshold (P&B)"},
         {AdjustmentType::Levels, "levels", "Níveis (Levels)"},
         {AdjustmentType::Curves, "curves", "Curvas (Curves)"},
+        {AdjustmentType::ChannelMixer, "channelMixer", "Misturador de Canais"},
         {AdjustmentType::GradientMap, "gradientMap", "Mapa de Gradiente"},
     };
     for (const auto& e : entries) {
@@ -125,14 +147,48 @@ void AdjustmentsDialog::buildUi()
         "background-color: #202227; border: 1px solid #2b303c; border-radius: 6px;"));
 
     m_pages = new QStackedWidget(this);
-    m_pages->addWidget(buildSlidersPage(m_bcSliderA, m_bcSliderB)); // 0: brilho/contraste
-    m_pages->addWidget(buildSlidersPage(m_hsSliderA, m_hsSliderB)); // 1: matiz/saturação
-    m_pages->addWidget(buildSimplePage());  // 2..4
-    m_pages->addWidget(buildSimplePage());
-    m_pages->addWidget(buildSimplePage());
-    m_pages->addWidget(buildLevelsPage());  // 5
-    m_pages->addWidget(buildCurvesPage());  // 6
-    m_pages->addWidget(buildGradientMapPage()); // 7
+    // Páginas na mesma ordem da lista de tipos (kTypes): sliders para os
+    // tipos com parâmetros simples, páginas dedicadas para o resto.
+    for (int i = 0; i < static_cast<int>(sizeof(kTypes) / sizeof(kTypes[0])); ++i) {
+        const AdjustmentType type = kTypes[i];
+        const SliderLabels labels = kSliderLabels[i];
+        if (labels.keyA && labels.keyB) {
+            QSlider*& outA = (i == 0) ? m_bcSliderA : (i == 1) ? m_hsSliderA : m_shadowSlider;
+            QSlider*& outB = (i == 0) ? m_bcSliderB : (i == 1) ? m_hsSliderB : m_highlightSlider;
+            m_pages->addWidget(buildSlidersPage(
+                outA, outB,
+                m_i18n ? m_i18n->t("editor", QString::fromLatin1(labels.keyA))
+                       : QString::fromUtf8(labels.fallbackA),
+                m_i18n ? m_i18n->t("editor", QString::fromLatin1(labels.keyB))
+                       : QString::fromUtf8(labels.fallbackB)));
+            continue;
+        }
+        switch (type) {
+        case AdjustmentType::Invert:
+        case AdjustmentType::Posterize:
+        case AdjustmentType::Threshold:
+            m_pages->addWidget(buildSimplePage());
+            break;
+        case AdjustmentType::Vignette:
+            m_pages->addWidget(buildVignettePage());
+            break;
+        case AdjustmentType::Levels:
+            m_pages->addWidget(buildLevelsPage());
+            break;
+        case AdjustmentType::Curves:
+            m_pages->addWidget(buildCurvesPage());
+            break;
+        case AdjustmentType::ChannelMixer:
+            m_pages->addWidget(buildChannelMixerPage());
+            break;
+        case AdjustmentType::GradientMap:
+            m_pages->addWidget(buildGradientMapPage());
+            break;
+        default:
+            m_pages->addWidget(buildSimplePage());
+            break;
+        }
+    }
     rightColumn->addWidget(m_pages, 1);
 
     rightColumn->addWidget(m_previewLabel, 1);
@@ -165,7 +221,8 @@ void AdjustmentsDialog::buildUi()
     connect(m_typeList, &QListWidget::currentRowChanged, this, &AdjustmentsDialog::onTypeChanged);
 }
 
-QWidget* AdjustmentsDialog::buildSlidersPage(QSlider*& outA, QSlider*& outB)
+QWidget* AdjustmentsDialog::buildSlidersPage(QSlider*& outA, QSlider*& outB,
+                                            const QString& labelA, const QString& labelB)
 {
     auto* page = new QWidget(this);
     auto* grid = new QGridLayout(page);
@@ -185,14 +242,14 @@ QWidget* AdjustmentsDialog::buildSlidersPage(QSlider*& outA, QSlider*& outB)
         return std::make_tuple(label, slider, valueLabel);
     };
 
-    auto [labelA, sliderA, valueA] = makeSlider(-100, 100, 0, QStringLiteral("A"));
-    auto [labelB, sliderB, valueB] = makeSlider(-100, 100, 0, QStringLiteral("B"));
+    auto [labelWidgetA, sliderA, valueA] = makeSlider(-100, 100, 0, labelA);
+    auto [labelWidgetB, sliderB, valueB] = makeSlider(-100, 100, 0, labelB);
     outA = sliderA;
     outB = sliderB;
-    grid->addWidget(labelA, 0, 0);
+    grid->addWidget(labelWidgetA, 0, 0);
     grid->addWidget(sliderA, 0, 1);
     grid->addWidget(valueA, 0, 2);
-    grid->addWidget(labelB, 1, 0);
+    grid->addWidget(labelWidgetB, 1, 0);
     grid->addWidget(sliderB, 1, 1);
     grid->addWidget(valueB, 1, 2);
     grid->setRowStretch(2, 1);
@@ -285,6 +342,68 @@ QWidget* AdjustmentsDialog::buildCurvesPage()
 
     connect(m_channelCombo, qOverload<int>(&QComboBox::currentIndexChanged),
             this, &AdjustmentsDialog::onChannelChanged);
+    return page;
+}
+
+QWidget* AdjustmentsDialog::buildVignettePage()
+{
+    auto* page = new QWidget(this);
+    auto* grid = new QGridLayout(page);
+    grid->setContentsMargins(4, 8, 4, 8);
+
+    auto* hint = new QLabel(tr("vignetteHint", QStringLiteral(
+        "Positivo escurece as bordas; negativo clareia.")), this);
+    hint->setWordWrap(true);
+    hint->setStyleSheet(QStringLiteral("color: #888;"));
+    grid->addWidget(hint, 0, 0, 1, 2);
+
+    m_vignetteSlider = new QSlider(Qt::Horizontal, this);
+    m_vignetteSlider->setRange(-100, 100);
+    m_vignetteSlider->setValue(0);
+    auto* value = new QLabel(QStringLiteral("0"), this);
+    value->setMinimumWidth(44);
+    connect(m_vignetteSlider, &QSlider::valueChanged, this, [this, value](int v) {
+        value->setText(QString::number(v));
+        onParamChanged();
+    });
+    grid->addWidget(new QLabel(tr("vignette", QStringLiteral("Vinheta")), this), 1, 0);
+    grid->addWidget(m_vignetteSlider, 1, 1);
+    grid->addWidget(value, 1, 2);
+    grid->setRowStretch(2, 1);
+    return page;
+}
+
+QWidget* AdjustmentsDialog::buildChannelMixerPage()
+{
+    auto* page = new QWidget(this);
+    auto* grid = new QGridLayout(page);
+    grid->setContentsMargins(4, 8, 4, 8);
+
+    auto* hint = new QLabel(tr("channelMixerHint", QStringLiteral(
+        "Ganho por canal de saída (100% = original).")), this);
+    hint->setWordWrap(true);
+    hint->setStyleSheet(QStringLiteral("color: #888;"));
+    grid->addWidget(hint, 0, 0, 1, 3);
+
+    auto makeGain = [this, grid](const QString& label, QSlider*& out, int row) {
+        auto* slider = new QSlider(Qt::Horizontal, this);
+        slider->setRange(0, 200);
+        slider->setValue(100);
+        auto* value = new QLabel(QStringLiteral("100%"), this);
+        value->setMinimumWidth(44);
+        connect(slider, &QSlider::valueChanged, this, [this, value](int v) {
+            value->setText(QStringLiteral("%1%").arg(v));
+            onParamChanged();
+        });
+        grid->addWidget(new QLabel(label, this), row, 0);
+        grid->addWidget(slider, row, 1);
+        grid->addWidget(value, row, 2);
+        out = slider;
+    };
+    makeGain(QStringLiteral("R"), m_cmRed, 1);
+    makeGain(QStringLiteral("G"), m_cmGreen, 2);
+    makeGain(QStringLiteral("B"), m_cmBlue, 3);
+    grid->setRowStretch(4, 1);
     return page;
 }
 
@@ -409,6 +528,24 @@ void AdjustmentsDialog::collectParams()
         m_request.params = {
             {QStringLiteral("hue"), m_hsSliderA ? m_hsSliderA->value() : 0.0},
             {QStringLiteral("saturation"), m_hsSliderB ? m_hsSliderB->value() : 0.0},
+        };
+        break;
+    case AdjustmentType::ShadowsHighlights:
+        m_request.params = {
+            {QStringLiteral("shadows"), m_shadowSlider ? m_shadowSlider->value() : 0.0},
+            {QStringLiteral("highlights"), m_highlightSlider ? m_highlightSlider->value() : 0.0},
+        };
+        break;
+    case AdjustmentType::Vignette:
+        m_request.params = {
+            {QStringLiteral("vignette"), m_vignetteSlider ? m_vignetteSlider->value() : 0.0},
+        };
+        break;
+    case AdjustmentType::ChannelMixer:
+        m_request.params = {
+            {QStringLiteral("redGain"), m_cmRed ? m_cmRed->value() / 100.0 : 1.0},
+            {QStringLiteral("greenGain"), m_cmGreen ? m_cmGreen->value() / 100.0 : 1.0},
+            {QStringLiteral("blueGain"), m_cmBlue ? m_cmBlue->value() / 100.0 : 1.0},
         };
         break;
     case AdjustmentType::Levels:

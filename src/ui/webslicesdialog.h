@@ -6,6 +6,7 @@
 #include <QDialog>
 #include <QString>
 
+class QLabel;
 class QListWidget;
 class QPushButton;
 class QSpinBox;
@@ -32,6 +33,11 @@ public:
                     I18nService* i18n = nullptr, QWidget* parent = nullptr);
     ~WebSlicesDialog() override = default;
 
+private:
+    /// Desenha o documento em miniatura com os rectângulos das fatias por
+    /// cima — é a prévia que torna o painel preciso sem adivinhar coordenadas.
+    void updatePreview();
+
 private slots:
     void refreshList();
     void addFromSelection();
@@ -49,6 +55,7 @@ private:
     I18nService* m_i18n = nullptr;
 
     QListWidget* m_list = nullptr;
+    QLabel* m_previewLabel = nullptr;
     QLineEdit* m_nameEdit = nullptr;
     QSpinBox* m_xSpin = nullptr;
     QSpinBox* m_ySpin = nullptr;

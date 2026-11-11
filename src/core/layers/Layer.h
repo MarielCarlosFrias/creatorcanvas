@@ -275,7 +275,11 @@ public:
 /// camadas abaixo (ou apenas às vinculadas por clipping mask).
 enum class AdjustmentType { Levels, Curves, BrightnessContrast, HueSaturation,
                             ColorBalance, PhotoFilter, ChannelMixer,
-                            Invert, Threshold, Posterize, GradientMap };
+                            Invert, Threshold, Posterize, GradientMap,
+                            // Adicionados depois: sempre no fim, para os
+                            // inteiros gravados nos projectos antigos
+                            // continuarem a significar o mesmo.
+                            ShadowsHighlights, Vignette };
 
 class AdjustmentLayer final : public Layer
 {

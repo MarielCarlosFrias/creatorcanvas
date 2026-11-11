@@ -1308,7 +1308,10 @@ private:
         auto adjustment = std::make_unique<AdjustmentLayer>();
         {
             const int kindRaw = o.value(QStringLiteral("kind")).toInt(0);
-            if (kindRaw < 0 || kindRaw >= 11) { // AdjustmentType tem 11 valores (0..10)
+            // Limite derivado do enum: um projecto gravado por uma versão
+            // com mais tipos carrega, um com kind inválido é rejeitado.
+            if (kindRaw < 0
+                || kindRaw > static_cast<int>(AdjustmentType::Vignette)) {
                 return false;
             }
             adjustment->kind = static_cast<AdjustmentType>(kindRaw);

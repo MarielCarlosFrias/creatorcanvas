@@ -60,11 +60,15 @@ private slots:
 
 private:
     void buildUi();
-    QWidget* buildSlidersPage(QSlider*& outA, QSlider*& outB);
+    QWidget* buildSlidersPage(QSlider*& outA, QSlider*& outB,
+                              const QString& labelA, const QString& labelB);
     QWidget* buildSimplePage();
     QWidget* buildLevelsPage();
     QWidget* buildCurvesPage();
     QWidget* buildGradientMapPage();
+    QWidget* buildShadowsHighlightsPage();
+    QWidget* buildVignettePage();
+    QWidget* buildChannelMixerPage();
     void collectParams();
 
 public:
@@ -113,6 +117,14 @@ protected:
     std::vector<CurvePoint> m_curveR;
     std::vector<CurvePoint> m_curveG;
     std::vector<CurvePoint> m_curveB;
+
+    // Páginas novas: sombras/realces, vinheta e channel mixer.
+    QSlider* m_shadowSlider = nullptr;
+    QSlider* m_highlightSlider = nullptr;
+    QSlider* m_vignetteSlider = nullptr;
+    QSlider* m_cmRed = nullptr;
+    QSlider* m_cmGreen = nullptr;
+    QSlider* m_cmBlue = nullptr;
 
     // Página de mapa de gradiente.
     QPushButton* m_color1Button = nullptr;

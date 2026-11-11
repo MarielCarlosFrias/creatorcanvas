@@ -187,6 +187,58 @@ private slots:
                                         AdjustmentType::Levels, {}, true));
         QVERIFY(history.canUndo() == false);
     }
+
+    void newAdjustmentTypesChangePixels()
+    {
+        // Imagem escura e imagem clara: os pesos do motor dependem da
+        // luminância (shadowWeight = 1 - 2L, highlightWeight = 2L - 0.5).
+        QImage dark(48, 48, QImage::Format_ARGB32);
+        dark.fill(qRgba(40, 40, 40, 255));
+        QImage bright(48, 48, QImage::Format_ARGB32);
+        bright.fill(qRgba(210, 210, 210, 255));
+
+        // Sombras a +40 clareiam os pixéis escuros e não tocam nos claros.
+        const QImage shadowsOnDark = applyAdjustmentParameters(
+            dark, AdjustmentType::ShadowsHighlights,
+            {{QStringLiteral("shadows"), 40.0}, {QStringLiteral("highlights"), 0.0}});
+        QVERIFY2(qRed(shadowsOnDark.pixel(24, 24)) > 40,
+                 qPrintable(QStringLiteral("sombras deviam clarear o escuro: %1")
+                            .arg(qRed(shadowsOnDark.pixel(24, 24)))));
+
+        const QImage shadowsOnBright = applyAdjustmentParameters(
+            bright, AdjustmentType::ShadowsHighlights,
+            {{QStringLiteral("shadows"), 40.0}, {QStringLiteral("highlights"), 0.0}});
+        QCOMPARE(qRed(shadowsOnBright.pixel(24, 24)), 210);
+
+        // Realces a +40 clareiam os pixéis claros (até ao tecto).
+        const QImage highlightsOnBright = applyAdjustmentParameters(
+            bright, AdjustmentType::ShadowsHighlights,
+            {{QStringLiteral("shadows"), 0.0}, {QStringLiteral("highlights"), 40.0}});
+        QVERIFY2(qRed(highlightsOnBright.pixel(24, 24)) > 210,
+                 qPrintable(QStringLiteral("realces deviam clarear o claro: %1")
+                            .arg(qRed(highlightsOnBright.pixel(24, 24)))));
+
+        // Vinheta: positiva escurece as bordas e mantém o centro.
+        const QImage vig = applyAdjustmentParameters(
+            bright, AdjustmentType::Vignette, {{QStringLiteral("vignette"), 100.0}});
+        const int center = qRed(vig.pixel(24, 24));
+        const int corner = qRed(vig.pixel(1, 1));
+        QVERIFY2(corner < center,
+                 qPrintable(QStringLiteral("vinheta devia escurecer o canto: %1 vs %2")
+                            .arg(corner).arg(center)));
+
+        // Channel Mixer: ganho 2 no verde duplica o canal.
+        QImage tinted(48, 48, QImage::Format_ARGB32);
+        tinted.fill(qRgba(120, 130, 140, 255));
+        const QImage mixed = applyAdjustmentParameters(
+            tinted, AdjustmentType::ChannelMixer,
+            {{QStringLiteral("redGain"), 1.0},
+             {QStringLiteral("greenGain"), 2.0},
+             {QStringLiteral("blueGain"), 1.0}});
+        QCOMPARE(qGreen(mixed.pixel(24, 24)), 255);
+        QCOMPARE(qRed(mixed.pixel(24, 24)), qRed(tinted.pixel(24, 24)));
+    }
+
 };
 
 QTEST_GUILESS_MAIN(TestAdjustments)

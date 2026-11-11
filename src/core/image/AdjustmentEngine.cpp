@@ -153,6 +153,19 @@ QImage applyAdjustmentParameters(const QImage& source, AdjustmentType kind,
         break;
     }
 
+    case AdjustmentType::ShadowsHighlights:
+        adjusted = ImageProcessing::adjustColors(
+            source, 0, 0, 0, 0, 0,
+            adjustmentParam(params, QStringLiteral("shadows"), 0.0),
+            adjustmentParam(params, QStringLiteral("highlights"), 0.0));
+        break;
+
+    case AdjustmentType::Vignette:
+        adjusted = ImageProcessing::adjustColors(
+            source, 0, 0, 0, 0, 0, 0, 0,
+            adjustmentParam(params, QStringLiteral("vignette"), 0.0));
+        break;
+
     case AdjustmentType::GradientMap:
         adjusted = ImageProcessing::applyGradientMap(
             source,

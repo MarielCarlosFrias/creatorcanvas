@@ -5,6 +5,7 @@
 #include "core/history/CommandStack.h"
 #include "core/layers/Layer.h"
 #include "core/selection/SelectionEngine.h"
+#include "rendering/CanvasRenderer.h"
 #include "imageio/DocumentExporter.h"
 #include "localization/i18nservice.h"
 
@@ -15,6 +16,7 @@
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QPainter>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMessageBox>
@@ -38,7 +40,15 @@ WebSlicesDialog::WebSlicesDialog(Document& doc, CommandStack* history,
 
     auto* layout = new QVBoxLayout(this);
 
+    m_previewLabel = new QLabel(this);
+    m_previewLabel->setMinimumHeight(150);
+    m_previewLabel->setAlignment(Qt::AlignCenter);
+    m_previewLabel->setStyleSheet(QStringLiteral(
+        "background-color: #202227; border: 1px solid #2b303c; border-radius: 6px;"));
+    layout->addWidget(m_previewLabel);
+
     m_list = new QListWidget(this);
+    m_list->setMaximumHeight(110);
     layout->addWidget(m_list, 1);
 
     // --- Criação por valores ---
@@ -141,12 +151,75 @@ void WebSlicesDialog::refreshList()
     }
     m_removeButton->setEnabled(false);
     m_exportButton->setEnabled(!m_doc.webSlices().empty());
+    updatePreview();
 }
 
 QString WebSlicesDialog::selectedSliceId() const
 {
     QListWidgetItem* item = m_list->currentItem();
     return item ? item->data(Qt::UserRole).toString() : QString();
+}
+
+void WebSlicesDialog::updatePreview()
+{
+    if (!m_previewLabel || m_doc.width() <= 0 || m_doc.height() <= 0)
+        return;
+
+    // Documento em miniatura: 320px do lado maior chega para julgar.
+    const double scale = std::min(1.0, 320.0 / std::max(m_doc.width(), m_doc.height()));
+    const QSize previewSize(std::max(1, qRound(m_doc.width() * scale)),
+                            std::max(1, qRound(m_doc.height() * scale)));
+
+    QImage img(previewSize, QImage::Format_ARGB32);
+    img.fill(QColor(0x1a, 0x1c, 0x20));
+    {
+        QPainter painter(&img);
+        QTransform toPreview;
+        toPreview.scale(scale, scale);
+        RenderOptions options;
+        options.drawCheckerboard = false;
+        options.canvasBorder = Qt::transparent;
+        renderDocument(m_doc, &painter, toPreview, options);
+    }
+
+    // Fatias por cima, com a mesma cor cíclica do canvas.
+    static const QColor kPalette[] = {
+        QColor(0x43, 0x78, 0xff), QColor(0x22, 0xc5, 0x5e),
+        QColor(0xf5, 0x9e, 0x0b), QColor(0xec, 0x48, 0x99),
+        QColor(0x8b, 0x5c, 0xf6), QColor(0x14, 0xb8, 0xa6),
+    };
+    QPainter painter(&img);
+    QFont labelFont = painter.font();
+    labelFont.setPointSize(7);
+    labelFont.setBold(true);
+    painter.setFont(labelFont);
+    const auto slices = m_doc.webSlices();
+    for (size_t i = 0; i < slices.size(); ++i) {
+        const WebSlice& slice = slices[i];
+        const QColor color = kPalette[i % (sizeof(kPalette) / sizeof(kPalette[0]))];
+        const QRectF r(slice.rect.left() * scale, slice.rect.top() * scale,
+                       slice.rect.width() * scale, slice.rect.height() * scale);
+        painter.setPen(QPen(color, 1.0, Qt::DashLine));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRect(r);
+        const QString label = slice.name.isEmpty()
+            ? slice.exportFormat.toUpper() : slice.name;
+        const QFontMetrics fm(labelFont);
+        const int tw = fm.horizontalAdvance(label) + 6;
+        QRectF labelRect(r.left(), r.top() - 11, tw, 11);
+        if (labelRect.top() < 0)
+            labelRect.moveTop(r.top() + 1);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QColor(color.red(), color.green(), color.blue(), 200));
+        painter.drawRect(labelRect);
+        painter.setPen(Qt::white);
+        painter.drawText(labelRect, Qt::AlignCenter, label);
+    }
+    painter.end();
+
+    m_previewLabel->setPixmap(QPixmap::fromImage(img)
+                                  .scaled(m_previewLabel->size(), Qt::KeepAspectRatio,
+                                          Qt::SmoothTransformation));
 }
 
 void WebSlicesDialog::addFromSelection()

@@ -1351,14 +1351,17 @@ void MainWindow::connectActionSignals()
     static const cc::AdjustmentType kAdjustmentTypes[] = {
         cc::AdjustmentType::BrightnessContrast,
         cc::AdjustmentType::HueSaturation,
+        cc::AdjustmentType::ShadowsHighlights,
+        cc::AdjustmentType::Vignette,
         cc::AdjustmentType::Invert,
         cc::AdjustmentType::Posterize,
         cc::AdjustmentType::Threshold,
         cc::AdjustmentType::Levels,
         cc::AdjustmentType::Curves,
+        cc::AdjustmentType::ChannelMixer,
         cc::AdjustmentType::GradientMap,
     };
-    for (int i = 0; i < m_adjustmentActions.size() && i < 8; ++i) {
+    for (int i = 0; i < m_adjustmentActions.size() && i < 11; ++i) {
         connect(m_adjustmentActions[i], &QAction::triggered, this, [this, i]() {
             openAdjustments(kAdjustmentTypes[i]);
         });

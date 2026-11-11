@@ -133,7 +133,7 @@ All types derive from `cc::Layer` (`src/core/layers/Layer.h`) — **eight** type
 - `ShapeLayer` — 18 kinds (rectangle, rounded rect, ellipse, line, polygon/arrow/star/badge/speech bubble/heart/triangle/diamond/pentagon/hexagon/cross/checkmark/cloud/explosion); fill or gradient, stroke, corner radius, dashed stroke, star tuning, `ShapeShadow`.
 - `BackgroundLayer` — solid fill or gradient.
 - `FillLayer` — procedural solid/gradient/pattern fill with dither and layer-alignment options.
-- `AdjustmentLayer` — procedural adjustment applied to everything below it (or to the linked image layer when used as a clipping mask): Levels, Curves, Brightness/Contrast, Hue/Saturation, Color Balance, Photo Filter, Channel Mixer, Invert, Threshold, Posterize, Gradient Map. Parameters are serialized as key/value pairs.
+- `AdjustmentLayer` — procedural adjustment applied to everything below it (or to the linked image layer when used as a clipping mask): Levels, Curves, Brightness/Contrast, Hue/Saturation, Shadow/Highlight, Vignette, Color Balance, Photo Filter, Channel Mixer, Invert, Threshold, Posterize, Gradient Map (13 types; new ones are always appended to the enum so integers written by older project files keep their meaning — `ProjectFile` bounds-checks against the enum, not a hardcoded count). Parameters are serialized as key/value pairs.
 - `VectorLayer` — cubic Bézier path with editable nodes (`VectorNode`), optional fill and/or stroke.
 
 ### Shared properties
@@ -285,6 +285,8 @@ Image Inspector live preview writes a temporary asset via `Document::setImageLay
   - `LayerRowWidget` captures mouse drag exceeding `QApplication::startDragDistance()`, generates a semi-transparent drag pixmap of the row, and sets MIME data `application/x-creatorcanvas-layer-id`.
   - `LayerListWidget` provides dynamic drop indicator and computes target index based on cursor position relative to item vertical midpoint.
   - Layer reordering executes through `ReorderLayerCommand` on the `CommandStack`, preserving non-destructive undo/redo history.
+- **Adjustments panel** (`Image ▸ Adjustments…`) — 11 entries: Brightness/Contrast, Hue/Saturation, Shadows/Highlights, Vignette, Invert, Posterize, Threshold, Levels (per channel), Curves (per channel, spline shown from the same LUT the engine uses), Channel Mixer, Gradient Map. Live preview (scaled to 480 px), non-destructive by default.
+- **Web-slice preview** — the slices panel renders a miniature of the document with each slice rect and label drawn on top (same colour cycling as the canvas), so coordinates can be judged without guessing.
 - **Workspace layouts:** `Window ▸ Workspace Layout` (`WorkspaceLayoutDialog`) saves the current dock geometry/state under a user-chosen name and restores or deletes saved layouts; layouts persist in `SettingsService`.
 - **Customizable shortcuts:** every registered action is listed in `Help ▸ Keyboard Shortcuts` (`ShortcutDialog`); individual shortcuts can be reassigned, reset to default, or reset in bulk. Defaults are captured at startup and user overrides persist in `QSettings` (`ActionManager::persistShortcut`).
 - **Perspective mockup:** `ImageInspector` → Mockup (`MockupDialog`) projects the layer onto a 4-point perspective warp (Photoshop-Distort semantics, click order preserved, free-form mode, live preview, `Esc` cancels). Transient layer, never serialized.
@@ -407,10 +409,10 @@ Batch runs over many files at once are driven by `BatchDialog` (UI layer), which
 16. `test_snap` — guide math
 17. `test_image_processing` — filters and raster helpers
 18. `test_tools` — modular tool activation, event delegation, and context handling
-19. `test_adjustments` — adjustment engine (levels/curves params, strength blend), non-destructive apply through the command stack (create/link/undo/redo), reuse of a linked layer in one undo step, the destructive bake path, and rejection of non-image layers
-20. `test_tools_extras` — marquee/gradient/retouch/healing behaviour, undo steps and raster ops
-21. `test_ai_quick` — quick AI / canvas-adjacent paths (`canvasview`, AI dialog, mask canvas compiled in)
-22. `test_ui_phase1` — start screen, layers panel, theme icons, collapsible sections
+19. `test_tools_extras` — marquee/gradient/retouch/healing behaviour, undo steps and raster ops
+20. `test_ai_quick` — quick AI / canvas-adjacent paths (`canvasview`, AI dialog, mask canvas compiled in)
+21. `test_ui_phase1` — start screen, layers panel, theme icons, collapsible sections
+22. `test_adjustments` — adjustment engine (levels/curves params, strength blend), non-destructive apply through the command stack (create/link/undo/redo), reuse of a linked layer in one undo step, the destructive bake path, rejection of non-image layers, and the Shadows/Highlights (luminance-weighted), Vignette (edge-weighted) and Channel Mixer (per-channel gain) types
 23. `test_photocraft` — pixel selection, layer comps/web-slices round-trip, comp apply/undo/redo and removal, slice creation and single-slice export
 24. `test_selection_engine` — magic wand contiguous vs global, feathering, selection combination, and the AI subject-mask → Alpha8 selection conversion (`fromAlphaMask`)
 25. `test_layer_render` — per-layer raster rendering

@@ -448,7 +448,19 @@
     "gradientMap": "Gradient Map",
     "nonDestructive": "Non-destructive (adjustment layer)",
     "nonDestructiveTip": "Creates an adjustment layer linked to this image layer. The parameters stay editable and undo restores the original.",
-    "noParams": "This adjustment has no parameters — it is applied directly."
+    "noParams": "This adjustment has no parameters — it is applied directly.",
+    "shadowsHighlights": "Shadows / Highlights",
+    "vignette": "Vignette",
+    "channelMixer": "Channel Mixer",
+    "brightness": "Brightness",
+    "contrast": "Contrast",
+    "hue": "Hue",
+    "saturation": "Saturation",
+    "shadows": "Shadows",
+    "highlights": "Highlights",
+    "vignetteStrength": "Amount",
+    "vignetteHint": "Positive darkens the edges; negative lightens them.",
+    "channelMixerHint": "Gain per output channel (100% = original)."
   },
   "comps": {
     "title": "Layer Comps - CreatorCanvas",

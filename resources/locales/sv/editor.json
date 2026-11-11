@@ -448,7 +448,19 @@
     "gradientMap": "Gradientkarta",
     "nonDestructive": "Icke-destruktiv (justeringslager)",
     "nonDestructiveTip": "Skapar ett justeringslager kopplat till detta bildlager. Parametrarna går att redigera och ångra återställer originalet.",
-    "noParams": "Denna justering har inga parametrar — den tillämpas direkt."
+    "noParams": "Denna justering har inga parametrar — den tillämpas direkt.",
+    "shadowsHighlights": "Skuggor / Ljusa partier",
+    "vignette": "Vinyett",
+    "channelMixer": "Kanalmixer",
+    "brightness": "Ljusstyrka",
+    "contrast": "Kontrast",
+    "hue": "Nyans",
+    "saturation": "Mättnad",
+    "shadows": "Skuggor",
+    "highlights": "Ljusa partier",
+    "vignetteStrength": "Styrka",
+    "vignetteHint": "Positivt mörkar kanterna; negativt ljusar upp dem.",
+    "channelMixerHint": "Förstärkning per utkanal (100% = original)."
   },
   "comps": {
     "title": "Lagerkompositioner - CreatorCanvas",
