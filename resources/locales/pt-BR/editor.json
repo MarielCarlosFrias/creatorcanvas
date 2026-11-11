@@ -448,5 +448,28 @@
     "nonDestructive": "Não-destrutivo (camada de ajuste)",
     "nonDestructiveTip": "Cria uma camada de ajuste ligada a esta camada de imagem. Os parâmetros ficam editáveis e o undo recupera o original.",
     "noParams": "Este ajuste não tem parâmetros — aplica-se diretamente."
+  },
+  "comps": {
+    "title": "Composições de Camadas - CreatorCanvas",
+    "menuOpen": "Composições de Camadas...",
+    "save": "Guardar estado actual",
+    "apply": "Aplicar",
+    "remove": "Remover",
+    "saveTitle": "Nova composição",
+    "savePrompt": "Nome da composição:",
+    "captureVisibility": "Visibilidade",
+    "capturePosition": "Posição",
+    "captureAppearance": "Aparência"
+  },
+  "webSlices": {
+    "title": "Fatias de Exportação Web - CreatorCanvas",
+    "menuOpen": "Fatias Web...",
+    "fromSelection": "Nova a partir da seleção",
+    "add": "Adicionar fatia",
+    "remove": "Remover",
+    "exportAll": "Exportar todas...",
+    "exportTitle": "Exportar fatias para",
+    "exportDone": "Exportação de fatias",
+    "namePlaceholder": "Nome da fatia"
   }
 }

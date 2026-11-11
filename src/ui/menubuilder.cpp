@@ -28,6 +28,7 @@ void MenuBuilder::buildMenus(I18nService* i18n)
     fileMenu->addAction(m_actions->importAction);
     fileMenu->addAction(m_actions->exportAction);
     fileMenu->addAction(m_actions->batchAction);
+    fileMenu->addAction(m_actions->webSlicesAction);
     fileMenu->addAction(m_actions->workspaceLayoutAction);
     fileMenu->addSeparator();
     fileMenu->addAction(m_actions->quitAction);
@@ -129,6 +130,8 @@ void MenuBuilder::buildMenus(I18nService* i18n)
     layerMenu->addAction(m_actions->mergeSelectedAction);
     layerMenu->addAction(m_actions->mergeVisibleAction);
     layerMenu->addAction(m_actions->flattenAction);
+    layerMenu->addSeparator();
+    layerMenu->addAction(m_actions->layerCompsAction);
     layerMenu->addSeparator();
     layerMenu->addAction(m_actions->textBehindSubjectAction);
     layerMenu->addSeparator();

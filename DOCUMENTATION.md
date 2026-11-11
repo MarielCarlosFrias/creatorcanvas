@@ -185,14 +185,14 @@ All **twelve** blend modes defined in the enum are currently mapped to `QPainter
 | Instagram promo | 1080×1080 |
 | TikTok / Reels | 1080×1920 |
 
-### Layer Comps & Web Slices (data model)
+### Layer Comps & Web Slices
 
 Both are modelled in `core/document/` (`LayerComps.h`, `WebSlice.h`), stored on the `Document`, and round-tripped by `ProjectFile` (manifest keys `layerComps` / `webSlices`). They follow the PhotoCraft schema:
 
-- `LayerComp` — named snapshot of per-layer state flags (`applyVisibility`, `applyPosition`, `applyAppearance`) plus `CompLayerState` deltas (visibility, position, opacity, blend mode). `Document::applyLayerComp()` restores a comp through the normal document API.
-- `WebSlice` — named rectangle (`SliceKind::Image` / `NoImage`) with a target `exportFormat` (`png`, `jpg`, `webp`).
+- `LayerComp` — named snapshot of per-layer state flags (`applyVisibility`, `applyPosition`, `applyAppearance`) plus `CompLayerState` deltas (visibility, position, opacity, blend mode). `compFromDocument()` captures the current state of the whole tree; `Layer ▸ Layer Comps` opens the panel (save / apply / delete).
+- `WebSlice` — named rectangle (`SliceKind::Image` / `NoImage`) with a target `exportFormat` (`png`, `jpg`, `webp`). `File ▸ Web Slices` opens the panel; `exportSliceToImage()` renders each slice.
 
-**No UI and no export integration yet** — these are serialization-level features only (see §16).
+All mutations go through `LayerCompCommands.h` (`executeAddLayerComp`, `executeApplyLayerComp`, `executeRemoveLayerComp`, `executeAddWebSlice`, `executeRemoveWebSlice`). Applying a comp is **one** undo step: `ApplyLayerCompCommand` snapshots the pre-state of every touched layer. Slices are created from the active selection (its bbox is mapped through the layer transform into document space) or by numeric X/Y/W/H.
 
 ## 5. Rendering & raster processing
 
@@ -285,7 +285,7 @@ Image Inspector live preview writes a temporary asset via `Document::setImageLay
 - **Batch processing:** `File ▸ Batch` (`BatchDialog`) applies a set of operations to a list of input files into an output directory, with overwrite protection.
 - **Puppet warp:** `PuppetWarpDialog` for mesh-based deformation.
 
-`MainWindow` wires menus, docks, tool option bars, align/distribute/group, start-screen templates, mockups, batch processing, and workspace layouts.
+`MainWindow` wires menus, docks, tool option bars, align/distribute/group, start-screen templates, mockups, batch processing, workspace layouts, layer comps (`Layer ▸ Layer Comps`) and web slices (`File ▸ Web Slices`).
 
 ### Responsive layout
 
@@ -368,6 +368,8 @@ The manifest also carries the document color space, the pixel selection, and the
 
 Batch runs over many files at once are driven by `BatchDialog` (UI layer), which reuses the same import/render/export pipeline.
 
+**Web slices** (`exportSliceToImage`): each slice renders the whole document translated so the slice rect fills the output image (`scale` supported, JPEG quality honoured), transparent outside the slice content. The slices panel exports every `SliceKind::Image` slice in one go to a chosen directory.
+
 ## 11. Commands and undo/redo
 
 `src/core/history/`:
@@ -403,7 +405,7 @@ Batch runs over many files at once are driven by `BatchDialog` (UI layer), which
 20. `test_tools_extras` — marquee/gradient/retouch/healing behaviour, undo steps and raster ops
 21. `test_ai_quick` — quick AI / canvas-adjacent paths (`canvasview`, AI dialog, mask canvas compiled in)
 22. `test_ui_phase1` — start screen, layers panel, theme icons, collapsible sections
-23. `test_photocraft` — pixel selection, layer comps and web slices round-trip
+23. `test_photocraft` — pixel selection, layer comps/web-slices round-trip, comp apply/undo/redo and removal, slice creation and single-slice export
 24. `test_selection_engine` — magic wand contiguous vs global, feathering, selection combination, and the AI subject-mask → Alpha8 selection conversion (`fromAlphaMask`)
 25. `test_layer_render` — per-layer raster rendering
 26. `test_hit_alpha` — alpha-aware hit testing
@@ -460,7 +462,7 @@ Install rules also stage locales, presets, desktop/AppStream files, and the SVG 
 
 ## 14. Roadmap
 
-Already on `main` (do not treat as future work): multi-select, group/align/distribute, grid, safe zones, templates, extra raster tools, modular `cc_tools` architecture, Photoshop-style layer drag-and-drop, clipping masks, perspective mockups, pen (Bézier) tool, batch processing, workspace layouts, customizable shortcuts.
+Already on `main` (do not treat as future work): multi-select, group/align/distribute, grid, safe zones, templates, extra raster tools, modular `cc_tools` architecture, Photoshop-style layer drag-and-drop, clipping masks, perspective mockups, pen (Bézier) tool, batch processing, workspace layouts, customizable shortcuts, the adjustments panel (curves/levels with a non-destructive path), layer comps and web slices with export.
 
 Still ahead:
 
@@ -468,8 +470,8 @@ Still ahead:
 2. **Layer raster cache + `IRenderer`** — skip full recomposition; give a GPU backend a real seam (none exists today).
 3. **GPU viewport** — optional Vulkan/Direct3D (or Qt RHI) behind that interface.
 4. **Richer blend modes** — only if compositing moves beyond the current seven `QPainter` modes.
-5. **Adjustment stack for the inspector path** — `AdjustmentLayer` already renders non-destructively; the image inspector still bakes a new asset on commit.
-6. **Layer Comps / Web Slices UI** — the data model and serialization exist; there is no panel, and slices do not drive export yet.
+5. **Inspector integration for adjustments** — the dialog edits parameters, but the image inspector has no live section bound to the linked `AdjustmentLayer`.
+6. **Slice overlays on canvas** — slices exist in the model, the panel and the exporter, but the canvas does not draw their rects.
 7. **macOS** — real bundle, notarization, and CI; `MACOSX_BUNDLE` on the target is not a shipping product.
 
 ## 15. Conventions
@@ -488,7 +490,6 @@ Logs live under the OS application data directory used by `LogService` / `Settin
 - **Still images only** — no timeline or video export.
 - **Software compositor, no general cache** — every paint of a dirty document walks the full tree (masked image layers have transient caches); large documents will hitch.
 - **The inspector adjustment path is destructive** — preview is live, but committing bakes a new raster asset. The non-destructive `AdjustmentLayer` type exists and renders at render time; there is no inspector integration.
-- **Layer Comps / Web Slices have no UI** — stored and round-tripped only.
 - **Public `Layer` fields** — UI or tests can mutate `visible` / `transform` / etc. without a `Command`. That bypasses undo.
 - **UI concentration** — most interaction lives in `canvasview.cpp` and `mainwindow.cpp`.
 - **Marquee + transformed layers** — the marquee is mapped through the layer inverse transform and collapsed to a bounding rectangle, so a rotated layer gets an axis-aligned selection in its own bitmap space.

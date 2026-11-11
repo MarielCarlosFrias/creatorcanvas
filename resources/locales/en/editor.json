@@ -448,5 +448,28 @@
     "nonDestructive": "Non-destructive (adjustment layer)",
     "nonDestructiveTip": "Creates an adjustment layer linked to this image layer. The parameters stay editable and undo restores the original.",
     "noParams": "This adjustment has no parameters — it is applied directly."
+  },
+  "comps": {
+    "title": "Layer Comps - CreatorCanvas",
+    "menuOpen": "Layer Comps...",
+    "save": "Save current state",
+    "apply": "Apply",
+    "remove": "Delete",
+    "saveTitle": "New comp",
+    "savePrompt": "Comp name:",
+    "captureVisibility": "Visibility",
+    "capturePosition": "Position",
+    "captureAppearance": "Appearance"
+  },
+  "webSlices": {
+    "title": "Web Export Slices - CreatorCanvas",
+    "menuOpen": "Web Slices...",
+    "fromSelection": "New from selection",
+    "add": "Add slice",
+    "remove": "Delete",
+    "exportAll": "Export all...",
+    "exportTitle": "Export slices to",
+    "exportDone": "Slice export",
+    "namePlaceholder": "Slice name"
   }
 }

@@ -344,6 +344,8 @@ void ActionManager::createActions(I18nService* i18n)
     settingsAction->setShortcut(QKeySequence::Preferences);
 
     shortcutsAction = new QAction(this);
+    layerCompsAction = new QAction(this);
+    webSlicesAction = new QAction(this);
 
     startScreenAction = new QAction(this);
     startScreenAction->setIcon(ThemeIcons::actionNewDocument());
@@ -562,6 +564,8 @@ void ActionManager::retranslate(I18nService* i18n)
     // --- Janela, Ajuda & Configurações ---
     settingsAction->setText(i18n->t("common", "menu.settings.open"));
     shortcutsAction->setText(i18n->t("common", "menu.settings.shortcuts"));
+    layerCompsAction->setText(i18n->t("editor", "comps.menuOpen"));
+    webSlicesAction->setText(i18n->t("editor", "webSlices.menuOpen"));
     startScreenAction->setText(i18n->t("common", "start.screenAction"));
     aboutAction->setText(i18n->t("common", "menu.help.about"));
     aboutQtAction->setText(i18n->t("common", "menu.help.aboutQt"));

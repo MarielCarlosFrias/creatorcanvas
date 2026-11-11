@@ -448,5 +448,28 @@
     "nonDestructive": "Icke-destruktiv (justeringslager)",
     "nonDestructiveTip": "Skapar ett justeringslager kopplat till detta bildlager. Parametrarna går att redigera och ångra återställer originalet.",
     "noParams": "Denna justering har inga parametrar — den tillämpas direkt."
+  },
+  "comps": {
+    "title": "Lagerkompositioner - CreatorCanvas",
+    "menuOpen": "Lagerkompositioner...",
+    "save": "Spara aktuellt tillstånd",
+    "apply": "Tillämpa",
+    "remove": "Ta bort",
+    "saveTitle": "Ny komposition",
+    "savePrompt": "Namn på komposition:",
+    "captureVisibility": "Synlighet",
+    "capturePosition": "Position",
+    "captureAppearance": "Utseende"
+  },
+  "webSlices": {
+    "title": "Webbexportskivor - CreatorCanvas",
+    "menuOpen": "Webbskivor...",
+    "fromSelection": "Ny från markering",
+    "add": "Lägg till skiva",
+    "remove": "Ta bort",
+    "exportAll": "Exportera alla...",
+    "exportTitle": "Exportera skivor till",
+    "exportDone": "Skivexport",
+    "namePlaceholder": "Skivans namn"
   }
 }

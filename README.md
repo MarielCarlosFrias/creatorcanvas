@@ -93,6 +93,7 @@ Most photo editing tools are either overly basic web canvas tools or intimidatin
 - **DocumentController**: Centralized engine synchronizing canvas, layers, inspectors, history, and background services.
 - **Smart Autosave & Recovery**: Auto-save with dirty-state checks, atomic writes (`.tmp` to target), and interactive crash recovery dialog (Open, Open as Copy, Discard).
 - **Batch processing**: apply a set of operations to many files at once (`File ▸ Batch`).
+- **Layer Comps & Web Slices**: save and apply named layer states (single undo step), and export named rectangles of the canvas for the web (`Layer ▸ Layer Comps`, `File ▸ Web Slices`).
 
 ### 🌍 Internationalization & Accessibility
 - Native multi-language support (English, Portuguese `pt-BR` and Swedish `sv`) with on-the-fly switching.

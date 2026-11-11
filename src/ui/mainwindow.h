@@ -135,6 +135,10 @@ private:
     void refreshRecentMenu();
     bool confirmDiscardUnsavedChanges();
     void openSettings();
+    /// Abre o painel de composições de camadas (guardar/aplicar estado).
+    void openLayerComps();
+    /// Abre o painel de fatias de exportação web.
+    void openWebSlices();
     /// Abre o diálogo de ajustes para a camada de imagem selecionada.
     /// `type` escolhe a página inicial (brilho/contraste, curvas, …).
     void openAdjustments(cc::AdjustmentType type);
@@ -303,6 +307,8 @@ private:
     QAction* m_colorRangeAction = nullptr;
     QAction* m_selectSubjectAction = nullptr;
     QList<QAction*> m_adjustmentActions;
+    QAction* m_layerCompsAction = nullptr;
+    QAction* m_webSlicesAction = nullptr;
     QAction* m_selectionOpsAction = nullptr;
     QMenu* m_selectionToolsMenu = nullptr;
     QMenu* m_retouchToolsMenu = nullptr;

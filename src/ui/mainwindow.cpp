@@ -15,6 +15,8 @@
 #include "rendering/CanvasRenderer.h"
 #include "localization/i18nservice.h"
 #include "ui/adjustmentsdialog.h"
+#include "ui/layercompsdialog.h"
+#include "ui/webslicesdialog.h"
 #include "ui/canvasview.h"
 #include "ui/exportdialog.h"
 #include "ui/layerspanel.h"
@@ -981,6 +983,8 @@ void MainWindow::buildActions()
     m_toolRetouchAction = m_actions->toolRetouchAction;
     m_toolHealingAction = m_actions->toolHealingAction;
     m_adjustmentActions = m_actions->adjustmentActions;
+    m_layerCompsAction = m_actions->layerCompsAction;
+    m_webSlicesAction = m_actions->webSlicesAction;
     m_removeBgAiAction = m_actions->removeBgAiAction;
     m_removeBgAiQuickAction = m_actions->removeBgAiQuickAction;
     m_mockupAction = m_actions->mockupAction;
@@ -1323,6 +1327,9 @@ void MainWindow::connectActionSignals()
         if (m_canvas && m_document && !m_selectedId.isNull())
             m_canvas->removeBackgroundAiQuick(m_selectedId);
     });
+
+    connect(m_layerCompsAction, &QAction::triggered, this, &MainWindow::openLayerComps);
+    connect(m_webSlicesAction, &QAction::triggered, this, &MainWindow::openWebSlices);
 
     // Ajustes (Image ▸ Adjustments): um tipo por ação, na mesma ordem do
     // dialogo.
@@ -2672,6 +2679,22 @@ void MainWindow::checkForRecoveryFile()
         m_suggestedSavePath = sourcePath;
         saveDocumentAs();
     }
+}
+
+void MainWindow::openLayerComps()
+{
+    if (!m_document)
+        return;
+    LayerCompsDialog dlg(*m_document, m_history.get(), m_i18n, this);
+    dlg.exec();
+}
+
+void MainWindow::openWebSlices()
+{
+    if (!m_document)
+        return;
+    WebSlicesDialog dlg(*m_document, m_history.get(), m_selectedId, m_i18n, this);
+    dlg.exec();
 }
 
 void MainWindow::openAdjustments(cc::AdjustmentType type)

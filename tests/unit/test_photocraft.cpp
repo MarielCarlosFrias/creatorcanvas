@@ -1,8 +1,12 @@
 #include "core/Document.h"
+#include "core/commands/LayerCompCommands.h"
+#include "core/history/CommandStack.h"
+#include "imageio/DocumentExporter.h"
 #include "core/layers/ToneAdjustments.h"
 #include "core/serialization/ProjectFile.h"
 
 #include <QTemporaryDir>
+#include <QFile>
 #include <QtTest>
 
 using namespace cc;
@@ -106,4 +110,75 @@ private slots:
 };
 
 QTEST_MAIN(TestPhotocraft)
+
+    void compsAndSlicesThroughCommands()
+    {
+        Document doc(40, 30);
+        auto bg = std::make_unique<BackgroundLayer>();
+        bg->fill = QColor(10, 20, 30);
+        QVERIFY(doc.addLayer(std::move(bg)));
+        auto shape = std::make_unique<ShapeLayer>();
+        shape->kind = ShapeKind::Ellipse;
+        shape->fill = QColor(200, 40, 40);
+        shape->transform.position = QPointF(8, 6);
+        const LayerId shapeId = shape->id();
+        QVERIFY(doc.addLayer(std::move(shape)));
+
+        CommandStack history;
+
+        // Guardar comp do estado actual e aplicá-la depois de mexer.
+        LayerComp comp = compFromDocument(doc, QStringLiteral("Composto 1"),
+                                          true, true, true);
+        QVERIFY(!comp.states.empty());
+        executeAddLayerComp(doc, &history, comp);
+        QCOMPARE(doc.layerComps().size(), 1);
+
+        // Mexer no documento e recuperar o estado pela comp (um undo step).
+        doc.setLayerVisible(shapeId, false);
+        doc.setLayerTransform(shapeId, [&] {
+            AffineTransform t = doc.findLayer(shapeId)->transform;
+            t.position = QPointF(20, 20);
+            return t;
+        }());
+        QVERIFY(executeApplyLayerComp(doc, &history, comp.id));
+        const Layer* restored = doc.findLayer(shapeId);
+        QVERIFY(restored->visible);
+        QCOMPARE(restored->transform.position, QPointF(8, 6));
+
+        // Undo volta ao estado mexido; redo reaplica a comp.
+        history.undo();
+        QVERIFY(!doc.findLayer(shapeId)->visible);
+        history.redo();
+        QVERIFY(doc.findLayer(shapeId)->visible);
+        QCOMPARE(doc.findLayer(shapeId)->transform.position, QPointF(8, 6));
+
+        // Remover a repõe no undo.
+        executeRemoveLayerComp(doc, &history, comp.id);
+        QVERIFY(doc.layerComps().empty());
+        history.undo();
+        QCOMPARE(doc.layerComps().size(), 1);
+
+        // Fatias: criar, remover e exportar uma.
+        WebSlice slice;
+        slice.name = QStringLiteral("thumb");
+        slice.rect = QRectF(0, 0, 40, 30);
+        slice.exportFormat = QStringLiteral("png");
+        executeAddWebSlice(doc, &history, slice);
+        QCOMPARE(doc.webSlices().size(), 1);
+
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString out = dir.filePath(QStringLiteral("thumb.png"));
+        QString error;
+        QVERIFY2(cc::exportSliceToImage(doc, doc.webSlices().front().rect, out,
+                                        QStringLiteral("png"), -1, 1.0, &error),
+                 qPrintable(error));
+        QVERIFY(QFile::exists(out));
+
+        executeRemoveWebSlice(doc, &history, slice.id);
+        QVERIFY(doc.webSlices().empty());
+        history.undo();
+        QCOMPARE(doc.webSlices().size(), 1);
+    }
+
 #include "test_photocraft.moc"

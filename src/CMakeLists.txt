@@ -222,6 +222,10 @@ add_executable(creatorcanvas
     ui/shortcutdialog.cpp
     ui/workspacelayout.h
     ui/workspacelayout.cpp
+    ui/layercompsdialog.h
+    ui/layercompsdialog.cpp
+    ui/webslicesdialog.h
+    ui/webslicesdialog.cpp
 )
 target_link_libraries(creatorcanvas
     PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets
