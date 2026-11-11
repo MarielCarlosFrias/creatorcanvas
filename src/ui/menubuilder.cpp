@@ -80,6 +80,8 @@ void MenuBuilder::buildMenus(I18nService* i18n)
         modifyMenu->addAction(act);
     }
     selectMenu->addAction(m_actions->colorRangeAction);
+    selectMenu->addSeparator();
+    selectMenu->addAction(m_actions->selectSubjectAction);
 
     // --- Camada ---
     layerMenu = m_menuBar->addMenu(QString());
@@ -191,6 +193,7 @@ void MenuBuilder::buildMenus(I18nService* i18n)
     // --- Configurações & Ajuda ---
     settingsMenu = m_menuBar->addMenu(QString());
     settingsMenu->addAction(m_actions->settingsAction);
+    settingsMenu->addAction(m_actions->shortcutsAction);
 
     helpMenu = m_menuBar->addMenu(QString());
     helpMenu->addAction(m_actions->startScreenAction);

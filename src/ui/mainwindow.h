@@ -64,6 +64,12 @@ public:
     /// ferramenta pelo nome usando a mesma action da UI.
     void selectToolByName(const QString& name);
 
+    /// Documento actualmente aberto (nullptr antes de abrir/criar um).
+    Document* document() const { return m_document; }
+
+    /// Selecciona uma camada (como se o utilizador clicasse na lista).
+    void selectLayer(const cc::LayerId& id);
+
     /// Ferramenta de desenvolvimento (--ui-snapshot): cria um documento demo
     /// para o canvas não ficar vazio nas capturas.
     void createDemoDocumentForSnapshot();
@@ -137,6 +143,8 @@ private:
     bool windowFitsOnScreen() const;
     void updateZoomLabel();
     void updatePositionLabel(const QPointF& documentPos);
+    void updateResponsiveLayout();
+    bool isEditorVisible() const;
 
     SettingsService* m_settings = nullptr;
     I18nService* m_i18n = nullptr;
@@ -290,6 +298,7 @@ private:
     QMenu* m_modifyMenu = nullptr;
     QList<QAction*> m_modifyActions;
     QAction* m_colorRangeAction = nullptr;
+    QAction* m_selectSubjectAction = nullptr;
     QAction* m_selectionOpsAction = nullptr;
     QMenu* m_selectionToolsMenu = nullptr;
     QMenu* m_retouchToolsMenu = nullptr;
@@ -308,6 +317,7 @@ private:
     // Responsividade: docks auto-ocultados em janelas estreitas, com o
     // estado escolhido pelo usuário guardado para ser restaurado.
     bool m_suppressStartupInteractions = false;
+    bool m_updatingResponsiveLayout = false;
     bool m_docksAutoHidden = false;
     QList<QPair<QDockWidget*, bool>> m_savedDockVisibility;
 };

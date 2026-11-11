@@ -1,5 +1,6 @@
 #include "actionmanager.h"
 #include <QMap>
+#include <QSettings>
 
 #include <QKeySequence>
 #include "localization/i18nservice.h"
@@ -279,6 +280,12 @@ void ActionManager::createActions(I18nService* i18n)
     selectionOpsAction = new QAction(this);
     colorRangeAction = new QAction(this);
 
+    // Selecionar Sujeito (IA): mesmo motor do recorte de fundo, mas o
+    // resultado é uma seleção de píxeis em vez de descartar o fundo.
+    selectSubjectAction = new QAction(this);
+    selectSubjectAction->setIcon(ThemeIcons::toolWand());
+    selectSubjectAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+Alt+S")));
+
     modifyActions.clear();
     for (int i = 0; i < 5; ++i) {
         modifyActions.append(new QAction(this));
@@ -329,6 +336,8 @@ void ActionManager::createActions(I18nService* i18n)
     settingsAction->setIcon(ThemeIcons::actionSettings());
     settingsAction->setShortcut(QKeySequence::Preferences);
 
+    shortcutsAction = new QAction(this);
+
     startScreenAction = new QAction(this);
     startScreenAction->setIcon(ThemeIcons::actionNewDocument());
 
@@ -338,6 +347,10 @@ void ActionManager::createActions(I18nService* i18n)
     aboutQtAction = new QAction(this);
 
     retranslate(i18n);
+    registerShortcutActions();
+    for (auto it = m_shortcutActions.cbegin(); it != m_shortcutActions.cend(); ++it)
+        m_defaultShortcuts.insert(it.key(), it.value()->shortcut());
+    loadCustomShortcuts();
 }
 
 void ActionManager::retranslate(I18nService* i18n)
@@ -479,6 +492,8 @@ void ActionManager::retranslate(I18nService* i18n)
     selectionOpsAction->setText(i18n->t("editor", "selection.operations"));
     selectionOpsAction->setToolTip(i18n->t("editor", "selection.operationsTooltip"));
     colorRangeAction->setText(i18n->t("editor", "selection.colorRange.title"));
+    selectSubjectAction->setText(i18n->t("editor", "selection.subjectAi"));
+    selectSubjectAction->setToolTip(i18n->t("editor", "selection.subjectAiTooltip"));
 
     static const char* const modifyKeys[] = {
         "selection.modify.expand", "selection.modify.contract",
@@ -530,6 +545,7 @@ void ActionManager::retranslate(I18nService* i18n)
 
     // --- Janela, Ajuda & Configurações ---
     settingsAction->setText(i18n->t("common", "menu.settings.open"));
+    shortcutsAction->setText(i18n->t("common", "menu.settings.shortcuts"));
     startScreenAction->setText(i18n->t("common", "start.screenAction"));
     aboutAction->setText(i18n->t("common", "menu.help.about"));
     aboutQtAction->setText(i18n->t("common", "menu.help.aboutQt"));
@@ -558,187 +574,23 @@ QMap<QString, QKeySequence> ActionManager::getAllShortcuts() const
 {
     QMap<QString, QKeySequence> shortcuts;
 
-    auto addAction = [&](QAction* act) {
-        if (act && !act->text().isEmpty()) {
-            shortcuts[act->text()] = act->shortcut();
-        }
-    };
-
-    addAction(newAction);
-    addAction(openAction);
-    addAction(saveAction);
-    addAction(saveAsAction);
-    addAction(importAction);
-    addAction(exportAction);
-    addAction(batchAction);
-    addAction(quitAction);
-    addAction(undoAction);
-    addAction(redoAction);
-    addAction(zoomInAction);
-    addAction(zoomOutAction);
-    addAction(zoomFitAction);
-    addAction(toggleGridAction);
-    addAction(toggleSnapAction);
-    addAction(toggleHistoryAction);
-    addAction(toggleToolsBarAction);
-    addAction(toggleRightPanelAction);
-    addAction(toggleLayersDockAction);
-    addAction(toggleTextDockAction);
-    addAction(toggleShapeDockAction);
-    addAction(toggleImageDockAction);
-    addAction(addTextAction);
-    addAction(addFillLayerAction);
-    addAction(addAdjustmentLayerAction);
-    addAction(addRectAction);
-    addAction(addRoundedRectAction);
-    addAction(addEllipseAction);
-    addAction(addLineAction);
-    addAction(addArrowRightAction);
-    addAction(addArrowCurvedAction);
-    addAction(addStarAction);
-    addAction(addBadgeAction);
-    addAction(addSpeechBubbleAction);
-    addAction(addHeartAction);
-    addAction(alignLeftAction);
-    addAction(alignCenterXAction);
-    addAction(alignRightAction);
-    addAction(alignTopAction);
-    addAction(alignCenterYAction);
-    addAction(alignBottomAction);
-    addAction(alignCenterBothAction);
-    addAction(distributeHAction);
-    addAction(distributeVAction);
-    addAction(groupAction);
-    addAction(ungroupAction);
-    addAction(mergeSelectedAction);
-    addAction(mergeVisibleAction);
-    addAction(flattenAction);
-    addAction(textBehindSubjectAction);
-    addAction(flipHAction);
-    addAction(flipVAction);
-    addAction(rotateLeftAction);
-    addAction(rotateRightAction);
-    addAction(deleteAction);
-    addAction(lockLayerAction);
-    addAction(createClippingMaskAction);
-    addAction(releaseClippingMaskAction);
-    addAction(selectAllAction);
-    addAction(deselectAction);
-    addAction(invertSelectionAction);
-    addAction(selectionOpsAction);
-    addAction(colorRangeAction);
-    addAction(toolSelectAction);
-    addAction(toolCropAction);
-    addAction(toolScissorsAction);
-    addAction(toolWandAction);
-    addAction(toolCloneAction);
-    addAction(toolPaintAction);
-    addAction(toolFloodAction);
-    addAction(toolEyedropperAction);
-    addAction(toolRetouchAction);
-    addAction(toolHealingAction);
-    addAction(removeBgAiAction);
-    addAction(removeBgAiQuickAction);
-    addAction(mockupAction);
-    addAction(settingsAction);
-    addAction(startScreenAction);
-    addAction(aboutAction);
-    addAction(aboutQtAction);
+    for (QAction* action : m_shortcutActions) {
+        if (action && !action->text().isEmpty())
+            shortcuts.insert(action->text(), action->shortcut());
+    }
 
     return shortcuts;
 }
 
 bool ActionManager::setShortcut(const QString& actionName, const QKeySequence& key)
 {
-    // Map action names to actions
-    static QMap<QString, QAction*> actionMap;
-    if (actionMap.isEmpty()) {
-        actionMap[newAction->text()] = newAction;
-        actionMap[openAction->text()] = openAction;
-        actionMap[saveAction->text()] = saveAction;
-        actionMap[saveAsAction->text()] = saveAsAction;
-        actionMap[importAction->text()] = importAction;
-        actionMap[exportAction->text()] = exportAction;
-        actionMap[batchAction->text()] = batchAction;
-        actionMap[quitAction->text()] = quitAction;
-        actionMap[undoAction->text()] = undoAction;
-        actionMap[redoAction->text()] = redoAction;
-        actionMap[zoomInAction->text()] = zoomInAction;
-        actionMap[zoomOutAction->text()] = zoomOutAction;
-        actionMap[zoomFitAction->text()] = zoomFitAction;
-        actionMap[toggleGridAction->text()] = toggleGridAction;
-        actionMap[toggleSnapAction->text()] = toggleSnapAction;
-        actionMap[toggleHistoryAction->text()] = toggleHistoryAction;
-        actionMap[toggleToolsBarAction->text()] = toggleToolsBarAction;
-        actionMap[toggleRightPanelAction->text()] = toggleRightPanelAction;
-        actionMap[toggleLayersDockAction->text()] = toggleLayersDockAction;
-        actionMap[toggleTextDockAction->text()] = toggleTextDockAction;
-        actionMap[toggleShapeDockAction->text()] = toggleShapeDockAction;
-        actionMap[toggleImageDockAction->text()] = toggleImageDockAction;
-        actionMap[addTextAction->text()] = addTextAction;
-        actionMap[addFillLayerAction->text()] = addFillLayerAction;
-        actionMap[addAdjustmentLayerAction->text()] = addAdjustmentLayerAction;
-        actionMap[addRectAction->text()] = addRectAction;
-        actionMap[addRoundedRectAction->text()] = addRoundedRectAction;
-        actionMap[addEllipseAction->text()] = addEllipseAction;
-        actionMap[addLineAction->text()] = addLineAction;
-        actionMap[addArrowRightAction->text()] = addArrowRightAction;
-        actionMap[addArrowCurvedAction->text()] = addArrowCurvedAction;
-        actionMap[addStarAction->text()] = addStarAction;
-        actionMap[addBadgeAction->text()] = addBadgeAction;
-        actionMap[addSpeechBubbleAction->text()] = addSpeechBubbleAction;
-        actionMap[addHeartAction->text()] = addHeartAction;
-        actionMap[alignLeftAction->text()] = alignLeftAction;
-        actionMap[alignCenterXAction->text()] = alignCenterXAction;
-        actionMap[alignRightAction->text()] = alignRightAction;
-        actionMap[alignTopAction->text()] = alignTopAction;
-        actionMap[alignCenterYAction->text()] = alignCenterYAction;
-        actionMap[alignBottomAction->text()] = alignBottomAction;
-        actionMap[alignCenterBothAction->text()] = alignCenterBothAction;
-        actionMap[distributeHAction->text()] = distributeHAction;
-        actionMap[distributeVAction->text()] = distributeVAction;
-        actionMap[groupAction->text()] = groupAction;
-        actionMap[ungroupAction->text()] = ungroupAction;
-        actionMap[mergeSelectedAction->text()] = mergeSelectedAction;
-        actionMap[mergeVisibleAction->text()] = mergeVisibleAction;
-        actionMap[flattenAction->text()] = flattenAction;
-        actionMap[textBehindSubjectAction->text()] = textBehindSubjectAction;
-        actionMap[flipHAction->text()] = flipHAction;
-        actionMap[flipVAction->text()] = flipVAction;
-        actionMap[rotateLeftAction->text()] = rotateLeftAction;
-        actionMap[rotateRightAction->text()] = rotateRightAction;
-        actionMap[createClippingMaskAction->text()] = createClippingMaskAction;
-        actionMap[releaseClippingMaskAction->text()] = releaseClippingMaskAction;
-        actionMap[deleteAction->text()] = deleteAction;
-        actionMap[lockLayerAction->text()] = lockLayerAction;
-        actionMap[selectAllAction->text()] = selectAllAction;
-        actionMap[deselectAction->text()] = deselectAction;
-        actionMap[invertSelectionAction->text()] = invertSelectionAction;
-        actionMap[selectionOpsAction->text()] = selectionOpsAction;
-        actionMap[colorRangeAction->text()] = colorRangeAction;
-        actionMap[toolSelectAction->text()] = toolSelectAction;
-        actionMap[toolCropAction->text()] = toolCropAction;
-        actionMap[toolScissorsAction->text()] = toolScissorsAction;
-        actionMap[toolWandAction->text()] = toolWandAction;
-        actionMap[toolCloneAction->text()] = toolCloneAction;
-        actionMap[toolPaintAction->text()] = toolPaintAction;
-        actionMap[toolFloodAction->text()] = toolFloodAction;
-        actionMap[toolEyedropperAction->text()] = toolEyedropperAction;
-        actionMap[toolRetouchAction->text()] = toolRetouchAction;
-        actionMap[toolHealingAction->text()] = toolHealingAction;
-        actionMap[removeBgAiAction->text()] = removeBgAiAction;
-        actionMap[removeBgAiQuickAction->text()] = removeBgAiQuickAction;
-        actionMap[mockupAction->text()] = mockupAction;
-        actionMap[settingsAction->text()] = settingsAction;
-        actionMap[startScreenAction->text()] = startScreenAction;
-        actionMap[aboutAction->text()] = aboutAction;
-        actionMap[aboutQtAction->text()] = aboutQtAction;
-    }
-
-    auto it = actionMap.find(actionName);
-    if (it != actionMap.end()) {
-        it.value()->setShortcut(key);
-        return true;
+    for (auto it = m_shortcutActions.cbegin(); it != m_shortcutActions.cend(); ++it) {
+        QAction* action = it.value();
+        if (action && action->text() == actionName) {
+            action->setShortcut(key);
+            persistShortcut(it.key(), key);
+            return true;
+        }
     }
     return false;
 }
@@ -749,12 +601,104 @@ QKeySequence ActionManager::getShortcut(const QString& actionName) const
     return shortcuts.value(actionName, QKeySequence());
 }
 
+QKeySequence ActionManager::defaultShortcut(const QString& actionName) const
+{
+    for (auto it = m_shortcutActions.cbegin(); it != m_shortcutActions.cend(); ++it) {
+        if (it.value() && it.value()->text() == actionName)
+            return m_defaultShortcuts.value(it.key());
+    }
+    return {};
+}
+
+bool ActionManager::resetShortcut(const QString& actionName)
+{
+    for (auto it = m_shortcutActions.cbegin(); it != m_shortcutActions.cend(); ++it) {
+        if (it.value() && it.value()->text() == actionName) {
+            const QKeySequence shortcut = m_defaultShortcuts.value(it.key());
+            it.value()->setShortcut(shortcut);
+            persistShortcut(it.key(), shortcut);
+            return true;
+        }
+    }
+    return false;
+}
+
 void ActionManager::resetAllShortcuts()
 {
-    // Reset all shortcuts to defaults by recreating actions
-    // This is a simplified version - in a full implementation,
-    // we would store original shortcuts and restore them
-    createActions(nullptr); // Will re-create with defaults
+    QSettings settings;
+    settings.beginGroup(QStringLiteral("shortcuts"));
+    settings.remove(QString());
+    settings.endGroup();
+    settings.sync();
+
+    for (auto it = m_shortcutActions.cbegin(); it != m_shortcutActions.cend(); ++it) {
+        if (it.value())
+            it.value()->setShortcut(m_defaultShortcuts.value(it.key()));
+    }
+}
+
+void ActionManager::registerShortcutActions()
+{
+    m_shortcutActions.clear();
+    const auto add = [this](const char* id, QAction* action) {
+        if (action)
+            m_shortcutActions.insert(QLatin1String(id), action);
+    };
+    add("file.new", newAction); add("file.open", openAction); add("file.save", saveAction);
+    add("file.saveAs", saveAsAction); add("file.import", importAction); add("file.export", exportAction);
+    add("file.batch", batchAction); add("file.quit", quitAction);
+    add("edit.undo", undoAction); add("edit.redo", redoAction);
+    add("view.zoomIn", zoomInAction); add("view.zoomOut", zoomOutAction); add("view.zoomFit", zoomFitAction);
+    add("view.grid", toggleGridAction); add("view.snap", toggleSnapAction); add("view.history", toggleHistoryAction);
+    add("view.toolsBar", toggleToolsBarAction); add("view.rightPanel", toggleRightPanelAction);
+    add("panel.layers", toggleLayersDockAction); add("panel.text", toggleTextDockAction);
+    add("panel.shape", toggleShapeDockAction); add("panel.image", toggleImageDockAction);
+    add("layer.addText", addTextAction); add("layer.addFill", addFillLayerAction);
+    add("layer.addAdjustment", addAdjustmentLayerAction); add("shape.rectangle", addRectAction);
+    add("shape.roundedRectangle", addRoundedRectAction); add("shape.ellipse", addEllipseAction);
+    add("shape.line", addLineAction); add("shape.arrow", addArrowRightAction); add("shape.curvedArrow", addArrowCurvedAction);
+    add("shape.star", addStarAction); add("shape.badge", addBadgeAction); add("shape.speechBubble", addSpeechBubbleAction);
+    add("shape.heart", addHeartAction); add("align.left", alignLeftAction); add("align.centerX", alignCenterXAction);
+    add("align.right", alignRightAction); add("align.top", alignTopAction); add("align.centerY", alignCenterYAction);
+    add("align.bottom", alignBottomAction); add("align.centerBoth", alignCenterBothAction);
+    add("align.distributeH", distributeHAction); add("align.distributeV", distributeVAction);
+    add("layer.group", groupAction); add("layer.ungroup", ungroupAction); add("layer.mergeSelected", mergeSelectedAction);
+    add("layer.mergeVisible", mergeVisibleAction); add("layer.flatten", flattenAction); add("layer.textBehind", textBehindSubjectAction);
+    add("transform.flipH", flipHAction); add("transform.flipV", flipVAction); add("transform.rotateLeft", rotateLeftAction);
+    add("transform.rotateRight", rotateRightAction); add("layer.delete", deleteAction); add("layer.lock", lockLayerAction);
+    add("layer.createClippingMask", createClippingMaskAction); add("layer.releaseClippingMask", releaseClippingMaskAction);
+    add("select.all", selectAllAction); add("select.none", deselectAction); add("select.invert", invertSelectionAction);
+    add("select.operations", selectionOpsAction); add("select.colorRange", colorRangeAction);
+    add("select.subjectAi", selectSubjectAction);
+    add("tool.select", toolSelectAction); add("tool.marquee", toolMarqueeAction); add("tool.crop", toolCropAction);
+    add("tool.scissors", toolScissorsAction); add("tool.wand", toolWandAction); add("tool.clone", toolCloneAction);
+    add("tool.paint", toolPaintAction); add("tool.gradient", toolGradientAction); add("tool.flood", toolFloodAction);
+    add("tool.eyedropper", toolEyedropperAction); add("tool.retouch", toolRetouchAction); add("tool.healing", toolHealingAction);
+    add("ai.removeBackground", removeBgAiAction); add("ai.quickRemoveBackground", removeBgAiQuickAction);
+    add("ai.mockup", mockupAction); add("settings.open", settingsAction); add("settings.shortcuts", shortcutsAction);
+    add("help.startScreen", startScreenAction); add("help.about", aboutAction); add("help.aboutQt", aboutQtAction);
+}
+
+void ActionManager::loadCustomShortcuts()
+{
+    QSettings settings;
+    settings.beginGroup(QStringLiteral("shortcuts"));
+    for (auto it = m_shortcutActions.cbegin(); it != m_shortcutActions.cend(); ++it) {
+        if (settings.contains(it.key()) && it.value()) {
+            const QString portable = settings.value(it.key()).toString();
+            it.value()->setShortcut(QKeySequence::fromString(portable, QKeySequence::PortableText));
+        }
+    }
+    settings.endGroup();
+}
+
+void ActionManager::persistShortcut(const QString& id, const QKeySequence& key) const
+{
+    QSettings settings;
+    settings.beginGroup(QStringLiteral("shortcuts"));
+    settings.setValue(id, key.toString(QKeySequence::PortableText));
+    settings.endGroup();
+    settings.sync();
 }
 
 } // namespace cc

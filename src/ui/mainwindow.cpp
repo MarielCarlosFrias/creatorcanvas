@@ -304,6 +304,30 @@ void MainWindow::resizeEvent(QResizeEvent* event)
 {
     QMainWindow::resizeEvent(event);
 
+    updateResponsiveLayout();
+}
+
+bool MainWindow::isEditorVisible() const
+{
+    return m_centralStack && m_canvas
+           && m_centralStack->currentWidget() == m_canvas;
+}
+
+void MainWindow::updateResponsiveLayout()
+{
+    // Mostrar/ocultar barras e docks pode causar outro resize no QMainWindow.
+    // Uma única atualização já calcula todo o estado, portanto evita recursão
+    // e oscilações visuais durante o redimensionamento.
+    if (m_updatingResponsiveLayout)
+        return;
+    m_updatingResponsiveLayout = true;
+
+    const bool editorVisible = isEditorVisible();
+    if (!editorVisible) {
+        m_updatingResponsiveLayout = false;
+        return;
+    }
+
     // At laptop widths keep the inspector usable, but give the canvas more
     // room than the desktop minimum dock width allows.
     const bool compact = width() < Design::BreakSM;
@@ -352,11 +376,20 @@ void MainWindow::resizeEvent(QResizeEvent* event)
         m_docksAutoHidden = false;
     }
 
+    // Em larguras de portátil, estes dois chips consomem espaço útil e
+    // empurram as mensagens de estado. Zoom e posição continuam sempre.
+    const bool minimalStatus = width() < 1100 || height() < 680;
     if (m_languageLabel)
-        m_languageLabel->setVisible(!compact);
+        m_languageLabel->setVisible(!minimalStatus);
     if (m_versionLabel)
-        m_versionLabel->setVisible(!compact);
+        m_versionLabel->setVisible(!minimalStatus);
 
+    const bool narrowTools = width() < Design::BreakSM
+                             || (height() < 760 && width() < 1300);
+    const bool toolsEnabled = !m_toggleToolsBarAction
+                              || m_toggleToolsBarAction->isChecked();
+    if (m_quickToolBar)
+        m_quickToolBar->setVisible(true);
     if (m_toolsBar) {
         // Em janelas pequenas a barra lateral some e uma barra horizontal
         // compacta (mesmas actions) aparece no topo. Antes a própria barra
@@ -365,13 +398,9 @@ void MainWindow::resizeEvent(QResizeEvent* event)
         // Também troca quando a ALTURA não comporta 14 ferramentas na
         // vertical (ex.: 1024x700 cortava as últimas e o usuário não via
         // gradiente/reparo).
-        const bool narrow = width() < Design::BreakSM
-                            || (height() < 760 && width() < 1300);
-        const bool toolsEnabled = !m_toggleToolsBarAction
-                                  || m_toggleToolsBarAction->isChecked();
-        m_toolsBar->setVisible(!narrow && toolsEnabled);
+        m_toolsBar->setVisible(!narrowTools && toolsEnabled);
         if (m_toolsBarCompact)
-            m_toolsBarCompact->setVisible(narrow && toolsEnabled);
+            m_toolsBarCompact->setVisible(narrowTools && toolsEnabled);
         // Ícone um pouco menor quando a altura é limitada, para as 14
         // ferramentas caberem sem corte/scroll.
         const int verticalIcon = height() < 800
@@ -389,12 +418,12 @@ void MainWindow::resizeEvent(QResizeEvent* event)
 
     applyToolOptionsCompact(width() < 1100);
     if (m_toolOptionsBar)
-        m_toolOptionsBar->setVisible(width() >= Design::EditorMinWidth
-                                     && m_toolOptionsBarWidget
+        m_toolOptionsBar->setVisible(toolsEnabled && m_toolOptionsBarWidget
                                      && m_toolOptionsBarWidget->currentToolIndex() != 0);
     // NOTA: o CanvasView cuida do próprio resize (re-ajusta em modo fit,
     // preserva o zoom manual). Antes um fitToViewport() aqui zerava o zoom
     // do usuário a cada redimensionamento de janela.
+    m_updatingResponsiveLayout = false;
 }
 
 void MainWindow::attachDocument(std::unique_ptr<Document> doc, const QString& filePath)
@@ -508,6 +537,7 @@ void MainWindow::buildCentralWidget()
                 const bool imageSelected = selected && selected->type() == LayerType::Image;
                 if (m_removeBgAiAction) m_removeBgAiAction->setEnabled(imageSelected);
                 if (m_removeBgAiQuickAction) m_removeBgAiQuickAction->setEnabled(imageSelected);
+                if (m_selectSubjectAction) m_selectSubjectAction->setEnabled(imageSelected);
                 if (m_mockupAction) m_mockupAction->setEnabled(imageSelected);
                 bool canMergeDown = false;
                 if (m_document && selected && selected->type() != LayerType::Background) {
@@ -524,25 +554,12 @@ void MainWindow::buildCentralWidget()
                 if (m_mergeVisibleAction) m_mergeVisibleAction->setEnabled(m_document != nullptr);
                 if (m_flattenAction) m_flattenAction->setEnabled(m_document != nullptr);
 
-                // Auto-ativar a aba do inspetor correspondente ao tipo de camada
-                // selecionada — apenas em seleção ÚNICA. Em seleção múltipla
-                // os tipos são mistos: pular de aba só confunde o utilizador.
-                if (selected
-                    && (!m_canvas || m_canvas->selectedLayers().size() <= 1)) {
-                    switch (selected->type()) {
-                    case LayerType::Text:
-                        if (m_textDock && m_textDock->isVisible()) m_textDock->raise();
-                        break;
-                    case LayerType::Shape:
-                        if (m_shapeDock && m_shapeDock->isVisible()) m_shapeDock->raise();
-                        break;
-                    case LayerType::Image:
-                        if (m_imageDock && m_imageDock->isVisible()) m_imageDock->raise();
-                        break;
-                    default:
-                        break;
-                    }
-                }
+                // NÃO trocar de aba automaticamente ao seleccionar uma
+                // camada. O utilizador permanece onde está: se está na aba
+                // "Camadas" continua lá, se está na aba "Texto" continua lá.
+                // Só muda se ele próprio carregar noutra aba.
+                // (Antes, clicar numa camada de texto saltava para a aba
+                // "Texto" e tirava o utilizador do painel de camadas.)
             });
     connect(m_canvas, &CanvasView::multiSelectionChanged, this,
             [this](const QList<LayerId>& ids) {
@@ -618,8 +635,7 @@ void MainWindow::buildCentralWidget()
             [this](CanvasTool tool) {
                 if (m_toolOptionsBarWidget)
                     m_toolOptionsBarWidget->setCurrentTool(tool);
-                if (m_toolOptionsBar)
-                    m_toolOptionsBar->setVisible(tool != CanvasTool::Select);
+                updateResponsiveLayout();
                 // Trocar de ferramenta NÃO deve mexer no zoom do canvas
                 // (era um dos comportamentos mais confusos do app).
                 if (m_toolGroup) {
@@ -944,6 +960,7 @@ void MainWindow::buildActions()
     m_invertSelectionAction = m_actions->invertSelectionAction;
     m_selectionOpsAction = m_actions->selectionOpsAction;
     m_colorRangeAction = m_actions->colorRangeAction;
+    m_selectSubjectAction = m_actions->selectSubjectAction;
     m_modifyActions = m_actions->modifyActions;
     m_toolGroup = m_actions->toolGroup;
     m_toolSelectAction = m_actions->toolSelectAction;
@@ -981,6 +998,11 @@ void MainWindow::connectActionSignals()
     connect(m_exportAction, &QAction::triggered, this, &MainWindow::exportImage);
     connect(m_actions->batchAction, &QAction::triggered, this, &MainWindow::openBatchDialog);
     connect(m_actions->workspaceLayoutAction, &QAction::triggered, this, &MainWindow::openWorkspaceLayoutDialog);
+    connect(m_actions->shortcutsAction, &QAction::triggered, this, [this] {
+        ShortcutDialog dialog(m_actions, this);
+        dialog.exec();
+        warnDuplicateShortcuts(this);
+    });
     connect(m_quitAction, &QAction::triggered, this, &MainWindow::close);
 
     // --- Edição & Histórico ---
@@ -1008,12 +1030,8 @@ void MainWindow::connectActionSignals()
         }
     });
     connect(m_toggleToolsBarAction, &QAction::triggered, this, [this](bool checked) {
-        const bool narrow = width() < Design::BreakSM;
-        if (m_toolsBar) m_toolsBar->setVisible(checked && !narrow);
-        if (m_toolsBarCompact) m_toolsBarCompact->setVisible(checked && narrow);
-        if (m_toolOptionsBar)
-            m_toolOptionsBar->setVisible(checked && m_toolOptionsBarWidget
-                                         && m_toolOptionsBarWidget->currentToolIndex() != 0);
+        Q_UNUSED(checked);
+        updateResponsiveLayout();
         QTimer::singleShot(150, this, [this] { if (m_canvas) m_canvas->fitToViewport(); });
     });
     connect(m_toggleRightPanelAction, &QAction::triggered, this, [this](bool checked) {
@@ -1299,6 +1317,10 @@ void MainWindow::connectActionSignals()
         if (m_canvas && m_document && !m_selectedId.isNull())
             m_canvas->removeBackgroundAiQuick(m_selectedId);
     });
+    connect(m_selectSubjectAction, &QAction::triggered, this, [this] {
+        if (m_canvas && m_document && !m_selectedId.isNull())
+            m_canvas->selectSubjectWithAi(m_selectedId);
+    });
     connect(m_mockupAction, &QAction::triggered, this, [this] {
         if (m_imageInspector) m_imageInspector->openMockupDialog();
     });
@@ -1429,9 +1451,9 @@ void MainWindow::buildToolBars()
         else
             m_toolsBarCompact->addAction(a);
     }
-    // Compartilha a linha do QuickAccess: em janelas estreitas as duas
-    // cabem juntas (≈330px + ≈360px) e isso evita uma terceira faixa de
-    // chrome vertical. A barra de opções ganha a linha de baixo.
+    // Linha própria: em 800–1024 px, juntá-la aos atalhos rápidos fazia os
+    // últimos botões desaparecerem sem qualquer indicação de overflow.
+    addToolBarBreak(Qt::TopToolBarArea);
     addToolBar(Qt::TopToolBarArea, m_toolsBarCompact);
     m_toolsBarCompact->hide();
 
@@ -1443,6 +1465,7 @@ void MainWindow::buildToolBars()
     // barra de opções era anexada ao fim da barra compacta e o conteúdo
     // (slider/valor) ficava cortado na borda direita.
     addToolBarBreak(Qt::TopToolBarArea);
+    addToolBar(Qt::TopToolBarArea, m_toolOptionsBar);
     m_toolOptionsBarWidget = new ToolOptionsBar(this);
     m_toolOptionsBarWidget->setCanvas(m_canvas);
     m_toolOptionsBarWidget->setI18n(m_i18n);
@@ -1498,6 +1521,17 @@ void MainWindow::selectToolByName(const QString& name)
 {
     if (m_actions)
         m_actions->selectToolByName(name);
+}
+
+void MainWindow::selectLayer(const cc::LayerId& id)
+{
+    if (id.isNull())
+        return;
+    m_selectedId = id;
+    if (m_canvas)
+        m_canvas->setSelectedLayer(id);
+    if (m_layersPanel)
+        m_layersPanel->setSelectedLayer(id);
 }
 
 void MainWindow::applyToolOptionsCompact(bool compact)
@@ -1569,14 +1603,7 @@ void MainWindow::enterEditor()
     if (m_imageDock) m_imageDock->show();
     if (m_historyDock) m_historyDock->show();
     if (m_toggleHistoryAction) m_toggleHistoryAction->setChecked(true);
-    if (m_quickToolBar) m_quickToolBar->show();
-    // Barra vertical ou compacta conforme a largura atual.
-    const bool narrow = width() < Design::BreakSM;
-    if (m_toolsBar) m_toolsBar->setVisible(!narrow);
-    if (m_toolsBarCompact) m_toolsBarCompact->setVisible(narrow);
-    // Selection has no contextual controls, so keep this row hidden until a
-    // tool that needs options is selected.
-    if (m_toolOptionsBar) m_toolOptionsBar->hide();
+    updateResponsiveLayout();
     updateWindowTitle();
 }
 

@@ -97,6 +97,7 @@ public:
     QAction* invertSelectionAction = nullptr;
     QAction* selectionOpsAction = nullptr;
     QAction* colorRangeAction = nullptr;
+    QAction* selectSubjectAction = nullptr;
 
     QAction* toolSelectAction = nullptr;
     QAction* toolCropAction = nullptr;
@@ -122,6 +123,7 @@ public:
     QList<QAction*> filterActions;
 
     QAction* settingsAction = nullptr;
+    QAction* shortcutsAction = nullptr;
     QAction* startScreenAction = nullptr;
     QAction* aboutAction = nullptr;
     QAction* aboutQtAction = nullptr;
@@ -144,7 +146,17 @@ public:
     QMap<QString, QKeySequence> getAllShortcuts() const;
     bool setShortcut(const QString& actionName, const QKeySequence& key);
     QKeySequence getShortcut(const QString& actionName) const;
+    QKeySequence defaultShortcut(const QString& actionName) const;
+    bool resetShortcut(const QString& actionName);
     void resetAllShortcuts();
+
+private:
+    void registerShortcutActions();
+    void loadCustomShortcuts();
+    void persistShortcut(const QString& id, const QKeySequence& key) const;
+
+    QMap<QString, QAction*> m_shortcutActions;
+    QMap<QString, QKeySequence> m_defaultShortcuts;
 };
 
 } // namespace cc
