@@ -291,11 +291,16 @@
     "removeSpecks": "Städa prickar",
     "refineTitle": "Förfina urklipp:",
     "refineNote": "Appliceras i realtid över AI-urklippet (penselredigeringar görs om).",
-    "more": "Fler val"
+    "more": "Fler val",
+    "titleSelection": "Välj motiv med AI - CreatorCanvas",
+    "applySelection": "✓ Skapa markering",
+    "tipSelection": "Tips: måla för att återställa eller radera motivets silhuett; resultatet blir en pixelmarkering.",
+    "doneSelection": "✓ Motivet är klart! Justera med penseln vid behov och klicka på Skapa markering."
   },
   "canvas": {
     "context.aiDialog": "✨ Ta bort bakgrund med AI...",
     "context.aiQuick": "⚡ Snabb bakgrundsborttagning (1 klick)",
+    "context.selectSubject": "🎯 Välj motiv (AI)...",
     "status.aiQuickProcessing": "⏳ Tar bort bakgrunden som bakgrundsprocess...",
     "status.aiQuickSuccess": "✓ Bakgrunden borttagen!",
     "status.aiQuickFailed": "Misslyckades med att ta bort bakgrunden.",
@@ -317,6 +322,7 @@
     "command.paintBucket": "Hinkverktyg",
     "command.aiBackground": "Ta bort bakgrund med AI",
     "command.aiBackgroundQuick": "Ta bort bakgrund med AI (Snabb)",
+    "command.selectSubject": "Välj motiv (AI)",
     "layer.group": "Gruppera",
     "layer.ungroup": "Lös upp grupp",
     "status.marqueeHelp": "Markering: dra för att markera. Shift lägger till, Alt drar ifrån. Esc rensar.",
@@ -375,7 +381,9 @@
     "modify.feather": "Fjädra markering",
     "modify.radius": "Radie (px):",
     "colorRange.title": "Färgspann",
-    "colorRange.fuzziness": "Suddighet:"
+    "colorRange.fuzziness": "Suddighet:",
+    "subjectAi": "Välj motiv (AI)...",
+    "subjectAiTooltip": "Använder den lokala AI-modellen för att markera motivet — icke-destruktivt, bakgrunden behålls"
   },
   "layer": {
     "group": "Grupp",

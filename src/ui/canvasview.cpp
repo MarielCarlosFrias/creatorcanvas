@@ -4,7 +4,9 @@
 #include "core/image/BackgroundRemover.h"
 #include "core/image/ImageProcessing.h"
 #include "core/history/DocumentCommands.h"
+#include "core/selection/SelectionEngine.h"
 #include "core/selection/SelectionOperations.h"
+#include "core/commands/SelectionCommands.h"
 #include "core/history/CommandStack.h"
 #include "canvascontextmenu.h"
 #include "inlinetexteditor.h"
@@ -1734,6 +1736,41 @@ void CanvasView::openAiBackgroundRemoval(const LayerId& id)
 bool CanvasView::isQuickAiRunning() const
 {
     return m_quickAiThread && m_quickAiThread->isRunning();
+}
+
+void CanvasView::selectSubjectWithAi(const LayerId& id)
+{
+    if (!m_document)
+        return;
+    Layer* layer = m_document->findLayer(id);
+    if (!layer || layer->type() != LayerType::Image)
+        return;
+
+    auto* imgLayer = static_cast<ImageLayer*>(layer);
+    const QImage srcImg = m_document->assets().decodedImage(imgLayer->assetId);
+    if (srcImg.isNull())
+        return;
+
+    // Modo seleção: recorte não-destrutivo. A silhueta vira uma seleção de
+    // píxeis no espaço do bitmap da camada (mesmo espaço da varinha mágica
+    // e da tesoura), fundida com a seleção atual quando existir — o cursor
+    // do diálogo mantém Replace, e a fusão fina fica para a UI do canvas.
+    AiBackgroundDialog dlg(srcImg, m_i18n, this, /*autoRunInference=*/true,
+                           /*selectionMode=*/true);
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+
+    QImage selection = cc::SelectionEngine::fromAlphaMask(
+        dlg.finalSelection(), srcImg.size(), m_document->pixelSelection(),
+        cc::SelectionMode::Replace);
+    if (selection.isNull())
+        return;
+
+    const QString cmdName = m_i18n
+        ? m_i18n->t("editor", "canvas.command.selectSubject")
+        : QStringLiteral("Select Subject (AI)");
+    cc::executeSetPixelSelection(*m_document, m_history, std::move(selection), cmdName);
+    update();
 }
 
 void CanvasView::removeBackgroundAiQuick(const LayerId& id)

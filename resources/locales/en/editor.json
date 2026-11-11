@@ -291,11 +291,16 @@
     "removeSpecks": "Clean specks",
     "refineTitle": "Cutout Refinement:",
     "refineNote": "Applied live over the AI cutout (brush edits are redone).",
-    "more": "More actions"
+    "more": "More actions",
+    "titleSelection": "Select Subject with AI - CreatorCanvas",
+    "applySelection": "✓ Create Selection",
+    "tipSelection": "Tip: brush to restore or erase the subject silhouette; the result becomes a pixel selection.",
+    "doneSelection": "✓ Subject ready! Adjust with the brush if needed and click Create Selection."
   },
   "canvas": {
     "context.aiDialog": "✨ Remove Background with AI...",
     "context.aiQuick": "⚡ Quick Background Removal (1-Click)",
+    "context.selectSubject": "🎯 Select Subject (AI)...",
     "status.aiQuickProcessing": "⏳ Removing background with AI in background...",
     "status.aiQuickSuccess": "✓ Background removed successfully with AI!",
     "status.aiQuickFailed": "Failed to remove background with AI.",
@@ -317,6 +322,7 @@
     "command.paintBucket": "Paint Bucket",
     "command.aiBackground": "AI Background Removal",
     "command.aiBackgroundQuick": "AI Background Removal (Quick)",
+    "command.selectSubject": "Select Subject (AI)",
     "layer.group": "Group",
     "layer.ungroup": "Ungroup",
     "status.marqueeHelp": "Marquee: drag to select. Shift adds, Alt subtracts. Esc clears.",
@@ -375,7 +381,9 @@
     "modify.feather": "Feather Selection",
     "modify.radius": "Radius (px):",
     "colorRange.title": "Color Range",
-    "colorRange.fuzziness": "Fuzziness:"
+    "colorRange.fuzziness": "Fuzziness:",
+    "subjectAi": "Select Subject (AI)...",
+    "subjectAiTooltip": "Uses the local AI model to select the subject — non-destructive, the background is kept"
   },
   "layer": {
     "group": "Group",

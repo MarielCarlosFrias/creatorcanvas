@@ -28,12 +28,20 @@ public:
     /// autoRunInference=false é usado por testes/capturas de layout: sem
     /// isso o diálogo abre a inferência e, sem modelo, um QMessageBox modal
     /// bloqueia qualquer execução headless.
+    /// selectionMode=true troca o resultado de "imagem sem fundo" para
+    /// "seleção de píxeis do sujeito" (recorte não-destrutivo): o botão de
+    /// aplicar vira "Criar Seleção" e finalSelection() devolve a máscara.
     explicit AiBackgroundDialog(const QImage& sourceImage, I18nService* i18n = nullptr,
                                 QWidget* parent = nullptr,
-                                bool autoRunInference = true);
+                                bool autoRunInference = true,
+                                bool selectionMode = false);
     ~AiBackgroundDialog() override;
 
     QImage finalImage() const;
+
+    /// Máscara Alpha8 da silhueta editada (tamanho da imagem original).
+    /// Só faz sentido no modo seleção; nula nos outros casos.
+    QImage finalSelection() const;
 
 public slots:
     void reject() override;
@@ -73,6 +81,7 @@ private:
     QPushButton* m_resetBtn = nullptr;
     QLabel* m_statusLabel = nullptr;
     I18nService* m_i18n = nullptr;
+    bool m_selectionMode = false;
     // QPointer: zera sozinho quando o thread se auto-deleta via deleteLater,
     // blindando os guards de re-entrada contra um QThread destruído.
     QPointer<QThread> m_workerThread;

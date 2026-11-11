@@ -92,6 +92,26 @@ public:
     static QImage polygon(const std::vector<QPointF>& points,
                           const QRect& area, bool antiAlias);
 
+    // ===== AI subject selection =====
+    /// Converte uma máscara de silhueta (ex.: a máscara bruta/refinada da
+    /// rede neural de remoção de fundo) numa seleção de píxeis Alpha8 do
+    /// tamanho do layer (`targetSize`), pronta para
+    /// Document::setPixelSelection().
+    /// Aceita a máscara em qualquer formato: Alpha8/Grayscale8 são usados
+    /// diretamente; imagens com canal alfa têm o alfa extraído; restantes
+    /// são convertidas por luminância. Máscaras com tamanho diferente de
+    /// `targetSize` são redimensionadas com interpolação suave para não
+    /// degradar a borda do sujeito.
+    /// Retorna uma QImage nula se a máscara for nula ou o tamanho inválido.
+    static QImage fromAlphaMask(const QImage& alphaMask, const QSize& targetSize);
+
+    /// Como acima, mas combina o resultado com a seleção atual usando
+    /// `mode` (Replace/Add/Subtract/Intersect). Se a seleção atual for
+    /// nula ou tiver tamanho diferente de `targetSize`, o resultado é a
+    /// nova máscara sozinha (não há base significativa para combinar).
+    static QImage fromAlphaMask(const QImage& alphaMask, const QSize& targetSize,
+                                const QImage& currentSelection, SelectionMode mode);
+
     // ===== Helpers =====
     /// Normalize a selection mask to Format_Alpha8 with values clamped 0-255.
     static QImage normalize(const QImage& mask);

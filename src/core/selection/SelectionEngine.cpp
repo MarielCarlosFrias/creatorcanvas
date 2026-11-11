@@ -650,6 +650,49 @@ QImage SelectionEngine::polygon(const std::vector<QPointF>& points,
 
 // ===== Helpers =====
 
+QImage SelectionEngine::fromAlphaMask(const QImage& alphaMask, const QSize& targetSize)
+{
+    if (alphaMask.isNull() || targetSize.isEmpty() || targetSize.width() <= 0
+        || targetSize.height() <= 0)
+        return {};
+
+    // Extrai a informação de cobertura: formatos de canal único já são a
+    // máscara; imagens com alfa usam o alfa; restantes caem na luminância.
+    QImage mask;
+    if (alphaMask.format() == QImage::Format_Alpha8
+        || alphaMask.format() == QImage::Format_Grayscale8) {
+        mask = alphaMask;
+    } else if (alphaMask.hasAlphaChannel()) {
+        mask = alphaMask.convertToFormat(QImage::Format_Alpha8);
+    } else {
+        mask = alphaMask.convertToFormat(QImage::Format_Grayscale8)
+                   .convertToFormat(QImage::Format_Alpha8);
+    }
+    if (mask.isNull())
+        return {};
+
+    if (mask.size() != targetSize) {
+        mask = mask.scaled(targetSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        if (mask.isNull())
+            return {};
+    }
+    return normalize(mask);
+}
+
+QImage SelectionEngine::fromAlphaMask(const QImage& alphaMask, const QSize& targetSize,
+                                      const QImage& currentSelection, SelectionMode mode)
+{
+    const QImage made = fromAlphaMask(alphaMask, targetSize);
+    if (made.isNull())
+        return {};
+
+    const QImage current = normalize(currentSelection);
+    if (current.isNull() || current.size() != targetSize || mode == SelectionMode::Replace)
+        return made;
+
+    return combine(current, made, QRect(QPoint(0, 0), targetSize), mode);
+}
+
 QImage SelectionEngine::normalize(const QImage& mask)
 {
     if (mask.isNull())

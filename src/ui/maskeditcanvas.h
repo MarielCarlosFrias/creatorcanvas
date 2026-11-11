@@ -18,6 +18,10 @@ public:
     void setBackgroundColor(const QColor& bgColor);
     void setBrushRadius(int radius);
     QImage getEditedImage() const;
+    /// Canal alfa do buffer editado como máscara Alpha8 — usado pelo modo
+    /// "criar seleção" do diálogo de IA (a silhueta vira seleção de píxeis
+    /// em vez de descartar o fundo).
+    QImage getEditedMask() const;
     void undo();
     void clearEdits();
     bool hasEdits() const;

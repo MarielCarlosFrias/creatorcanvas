@@ -9,6 +9,7 @@
 #include "core/Document.h"
 #include "core/document/NewDocumentSpec.h"
 #include "core/image/BackgroundRemover.h"
+#include "ui/aibackgrounddialog.h"
 #include "ui/canvasview.h"
 
 using namespace cc;
@@ -171,6 +172,27 @@ void TestAiQuick::testResultAppliedOnlyToTargetLayer()
     QCOMPARE(imgL2->naturalHeight, 48);
     QCOMPARE(imgL2->name, QStringLiteral("Layer2"));
 }
+
+    void testSelectionModeApiContract()
+    {
+        // Modo normal: finalSelection() é sempre nulo (o resultado é imagem).
+        QImage src(16, 16, QImage::Format_ARGB32);
+        src.fill(qRgba(200, 30, 30, 255));
+
+        AiBackgroundDialog normal(src, nullptr, nullptr, /*autoRunInference=*/false);
+        // Sem inferência, o canvas devolve a própria imagem de origem.
+        QCOMPARE(normal.finalImage().size(), QSize(16, 16));
+        // ...mas nunca uma seleção: o motor de seleção é exclusivo do modo.
+        QVERIFY(normal.finalSelection().isNull());
+
+        // Modo seleção: a máscara da silhueta fica disponível (Alpha8 do
+        // tamanho da imagem original) mesmo sem inferência corrida.
+        AiBackgroundDialog selection(src, nullptr, nullptr, /*autoRunInference=*/false,
+                                     /*selectionMode=*/true);
+        const QImage mask = selection.finalSelection();
+        QVERIFY(!mask.isNull());
+        QCOMPARE(mask.size(), QSize(16, 16));
+    }
 
 QTEST_MAIN(TestAiQuick)
 #include "test_ai_quick.moc"

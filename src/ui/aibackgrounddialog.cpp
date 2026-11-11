@@ -27,13 +27,17 @@
 namespace cc {
 
 AiBackgroundDialog::AiBackgroundDialog(const QImage& sourceImage, I18nService* i18n,
-                                       QWidget* parent, bool autoRunInference)
+                                       QWidget* parent, bool autoRunInference,
+                                       bool selectionMode)
     : QDialog(parent),
       m_originalImage(sourceImage),
       m_i18n(i18n)
+    , m_selectionMode(selectionMode)
     , m_cancelFlag(std::make_shared<std::atomic<bool>>(false))
 {
-    setWindowTitle(m_i18n ? m_i18n->t("editor", "aiBackground.title") : QStringLiteral("Remoção de Fundo com IA - CreatorCanvas"));
+    setWindowTitle(m_i18n
+        ? m_i18n->t("editor", m_selectionMode ? "aiBackground.titleSelection" : "aiBackground.title")
+        : QStringLiteral("Remoção de Fundo com IA - CreatorCanvas"));
     // Precisa caber em 800x520 (mínimo real do app). O mínimo do diálogo
     // era 920x640 — maior que a janela, cortando prévia e botões.
     setMinimumSize(560, 380);
@@ -151,6 +155,10 @@ void AiBackgroundDialog::setupUi()
     m_bgColorCombo->addItem(m_i18n ? m_i18n->t("editor", "aiBackground.bg.black") : QStringLiteral("Preto"));
     connect(m_bgColorCombo, &QComboBox::currentIndexChanged, this, &AiBackgroundDialog::onBgColorChanged);
     topLayout->addWidget(m_bgColorCombo, 1, 1);
+    // No modo seleção a cor de fundo é irrelevante: o resultado é a
+    // máscara, não uma imagem composta.
+    bgPreviewLabel->setVisible(!m_selectionMode);
+    m_bgColorCombo->setVisible(!m_selectionMode);
 
     mainLayout->addWidget(topCard);
 
@@ -279,7 +287,9 @@ void AiBackgroundDialog::setupUi()
     auto* footerV = new QVBoxLayout(footerWidget);
     footerV->setContentsMargins(0, 0, 0, 0);
     footerV->setSpacing(6);
-    m_statusLabel = new QLabel(m_i18n ? m_i18n->t("editor", "aiBackground.tip") : QStringLiteral("Tip: brush over the image to restore or erase areas."), this);
+    m_statusLabel = new QLabel(m_i18n
+        ? m_i18n->t("editor", m_selectionMode ? "aiBackground.tipSelection" : "aiBackground.tip")
+        : QStringLiteral("Tip: brush over the image to restore or erase areas."), this);
     m_statusLabel->setStyleSheet(QStringLiteral("color: #888; font-size: 11px;"));
     m_statusLabel->setWordWrap(true);
     footerV->addWidget(m_statusLabel);
@@ -291,7 +301,9 @@ void AiBackgroundDialog::setupUi()
     connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
     footerLayout->addWidget(cancelBtn);
 
-    auto* applyBtn = new QPushButton(m_i18n ? m_i18n->t("editor", "aiBackground.apply") : QStringLiteral("✓ Aplicar ao Canvas"), this);
+    auto* applyBtn = new QPushButton(m_i18n
+        ? m_i18n->t("editor", m_selectionMode ? "aiBackground.applySelection" : "aiBackground.apply")
+        : QStringLiteral("✓ Aplicar ao Canvas"), this);
     applyBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: %1; color: white; font-weight: bold; padding: 6px 18px; border-radius: 4px; }"
         "QPushButton:hover { background-color: %2; }"
@@ -422,7 +434,9 @@ void AiBackgroundDialog::runAiInference()
             if (self->m_cutSlider) self->m_cutSlider->setEnabled(true);
             if (self->m_specksCheck) self->m_specksCheck->setEnabled(true);
             self->m_editCanvas->setImage(self->m_originalImage, self->m_processedImage);
-            self->m_statusLabel->setText(self->m_i18n ? self->m_i18n->t("editor", "aiBackground.done") : QStringLiteral("✓ Recorte concluído! Se desejar, faça ajustes com o pincel e clique em Aplicar."));
+            self->m_statusLabel->setText(self->m_i18n
+                ? self->m_i18n->t("editor", self->m_selectionMode ? "aiBackground.doneSelection" : "aiBackground.done")
+                : QStringLiteral("✓ Recorte concluído!"));
         });
     });
 
@@ -454,6 +468,14 @@ void AiBackgroundDialog::reapplyMatte()
 QImage AiBackgroundDialog::finalImage() const
 {
     return m_editCanvas ? m_editCanvas->getEditedImage() : m_processedImage;
+}
+
+QImage AiBackgroundDialog::finalSelection() const
+{
+    if (!m_selectionMode || !m_editCanvas)
+        return {};
+    const QImage mask = m_editCanvas->getEditedMask();
+    return mask.isNull() ? QImage() : mask.copy();
 }
 
 } // namespace cc

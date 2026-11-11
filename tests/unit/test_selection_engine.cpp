@@ -296,8 +296,81 @@ private slots:
         QCOMPARE(norm.format(), QImage::Format_Alpha8);
     }
 
-    void morphologyIsFastForLargeRadius()
+    void fromAlphaMaskAiSelection()
     {
+        // Simula a silhueta devolvida pelo motor de IA: Alpha8 com o
+        // sujeito a 255 dentro de um rect e 0 no fundo. (Escrita via
+        // scanLine — setPixel em Format_Alpha8 não é portável.)
+        QImage mask(30, 20, QImage::Format_Alpha8);
+        mask.fill(0);
+        for (int y = 4; y < 16; ++y) {
+            uchar* row = mask.scanLine(y);
+            for (int x = 6; x < 24; ++x)
+                row[x] = 255;
+        }
+
+        // 1) Tamanho igual: mantém cobertura e formato.
+        const QImage same = SelectionEngine::fromAlphaMask(mask, QSize(30, 20));
+        QVERIFY(!same.isNull());
+        QCOMPARE(same.format(), QImage::Format_Alpha8);
+        QCOMPARE(same.size(), QSize(30, 20));
+        QCOMPARE(same.constScanLine(4)[7], uchar(255));
+        QCOMPARE(same.constScanLine(0)[7], uchar(0));
+
+        // 2) Imagem ARGB com alfa: o canal alfa é extraído.
+        QImage rgba(30, 20, QImage::Format_ARGB32);
+        rgba.fill(qRgba(0, 0, 0, 0));
+        for (int y = 4; y < 16; ++y)
+            for (int x = 6; x < 24; ++x)
+                rgba.setPixel(x, y, qRgba(255, 255, 255, 255));
+        const QImage fromArgb = SelectionEngine::fromAlphaMask(rgba, QSize(30, 20));
+        QVERIFY(!fromArgb.isNull());
+        QCOMPARE(fromArgb.format(), QImage::Format_Alpha8);
+        QCOMPARE(fromArgb.constScanLine(4)[7], uchar(255));
+        QCOMPARE(fromArgb.constScanLine(0)[7], uchar(0));
+
+        // 3) Redimensionamento suave para o tamanho do layer preserva a
+        //    ordem de grandeza (o sujeito continua selecionado).
+        const QImage scaled = SelectionEngine::fromAlphaMask(mask, QSize(60, 40));
+        QVERIFY(!scaled.isNull());
+        QCOMPARE(scaled.size(), QSize(60, 40));
+        QVERIFY(!SelectionEngine::isEmpty(scaled));
+        QVERIFY(!SelectionEngine::boundingBox(scaled).isEmpty());
+
+        // 4) Entrada nula / tamanho inválido → seleção nula.
+        QVERIFY(SelectionEngine::fromAlphaMask(QImage(), QSize(10, 10)).isNull());
+        QVERIFY(SelectionEngine::fromAlphaMask(mask, QSize()).isNull());
+
+        // 5) Combinação com seleção atual: Add soma, Subtract remove.
+        QImage current(30, 20, QImage::Format_Alpha8);
+        current.fill(0);
+        for (int y = 0; y <= 2; ++y) { // tira no topo, fora do sujeito
+            uchar* row = current.scanLine(y);
+            for (int x = 0; x < 30; ++x)
+                row[x] = 255;
+        }
+
+        const QImage added = SelectionEngine::fromAlphaMask(
+            mask, QSize(30, 20), current, SelectionMode::Add);
+        QCOMPARE(added.size(), QSize(30, 20));
+        // A tira continua selecionada e o sujeito passou a estar.
+        QCOMPARE(added.constScanLine(1)[1], uchar(255));
+        QCOMPARE(added.constScanLine(4)[7], uchar(255));
+
+        const QImage subtracted = SelectionEngine::fromAlphaMask(
+            mask, QSize(30, 20), current, SelectionMode::Subtract);
+        // O sujeito foi removido da seleção; a tira permanece.
+        QCOMPARE(subtracted.constScanLine(4)[7], uchar(0));
+        QCOMPARE(subtracted.constScanLine(1)[1], uchar(255));
+
+        // 6) Replace ignora a seleção atual.
+        const QImage replaced = SelectionEngine::fromAlphaMask(
+            mask, QSize(30, 20), current, SelectionMode::Replace);
+        QCOMPARE(replaced.constScanLine(1)[1], uchar(0));
+        QCOMPARE(replaced.constScanLine(4)[7], uchar(255));
+    }
+
+    void morphologyIsFastForLargeRadius()    {
         // Regressão do congelamento: a versão antiga era O(w·h·r²) e
         // travava o app por minutos (raio 200 ≈ 320 bilhões de operações),
         // fazendo o gerenciador de janelas escurecer a janela ("cinza").

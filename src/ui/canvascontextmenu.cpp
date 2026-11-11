@@ -26,6 +26,7 @@ struct MenuActions {
     QAction* lockAction = nullptr;
     QAction* removeBgAiDialogAction = nullptr;
     QAction* removeBgAiQuickAction = nullptr;
+    QAction* selectSubjectAiAction = nullptr;
     QAction* maskInsideAction = nullptr;
     QAction* maskOutsideAction = nullptr;
     QAction* copySelectionAction = nullptr;
@@ -85,6 +86,10 @@ static MenuActions populateMenu(QMenu* menu,
                                          : QStringLiteral("⚡ Quick Background Removal (1-Click)");
         a.removeBgAiDialogAction = menu->addAction(aiDialogText);
         a.removeBgAiQuickAction = menu->addAction(aiQuickText);
+        const QString selectSubjectText = i18n
+            ? i18n->t("editor", "canvas.context.selectSubject")
+            : QStringLiteral("🎯 Select Subject (AI)...");
+        a.selectSubjectAiAction = menu->addAction(selectSubjectText);
     }
 
     return a;
@@ -150,6 +155,8 @@ bool show(QWidget* parent,
         if (canvas) canvas->openAiBackgroundRemoval(id);
     } else if (chosen == a.removeBgAiQuickAction) {
         if (canvas) canvas->removeBackgroundAiQuick(id);
+    } else if (chosen == a.selectSubjectAiAction) {
+        if (canvas) canvas->selectSubjectWithAi(id);
     } else if (chosen == a.duplicateAction) {
         if (canvas) emit canvas->duplicateRequested(id);
     } else if (chosen == a.deleteAction) {

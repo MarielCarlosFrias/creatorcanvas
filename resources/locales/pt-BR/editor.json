@@ -291,11 +291,16 @@
     "removeSpecks": "Limpar manchas",
     "refineTitle": "Refinamento do Recorte:",
     "refineNote": "Aplicado ao vivo sobre o recorte da IA (edições do pincel são refeitas).",
-    "more": "Mais ações"
+    "more": "Mais ações",
+    "titleSelection": "Selecionar Sujeito com IA - CreatorCanvas",
+    "applySelection": "✓ Criar Seleção",
+    "tipSelection": "Dica: use o pincel para restaurar ou apagar a silhueta do sujeito; o resultado vira uma seleção de píxeis.",
+    "doneSelection": "✓ Sujeito pronto! Ajuste com o pincel se precisar e clique em Criar Seleção."
   },
   "canvas": {
     "context.aiDialog": "✨ Remover Fundo com IA...",
     "context.aiQuick": "⚡ Remover Fundo Rápido (1-Clique)",
+    "context.selectSubject": "🎯 Selecionar Sujeito (IA)...",
     "status.aiQuickProcessing": "⏳ Removendo fundo com IA em segundo plano...",
     "status.aiQuickSuccess": "✓ Fundo removido com sucesso pela IA!",
     "status.aiQuickFailed": "Falha ao processar remoção de fundo com IA.",
@@ -317,6 +322,7 @@
     "command.paintBucket": "Balde de Tinta",
     "command.aiBackground": "Remoção de Fundo por IA",
     "command.aiBackgroundQuick": "Remoção Rápida de Fundo por IA",
+    "command.selectSubject": "Selecionar Sujeito (IA)",
     "layer.group": "Grupo",
     "layer.ungroup": "Desagrupar",
     "status.marqueeHelp": "Seleção: arraste para selecionar. Shift soma, Alt subtrai. Esc limpa.",
@@ -375,7 +381,9 @@
     "modify.feather": "Seleção com Feather",
     "modify.radius": "Raio (px):",
     "colorRange.title": "Faixa de Cor",
-    "colorRange.fuzziness": "Imprecisão (Fuzziness):"
+    "colorRange.fuzziness": "Imprecisão (Fuzziness):",
+    "subjectAi": "Selecionar Sujeito (IA)...",
+    "subjectAiTooltip": "Usa o modelo de IA local para selecionar o sujeito — não-destrutivo, o fundo é mantido"
   },
   "layer": {
     "group": "Agrupar",

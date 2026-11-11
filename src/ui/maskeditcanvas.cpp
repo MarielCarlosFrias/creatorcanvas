@@ -51,6 +51,16 @@ QImage MaskEditCanvas::getEditedImage() const
     return m_editBuffer.isNull() ? QImage() : m_editBuffer.copy();
 }
 
+QImage MaskEditCanvas::getEditedMask() const
+{
+    if (m_editBuffer.isNull())
+        return {};
+    // O buffer é RGBA8888: o alfa É a cobertura da máscara (0 = fundo
+    // removido, 255 = sujeito). Extrair o canal devolve uma Alpha8 pronta
+    // para Document::setPixelSelection().
+    return m_editBuffer.convertToFormat(QImage::Format_Alpha8);
+}
+
 void MaskEditCanvas::undo()
 {
     if (!m_hasUndo || m_undoBuffer.isNull())

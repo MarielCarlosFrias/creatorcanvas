@@ -115,6 +115,9 @@ public:
 
     // Remoção de Fundo com IA
     void openAiBackgroundRemoval(const cc::LayerId& id);
+    /// Abre o mesmo motor de IA em modo seleção: a silhueta vira uma
+    /// seleção de píxeis (não-destrutivo) em vez de descartar o fundo.
+    void selectSubjectWithAi(const cc::LayerId& id);
     void removeBackgroundAiQuick(const cc::LayerId& id);
     bool isQuickAiRunning() const;
 
