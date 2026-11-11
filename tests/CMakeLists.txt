@@ -26,7 +26,9 @@ cc_add_test(test_serialization unit/test_serialization.cpp)
 cc_add_test(test_renderer      unit/test_renderer.cpp)
 cc_add_test(test_newdocument   unit/test_newdocument.cpp)
 cc_add_test(test_import unit/test_import.cpp)
-cc_add_test(test_transform unit/test_transform.cpp)
+cc_add_test(test_transform unit/test_transform.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/transformbar.cpp
+)
 cc_add_test(test_textbox unit/test_textbox.cpp)
 cc_add_test(test_effects unit/test_effects.cpp)
 cc_add_test(test_export unit/test_export.cpp)
@@ -137,6 +139,7 @@ cc_add_test(test_mainwindow_tabs unit/test_mainwindow_tabs.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/adjustmentsdialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/layercompsdialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/webslicesdialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/transformbar.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/curveeditor.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/recoverydialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/mockupdialog.cpp

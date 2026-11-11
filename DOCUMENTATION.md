@@ -272,9 +272,10 @@ Image Inspector live preview writes a temporary asset via `Document::setImageLay
   - Tools implemented: `SelectTool`, `CropTool`, `PaintTool`, `ScissorsTool`, `PenTool` (cubic Bézier paths), `MagicWandTool`, `CloneStampTool`, `FloodFillTool` (all in `RasterTools.h`), `MarqueeTool` (rect/ellipse), `GradientTool` and `RetouchTool` (6 modes) (both in `PaintExtras.h`), `HealingTool` (spot heal / red eye). The eyedropper is handled by the view, not a tool class.
   - Every raster tool previews through `ToolContext::setLayerPreview` and commits **one** undo step (`ModifyImageLayerCommand`, via `tools/ToolCommit.h`); without a `CommandStack` the edit is applied directly so it can never be lost.
   - Selection convention: the pixel selection (`Document::pixelSelection`) lives in the **active layer bitmap space** (same as wand/scissors), so masking/`applyMask` stays consistent; with no image layer selected the marquee uses document space. The AI subject selection (§7) produces its mask in the same space through `SelectionEngine::fromAlphaMask()`.
-  - Shortcuts: `V` select, `M` marquee, `X` scissors, `W` wand, `C` crop, `B` brush, `G` gradient, `Shift+G` bucket, `S` clone, `U` retouch, `J` healing, `I` eyedropper.
+  - Shortcuts: `V` select, `M` marquee, `X` scissors, `W` wand, `C` crop, `B` brush, `G` gradient, `Shift+G` bucket, `S` clone, `U` retouch, `J` healing, `I` eyedropper, `P` pen (Bézier vector paths — creating a `VectorLayer`).
   - Tool groups are separated in the toolbar (selection / cut / paint / retouch / utility / create) and mirrored in the **Tools** menu.
-  - Viewport delegates mouse and paint events to `m_activeTool` before legacy fallback handlers.
+  - Viewport delegates mouse and paint events to `m_activeTool` before legacy fallback handlers. Every `CanvasToolType` in the enum is wired to its own class (`Vector` → `PenTool`); a tool without classe própria é um bug, não um fallback.
+  - **Numeric transform bar** (`TransformBar`, on the tool-options row): X/Y/W/H/rotation of the selected layer. W/H set scale from the natural size (image layers only; other types keep the fields disabled rather than lying), aspect ratio locked by default, mirror sign preserved. Each edit is one `SetLayerTransformCommand` (mergeable — dragging a spin is a single undo step). The bar refreshes on undo/redo.
 - **Photoshop-style Layer Drag & Drop:**
   - `LayerRowWidget` captures mouse drag exceeding `QApplication::startDragDistance()`, generates a semi-transparent drag pixmap of the row, and sets MIME data `application/x-creatorcanvas-layer-id`.
   - `LayerListWidget` provides dynamic drop indicator and computes target index based on cursor position relative to item vertical midpoint.
@@ -439,7 +440,7 @@ Checks catalog load, optional ONNX inference, in-memory document, `.creatorcanva
 QT_QPA_PLATFORM=offscreen CreatorCanvas --ui-snapshot /tmp/shots
 ```
 
-Renders the editor at 1600×1000, 1280×800, 1024×700, 900×620 and 800×520 for every tool (12 tools → 60 PNGs) so responsive layout can be reviewed headlessly through the same `MainWindow` the user runs.
+Renders the editor at 1600×1000, 1280×800, 1024×700, 900×620 and 800×520 for every tool (13 tools → 65 PNGs) so responsive layout can be reviewed headlessly through the same `MainWindow` the user runs.
 
 ## 13. Build & distribution
 

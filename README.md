@@ -76,7 +76,7 @@ Most photo editing tools are either overly basic web canvas tools or intimidatin
 - Selection & Transform (shear, rotate, scale, flip).
 - Crop tool with standard aspect presets.
 - Raster Brush, Pencil, Airbrush, Eraser, Clone Stamp, and Flood Fill.
-- **Pen tool** — cubic Bézier paths with editable nodes and handles.
+- **Pen tool** — cubic Bézier paths with editable nodes and handles (`P`).
 - **Gradient** — linear/radial, two colors with alpha, respects the active pixel selection.
 - **Retouch brush** — Blur, Sharpen, Smudge, Dodge, Burn and Sponge with size/strength controls.
 - **Spot Healing & Red Eye** — automatic nearby-source repair, one undo step per stroke.
@@ -86,6 +86,7 @@ Most photo editing tools are either overly basic web canvas tools or intimidatin
 ### 🖥️ Responsive Layout & Workspace
 - Breakpoint-driven chrome (620 / 980 / 1440 px): the vertical tool rail turns into a compact horizontal bar on narrow or short windows, tool options compact themselves, and inspectors auto-hide with their previous visibility restored.
 - Canvas keeps `auto-fit` until you zoom/pan manually; after that, resizing preserves your zoom instead of resetting it.
+- **Numeric transform**: X/Y/W/H/rotation fields for the selected layer, aspect-locked, one undo step per drag.
 - **Workspace layouts** — save, restore and delete named dock layouts (`Window ▸ Workspace Layout`).
 - **Customizable shortcuts** — reassign any action in `Help ▸ Keyboard Shortcuts`; overrides persist across sessions.
 

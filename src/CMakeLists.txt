@@ -226,6 +226,8 @@ add_executable(creatorcanvas
     ui/layercompsdialog.cpp
     ui/webslicesdialog.h
     ui/webslicesdialog.cpp
+    ui/transformbar.h
+    ui/transformbar.cpp
 )
 target_link_libraries(creatorcanvas
     PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets

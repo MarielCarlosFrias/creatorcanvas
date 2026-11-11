@@ -224,7 +224,8 @@
     "healing.redEye": "Olho vermelho",
     "healing.radius": "Raio",
     "healing.strength": "Intensidade",
-    "eyedropper.hint": "Clique no canvas para amostrar a cor. (Dica: segurar Alt em qualquer ferramenta também ativa o conta-gotas)"
+    "eyedropper.hint": "Clique no canvas para amostrar a cor. (Dica: segurar Alt em qualquer ferramenta também ativa o conta-gotas)",
+    "pen": "Caneta (Bézier)"
   },
   "section": {
     "typography": "Tipografia",
@@ -471,5 +472,9 @@
     "exportTitle": "Exportar fatias para",
     "exportDone": "Exportação de fatias",
     "namePlaceholder": "Nome da fatia"
+  },
+  "transformBar": {
+    "aspectLock": "Manter proporção",
+    "aspectShort": "🔗"
   }
 }

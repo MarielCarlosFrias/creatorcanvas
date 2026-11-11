@@ -224,7 +224,8 @@
     "healing.redEye": "Röda ögon",
     "healing.radius": "Radie",
     "healing.strength": "Styrka",
-    "eyedropper.hint": "Tryck på ritytan för att plocka upp en färg. (Tisp: håller du inne Alt med något annat verktyg valt kommer du också åt pipetten)"
+    "eyedropper.hint": "Tryck på ritytan för att plocka upp en färg. (Tisp: håller du inne Alt med något annat verktyg valt kommer du också åt pipetten)",
+    "pen": "Penna (Bézier)"
   },
   "section": {
     "typography": "Typografi",
@@ -471,5 +472,9 @@
     "exportTitle": "Exportera skivor till",
     "exportDone": "Skivexport",
     "namePlaceholder": "Skivans namn"
+  },
+  "transformBar": {
+    "aspectLock": "Bevara proportion",
+    "aspectShort": "🔗"
   }
 }

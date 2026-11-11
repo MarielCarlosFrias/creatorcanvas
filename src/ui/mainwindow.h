@@ -32,6 +32,8 @@ class QSlider;
 
 namespace cc {
 
+class TransformBar;
+
 class I18nService;
 class SettingsService;
 class DocumentController;
@@ -135,6 +137,10 @@ private:
     void refreshRecentMenu();
     bool confirmDiscardUnsavedChanges();
     void openSettings();
+    /// Aplica uma edição da barra de transformação numérica (um passo de
+    /// histórico, fundível durante o arrasto do spin).
+    void onTransformEdited(const cc::LayerId& id, cc::AffineTransform oldTransform,
+                           cc::AffineTransform newTransform);
     /// Abre o painel de composições de camadas (guardar/aplicar estado).
     void openLayerComps();
     /// Abre o painel de fatias de exportação web.
@@ -290,6 +296,7 @@ private:
     QAction* m_toolPaintAction = nullptr;
     QAction* m_toolFloodAction = nullptr;
     QAction* m_toolEyedropperAction = nullptr;
+    QAction* m_toolPenAction = nullptr;
     QAction* m_toolMarqueeAction = nullptr;
     QAction* m_toolGradientAction = nullptr;
     QAction* m_toolRetouchAction = nullptr;
@@ -315,6 +322,7 @@ private:
     QMenu* m_createToolsMenu = nullptr;
 
     ToolOptionsBar* m_toolOptionsBarWidget = nullptr;
+    TransformBar* m_transformBar = nullptr;
 
     QLabel* m_zoomLabel = nullptr;
     QLabel* m_positionLabel = nullptr;

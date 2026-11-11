@@ -19,6 +19,7 @@ public:
     static QIcon toolCrop(const QColor& color = QColor(220, 220, 220));
     static QIcon toolScissors(const QColor& color = QColor(220, 220, 220));
     static QIcon toolWand(const QColor& color = QColor(220, 220, 220));
+    static QIcon toolPen(const QColor& color = QColor(220, 220, 220));
     static QIcon toolClone(const QColor& color = QColor(220, 220, 220));
     static QIcon toolPaint(const QColor& color = QColor(220, 220, 220));
     static QIcon toolFlood(const QColor& color = QColor(220, 220, 220));

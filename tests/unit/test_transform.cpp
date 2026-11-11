@@ -5,6 +5,7 @@
 #include "core/layers/Layer.h"
 #include "core/serialization/ProjectFile.h"
 #include "rendering/CanvasRenderer.h"
+#include "ui/transformbar.h"
 
 #include <QBuffer>
 #include <QImage>
@@ -174,6 +175,41 @@ private slots:
         QCOMPARE(target.pixelColor(10, 10), QColor(255, 0, 0));
     }
 };
+
+
+    void numericResizeHelpers()
+    {
+        // Redimensionar por píxeis: escala = dimensão / natural.
+        AffineTransform base;
+        base.position = QPointF(10, 20);
+        const AffineTransform resized = numericResize(base, 100, 50, 200, 100);
+        QCOMPARE(resized.position, QPointF(10, 20));
+        QCOMPARE(resized.scaleX, 2.0);
+        QCOMPARE(resized.scaleY, 2.0);
+
+        // Espelho preservado: escala negativa continua negativa.
+        AffineTransform mirrored = base;
+        mirrored.scaleX = -1.0;
+        const AffineTransform keptMirror = numericResize(mirrored, 100, 50, 50, 50);
+        QCOMPARE(keptMirror.scaleX, -0.5);
+        QCOMPARE(keptMirror.scaleY, 0.5);
+
+        // Sem tamanho intrínseco: nada muda.
+        QCOMPARE(numericResize(base, 0, 0, 300, 300), base);
+
+        // Proporção travada: 2:1 (100x50) — mexer na largura arrasta a altura.
+        const auto fromWidth = lockAspect(300, 10, 100, 50, true);
+        QCOMPARE(fromWidth.first, 300.0);
+        QCOMPARE(fromWidth.second, 150.0);
+        const auto fromHeight = lockAspect(10, 400, 100, 50, false);
+        QCOMPARE(fromHeight.first, 800.0);
+        QCOMPARE(fromHeight.second, 400.0);
+
+        // Sem tamanho intrínseco o lock é inócuo.
+        const auto noLock = lockAspect(300, 400, 0, 0, true);
+        QCOMPARE(noLock.first, 300.0);
+        QCOMPARE(noLock.second, 400.0);
+    }
 
 QTEST_GUILESS_MAIN(TestTransform)
 #include "test_transform.moc"

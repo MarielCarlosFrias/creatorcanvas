@@ -15,6 +15,7 @@
 #include "rendering/CanvasRenderer.h"
 #include "localization/i18nservice.h"
 #include "ui/adjustmentsdialog.h"
+#include "ui/transformbar.h"
 #include "ui/layercompsdialog.h"
 #include "ui/webslicesdialog.h"
 #include "ui/canvasview.h"
@@ -230,6 +231,8 @@ MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
     updateWindowTitle();
 
     connect(m_history.get(), &CommandStack::stateChanged, this, [this] {
+        if (m_transformBar && m_document && !m_selectedId.isNull())
+            m_transformBar->setLayer(*m_document, m_selectedId);
         if (!m_modified) {
             m_modified = true;
             if (m_docController) m_docController->setModified(true);
@@ -495,6 +498,9 @@ void MainWindow::buildCentralWidget()
     m_canvas->setI18n(m_i18n);
     m_canvas->setHistory(m_history.get());
 
+    m_transformBar = new TransformBar(this);
+    m_transformBar->setI18n(m_i18n);
+
     m_centralStack = new QStackedWidget(this);
     m_centralStack->addWidget(m_startScreen); // page 0: start
     m_centralStack->addWidget(m_canvas);      // page 1: editor
@@ -524,6 +530,9 @@ void MainWindow::buildCentralWidget()
             });
     connect(m_canvas, &CanvasView::deleteRequested,
             this, &MainWindow::deleteSelectedLayer);
+    connect(m_transformBar, &TransformBar::transformEdited,
+            this, &MainWindow::onTransformEdited);
+
     connect(m_canvas, &CanvasView::selectionChanged, this,
             [this](const LayerId& id) {
                 m_selectedId = id;
@@ -543,6 +552,10 @@ void MainWindow::buildCentralWidget()
                 if (m_removeBgAiQuickAction) m_removeBgAiQuickAction->setEnabled(imageSelected);
                 for (QAction* act : m_adjustmentActions) {
                     if (act) act->setEnabled(imageSelected);
+                }
+                if (m_transformBar) {
+                    m_transformBar->setLayer(*m_document, id);
+                    m_transformBar->setVisible(id.isNull() == false);
                 }
                 if (m_selectSubjectAction) m_selectSubjectAction->setEnabled(imageSelected);
                 if (m_mockupAction) m_mockupAction->setEnabled(imageSelected);
@@ -684,7 +697,7 @@ void MainWindow::buildCentralWidget()
                         if (m_toolHealingAction) m_toolHealingAction->setChecked(true);
                         break;
                     case CanvasTool::Vector:
-                        if (m_toolPaintAction) m_toolPaintAction->setChecked(true);
+                        if (m_toolPenAction) m_toolPenAction->setChecked(true);
                         break;
                     }
                 }
@@ -978,6 +991,7 @@ void MainWindow::buildActions()
     m_toolPaintAction = m_actions->toolPaintAction;
     m_toolFloodAction = m_actions->toolFloodAction;
     m_toolEyedropperAction = m_actions->toolEyedropperAction;
+    m_toolPenAction = m_actions->toolPenAction;
     m_toolMarqueeAction = m_actions->toolMarqueeAction;
     m_toolGradientAction = m_actions->toolGradientAction;
     m_toolRetouchAction = m_actions->toolRetouchAction;
@@ -1313,6 +1327,7 @@ void MainWindow::connectActionSignals()
     connect(m_toolPaintAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::Paint); });
     connect(m_toolFloodAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::FloodFill); });
     connect(m_toolEyedropperAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::Eyedropper); });
+    connect(m_toolPenAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::Vector); });
     connect(m_toolMarqueeAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::Marquee); });
     connect(m_toolGradientAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::Gradient); });
     connect(m_toolRetouchAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::Retouch); });
@@ -1501,6 +1516,8 @@ void MainWindow::buildToolBars()
     m_toolOptionsBarWidget->setCanvas(m_canvas);
     m_toolOptionsBarWidget->setI18n(m_i18n);
     m_toolOptionsBar->addWidget(m_toolOptionsBarWidget);
+    // Transformação numérica (X/Y/W/H/rotação) da camada selecionada.
+    m_toolOptionsBar->addWidget(m_transformBar);
 
     m_quickToolBar->hide();
     m_toolsBar->hide();
@@ -2679,6 +2696,22 @@ void MainWindow::checkForRecoveryFile()
         m_suggestedSavePath = sourcePath;
         saveDocumentAs();
     }
+}
+
+void MainWindow::onTransformEdited(const LayerId& id, AffineTransform oldTransform,
+                                  AffineTransform newTransform)
+{
+    if (!m_document || !m_history || id.isNull())
+        return;
+    Layer* layer = m_document->findLayer(id);
+    if (!layer)
+        return;
+    m_history->execute(std::make_unique<cc::SetLayerTransformCommand>(
+        *m_document, id, oldTransform, newTransform));
+    if (m_canvas)
+        m_canvas->update();
+    if (m_docController)
+        m_docController->setModified(true);
 }
 
 void MainWindow::openLayerComps()

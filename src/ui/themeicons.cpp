@@ -1403,6 +1403,25 @@ QIcon ThemeIcons::toolRetouch(const QColor& color)
     });
 }
 
+QIcon ThemeIcons::toolPen(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal k = s / 24.0;
+        // Corpo da caneta (diagonal) + bico.
+        p.setPen(QPen(color, 1.6 * k, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(16 * k, 4 * k), QPointF(7 * k, 13 * k));
+        p.setBrush(color);
+        p.setPen(Qt::NoPen);
+        // Bico (triângulo para baixo).
+        const QPointF tip(5 * k, 15 * k);
+        p.drawPolygon(QPolygonF() << QPointF(7 * k, 13 * k) << QPointF(5 * k, 15 * k)
+                                  << QPointF(9 * k, 12 * k));
+        // Ponto do bico.
+        p.setBrush(Qt::white);
+        p.drawEllipse(QRectF(4.2 * k, 14.2 * k, 1.8 * k, 1.8 * k));
+    });
+}
+
 QIcon ThemeIcons::toolHealing(const QColor& color)
 {
     return makeMultiSizeIcon([color](QPainter& p, int s) {

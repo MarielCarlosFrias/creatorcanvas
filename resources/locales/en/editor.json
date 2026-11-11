@@ -224,7 +224,8 @@
     "healing.redEye": "Red Eye",
     "healing.radius": "Radius",
     "healing.strength": "Strength",
-    "eyedropper.hint": "Click the canvas to sample a color. (Tip: holding Alt with any tool also activates the eyedropper)"
+    "eyedropper.hint": "Click the canvas to sample a color. (Tip: holding Alt with any tool also activates the eyedropper)",
+    "pen": "Pen (Bézier)"
   },
   "section": {
     "typography": "Typography",
@@ -471,5 +472,9 @@
     "exportTitle": "Export slices to",
     "exportDone": "Slice export",
     "namePlaceholder": "Slice name"
+  },
+  "transformBar": {
+    "aspectLock": "Keep aspect ratio",
+    "aspectShort": "🔗"
   }
 }
