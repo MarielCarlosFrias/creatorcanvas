@@ -103,12 +103,12 @@ CMake targets (`src/CMakeLists.txt`):
 |---|---|
 | `cc_core` | `core/*` + `imageio/*`, links Qt Core/Gui, `miniz`, ONNX Runtime |
 | `cc_tools` | `tools/*` (`ICanvasTool`, tools suite), links `cc_core` |
-| `cc_rendering` | `rendering/CanvasRenderer.*` |
+| `cc_rendering` | `rendering/CanvasRenderer.*` + `rendering/IRenderer.*` |
 | `cc_services` | settings, autosave, recents, log, presets |
 | `cc_localization` | i18n + locale `.qrc` |
 | `creatorcanvas` | `main.cpp` + `ui/*` (output name `CreatorCanvas`) |
 
-There is **no** `src/platform/` tree and **no** `IRenderer` / `core/paint/` module. Raster drawing lives in `cc::ImageProcessing`.
+There is **no** `src/platform/` tree and **no** `core/paint/` module — raster drawing lives in `cc::ImageProcessing`. The compositor interface exists since o cache de camadas: `rendering/IRenderer.h` (ver §5).
 
 ### Principles
 
@@ -210,7 +210,12 @@ All mutations go through `LayerCompCommands.h` (`executeAddLayerComp`, `executeA
 
 Export and the viewport share this function; `CanvasView` then draws editor overlays (handles, guides, grid, safe zones, tool cursors) on top.
 
-The compositor still recomposes the full tree on every paint of a dirty document — there is no general per-layer pixmap cache. `ImageLayer` keeps two **transient** caches (full-res and interactive ≤2048 px preview) for masked bitmaps, keyed by asset/mask revisions; interactive gestures reuse them, but a structural change still triggers a full walk.
+The compositor still recomposes on every paint of a *changed* document, but unchanged layers no longer pay rasterization again:
+
+- `IRenderer` (`rendering/IRenderer.h`) is the compositor seam: `renderDocument(doc, painter, transform, options)` + `clearCaches()`, with `name()` for diagnostics. `SoftwareRenderer` is the historical QPainter implementation; `CachingRenderer` adds a per-layer pixmap cache and is the process default — the free `renderDocument()` delegates to it, so canvas, exporters and the smoke test all benefit with zero call-site changes.
+- The cache only applies to the **fast path** (no clipping masks, no visible adjustment layers) and only to layers whose rasterization is expensive: **Text, Shape, Vector and Fill**. Image layers have their own mask caches and are excluded; groups, adjustments, clipped layers, layers with alpha/vector masks, `BlendIf`, or the live tool preview are also excluded rather than risk a stale pixmap.
+- Cache key: (layer id, `Document::revision()`, device canvas size, `interactive` mode). The revision is monotonic, so any document edit invalidates every old entry — stale pixmaps are impossible by construction. Budget: 16 entries / 64 MB with LRU eviction; `invalidateLayerCache(id)` / `invalidateAllLayerCaches()` / `clearRendererCaches()` drop entries explicitly.
+- `ImageLayer` additionally keeps two **transient** caches (full-res and interactive ≤2048 px preview) for masked bitmaps, keyed by asset/mask revisions.
 
 ### Raster engine
 
@@ -468,7 +473,7 @@ Already on `main` (do not treat as future work): multi-select, group/align/distr
 Still ahead:
 
 1. **Split `CanvasView` / `MainWindow`** — isolate tools and overlays so the viewport is not a 2k+ line catch-all (Phase 1 delivered: `cc_tools` static library and `ICanvasTool` architecture integrated).
-2. **Layer raster cache + `IRenderer`** — skip full recomposition; give a GPU backend a real seam (none exists today).
+2. ~~Layer raster cache + `IRenderer`~~ — **done for the fast path**: `IRenderer` seam exists, `CachingRenderer` caches text/shape/vector/fill layers per revision. Still open: caching the compositing path (clipping masks/adjustments) and a GPU backend behind the same interface.
 3. **GPU viewport** — optional Vulkan/Direct3D (or Qt RHI) behind that interface.
 4. **Richer blend modes** — only if compositing moves beyond the current seven `QPainter` modes.
 5. **Inspector integration for adjustments** — the dialog edits parameters, but the image inspector has no live section bound to the linked `AdjustmentLayer`.

@@ -1,6 +1,7 @@
 #include "core/Document.h"
 #include "core/layers/Layer.h"
 #include "rendering/CanvasRenderer.h"
+#include "rendering/IRenderer.h"
 
 #include <QImage>
 #include <QPainter>
@@ -298,6 +299,83 @@ private slots:
         clearRendererCaches();
     }
 };
+
+
+    void layerCacheAndRendererInterface()
+    {
+        // Documento com texto (camada cacheável) + fundo (não cacheável).
+        Document doc(60, 40);
+        auto bg = std::make_unique<BackgroundLayer>();
+        bg->fill = QColor(240, 240, 240);
+        QVERIFY(doc.addLayer(std::move(bg)));
+        auto text = std::make_unique<TextLayer>();
+        text->content = QStringLiteral("ABC");
+        text->sizePt = 24;
+        text->transform.position = QPointF(10, 8);
+        const LayerId textId = text->id();
+        QVERIFY(doc.addLayer(std::move(text)));
+
+        auto& renderer = defaultRenderer();
+        QCOMPARE(QString::fromLatin1(renderer.name()), QStringLiteral("software+cache"));
+        renderer.clearCaches();
+
+        QImage first(60, 40, QImage::Format_ARGB32);
+        renderTo(first, doc);
+
+        // Segunda pintura na MESMA revisão: o cache acerta e o resultado é
+        // idêntico (pixmap colado, não re-rasterizado).
+        QImage second(60, 40, QImage::Format_ARGB32);
+        renderTo(second, doc);
+        QCOMPARE(second, first);
+        QVERIFY2(dynamic_cast<CachingRenderer*>(&renderer)->cacheHits() > 0,
+                 "o cache por camada devia ter acertado na segunda pintura");
+
+        // Editar o texto muda a revisão: o cache invalida e o novo texto
+        // aparece — sem pixmap velho.
+        doc.setLayerTextContent(textId, QStringLiteral("XYZ"));
+        doc.setLayerTextColor(textId, QColor(200, 0, 0));
+        QImage edited(60, 40, QImage::Format_ARGB32);
+        renderTo(edited, doc);
+        QVERIFY(edited != first);
+
+        // Invalidar à mão e repintar dá o mesmo resultado.
+        clearRendererCaches();
+        QImage afterClear(60, 40, QImage::Format_ARGB32);
+        renderTo(afterClear, doc);
+        QCOMPARE(afterClear, edited);
+
+        // A interface aceita os dois renderers e ambos produzem o mesmo.
+        SoftwareRenderer plain;
+        plain.clearCaches();
+        QImage viaSoftware(60, 40, QImage::Format_ARGB32);
+        {
+            QPainter p(&viaSoftware);
+            plain.renderDocument(doc, &p, QTransform(), {});
+        }
+        QCOMPARE(viaSoftware, afterClear);
+
+        CachingRenderer local;
+        QImage viaCaching(60, 40, QImage::Format_ARGB32);
+        {
+            QPainter p(&viaCaching);
+            local.renderDocument(doc, &p, QTransform(), {});
+            local.renderDocument(doc, &p, QTransform(), {});
+        }
+        QCOMPARE(viaCaching, afterClear);
+        QVERIFY(local.cacheHits() > 0);
+        local.clearCaches();
+        QCOMPARE(local.cacheHits(), 0);
+
+        // invalidateLayer força re-renderização sem quebrar o resultado.
+        auto* caching = dynamic_cast<CachingRenderer*>(&renderer);
+        QVERIFY(caching != nullptr);
+        caching->invalidateLayer(textId);
+        QImage afterInvalidate(60, 40, QImage::Format_ARGB32);
+        renderTo(afterInvalidate, doc);
+        QCOMPARE(afterInvalidate, edited);
+
+        clearRendererCaches();
+    }
 
 QTEST_GUILESS_MAIN(TestRenderer)
 #include "test_renderer.moc"

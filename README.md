@@ -122,6 +122,7 @@ CreatorCanvas Architecture
 | **Build System** | CMake ≥ 3.24 | Presets for Linux (`linux-debug`, `linux-release`, `linux-asan`) and Windows |
 | **Machine Learning** | ONNX Runtime | Local, offline inference (`u2netp.onnx`) |
 | **Archive Engine** | miniz | Clean project bundling into `.creatorcanvas` containers |
+| **Compositor** | `IRenderer` seam | Software QPainter renderer + per-layer pixmap cache (text/shape/vector/fill, revision-keyed, LRU) |
 | **Testing** | QTest / CTest | 39 automated test suites with 100% pass rate |
 
 ---

@@ -1,4 +1,5 @@
 #include "CanvasRenderer.h"
+#include "IRenderer.h"
 #include <QRectF>
 
 #include "core/Document.h"
@@ -1543,8 +1544,18 @@ QImage composeLayers(const std::vector<std::unique_ptr<Layer>>& layers,
 
 } // namespace
 
+/// Entrada livre histórica: delega no renderer por omissão (com cache), para
+/// que todos os chamadores actuais — canvas, exporters, smoke test —
+/// beneficiem do cache sem mudar uma linha.
 void renderDocument(const Document& doc, QPainter* painter,
                     const QTransform& docToDevice, const RenderOptions& options)
+{
+    defaultRenderer().renderDocument(doc, painter, docToDevice, options);
+}
+
+void SoftwareRenderer::renderDocument(const Document& doc, QPainter* painter,
+                                     const QTransform& docToDevice,
+                                     const RenderOptions& options)
 {
     const QRectF canvasRect(0, 0, doc.width(), doc.height());
     const QRectF canvasOnDevice = docToDevice.mapRect(canvasRect);
@@ -1556,7 +1567,7 @@ void renderDocument(const Document& doc, QPainter* painter,
 
     if (!needsCompositing(root)) {
         // Caminho rápido (sem camadas recortadas): desenha direto no painter,
-        // como sempre funcionou.
+        // como sempre funcionou — com hipótese de cache por camada.
         painter->save();
         painter->setTransform(docToDevice);
         painter->setRenderHint(QPainter::Antialiasing, true);
@@ -1564,8 +1575,14 @@ void renderDocument(const Document& doc, QPainter* painter,
         if (!options.interactive)
             painter->setRenderHint(QPainter::SmoothPixmapTransform, true);
         painter->setClipRect(canvasRect);
-        for (const auto& child : root->children)
+        for (const auto& child : root->children) {
+            // O hook devolve false quando não cacheou (ou quando a camada
+            // não é cacheável) — aí o desenho normal segue.
+            if (drawCachedLayer(painter, *child, doc, canvasRect, docToDevice,
+                                canvasOnDevice, options))
+                continue;
             drawLayer(painter, *child, doc, canvasRect, 1.0f, options);
+        }
         painter->restore();
     } else {
         // Caminho de composição (Photoshop clipping mask): uma camada com
@@ -1688,6 +1705,172 @@ void clearRendererCaches()
     s_outlineCache.clear();
     s_dropShadowCache.clear();
     s_checkerboardCache.clear();
+    defaultRenderer().clearCaches();
+}
+
+bool SoftwareRenderer::drawCachedLayer(QPainter*, const Layer&, const Document&,
+                                       const QRectF&, const QTransform&,
+                                       const QRectF&, const RenderOptions&)
+{
+    return false;   // o renderer base não cacheia
+}
+
+void SoftwareRenderer::clearCaches() {}
+
+void SoftwareRenderer::invalidateLayer(const QUuid&) {}
+
+void SoftwareRenderer::invalidateAllLayers() {}
+
+// ---------------------------------------------------------------------------
+// CachingRenderer
+// ---------------------------------------------------------------------------
+
+namespace {
+
+/// Camadas cuja rasterização justifica cache: texto, formas, vectores e
+/// preenchimentos procedurais. Imagens ficam de fora (têm cache próprio de
+/// máscara e desenhá-las já é barato); grupos e ajustes só aparecem no
+/// caminho de composição, que nunca é cacheado.
+bool layerCacheable(const Layer& layer, const RenderOptions& options)
+{
+    if (layer.type() != LayerType::Text && layer.type() != LayerType::Shape
+        && layer.type() != LayerType::Vector && layer.type() != LayerType::Fill)
+        return false;
+    // Nada de máscaras, efeitos ou blend-if: cada um tem semântica própria
+    // e o objectivo aqui é cachear o caso comum, não todos.
+    if (layer.type() == LayerType::Image)
+        return false;
+    if (!layer.vectorMask.isNull())
+        return false;
+    if (!layer.blendIf.isDefault())
+        return false;
+    if (layer.clipped)
+        return false;
+    // A prévia de uma ferramenta muda a cada evento — nunca cachear.
+    if (!options.previewLayerId.isNull() && options.previewLayerId == layer.id())
+        return false;
+    return true;
+}
+
+constexpr qint64 kCacheBudgetBytes = 64 * 1024 * 1024;   // 64 MB
+constexpr int kCacheMaxEntries = 16;
+
+} // namespace
+
+// A chave do cache precisa de qHash para viver num QHash.
+inline size_t qHash(const CachingRenderer::Key& key, size_t seed = 0)
+{
+    return qHashMulti(seed, key.layerId, key.revision, key.device, key.interactive);
+}
+
+bool CachingRenderer::drawCachedLayer(QPainter* painter, const Layer& layer,
+                                      const Document& doc, const QRectF& canvasRect,
+                                      const QTransform& docToDevice,
+                                      const QRectF& canvasOnDevice,
+                                      const RenderOptions& options)
+{
+    if (!layer.visible || !layerCacheable(layer, options))
+        return false;
+
+    const QSize device = canvasOnDevice.size().toSize();
+    if (device.isEmpty() || device.width() <= 0 || device.height() <= 0)
+        return false;
+
+    const Key key{layer.id(), doc.revision(), device, options.interactive};
+
+    if (auto it = m_cache.find(key); it != m_cache.end()) {
+        ++m_hits;
+        m_lru.removeOne(key);
+        m_lru.append(key);
+        painter->drawPixmap(canvasOnDevice.topLeft(), it->pixmap);
+        return true;
+    }
+
+    ++m_misses;
+
+    // Rasteriza a camada sozinha numa imagem do tamanho do canvas no
+    // dispositivo: a transformação é a mesma do caminho rápido, deslocada
+    // para a origem do canvas no dispositivo (para poder colar depois).
+    QImage img(device, QImage::Format_ARGB32_Premultiplied);
+    if (img.isNull())
+        return false;
+    img.fill(Qt::transparent);
+
+    QPainter local(&img);
+    QTransform localTransform = docToDevice;
+    localTransform.translate(-canvasOnDevice.left(), -canvasOnDevice.top());
+    local.setTransform(localTransform);
+    local.setRenderHint(QPainter::Antialiasing, true);
+    local.setRenderHint(QPainter::TextAntialiasing, true);
+    if (!options.interactive)
+        local.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    local.setClipRect(canvasRect);
+    drawLayer(&local, layer, doc, canvasRect, 1.0f, options);
+    local.end();
+
+    Entry entry;
+    entry.pixmap = QPixmap::fromImage(img);
+    if (entry.pixmap.isNull())
+        return false;
+    entry.bytes = static_cast<qint64>(img.sizeInBytes());
+
+    dropLayer(layer.id());
+    m_bytes += entry.bytes;
+    m_cache.insert(key, entry);
+    m_lru.append(key);
+    evictToFit();
+
+    painter->drawPixmap(canvasOnDevice.topLeft(), entry.pixmap);
+    return true;
+}
+
+void CachingRenderer::dropLayer(const QUuid& layerId)
+{
+    for (auto it = m_cache.begin(); it != m_cache.end();) {
+        if (it.key().layerId == layerId) {
+            m_bytes -= it.value().bytes;
+            m_lru.removeOne(it.key());
+            it = m_cache.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void CachingRenderer::evictToFit()
+{
+    while ((m_bytes > kCacheBudgetBytes || m_cache.size() > kCacheMaxEntries)
+           && !m_lru.isEmpty()) {
+        const Key oldest = m_lru.takeFirst();
+        auto it = m_cache.find(oldest);
+        if (it != m_cache.end()) {
+            m_bytes -= it.value().bytes;
+            m_cache.erase(it);
+        }
+    }
+}
+
+void CachingRenderer::clearCaches()
+{
+    m_cache.clear();
+    m_lru.clear();
+    m_bytes = 0;
+}
+
+void CachingRenderer::invalidateLayer(const QUuid& layerId)
+{
+    dropLayer(layerId);
+}
+
+void CachingRenderer::invalidateAllLayers()
+{
+    clearCaches();
+}
+
+IRenderer& defaultRenderer()
+{
+    static CachingRenderer renderer;
+    return renderer;
 }
 
 } // namespace cc
