@@ -262,7 +262,9 @@
     "filter.vividPop": "Vivid Pop",
     "filter.cyberpunk": "Cyberpunk",
     "filter.goldenHour": "Golden Hour",
-    "filter.noir": "Noir"
+    "filter.noir": "Noir",
+    "menu.image.editInMiniPaint": "Edit in MiniPaint...",
+    "menu.image.editInMiniPaint.tooltip": "Open the selected image layer in the MiniPaint standalone editor"
   },
   "aiBackground": {
     "title": "AI Background Removal - CreatorCanvas",
@@ -325,6 +327,7 @@
     "command.aiBackground": "AI Background Removal",
     "command.aiBackgroundQuick": "AI Background Removal (Quick)",
     "command.selectSubject": "Select Subject (AI)",
+    "command.editInMiniPaint": "Edit in MiniPaint",
     "layer.group": "Group",
     "layer.ungroup": "Ungroup",
     "status.marqueeHelp": "Marquee: drag to select. Shift adds, Alt subtracts. Esc clears.",
@@ -355,7 +358,8 @@
     "status.layerLocked": "The layer is locked (image pixels).",
     "command": {
       "adjustment": "Adjustment",
-      "refineEdge": "Refine Edge"
+      "refineEdge": "Refine Edge",
+      "editInMiniPaint": "Edit in MiniPaint"
     }
   },
   "filters": {
@@ -504,5 +508,11 @@
     "smooth": "Smooth",
     "expand": "Expand / Contract",
     "feather": "Feather"
+  },
+  "menu": {
+    "image": {
+      "editInMiniPaint": "Edit in MiniPaint...",
+      "editInMiniPaint.tooltip": "Open this image layer in the external MiniPaint editor"
+    }
   }
 }

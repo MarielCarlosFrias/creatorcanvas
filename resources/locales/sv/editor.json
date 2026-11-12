@@ -355,7 +355,8 @@
     "status.layerLocked": "Lagret är låst (bildpixlar).",
     "command": {
       "adjustment": "Justering",
-      "refineEdge": "Förfina kant"
+      "refineEdge": "Förfina kant",
+      "editInMiniPaint": "Redigera i MiniPaint"
     }
   },
   "filters": {
@@ -504,5 +505,11 @@
     "smooth": "Mjuka upp",
     "expand": "Utöka / Dra ihop",
     "feather": "Ludda"
+  },
+  "menu": {
+    "image": {
+      "editInMiniPaint": "Redigera i MiniPaint...",
+      "editInMiniPaint.tooltip": "Öppna detta bildlager i den externa redigeraren MiniPaint"
+    }
   }
 }

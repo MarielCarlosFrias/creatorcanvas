@@ -258,8 +258,34 @@ std::unique_ptr<Layer> VectorLayer::deepCopy() const
     return copy;
 }
 
+void VectorLayer::rebuildPath()
+{
+    if (nodes.size() < 2)
+        return;   // sem nós suficientes o caminho existente manda
+
+    QPainterPath rebuilt;
+    rebuilt.moveTo(nodes.front().position);
+    for (size_t i = 0; i < nodes.size(); ++i) {
+        const VectorNode& n = nodes[i];
+        const VectorNode& next = nodes[(i + 1) % nodes.size()];
+        if (!closed && i + 1 >= nodes.size())
+            break;
+        rebuilt.cubicTo(n.position + n.handleOut, next.position + next.handleIn,
+                        next.position);
+    }
+    if (closed)
+        rebuilt.closeSubpath();
+    path = rebuilt;
+}
+
 QRectF VectorLayer::contentBounds() const
 {
+    if (!nodes.empty()) {
+        QRectF bounds = path.boundingRect();
+        for (const VectorNode& n : nodes)
+            bounds |= QRectF(n.position, n.position);
+        return bounds;
+    }
     return path.boundingRect();
 }
 

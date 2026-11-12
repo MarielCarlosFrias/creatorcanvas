@@ -115,6 +115,7 @@ public:
     QAction* removeBgAiAction = nullptr;
     QAction* removeBgAiQuickAction = nullptr;
     QAction* mockupAction = nullptr;
+    QAction* editInMiniPaintAction = nullptr;
 
     QList<QAction*> addNewShapeActions;
     QList<QAction*> modifyActions;

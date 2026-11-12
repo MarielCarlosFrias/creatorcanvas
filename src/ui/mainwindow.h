@@ -13,6 +13,7 @@
 #include "core/geometry/LayerAlignment.h"
 #include "services/presetstore.h"
 #include "services/textstylestore.h"
+#include "services/minipaintbridge.h"
 #include "services/autosaveservice.h"
 #include "services/recentfiles.h"
 
@@ -144,6 +145,9 @@ private:
                            cc::AffineTransform newTransform);
     /// Abre o painel de composições de camadas (guardar/aplicar estado).
     /// Abre o painel Refine Edge sobre a selecção activa (modo avançado).
+    /// Abre a camada selecionada no editor externo MiniPaint.
+    void editSelectedLayerInMiniPaint();
+
     void openRefineEdge();
     void openLayerComps();
     /// Abre o painel de fatias de exportação web.
@@ -196,6 +200,8 @@ private:
 
     ActionManager* m_actions = nullptr;
     MenuBuilder* m_menuBuilder = nullptr;
+
+    std::unique_ptr<cc::MiniPaintBridge> m_miniPaintBridge;
 
     QAction* m_newAction = nullptr;
     QAction* m_openAction = nullptr;
@@ -266,6 +272,7 @@ private:
     QAction* m_removeBgAiAction = nullptr;
     QAction* m_removeBgAiQuickAction = nullptr;
     QAction* m_mockupAction = nullptr;
+    QAction* m_editInMiniPaintAction = nullptr;
 
     QMenu* m_fileMenu = nullptr;
     QMenu* m_openRecentMenu = nullptr;

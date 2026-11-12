@@ -29,6 +29,7 @@
 #include "services/autosaveservice.h"
 #include "services/recentfiles.h"
 #include "services/settingsservice.h"
+#include "services/minipaintbridge.h"
 #include "ui/textinspector.h"
 #include "ui/shapeinspector.h"
 #include "ui/imageinspector.h"
@@ -559,6 +560,8 @@ void MainWindow::buildCentralWidget()
                 const bool imageSelected = selected && selected->type() == LayerType::Image;
                 if (m_removeBgAiAction) m_removeBgAiAction->setEnabled(imageSelected);
                 if (m_removeBgAiQuickAction) m_removeBgAiQuickAction->setEnabled(imageSelected);
+                if (m_editInMiniPaintAction)
+                    m_editInMiniPaintAction->setEnabled(imageSelected && m_miniPaintBridge && m_miniPaintBridge->isAvailable());
                 for (QAction* act : m_adjustmentActions) {
                     if (act) act->setEnabled(imageSelected);
                 }
@@ -1019,11 +1022,20 @@ void MainWindow::buildActions()
     m_removeBgAiAction = m_actions->removeBgAiAction;
     m_removeBgAiQuickAction = m_actions->removeBgAiQuickAction;
     m_mockupAction = m_actions->mockupAction;
+    m_editInMiniPaintAction = m_actions->editInMiniPaintAction;
     m_filterActions = m_actions->filterActions;
     m_settingsAction = m_actions->settingsAction;
     m_startScreenAction = m_actions->startScreenAction;
     m_aboutAction = m_actions->aboutAction;
     m_aboutQtAction = m_actions->aboutQtAction;
+
+    // Bridge para o editor externo MiniPaint (separado, SFML 3).
+    m_miniPaintBridge = std::make_unique<cc::MiniPaintBridge>(this);
+    connect(m_miniPaintBridge.get(), &cc::MiniPaintBridge::availabilityChanged,
+            this, [this](bool available) {
+        if (m_editInMiniPaintAction)
+            m_editInMiniPaintAction->setEnabled(available && m_document != nullptr);
+    });
 
     connectActionSignals();
 }
@@ -1400,6 +1412,9 @@ void MainWindow::connectActionSignals()
     connect(m_mockupAction, &QAction::triggered, this, [this] {
         if (m_imageInspector) m_imageInspector->openMockupDialog();
     });
+
+    connect(m_editInMiniPaintAction, &QAction::triggered, this,
+            &MainWindow::editSelectedLayerInMiniPaint);
 
     for (int i = 0; i < m_filterActions.size(); ++i) {
         connect(m_filterActions[i], &QAction::triggered, this, [this, i] {
@@ -2297,6 +2312,65 @@ void MainWindow::exportImage()
     QMessageBox::information(
         this, m_i18n->t("editor", "export.success.title"),
         m_i18n->t("editor", "export.success").arg(path));
+}
+
+void MainWindow::editSelectedLayerInMiniPaint()
+{
+    if (!m_document || !m_miniPaintBridge || !m_miniPaintBridge->isAvailable())
+        return;
+
+    LayerId selectedId;
+    if (m_canvas && !m_canvas->selectedLayers().isEmpty())
+        selectedId = m_canvas->selectedLayers().first();
+    else if (m_layersPanel && !m_layersPanel->selectedLayer().isNull())
+        selectedId = m_layersPanel->selectedLayer();
+
+    if (selectedId.isNull())
+        return;
+
+    Layer* layer = m_document->findLayer(selectedId);
+    if (!layer || layer->type() != LayerType::Image)
+        return;
+
+    auto* imageLayer = static_cast<ImageLayer*>(layer);
+    if (imageLayer->locked)
+        return;
+
+    QGuiApplication::setOverrideCursor(Qt::WaitCursor);
+    QImage result = m_miniPaintBridge->editLayer(imageLayer, m_document,
+                                                  QStringLiteral("pencil"), 3.0F);
+    QGuiApplication::restoreOverrideCursor();
+
+    if (result.isNull())
+        return;
+
+    // Import the edited bitmap back as one undoable command.
+    AssetStore& assets = m_document->assets();
+    const LayerId oldAssetId = imageLayer->assetId;
+    const int oldW = imageLayer->naturalWidth;
+    const int oldH = imageLayer->naturalHeight;
+
+    LayerId newAssetId = assets.addImage(result, QStringLiteral("png"));
+    if (newAssetId.isNull())
+        return;
+
+    const QString cmdName = m_i18n
+        ? m_i18n->t("editor", "canvas.command.editInMiniPaint")
+        : QStringLiteral("Edit in MiniPaint");
+
+    if (m_history) {
+        m_history->execute(std::make_unique<SetLayerImageAssetCommand>(
+            *m_document, selectedId,
+            oldAssetId, oldW, oldH,
+            newAssetId, result.width(), result.height()
+        ));
+    } else {
+        m_document->setImageLayerAsset(selectedId, newAssetId,
+                                        result.width(), result.height());
+    }
+
+    if (m_canvas)
+        m_canvas->update();
 }
 
 void MainWindow::openBatchDialog()

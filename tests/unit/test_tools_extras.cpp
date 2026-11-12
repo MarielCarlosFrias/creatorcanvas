@@ -9,7 +9,11 @@
 #include "tools/MarqueeTool.h"
 #include "tools/PaintExtras.h"
 #include "tools/HealingTool.h"
+#include "tools/PenTool.h"
 #include "tools/VectorNodeTool.h"
+#include "rendering/CanvasRenderer.h"
+
+#include <QPainter>
 
 using namespace cc;
 
@@ -398,42 +402,59 @@ private slots:
         ctx.requestStatusMessage = [](const QString&) {};
         tool.activate(ctx);
 
+        // Espaço local: os nós estão centrados no bounds do caminho — a
+        // ferramenta converte documento->local (e o renderer aplica a mesma
+        // matriz que AffineTransform::matrix produz).
+        auto* vecStart = dynamic_cast<VectorLayer*>(doc.findLayer(id));
+        const QRectF bounds = vecStart->contentBounds();
+        const QTransform localToDoc = vecStart->transform.matrix(bounds);
+
         // 1) Arrastar o primeiro nó move-o e commitA UM passo de undo.
-        const QPointF nodePos = static_cast<VectorLayer*>(doc.findLayer(id))->nodes[0].position;
-        QMouseEvent press = makeMouse(QEvent::MouseButtonPress, nodePos);
-        tool.mousePress(&press, nodePos, ctx);
-        const QPointF moved(30, 25);
-        QMouseEvent move = makeMouse(QEvent::MouseMove, moved);
-        tool.mouseMove(&move, moved, ctx);
-        QMouseEvent release = makeMouse(QEvent::MouseButtonRelease, moved);
-        tool.mouseRelease(&release, moved, ctx);
+        const QPointF nodePosLocal = static_cast<VectorLayer*>(doc.findLayer(id))->nodes[0].position;
+        const QPointF pressDoc = localToDoc.map(nodePosLocal);   // onde o nó aparece
+        QMouseEvent press = makeMouse(QEvent::MouseButtonPress, pressDoc);
+        tool.mousePress(&press, pressDoc, ctx);
+        const QPointF movedDoc = pressDoc + QPointF(20, 15);
+        QMouseEvent move = makeMouse(QEvent::MouseMove, movedDoc);
+        tool.mouseMove(&move, movedDoc, ctx);
+        QMouseEvent release = makeMouse(QEvent::MouseButtonRelease, movedDoc);
+        tool.mouseRelease(&release, movedDoc, ctx);
 
         auto* vecLayer = dynamic_cast<VectorLayer*>(doc.findLayer(id));
         QVERIFY(vecLayer);
-        QCOMPARE(vecLayer->nodes[0].position, QPointF(30, 25));
+        const QPointF expectedLocal = localToDoc.inverted().map(pressDoc + QPointF(20, 15));
+        QCOMPARE(vecLayer->nodes[0].position, expectedLocal);
         QCOMPARE(history.undoCount(), 1);
 
         // Undo volta ao estado original; reido reaplica.
         history.undo();
         QCOMPARE(dynamic_cast<VectorLayer*>(doc.findLayer(id))->nodes[0].position,
-                 QPointF(10, 10));
+                 nodePosLocal);
         history.redo();
         QCOMPARE(dynamic_cast<VectorLayer*>(doc.findLayer(id))->nodes[0].position,
-                 QPointF(30, 25));
+                 expectedLocal);
 
         // 2) Duplo-clique num nó apaga-o (mínimo 2 ficam).
-        const QPointF node2 = dynamic_cast<VectorLayer*>(doc.findLayer(id))->nodes[1].position;
-        QMouseEvent dbl = makeMouse(QEvent::MouseButtonDblClick, node2);
-        tool.mouseDoubleClick(&dbl, node2, ctx);
+        // Matriz FRESCA: o arraste mudou o bounds (e portanto o centro).
+        auto* vecNow = dynamic_cast<VectorLayer*>(doc.findLayer(id));
+        const QTransform localToDocNow = vecNow->transform.matrix(vecNow->contentBounds());
+        const QPointF node2Local = vecNow->nodes[1].position;
+        const QPointF node2Doc = localToDocNow.map(node2Local);
+        QMouseEvent dbl = makeMouse(QEvent::MouseButtonDblClick, node2Doc);
+        tool.mouseDoubleClick(&dbl, node2Doc, ctx);
         vecLayer = dynamic_cast<VectorLayer*>(doc.findLayer(id));
         QCOMPARE(vecLayer->nodes.size(), 2u);
         QCOMPARE(history.undoCount(), 2);
 
         // 3) Clicar no caminho insere um nó novo.
+        // Matriz recalculada: o delete mudou o caminho (e o centro) de novo.
+        const QTransform localToDocAfterDelete =
+            vecLayer->transform.matrix(vecLayer->contentBounds());
         const QPointF mid((vecLayer->nodes[0].position.x() + vecLayer->nodes[1].position.x()) / 2,
                           (vecLayer->nodes[0].position.y() + vecLayer->nodes[1].position.y()) / 2);
-        QMouseEvent press2 = makeMouse(QEvent::MouseButtonPress, mid);
-        tool.mousePress(&press2, mid, ctx);
+        const QPointF midDoc = localToDocAfterDelete.map(mid);
+        QMouseEvent press2 = makeMouse(QEvent::MouseButtonPress, midDoc);
+        tool.mousePress(&press2, midDoc, ctx);
         vecLayer = dynamic_cast<VectorLayer*>(doc.findLayer(id));
         QCOMPARE(vecLayer->nodes.size(), 3u);
 
@@ -445,7 +466,93 @@ private slots:
         QVERIFY(doc.setVectorLayerNodes(id, vecLayer->nodes));   // idempotente = true
     }
 
+
+    void penCreatesEditableNodesAndSelectsLayer()
+    {
+        // Regressão do "node path não funciona": a caneta criava o caminho
+        // mas não os nós nem a selecção — a ferramenta de nós não tinha o
+        // que agarrar nem sabia em que camada mexer.
+        Document doc(200, 120);
+        CommandStack history;
+        LayerId created;
+
+        PenTool pen;
+        ToolContext ctx;
+        ctx.document = &doc;
+        ctx.history = &history;
+        ctx.zoom = 1.0;
+        ctx.i18n = nullptr;
+        ctx.requestUpdate = [] {};
+        ctx.requestStatusMessage = [](const QString&) {};
+        ctx.selectLayer = [&created](const LayerId& id) { created = id; };
+        pen.activate(ctx);
+
+        // Três cliques = três pontos; Alt+clique fecha e cria a camada.
+        for (const QPointF& p : {QPointF(20, 20), QPointF(100, 60), QPointF(180, 90)}) {
+            QMouseEvent press = makeMouse(QEvent::MouseButtonPress, p);
+            pen.mousePress(&press, p, ctx);
+        }
+        QMouseEvent close = makeMouse(QEvent::MouseButtonPress, QPointF(20, 20), Qt::AltModifier);
+        pen.mousePress(&close, QPointF(20, 20), ctx);
+
+        QVERIFY2(!created.isNull(), "a caneta devia selecionar a camada criada");
+        auto* vec = dynamic_cast<VectorLayer*>(doc.findLayer(created));
+        QVERIFY(vec != nullptr);
+        QCOMPARE(vec->nodes.size(), 3u);          // nós criados para edição
+        QVERIFY(!vec->path.isEmpty());            // e o caminho desenhado
+        // Os nós ficam em espaço LOCAL centrado (a caneta subtrai o centro
+        // das âncoras): o renderer aplica a mesma convenção de matriz.
+        // Âncoras: (20,20), (100,60), (180,90) -> bbox centro (100, 55).
+        const QPointF expectedFirst = QPointF(20, 20) - QPointF(100, 55);
+        QCOMPARE(vec->nodes.front().position, expectedFirst);
+
+        // Editar um nó muda o CAMINHO desenhado (fonte de verdade única).
+        const QPointF before = vec->path.pointAtPercent(0.0);
+        const QPointF firstLocal = vec->nodes.front().position;
+        const QPointF firstDoc = vec->transform.matrix(vec->contentBounds()).map(firstLocal);
+        VectorNodeTool nodes;
+        ToolContext nctx = ctx;
+        nctx.selectedLayerId = created;
+        nodes.activate(nctx);
+        QMouseEvent press = makeMouse(QEvent::MouseButtonPress, firstDoc);
+        nodes.mousePress(&press, firstDoc, nctx);
+        const QPointF movedDoc = firstDoc + QPointF(20, 15);
+        QMouseEvent move = makeMouse(QEvent::MouseMove, movedDoc);
+        nodes.mouseMove(&move, movedDoc, nctx);
+        QMouseEvent release = makeMouse(QEvent::MouseButtonRelease, movedDoc);
+        nodes.mouseRelease(&release, movedDoc, nctx);
+
+        vec = dynamic_cast<VectorLayer*>(doc.findLayer(created));
+        // O arraste desloca o nó pelo MESMO delta no espaço local (a matriz
+        // da camada é identidade aqui): primeiro nó + (20,15).
+        const QPointF expectedLocal = firstLocal + QPointF(20, 15);
+        QCOMPARE(vec->nodes.front().position, expectedLocal);
+        QVERIFY2(vec->path.pointAtPercent(0.0) != before,
+                 "mover o nó devia mudar o caminho desenhado");
+
+        // E o RENDER também muda: é o que o utilizador vê.
+        QImage imgBefore(200, 120, QImage::Format_ARGB32);
+        QImage imgAfter(200, 120, QImage::Format_ARGB32);
+        {
+            QPainter p(&imgBefore);
+            cc::RenderOptions opt;
+            opt.drawCheckerboard = false;
+            cc::renderDocument(doc, &p, QTransform(), opt);
+        }
+        QVERIFY(!imgBefore.isNull());
+        // O caminho tem de ser visível: o contorno azul aparece no render.
+        int painted = 0;
+        for (int y = 0; y < imgBefore.height(); ++y)
+            for (int x = 0; x < imgBefore.width(); ++x)
+                if (imgBefore.pixelColor(x, y).alpha() != 0)
+                    ++painted;
+        QVERIFY2(painted > 0, "o caminho criado pela caneta devia ser visível");
+    }
+
+
+
 };
 
 QTEST_MAIN(TestToolsExtras)
 #include "test_tools_extras.moc"
+

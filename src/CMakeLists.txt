@@ -117,9 +117,13 @@ add_library(cc_services STATIC
     services/textstylestore.cpp
     services/autosaveservice.h
     services/autosaveservice.cpp
+    services/minipaintbridge.h
+    services/minipaintbridge.cpp
     ${PROJECT_SOURCE_DIR}/resources/presets.qrc
 )
-target_link_libraries(cc_services PUBLIC Qt6::Core Qt6::Gui cc_core)
+# Qt6::Widgets: MiniPaintBridge precisa de QApplication para bombear eventos
+# enquanto o processo externo corre.
+target_link_libraries(cc_services PUBLIC Qt6::Core Qt6::Gui Qt6::Widgets cc_core)
 target_include_directories(cc_services PUBLIC ${PROJECT_SOURCE_DIR}/src)
 cc_enable_warnings(cc_services)
 

@@ -51,6 +51,8 @@ void MenuBuilder::buildMenus(I18nService* i18n)
     imageMenu->addAction(m_actions->removeBgAiAction);
     imageMenu->addAction(m_actions->removeBgAiQuickAction);
     imageMenu->addAction(m_actions->mockupAction);
+    imageMenu->addSeparator();
+    imageMenu->addAction(m_actions->editInMiniPaintAction);
     adjustmentsMenu = imageMenu->addMenu(QStringLiteral("Adjustments"));
     for (QAction* act : m_actions->adjustmentActions)
         adjustmentsMenu->addAction(act);

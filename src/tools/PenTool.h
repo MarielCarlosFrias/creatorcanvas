@@ -26,6 +26,10 @@ public:
     void drawOverlay(QPainter* painter, const ToolContext& ctx) override;
     void cancel(const ToolContext& ctx) override;
 
+    /// Âncoras do caminho em construção — viram os nós da VectorLayer, para
+    /// a edição de nós funcionar desde o primeiro momento.
+    std::vector<QPointF> m_anchors;
+
     void setStrokeColor(const QColor& c) { m_strokeColor = c; }
     QColor strokeColor() const { return m_strokeColor; }
     void setStrokeWidth(double w) { m_strokeWidth = w; }

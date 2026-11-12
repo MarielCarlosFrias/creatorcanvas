@@ -334,14 +334,19 @@ public:
     std::unique_ptr<Layer> deepCopy() const override;
     QRectF contentBounds() const override;
 
-    QPainterPath path;        ///< Caminho vetorial completo
-    std::vector<VectorNode> nodes;  ///< Nós para edição interativa
+    QPainterPath path;        ///< Caminho vetorial completo (derivado dos nós quando existem)
+    std::vector<VectorNode> nodes;  ///< Nós para edição interativa (fonte de verdade)
     bool closed = false;      ///< Se o caminho está fechado
     QColor fill = Qt::transparent;
     QColor stroke = Qt::black;
     double strokeWidth = 2.0;
     bool fillEnabled = true;
     bool strokeEnabled = true;
+
+    /// Reconstrói `path` a partir dos `nodes` — a edição de nós mexe nos
+    /// nós; o renderer desenha o caminho, por isso os dois têm de ficar
+    /// sincronizados (senão editar não se vê).
+    void rebuildPath();
 };
 
 std::unique_ptr<Layer> makeLayer(LayerType type);

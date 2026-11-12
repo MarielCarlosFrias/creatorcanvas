@@ -329,6 +329,10 @@ void ActionManager::createActions(I18nService* i18n)
     mockupAction = new QAction(this);
     mockupAction->setEnabled(false);
 
+    editInMiniPaintAction = new QAction(this);
+    editInMiniPaintAction->setIcon(ThemeIcons::actionExport());
+    editInMiniPaintAction->setEnabled(false);
+
     filterActions.clear();
     for (int i = 0; i < 11; ++i) {
         filterActions.append(new QAction(this));
@@ -550,6 +554,9 @@ void ActionManager::retranslate(I18nService* i18n)
     removeBgAiQuickAction->setText(i18n->t("editor", "ai.quickRemoveBackground"));
     mockupAction->setText(i18n->t("editor", "ai.mockup"));
 
+    editInMiniPaintAction->setText(i18n->t("editor", "menu.image.editInMiniPaint"));
+    editInMiniPaintAction->setToolTip(i18n->t("editor", "menu.image.editInMiniPaint.tooltip"));
+
     static const char* const filterKeys[] = {
         "filters.grayscale", "filters.sepia", "filters.vintage",
         "filters.highContrast", "filters.vividPop", "filters.cyberpunk",
@@ -720,7 +727,7 @@ void ActionManager::registerShortcutActions()
     for (int i = 0; i < adjustmentActions.size() && i < 11; ++i)
         add(adjustmentRegistry[i], adjustmentActions[i]);
     add("ai.removeBackground", removeBgAiAction); add("ai.quickRemoveBackground", removeBgAiQuickAction);
-    add("ai.mockup", mockupAction); add("settings.open", settingsAction); add("settings.shortcuts", shortcutsAction);
+    add("ai.mockup", mockupAction); add("image.editInMiniPaint", editInMiniPaintAction); add("settings.open", settingsAction); add("settings.shortcuts", shortcutsAction);
     add("help.startScreen", startScreenAction); add("help.about", aboutAction); add("help.aboutQt", aboutQtAction);
 }
 

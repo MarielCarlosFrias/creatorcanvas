@@ -410,6 +410,8 @@ bool Document::setVectorLayerNodes(const LayerId& id, std::vector<VectorNode> no
     if (vec->nodes == nodes)
         return true;
     vec->nodes = std::move(nodes);
+    // O renderer desenha `path`: sincronizar aqui faz a edição aparecer.
+    vec->rebuildPath();
     bumpRevision();
     emit layerPropertyChanged(id);
     return true;

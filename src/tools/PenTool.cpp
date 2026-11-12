@@ -39,7 +39,9 @@ void PenTool::mousePress(QMouseEvent* event, const QPointF& docPos, const ToolCo
         if (!m_path.isEmpty()) {
             m_path.closeSubpath();
             m_drawing = false;
-            // Cria VectorLayer com o caminho
+            // Cria VectorLayer com o caminho E os nós correspondentes: sem
+            // nós, a edição de nós não teria nada para agarrar (era o
+            // "não funciona" que se sentia ao trocar para a ferramenta).
             auto vecLayer = std::make_unique<VectorLayer>();
             vecLayer->path = m_path;
             vecLayer->fill = m_fillColor;
@@ -47,9 +49,43 @@ void PenTool::mousePress(QMouseEvent* event, const QPointF& docPos, const ToolCo
             vecLayer->strokeWidth = m_strokeWidth;
             vecLayer->fillEnabled = m_fillColor.alpha() > 0;
             vecLayer->strokeEnabled = m_strokeColor.alpha() > 0;
+            vecLayer->closed = !m_path.elementAt(m_path.elementCount() - 1).isMoveTo()
+                               && m_path.elementAt(0).type == QPainterPath::MoveToElement
+                               && m_path.currentPosition().isNull() ? vecLayer->closed
+                                                                   : vecLayer->closed;
 
-            (void)vecLayer->id(); // unused
+            // A camada desenha-se com transform.matrix(contentBounds()), que
+            // traduz por -centro: o conteúdo vive em coordenadas LOCAIS
+            // centradas na própria bounding box (como as shapes). Guardar as
+            // âncoras absolutas faria o caminho renderizar fora do sítio.
+            const LayerId newId = vecLayer->id();
+            // Bbox das âncoras por min/max explícito: `QRectF::operator|=`
+            // SUBSTITUI quando um dos lados é "null" (tamanho zero conta
+            // como null no Qt) — a união acumulada perdia âncoras e o centro
+            // do caminho caía na última âncora, deslocando tudo.
+            qreal minX = m_anchors.front().x(), maxX = minX;
+            qreal minY = m_anchors.front().y(), maxY = minY;
+            for (const QPointF& anchor : m_anchors) {
+                minX = std::min(minX, anchor.x());
+                maxX = std::max(maxX, anchor.x());
+                minY = std::min(minY, anchor.y());
+                maxY = std::max(maxY, anchor.y());
+            }
+            const QPointF center((minX + maxX) / 2.0, (minY + maxY) / 2.0);
+            for (const QPointF& anchor : m_anchors) {
+                VectorNode node;
+                node.position = anchor - center;
+                node.smooth = false;   // segmentos rectos até o utilizador os suavizar
+                vecLayer->nodes.push_back(node);
+            }
+            vecLayer->path.translate(-center);
+            vecLayer->rebuildPath();
+
             if (ctx.document->addLayer(std::move(vecLayer), nullptr, -1)) {
+                // Selecção imediata: sem isto a camada fica criada mas
+                // nenhuma ferramenta (incluindo a de edição de nós) a vê.
+                if (ctx.selectLayer)
+                    ctx.selectLayer(newId);
                 if (ctx.requestStatusMessage) {
                     const QString msg = ctx.i18n ? ctx.i18n->t("editor", "canvas.status.penComplete")
                                                  : QStringLiteral("Vector path created.");
@@ -60,6 +96,7 @@ void PenTool::mousePress(QMouseEvent* event, const QPointF& docPos, const ToolCo
             }
         }
         m_path = QPainterPath();
+        m_anchors.clear();
         m_drawing = false;
         event->accept();
         return;
@@ -67,13 +104,16 @@ void PenTool::mousePress(QMouseEvent* event, const QPointF& docPos, const ToolCo
 
     // Primeiro ponto: começa o caminho
     if (!m_drawing) {
+        m_anchors.clear();
         m_path.moveTo(docPos);
+        m_anchors.push_back(docPos);
         m_lastPoint = docPos;
         m_drawing = true;
     } else {
         // Próximo ponto: cria curva cúbica com handle aproximado
         // Para simplicidade, cria linha reta (usuário pode editar handles depois)
         m_path.lineTo(docPos);
+        m_anchors.push_back(docPos);
         m_lastPoint = docPos;
     }
 

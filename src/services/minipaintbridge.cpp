@@ -1,0 +1,238 @@
+#include "minipaintbridge.h"
+
+#include "core/Document.h"
+#include "core/assets/AssetStore.h"
+#include "core/layers/Layer.h"
+#include "imageio/DocumentExporter.h"
+
+#include <QApplication>
+#include <QCommandLineParser>
+#include <QDir>
+#include <QFileInfo>
+#include <QProcess>
+#include <QStandardPaths>
+#include <QTemporaryDir>
+#include <QDebug>
+
+namespace cc {
+
+namespace
+{
+/// Tool names accepted by MiniPaint CLI.
+const QStringList kValidTools = {
+    QStringLiteral("pencil"),
+    QStringLiteral("eraser"),
+    QStringLiteral("line"),
+    QStringLiteral("rectangle"),
+    QStringLiteral("ellipse"),
+    QStringLiteral("bucket"),
+    QStringLiteral("eyedropper")
+};
+} // namespace
+
+MiniPaintBridge::MiniPaintBridge(QObject* parent)
+    : QObject(parent)
+{
+    m_executablePath = resolveExecutable();
+    m_available = !m_executablePath.isEmpty();
+    if (m_available)
+    {
+        qInfo() << "[MiniPaintBridge] Found executable at:" << m_executablePath;
+    }
+    else
+    {
+        qWarning() << "[MiniPaintBridge] MiniPaint standalone executable not found. "
+                      "Install it beside CreatorCanvas or add it to PATH.";
+    }
+    emit availabilityChanged(m_available);
+}
+
+QString MiniPaintBridge::resolveExecutable() const
+{
+    const QString appDir = QCoreApplication::applicationDirPath();
+
+    // Candidate names per platform
+#if defined(Q_OS_WIN)
+    const QStringList names = {
+        QStringLiteral("minipaint-standalone.exe"),
+        QStringLiteral("minipaint-standalone")
+    };
+#else
+    const QStringList names = {
+        QStringLiteral("minipaint-standalone")
+    };
+#endif
+
+    // 1. Beside the application executable (bundled with CreatorCanvas)
+    for (const QString& name : names)
+    {
+        const QString path = appDir + QDir::separator() + name;
+        if (QFile::exists(path))
+        {
+            return path;
+        }
+    }
+
+    // 2. In a sibling minipaint/ directory (development layout)
+    for (const QString& name : names)
+    {
+        const QString path = appDir + QStringLiteral("/../minipaint/build/") + name;
+        if (QFile::exists(path))
+        {
+            return path;
+        }
+    }
+
+    // 3. System PATH
+    for (const QString& name : names)
+    {
+        const QString found = QStandardPaths::findExecutable(name);
+        if (!found.isEmpty())
+        {
+            return found;
+        }
+    }
+
+    return QString();
+}
+
+bool MiniPaintBridge::isAvailable() const
+{
+    return m_available;
+}
+
+QString MiniPaintBridge::executablePath() const
+{
+    return m_executablePath;
+}
+
+QImage MiniPaintBridge::editLayer(ImageLayer* layer,
+                                   Document* document,
+                                   QString initialTool,
+                                   float brushSize)
+{
+    if (!m_available || !layer || !document)
+    {
+        return QImage();
+    }
+
+    if (layer->type() != LayerType::Image)
+    {
+        qWarning() << "[MiniPaintBridge] Layer is not an image layer";
+        return QImage();
+    }
+
+    if (layer->locked)
+    {
+        qWarning() << "[MiniPaintBridge] Layer is locked";
+        return QImage();
+    }
+
+    AssetStore& assets = document->assets();
+    QImage source = assets.decodedImage(layer->assetId);
+    if (source.isNull())
+    {
+        qWarning() << "[MiniPaintBridge] Could not decode layer asset";
+        return QImage();
+    }
+
+    // Normalize tool name
+    initialTool = initialTool.toLower();
+    if (!kValidTools.contains(initialTool))
+    {
+        initialTool = QStringLiteral("pencil");
+    }
+
+    // Clamp brush size
+    if (brushSize < 1.0F)
+        brushSize = 1.0F;
+    if (brushSize > 128.0F)
+        brushSize = 128.0F;
+
+    QTemporaryDir tempDir;
+    if (!tempDir.isValid())
+    {
+        qWarning() << "[MiniPaintBridge] Could not create temporary directory";
+        return QImage();
+    }
+
+    const QString inputPath = tempDir.filePath(QStringLiteral("input.png"));
+    const QString outputPath = tempDir.filePath(QStringLiteral("output.png"));
+
+    // Export the layer bitmap as PNG (preserves alpha)
+    if (!source.save(inputPath, "PNG"))
+    {
+        qWarning() << "[MiniPaintBridge] Could not write input PNG to" << inputPath;
+        return QImage();
+    }
+
+    // Build command line arguments
+    QStringList args;
+    args << QStringLiteral("--input") << inputPath;
+    args << QStringLiteral("--output") << outputPath;
+    args << QStringLiteral("--tool") << initialTool;
+    args << QStringLiteral("--brush-size") << QString::number(brushSize);
+    args << QStringLiteral("--primary-color") << QStringLiteral("000000FF");
+    args << QStringLiteral("--secondary-color") << QStringLiteral("FFFFFFFF");
+    args << QStringLiteral("--title")
+         << QStringLiteral("MiniPaint - Editing ") + layer->name;
+
+    qInfo() << "[MiniPaintBridge] Launching:" << m_executablePath << args;
+
+    QProcess process;
+    process.setProcessChannelMode(QProcess::SeparateChannels);
+    process.start(m_executablePath, args);
+
+    if (!process.waitForStarted(5000))
+    {
+        qWarning() << "[MiniPaintBridge] Could not start MiniPaint process";
+        return QImage();
+    }
+
+    if (!process.waitForFinished(300000))
+    {
+        qWarning() << "[MiniPaintBridge] MiniPaint process timed out";
+        process.kill();
+        process.waitForFinished();
+        return QImage();
+    }
+
+    const int exitCode = process.exitCode();
+    qInfo() << "[MiniPaintBridge] MiniPaint exited with code" << exitCode;
+
+    // Exit code 2 = user cancelled
+    if (exitCode == 2)
+    {
+        qInfo() << "[MiniPaintBridge] User cancelled";
+        return QImage();
+    }
+
+    if (exitCode != 0)
+    {
+        qWarning() << "[MiniPaintBridge] MiniPaint failed with exit code" << exitCode;
+        QByteArray err = process.readAllStandardError();
+        if (!err.isEmpty())
+            qWarning() << "[MiniPaintBridge] stderr:" << err;
+        return QImage();
+    }
+
+    // Import the result PNG
+    QFileInfo outInfo(outputPath);
+    if (!outInfo.exists() || outInfo.size() == 0)
+    {
+        qWarning() << "[MiniPaintBridge] Output file missing or empty";
+        return QImage();
+    }
+
+    QImage result(outputPath);
+    if (result.isNull())
+    {
+        qWarning() << "[MiniPaintBridge] Could not read output PNG";
+        return QImage();
+    }
+
+    qInfo() << "[MiniPaintBridge] Imported result:" << result.size();
+    return result;
+}
+
+} // namespace cc

@@ -1427,9 +1427,25 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
 
     case LayerType::Vector: {
         const auto& vector = static_cast<const VectorLayer&>(layer);
-        if (vector.path.isEmpty())
+        // Caminho vazio mas com nós: deriva dos nós (camadas antigas ou
+        // criadas por código sem sincronizar) em vez de desenhar nada.
+        if (vector.path.isEmpty() && vector.nodes.size() < 2)
             break;
-        QPainterPath transformedPath = vector.path;
+        QPainterPath base = vector.path;
+        if (base.isEmpty()) {
+            base.moveTo(vector.nodes.front().position);
+            for (size_t i = 0; i < vector.nodes.size(); ++i) {
+                const VectorNode& n = vector.nodes[i];
+                const VectorNode& next = vector.nodes[(i + 1) % vector.nodes.size()];
+                if (!vector.closed && i + 1 >= vector.nodes.size())
+                    break;
+                base.cubicTo(n.position + n.handleOut, next.position + next.handleIn,
+                             next.position);
+            }
+            if (vector.closed)
+                base.closeSubpath();
+        }
+        QPainterPath transformedPath = base;
         transformedPath = vector.transform.matrix(vector.contentBounds()).map(transformedPath);
         QPen pen(vector.stroke, vector.strokeWidth);
         pen.setCosmetic(false);

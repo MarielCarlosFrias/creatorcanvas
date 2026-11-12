@@ -262,7 +262,9 @@
     "filter.vividPop": "Vivid Pop",
     "filter.cyberpunk": "Cyberpunk",
     "filter.goldenHour": "Golden Hour",
-    "filter.noir": "Noir"
+    "filter.noir": "Noir",
+    "menu.image.editInMiniPaint": "Editar no MiniPaint...",
+    "menu.image.editInMiniPaint.tooltip": "Abrir a camada de imagem selecionada no editor autônomo MiniPaint"
   },
   "aiBackground": {
     "title": "Remoção de Fundo com IA - CreatorCanvas",
@@ -325,6 +327,7 @@
     "command.aiBackground": "Remoção de Fundo por IA",
     "command.aiBackgroundQuick": "Remoção Rápida de Fundo por IA",
     "command.selectSubject": "Selecionar Sujeito (IA)",
+    "command.editInMiniPaint": "Editar no MiniPaint",
     "layer.group": "Grupo",
     "layer.ungroup": "Desagrupar",
     "status.marqueeHelp": "Seleção: arraste para selecionar. Shift soma, Alt subtrai. Esc limpa.",
@@ -355,7 +358,8 @@
     "status.layerLocked": "A camada está trancada (pixels da imagem).",
     "command": {
       "adjustment": "Ajuste",
-      "refineEdge": "Refinar Borda"
+      "refineEdge": "Refinar Borda",
+      "editInMiniPaint": "Editar no MiniPaint"
     }
   },
   "filters": {
@@ -504,5 +508,11 @@
     "smooth": "Suavizar",
     "expand": "Expandir / Contrair",
     "feather": "Esbater"
+  },
+  "menu": {
+    "image": {
+      "editInMiniPaint": "Editar no MiniPaint...",
+      "editInMiniPaint.tooltip": "Abrir esta camada de imagem no editor externo MiniPaint"
+    }
   }
 }
