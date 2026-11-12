@@ -230,6 +230,8 @@ add_executable(creatorcanvas
     ui/layercompsdialog.cpp
     ui/webslicesdialog.h
     ui/webslicesdialog.cpp
+    ui/slicepreviewwidget.h
+    ui/slicepreviewwidget.cpp
     ui/transformbar.h
     ui/transformbar.cpp
 )

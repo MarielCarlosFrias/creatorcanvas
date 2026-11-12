@@ -2760,7 +2760,7 @@ void MainWindow::openWebSlices()
 {
     if (!m_document)
         return;
-    WebSlicesDialog dlg(*m_document, m_history.get(), m_selectedId, m_i18n, this);
+    WebSlicesDialog dlg(*m_document, m_history.get(), m_selectedId, m_i18n, this, m_advancedMode);
     dlg.exec();
 }
 

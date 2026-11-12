@@ -143,6 +143,7 @@ cc_add_test(test_mainwindow_tabs unit/test_mainwindow_tabs.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/adjustmentsdialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/layercompsdialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/webslicesdialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/slicepreviewwidget.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/transformbar.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/curveeditor.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/histogramview.cpp

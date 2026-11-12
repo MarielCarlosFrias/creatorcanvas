@@ -15,6 +15,8 @@ class QComboBox;
 
 namespace cc {
 
+class SlicePreviewWidget;
+
 class Document;
 class CommandStack;
 class I18nService;
@@ -30,7 +32,8 @@ class WebSlicesDialog final : public QDialog
 public:
     WebSlicesDialog(Document& doc, CommandStack* history,
                     const LayerId& selectedLayer,
-                    I18nService* i18n = nullptr, QWidget* parent = nullptr);
+                    I18nService* i18n = nullptr, QWidget* parent = nullptr,
+                    bool advancedMode = false);
     ~WebSlicesDialog() override = default;
 
 private:
@@ -55,9 +58,10 @@ private:
     CommandStack* m_history = nullptr;
     LayerId m_selectedLayer;
     I18nService* m_i18n = nullptr;
+    bool m_advancedMode = false;
 
     QListWidget* m_list = nullptr;
-    QLabel* m_previewLabel = nullptr;
+    SlicePreviewWidget* m_preview = nullptr;
     QLineEdit* m_nameEdit = nullptr;
     QSpinBox* m_xSpin = nullptr;
     QSpinBox* m_ySpin = nullptr;

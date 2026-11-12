@@ -3,6 +3,7 @@
 /// permanece onde está até carregar ele próprio noutra aba.
 #include <QtTest>
 #include <QDockWidget>
+#include <QMouseEvent>
 #include <QSpinBox>
 #include <QTabBar>
 #include <QPainter>
@@ -11,6 +12,7 @@
 #include "core/Document.h"
 #include "ui/adjustmentsdialog.h"
 #include "ui/webslicesdialog.h"
+#include "ui/slicepreviewwidget.h"
 #include "core/document/WebSlice.h"
 #include "imageio/DocumentExporter.h"
 #include "core/layers/Layer.h"
@@ -156,11 +158,71 @@ private slots:
         AdjustmentsDialog basic(src, cc::AdjustmentType::Levels);
         QVERIFY(basic.request().valid);
     }
+
+    void slicePreviewDragWritesBackToFields()
+    {
+        // Modo avançado: arrastar o pendente na prévia tem de escrever as
+        // coordenadas de volta nos campos — é a razão de ser da prévia.
+        Document doc(480, 360);
+        auto bg = std::make_unique<BackgroundLayer>();
+        bg->fill = QColor(35, 65, 115);
+        QVERIFY(doc.addLayer(std::move(bg)));
+
+        WebSlicesDialog dlg(doc, nullptr, LayerId(), nullptr, nullptr, /*advancedMode=*/true);
+        dlg.show();
+        QTest::qWait(120);
+
+        // Identificar os campos pelos valores iniciais (X=Y=0, L=640, A=360).
+        QList<QSpinBox*> spins = dlg.findChildren<QSpinBox*>();
+        QVERIFY(spins.size() >= 4);
+        QSpinBox* x = nullptr; QSpinBox* y = nullptr;
+        QSpinBox* w = nullptr; QSpinBox* h = nullptr;
+        for (QSpinBox* s : spins) {
+            const int v = s->value();
+            if (v == 640 && !w) w = s;
+            else if (v == 360 && !h) h = s;
+            else if (v == 0 && !x) x = s;
+            else if (v == 0 && !y) y = s;
+        }
+        QVERIFY2(w && h && x && y, "campos X/Y/L/A não encontrados");
+
+        // Arrastar o pendente pelo centro da prévia.
+        auto* preview = dlg.findChild<SlicePreviewWidget*>();
+        QVERIFY(preview);
+
+        // Pendente sensato (cabe no documento) antes de arrastar: o default
+        // 640x360 num documento 480x360 gera coordenadas negativas ao
+        // arrastar, que o range do spin clampava a zero.
+        x->setValue(40);
+        y->setValue(30);
+        w->setValue(200);
+        h->setValue(100);
+        QTest::qWait(30);
+
+        // O centro tem de ser lido DEPOIS de mexer nos campos — o rect do
+        // pendente mudou de tamanho.
+        const QRectF before = preview->pendingWidgetRect();
+        QVERIFY(!before.isNull());
+        const QPoint center = before.center().toPoint();
+
+        const int xBefore = x->value();
+        const int yBefore = y->value();
+        const int wBefore = w->value();
+        const int hBefore = h->value();
+
+        QTest::mousePress(preview, Qt::LeftButton, Qt::NoModifier, center);
+        QTest::mouseMove(preview, center + QPoint(40, 25));
+        QTest::mouseRelease(preview, Qt::LeftButton, Qt::NoModifier, center + QPoint(40, 25));
+
+        // Os campos passaram a reflectir o arraste: posição mudou, tamanho
+        // ficou igual (arrastar pelo centro move, não redimensiona).
+        QVERIFY2(x->value() != xBefore || y->value() != yBefore,
+                 qPrintable(QStringLiteral("arraste devia mudar X/Y: %1,%2 -> %3,%4")
+                            .arg(xBefore).arg(yBefore).arg(x->value()).arg(y->value())));
+        QCOMPARE(w->value(), wBefore);
+        QCOMPARE(h->value(), hBefore);
+    }
 };
 
 QTEST_MAIN(TestMainWindowTabs)
 #include "test_mainwindow_tabs.moc"
-
-
-
-

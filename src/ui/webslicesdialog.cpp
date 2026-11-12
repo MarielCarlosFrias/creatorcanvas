@@ -1,4 +1,5 @@
 #include "webslicesdialog.h"
+#include "slicepreviewwidget.h"
 
 #include "core/Document.h"
 #include "core/commands/LayerCompCommands.h"
@@ -28,24 +29,25 @@ namespace cc {
 
 WebSlicesDialog::WebSlicesDialog(Document& doc, CommandStack* history,
                                  const LayerId& selectedLayer,
-                                 I18nService* i18n, QWidget* parent)
+                                 I18nService* i18n, QWidget* parent,
+                                 bool advancedMode)
     : QDialog(parent)
     , m_doc(doc)
     , m_history(history)
     , m_selectedLayer(selectedLayer)
     , m_i18n(i18n)
+    , m_advancedMode(advancedMode)
 {
     setWindowTitle(tr("title", QStringLiteral("Fatias de Exportação Web - CreatorCanvas")));
     setMinimumSize(540, 430);
 
     auto* layout = new QVBoxLayout(this);
 
-    m_previewLabel = new QLabel(this);
-    m_previewLabel->setMinimumHeight(150);
-    m_previewLabel->setAlignment(Qt::AlignCenter);
-    m_previewLabel->setStyleSheet(QStringLiteral(
-        "background-color: #202227; border: 1px solid #2b303c; border-radius: 6px;"));
-    layout->addWidget(m_previewLabel);
+    m_preview = new SlicePreviewWidget(this);
+    m_preview->setMinimumHeight(150);
+    // Arrastar/redimensionar o pendente é ferramenta profissional.
+    m_preview->setInteractive(m_advancedMode);
+    layout->addWidget(m_preview, 1);
 
     m_list = new QListWidget(this);
     m_list->setMaximumHeight(110);
@@ -123,6 +125,18 @@ WebSlicesDialog::WebSlicesDialog(Document& doc, CommandStack* history,
         connect(s, &QSpinBox::valueChanged, this, [this]() { updatePreview(); });
     }
     connect(m_nameEdit, &QLineEdit::textChanged, this, [this]() { updatePreview(); });
+    // Arrastar/redimensionar o pendente na prévia (modo avançado) escreve
+    // as coordenadas de volta nos campos.
+    connect(m_preview, &SlicePreviewWidget::pendingEdited, this,
+            [this](const QRectF& docRect) {
+                if (!m_xSpin || !m_ySpin || !m_wSpin || !m_hSpin)
+                    return;
+                const QSignalBlocker b1(m_xSpin), b2(m_ySpin), b3(m_wSpin), b4(m_hSpin);
+                m_xSpin->setValue(qRound(docRect.x()));
+                m_ySpin->setValue(qRound(docRect.y()));
+                m_wSpin->setValue(qRound(docRect.width()));
+                m_hSpin->setValue(qRound(docRect.height()));
+            });
     connect(m_formatCombo, &QComboBox::currentIndexChanged, this, [this]() { updatePreview(); });
 
     connect(fromSelectionBtn, &QPushButton::clicked, this, &WebSlicesDialog::addFromSelection);
@@ -170,23 +184,7 @@ QString WebSlicesDialog::selectedSliceId() const
 
 void WebSlicesDialog::updatePreview()
 {
-    // Rectângulo pendente: o que os campos descrevem AGORA. Desenhado por
-    // cima das fatias guardadas, em cor de acento, para se ver onde a nova
-    // fatia vai cair antes de a adicionar — é todo o ponto da prévia.
-    auto pendingRect = [this]() -> QRectF {
-        if (!m_xSpin || !m_ySpin || !m_wSpin || !m_hSpin)
-            return {};
-        return QRectF(m_xSpin->value(), m_ySpin->value(),
-                      std::max(1, m_wSpin->value()), std::max(1, m_hSpin->value()));
-    };
-    const QRectF pending = pendingRect();
-    const QString pendingName = m_nameEdit ? m_nameEdit->text().trimmed() : QString();
-    const QString pendingFormat = m_formatCombo
-        ? m_formatCombo->currentData().toString() : QStringLiteral("png");
-
-    if (!m_previewLabel || m_doc.width() <= 0 || m_doc.height() <= 0)
-        return;
-    if (!m_previewLabel || m_doc.width() <= 0 || m_doc.height() <= 0)
+    if (!m_preview || m_doc.width() <= 0 || m_doc.height() <= 0)
         return;
 
     // Documento em miniatura: 320px do lado maior chega para julgar.
@@ -206,68 +204,16 @@ void WebSlicesDialog::updatePreview()
         renderDocument(m_doc, &painter, toPreview, options);
     }
 
-    // Fatias por cima, com a mesma cor cíclica do canvas.
-    static const QColor kPalette[] = {
-        QColor(0x43, 0x78, 0xff), QColor(0x22, 0xc5, 0x5e),
-        QColor(0xf5, 0x9e, 0x0b), QColor(0xec, 0x48, 0x99),
-        QColor(0x8b, 0x5c, 0xf6), QColor(0x14, 0xb8, 0xa6),
-    };
-    QPainter painter(&img);
-    QFont labelFont = painter.font();
-    labelFont.setPointSize(7);
-    labelFont.setBold(true);
-    painter.setFont(labelFont);
-    const auto slices = m_doc.webSlices();
-    for (size_t i = 0; i < slices.size(); ++i) {
-        const WebSlice& slice = slices[i];
-        const QColor color = kPalette[i % (sizeof(kPalette) / sizeof(kPalette[0]))];
-        const QRectF r(slice.rect.left() * scale, slice.rect.top() * scale,
-                       slice.rect.width() * scale, slice.rect.height() * scale);
-        painter.setPen(QPen(color, 1.0, Qt::DashLine));
-        painter.setBrush(Qt::NoBrush);
-        painter.drawRect(r);
-        const QString label = slice.name.isEmpty()
-            ? slice.exportFormat.toUpper() : slice.name;
-        const QFontMetrics fm(labelFont);
-        const int tw = fm.horizontalAdvance(label) + 6;
-        QRectF labelRect(r.left(), r.top() - 11, tw, 11);
-        if (labelRect.top() < 0)
-            labelRect.moveTop(r.top() + 1);
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(QColor(color.red(), color.green(), color.blue(), 200));
-        painter.drawRect(labelRect);
-        painter.setPen(Qt::white);
-        painter.drawText(labelRect, Qt::AlignCenter, label);
+    // Pendente = o que os campos descrevem agora.
+    QRectF pending;
+    if (m_xSpin && m_ySpin && m_wSpin && m_hSpin) {
+        pending = QRectF(m_xSpin->value(), m_ySpin->value(),
+                         std::max(1, m_wSpin->value()), std::max(1, m_hSpin->value()));
     }
 
-    // Pendente: tracejado mais grosso em cor de acento + etiqueta com nome.
-    if (!pending.isNull()) {
-        const QRectF r(pending.left() * scale, pending.top() * scale,
-                       pending.width() * scale, pending.height() * scale);
-        QPen pen(QColor(0x43, 0x78, 0xff), 2.0, Qt::SolidLine);
-        painter.setPen(pen);
-        painter.setBrush(Qt::NoBrush);
-        painter.drawRect(r);
-
-        const QString label = pendingName.isEmpty()
-            ? QStringLiteral("nova [%1]").arg(pendingFormat.toUpper())
-            : QStringLiteral("%1 [%2]").arg(pendingName, pendingFormat.toUpper());
-        const QFontMetrics fm(labelFont);
-        const int tw = fm.horizontalAdvance(label) + 6;
-        QRectF labelRect(r.left(), r.top() - 12, tw, 12);
-        if (labelRect.top() < 0)
-            labelRect.moveTop(r.top() + 1);
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(QColor(0x43, 0x78, 0xff, 220));
-        painter.drawRect(labelRect);
-        painter.setPen(Qt::white);
-        painter.drawText(labelRect, Qt::AlignCenter, label);
-    }
-    painter.end();
-
-    m_previewLabel->setPixmap(QPixmap::fromImage(img)
-                                  .scaled(m_previewLabel->size(), Qt::KeepAspectRatio,
-                                          Qt::SmoothTransformation));
+    m_preview->setDocumentImage(img);
+    m_preview->setSlices(m_doc.webSlices());
+    m_preview->setPending(pending);
 }
 
 void WebSlicesDialog::addFromSelection()
