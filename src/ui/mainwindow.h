@@ -143,6 +143,8 @@ private:
     void onTransformEdited(const cc::LayerId& id, cc::AffineTransform oldTransform,
                            cc::AffineTransform newTransform);
     /// Abre o painel de composições de camadas (guardar/aplicar estado).
+    /// Abre o painel Refine Edge sobre a selecção activa (modo avançado).
+    void openRefineEdge();
     void openLayerComps();
     /// Abre o painel de fatias de exportação web.
     void openWebSlices();
@@ -320,6 +322,7 @@ private:
     QAction* m_layerCompsAction = nullptr;
     QAction* m_webSlicesAction = nullptr;
     QAction* m_toggleAdvancedModeAction = nullptr;
+    QAction* m_refineEdgeAction = nullptr;
     QAction* m_selectionOpsAction = nullptr;
     QMenu* m_selectionToolsMenu = nullptr;
     QMenu* m_retouchToolsMenu = nullptr;

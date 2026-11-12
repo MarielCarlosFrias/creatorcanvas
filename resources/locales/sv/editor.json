@@ -354,7 +354,8 @@
     "status.scissorsHelp": "Sax: klicka eller dra för att skapa en kontur, dubbelklicka eller tryck på Enter för att klippa.",
     "status.layerLocked": "Lagret är låst (bildpixlar).",
     "command": {
-      "adjustment": "Justering"
+      "adjustment": "Justering",
+      "refineEdge": "Förfina kant"
     }
   },
   "filters": {
@@ -496,5 +497,12 @@
   "advancedMode": {
     "menu": "Avancerat läge",
     "tip": "Visar proffsverktyg: histogram, nodredigering, kantförfining, flerfärgsgraderingar, text längs bana och justeringar i inspektören."
+  },
+  "refineEdge": {
+    "menuOpen": "Förfina kant...",
+    "title": "Förfina markeringskant - CreatorCanvas",
+    "smooth": "Mjuka upp",
+    "expand": "Utöka / Dra ihop",
+    "feather": "Ludda"
   }
 }

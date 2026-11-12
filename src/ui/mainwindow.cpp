@@ -6,6 +6,7 @@
 #include "core/templates/TemplateFactory.h"
 #include "core/history/DocumentCommands.h"
 #include "core/commands/AdjustmentLayerCommands.h"
+#include "core/commands/SelectionCommands.h"
 #include "core/commands/LayerPropertyCommands.h"
 #include "core/layers/Layer.h"
 #include "core/serialization/ProjectFile.h"
@@ -17,6 +18,7 @@
 #include "ui/adjustmentsdialog.h"
 #include "ui/transformbar.h"
 #include "ui/layercompsdialog.h"
+#include "ui/refineedgedialog.h"
 #include "ui/webslicesdialog.h"
 #include "ui/canvasview.h"
 #include "ui/exportdialog.h"
@@ -1013,6 +1015,7 @@ void MainWindow::buildActions()
     m_layerCompsAction = m_actions->layerCompsAction;
     m_webSlicesAction = m_actions->webSlicesAction;
     m_toggleAdvancedModeAction = m_actions->toggleAdvancedModeAction;
+    m_refineEdgeAction = m_actions->refineEdgeAction;
     m_removeBgAiAction = m_actions->removeBgAiAction;
     m_removeBgAiQuickAction = m_actions->removeBgAiQuickAction;
     m_mockupAction = m_actions->mockupAction;
@@ -1389,6 +1392,7 @@ void MainWindow::connectActionSignals()
             openAdjustments(kAdjustmentTypes[i]);
         });
     }
+    connect(m_refineEdgeAction, &QAction::triggered, this, &MainWindow::openRefineEdge);
     connect(m_selectSubjectAction, &QAction::triggered, this, [this] {
         if (m_canvas && m_document && !m_selectedId.isNull())
             m_canvas->selectSubjectWithAi(m_selectedId);
@@ -2756,11 +2760,40 @@ void MainWindow::applyAdvancedMode()
     if (m_toolVectorNodesAction)
         m_toolVectorNodesAction->setVisible(m_advancedMode);
 
+    // Refine Edge só faz sentido com selecção e em modo avançado.
+    if (m_refineEdgeAction)
+        m_refineEdgeAction->setVisible(m_advancedMode);
+
     // Inspector de imagem: secção de ajustes vivos só em modo avançado.
     if (m_imageInspector)
         m_imageInspector->setAdvancedMode(m_advancedMode);
 
     updateResponsiveLayout();
+}
+
+void MainWindow::openRefineEdge()
+{
+    if (!m_document)
+        return;
+    const QImage selection = m_document->pixelSelection();
+    if (selection.isNull()) {
+        QMessageBox::information(this, QStringLiteral("Refinar Borda"),
+                                 QStringLiteral("Faça primeiro uma selecção (marquee, varinha ou scissors)."));
+        return;
+    }
+
+    RefineEdgeDialog dlg(selection, m_i18n, this);
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+    const QImage refined = dlg.refinedSelection();
+    if (refined.isNull())
+        return;
+
+    const QString cmdName = m_i18n ? m_i18n->t("editor", "canvas.command.refineEdge")
+                                   : QStringLiteral("Refine Edge");
+    cc::executeSetPixelSelection(*m_document, m_history.get(), std::move(refined), cmdName);
+    if (m_canvas)
+        m_canvas->update();
 }
 
 void MainWindow::openLayerComps()

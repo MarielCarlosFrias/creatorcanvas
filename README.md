@@ -69,6 +69,7 @@ Most photo editing tools are either overly basic web canvas tools or intimidatin
 - **Select Subject (AI)**: one click turns the local ONNX model into a pixel selection of the subject — the background is kept, so you can copy the subject to a new layer, feather the edge or composite it over another image (`Ctrl+Alt+S`).
 - **Smart Operations**: Invert selection, clean contour visualization, Copy to new layer, and Cut (creates isolated layer and hides original cleanly).
 
+- **Refine Edge** (advanced mode) — smooth, expand/contract and feather the active selection with a live mask preview, applied as a single undo step.
 - **Text-style presets** — save a text layer's look (font, colour, outline, shadow, gradient) and re-apply it in one click; four built-in creator styles ship with the app (advanced mode).
 - **Adjustments, two ways** (`Image ▸ Adjustments`): brightness/contrast, hue/saturation, **shadows/highlights**, **vignette**, invert, posterize, threshold, levels, curves (per channel), channel mixer and gradient map — with live preview and a non-destructive default. In advanced mode the image inspector also gets a live adjustments section bound to the layer's adjustment layer (never baking pixels, one undo per slider drag).
 

@@ -350,6 +350,7 @@ void ActionManager::createActions(I18nService* i18n)
     layerCompsAction = new QAction(this);
     webSlicesAction = new QAction(this);
     toggleAdvancedModeAction = new QAction(this);
+    refineEdgeAction = new QAction(this);
     toggleAdvancedModeAction->setCheckable(true);
 
     startScreenAction = new QAction(this);
@@ -575,6 +576,7 @@ void ActionManager::retranslate(I18nService* i18n)
     shortcutsAction->setText(i18n->t("common", "menu.settings.shortcuts"));
     layerCompsAction->setText(i18n->t("editor", "comps.menuOpen"));
     toggleAdvancedModeAction->setText(i18n->t("editor", "advancedMode.menu"));
+    refineEdgeAction->setText(i18n->t("editor", "refineEdge.menuOpen"));
     toggleAdvancedModeAction->setToolTip(i18n->t("editor", "advancedMode.tip"));
     webSlicesAction->setText(i18n->t("editor", "webSlices.menuOpen"));
     startScreenAction->setText(i18n->t("common", "start.screenAction"));

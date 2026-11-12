@@ -112,6 +112,14 @@ public:
     static QImage fromAlphaMask(const QImage& alphaMask, const QSize& targetSize,
                                 const QImage& currentSelection, SelectionMode mode);
 
+    // ===== Refine Edge (painel avançado) =====
+    /// Pipeline único de refinamento de borda usado pelo painel: suavizar,
+    /// expandir/contrair (raio negativo CONTRAI) e esbatar, por esta ordem.
+    /// Parâmetros em zero são ignorados — uma selecção intacta entra e sai
+    /// igual, sem custo de cópia.
+    static QImage refine(const QImage& selection, float smoothRadius,
+                         float expandRadius, float featherRadius);
+
     // ===== Helpers =====
     /// Normalize a selection mask to Format_Alpha8 with values clamped 0-255.
     static QImage normalize(const QImage& mask);

@@ -86,6 +86,7 @@ void MenuBuilder::buildMenus(I18nService* i18n)
     selectMenu->addAction(m_actions->colorRangeAction);
     selectMenu->addSeparator();
     selectMenu->addAction(m_actions->selectSubjectAction);
+    selectMenu->addAction(m_actions->refineEdgeAction);
 
     // --- Camada ---
     layerMenu = m_menuBar->addMenu(QString());

@@ -204,6 +204,8 @@ add_executable(creatorcanvas
     ui/histogramview.cpp
     ui/adjustmentsection.h
     ui/adjustmentsection.cpp
+    ui/refineedgedialog.h
+    ui/refineedgedialog.cpp
     ui/themeicons.h
     ui/themeicons.cpp
     ui/collapsiblesection.h

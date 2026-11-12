@@ -445,6 +445,31 @@ QImage SelectionEngine::tonalHighlights(const QImage& image, const QRect& area,
 
 // ===== Morphological Operations =====
 
+QImage SelectionEngine::refine(const QImage& selection, float smoothRadius,
+                               float expandRadius, float featherRadius)
+{
+    if (selection.isNull())
+        return {};
+    const bool noSmooth = qFuzzyIsNull(smoothRadius) || smoothRadius < 0.0f;
+    const bool noExpand = qFuzzyIsNull(expandRadius);
+    const bool noFeather = qFuzzyIsNull(featherRadius) || featherRadius < 0.0f;
+    if (noSmooth && noExpand && noFeather)
+        return selection;
+
+    QImage result = selection;
+    if (!noSmooth)
+        result = smooth(result, smoothRadius);
+    if (!noExpand) {
+        if (expandRadius > 0.0f)
+            result = expand(result, expandRadius);
+        else
+            result = contract(result, -expandRadius);
+    }
+    if (!noFeather)
+        result = feather(result, featherRadius);
+    return result;
+}
+
 QImage SelectionEngine::expand(const QImage& selection, float radius)
 {
     if (selection.isNull() || radius <= 0.0f)

@@ -405,7 +405,55 @@ private slots:
         QVERIFY(e.constScanLine(500)[201] == uchar(255)); // dentro da nova borda
         QVERIFY(e.constScanLine(500)[199] == uchar(0));   // fora da nova borda
     }
+
+    void refinePipeline()
+    {
+        // Quadrado 20x20 dentro de uma máscara 60x60.
+        QImage mask(60, 60, QImage::Format_Alpha8);
+        mask.fill(0);
+        for (int y = 20; y < 40; ++y) {
+            uchar* row = mask.scanLine(y);
+            for (int x = 20; x < 40; ++x)
+                row[x] = 255;
+        }
+
+        // Pipeline vazio = selecção intacta (sem custo de cópia).
+        const QImage same = SelectionEngine::refine(mask, 0.0f, 0.0f, 0.0f);
+        QVERIFY(same == mask);
+
+        // Expandir cresce a área; contrair encolhe (bbox original: 20x20).
+        const QRect base = SelectionEngine::boundingBox(mask);
+        QCOMPARE(base, QRect(20, 20, 20, 20));
+        const QImage grown = SelectionEngine::refine(mask, 0.0f, 4.0f, 0.0f);
+        QVERIFY2(SelectionEngine::boundingBox(grown).width() > base.width(),
+                 qPrintable(QStringLiteral("expandir devia crescer: %1 -> %2")
+                            .arg(base.width()).arg(SelectionEngine::boundingBox(grown).width())));
+        const QImage shrunk = SelectionEngine::refine(mask, 0.0f, -4.0f, 0.0f);
+        QVERIFY2(SelectionEngine::boundingBox(shrunk).width() < base.width(),
+                 qPrintable(QStringLiteral("contrair devia encolher: %1 -> %2")
+                            .arg(base.width()).arg(SelectionEngine::boundingBox(shrunk).width())));
+
+        // Esbatar cria valores intermédios na borda.
+        const QImage feathered = SelectionEngine::refine(mask, 0.0f, 0.0f, 3.0f);
+        int partial = 0;
+        for (int y = 0; y < feathered.height(); ++y) {
+            const uchar* row = feathered.constScanLine(y);
+            for (int x = 0; x < feathered.width(); ++x)
+                if (row[x] != 0 && row[x] != 255)
+                    ++partial;
+        }
+        QVERIFY2(partial > 0, "esbater devia criar pixels intermédios na borda");
+
+        // Pipeline completo não estoura e mantém o formato.
+        const QImage all = SelectionEngine::refine(mask, 2.0f, 2.0f, 2.0f);
+        QCOMPARE(all.format(), QImage::Format_Alpha8);
+        QCOMPARE(all.size(), mask.size());
+
+        // Entrada nula não estoura.
+        QVERIFY(SelectionEngine::refine(QImage(), 2.0f, 2.0f, 2.0f).isNull());
+    }
 };
 
 QTEST_GUILESS_MAIN(TestSelectionEngine)
 #include "test_selection_engine.moc"
+

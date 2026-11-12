@@ -354,7 +354,8 @@
     "status.scissorsHelp": "Scissors: click or drag to outline; double-click or Enter to cut.",
     "status.layerLocked": "The layer is locked (image pixels).",
     "command": {
-      "adjustment": "Adjustment"
+      "adjustment": "Adjustment",
+      "refineEdge": "Refine Edge"
     }
   },
   "filters": {
@@ -496,5 +497,12 @@
   "advancedMode": {
     "menu": "Advanced Mode",
     "tip": "Reveals professional tools: histogram, node editing, refine edge, multi-stop gradients, text on path and live inspector adjustments."
+  },
+  "refineEdge": {
+    "menuOpen": "Refine Edge...",
+    "title": "Refine Selection Edge - CreatorCanvas",
+    "smooth": "Smooth",
+    "expand": "Expand / Contract",
+    "feather": "Feather"
   }
 }
