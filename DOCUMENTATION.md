@@ -478,11 +478,11 @@ Already on `main` (do not treat as future work): multi-select, group/align/distr
 Still ahead:
 
 1. **Split `CanvasView` / `MainWindow`** — isolate tools and overlays so the viewport is not a 2k+ line catch-all (Phase 1 delivered: `cc_tools` static library and `ICanvasTool` architecture integrated).
-2. ~~Layer raster cache + `IRenderer`~~ — **done for the fast path**: `IRenderer` seam exists, `CachingRenderer` caches text/shape/vector/fill layers per revision. Still open: caching the compositing path (clipping masks/adjustments) and a GPU backend behind the same interface.
-3. **GPU viewport** — optional Vulkan/Direct3D (or Qt RHI) behind that interface.
-4. **Richer blend modes** — only if compositing moves beyond the current seven `QPainter` modes.
-5. **Inspector integration for adjustments** — the dialog edits parameters, but the image inspector has no live section bound to the linked `AdjustmentLayer`.
-7. **macOS** — real bundle, notarization, and CI; `MACOSX_BUNDLE` on the target is not a shipping product.
+2. **Compositing-path cache + GPU viewport** — the fast path is cached (`CachingRenderer`); the compositing path (clipping masks / adjustment layers) still recomposes, and a Vulkan/Direct3D (Qt RHI) backend behind `IRenderer` is the long-term seam.
+3. **Richer blend modes** — only if compositing moves beyond the current twelve `QPainter` modes.
+4. **macOS** — real bundle, notarization, and CI; `MACOSX_BUNDLE` on the target is not a shipping product.
+
+Delivered after `v0.2.1` (do not treat as future work): per-layer render cache with the `IRenderer` seam, the adjustments panel with a non-destructive path, live adjustments in the image inspector (advanced mode), layer comps, web slices with preview and export, pen/node editing, numeric transform, Select Subject (AI).
 
 ## 15. Conventions
 

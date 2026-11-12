@@ -101,6 +101,18 @@ public:
         m_doc->setAdjustmentParameters(m_id, m_oldParams);
     }
 
+    /// Arrastar um slider produz um evento por pixel: fundir os comandos da
+    /// mesma camada mantém um único passo de undo por gesto.
+    bool mergeWith(const Command& other) override
+    {
+        const auto* rhs = dynamic_cast<const UpdateAdjustmentLayerCommand*>(&other);
+        if (!rhs || rhs->m_doc != m_doc || rhs->m_id != m_id)
+            return false;
+        m_newKind = rhs->m_newKind;
+        m_newParams = rhs->m_newParams;
+        return true;
+    }
+
 private:
     Document* m_doc = nullptr;
     LayerId m_id;

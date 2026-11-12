@@ -438,7 +438,7 @@
   "batch.done.title": "Batchbearbetning klar",
   "batch.done.message": "%1 av %2 filer bearbetades utan problem.",
   "adjustments": {
-    "title": "Bildjusteringar - CreatorCanvas",
+    "title": "Justeringar",
     "brightnessContrast": "Ljusstyrka / Kontrast",
     "hueSaturation": "Nyans / Mättnad",
     "invert": "Invertera färger",
@@ -461,7 +461,10 @@
     "highlights": "Ljusa partier",
     "vignetteStrength": "Styrka",
     "vignetteHint": "Positivt mörkar kanterna; negativt ljusar upp dem.",
-    "channelMixerHint": "Förstärkning per utkanal (100% = original)."
+    "channelMixerHint": "Förstärkning per utkanal (100% = original).",
+    "strength": "Styrka",
+    "sliderA": "A",
+    "sliderB": "B"
   },
   "comps": {
     "title": "Lagerkompositioner - CreatorCanvas",

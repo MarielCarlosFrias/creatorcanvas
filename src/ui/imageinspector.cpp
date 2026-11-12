@@ -1,4 +1,5 @@
 #include "imageinspector.h"
+#include "adjustmentsection.h"
 #include "collapsiblesection.h"
 #include "puppetwarpdialog.h"
 #include "mockupdialog.h"
@@ -99,6 +100,26 @@ void ImageInspector::setDocument(Document* document)
     refresh();
 }
 
+namespace {
+
+QString trAdj(I18nService* i18n, const QString& key, const QString& fallback)
+{
+    return i18n ? i18n->t("editor", key) : fallback;
+}
+
+} // namespace
+
+void ImageInspector::setAdvancedMode(bool advanced)
+{
+    if (m_liveAdjustmentsContainer)
+        m_liveAdjustmentsContainer->setVisible(advanced);
+    if (m_liveAdjustmentsSection)
+        m_liveAdjustmentsSection->setVisible(advanced);
+    // Ao revelar, já carrega o estado da camada selecionada.
+    if (advanced && m_liveAdjustmentsSection && m_liveAdjustmentsContainer->isVisible())
+        m_liveAdjustmentsSection->setContext(m_document, m_history, m_id);
+}
+
 void ImageInspector::setSelectedLayer(const LayerId& id)
 {
     // Se havia preview pendente não aplicada na camada anterior, restaura o asset original
@@ -129,6 +150,10 @@ void ImageInspector::setSelectedLayer(const LayerId& id)
         m_originalAssetId = newLayer->assetId;
         m_originalPreviewImage = m_document->assets().decodedImage(m_originalAssetId);
     }
+
+    // A secção de ajustes vivos segue a camada selecionada (modo avançado).
+    if (m_liveAdjustmentsContainer && m_liveAdjustmentsContainer->isVisible())
+        m_liveAdjustmentsSection->setContext(m_document, m_history, m_id);
 
     refresh();
 }
@@ -313,6 +338,17 @@ void ImageInspector::buildUi()
     auto* advLayout = new QVBoxLayout(advContainer);
     advLayout->setContentsMargins(4, 4, 4, 4);
     advLayout->setSpacing(6);
+
+    // --- 0. Ajustes vivos (modo avançado; escondido por omissão) ---
+    m_liveAdjustmentsContainer = new CollapsibleSection(
+        trAdj(m_i18n, "adjustments.title", QStringLiteral("Ajustes")), true, this);
+    auto* liveAdjustmentsLayout = new QVBoxLayout;
+    liveAdjustmentsLayout->setContentsMargins(4, 4, 4, 4);
+    m_liveAdjustmentsSection = new AdjustmentsSection(m_i18n, this);
+    liveAdjustmentsLayout->addWidget(m_liveAdjustmentsSection);
+    m_liveAdjustmentsContainer->setContentLayout(liveAdjustmentsLayout);
+    m_liveAdjustmentsContainer->setVisible(false);   // revelado pelo modo avançado
+    mainLayout->addWidget(m_liveAdjustmentsContainer);
 
     // --- 1. Filtros Rápidos (Aberto por padrão) ---
     m_quickFiltersSection = new CollapsibleSection(QStringLiteral("Quick 1-Click Filters"), true, this);

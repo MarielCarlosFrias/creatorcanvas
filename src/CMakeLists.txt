@@ -200,6 +200,8 @@ add_executable(creatorcanvas
     ui/curveeditor.cpp
     ui/histogramview.h
     ui/histogramview.cpp
+    ui/adjustmentsection.h
+    ui/adjustmentsection.cpp
     ui/themeicons.h
     ui/themeicons.cpp
     ui/collapsiblesection.h

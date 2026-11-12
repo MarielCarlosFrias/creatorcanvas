@@ -23,6 +23,8 @@ class QScrollArea;
 namespace cc {
 
 class I18nService;
+class AdjustmentsSection;
+class CollapsibleSection;
 class CommandStack;
 
 /// Painel de propriedades para ImageLayers:
@@ -46,6 +48,9 @@ public:
     void clearPendingMockup();
     void openMockupDialog();
     void applyPreset(int presetIndex);
+
+    /// Modo avançado: revela a secção de ajustes vivos (não-destrutivos).
+    void setAdvancedMode(bool advanced);
 
 public slots:
     void setChromaKeyColor(const QColor& color);
@@ -212,6 +217,8 @@ private:
     // Seções recolhíveis
     class CollapsibleSection* m_quickFiltersSection = nullptr;
     class CollapsibleSection* m_adjustmentsSection = nullptr;
+    class CollapsibleSection* m_liveAdjustmentsContainer = nullptr;
+    AdjustmentsSection* m_liveAdjustmentsSection = nullptr;
     class CollapsibleSection* m_perspectiveSection = nullptr;
     class CollapsibleSection* m_mockupSection = nullptr;
     QPushButton* m_mockupButton = nullptr;

@@ -41,7 +41,9 @@ cc_add_test(test_overlays       unit/test_overlays.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasoverlayrenderer.cpp
 )
 
-cc_add_test(test_adjustments    unit/test_adjustments.cpp)
+cc_add_test(test_adjustments    unit/test_adjustments.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/adjustmentsection.cpp
+)
 
 cc_add_test(test_ai_quick unit/test_ai_quick.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/inlinetexteditor.cpp
@@ -147,6 +149,7 @@ cc_add_test(test_mainwindow_tabs unit/test_mainwindow_tabs.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/transformbar.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/curveeditor.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/histogramview.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/adjustmentsection.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/recoverydialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/mockupdialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/batchdialog.cpp

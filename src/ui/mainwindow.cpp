@@ -2753,6 +2753,10 @@ void MainWindow::applyAdvancedMode()
     if (m_toolVectorNodesAction)
         m_toolVectorNodesAction->setVisible(m_advancedMode);
 
+    // Inspector de imagem: secção de ajustes vivos só em modo avançado.
+    if (m_imageInspector)
+        m_imageInspector->setAdvancedMode(m_advancedMode);
+
     updateResponsiveLayout();
 }
 

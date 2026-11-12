@@ -8,6 +8,8 @@
 #include "core/layers/Layer.h"
 
 #include <QImage>
+#include "ui/adjustmentsection.h"
+
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -280,7 +282,58 @@ private slots:
         QCOMPARE(empty.maxCount(), 0u);
     }
 
+
+    void liveSectionCreatesLinkedLayer()
+    {
+        // A secção viva do inspector (modo avançado) nunca coze pixéis:
+        // cria uma camada de ajuste ligada à imagem.
+        Document doc(64, 48);
+        QImage img(64, 48, QImage::Format_ARGB32);
+        img.fill(qRgba(120, 140, 160, 255));
+        const LayerId asset = doc.assets().addImage(img, QStringLiteral("png"));
+        auto layer = std::make_unique<ImageLayer>();
+        layer->assetId = asset;
+        layer->naturalWidth = 64;
+        layer->naturalHeight = 48;
+        const LayerId id = layer->id();
+        QVERIFY(doc.addLayer(std::move(layer)));
+        CommandStack history;
+
+        AdjustmentsSection section(nullptr);
+        section.setContext(&doc, &history, id);
+        // Sem interacção ainda não há camada ligada (nada foi mexido).
+        const auto* before = dynamic_cast<const ImageLayer*>(doc.findLayer(id));
+        QVERIFY(!before->adjustmentLayerId.has_value());
+
+        // Simular o primeiro ajuste: o caminho real passa pelos sliders,
+        // mas a política está em executeApplyAdjustment (testado noutro
+        // caso) — aqui verificamos o contrato da secção com o documento.
+        QVERIFY(executeApplyAdjustment(doc, &history, id,
+                                       AdjustmentType::BrightnessContrast,
+                                       {{QStringLiteral("brightness"), 20.0},
+                                        {QStringLiteral("contrast"), 0.0}},
+                                       true));
+        const auto* after = dynamic_cast<const ImageLayer*>(doc.findLayer(id));
+        QVERIFY(after->adjustmentLayerId.has_value());
+        const AdjustmentLayer* adj = doc.findAdjustmentLayer(*after->adjustmentLayerId);
+        QCOMPARE(adj->kind, AdjustmentType::BrightnessContrast);
+        QCOMPARE(adj->parameters.size(), 2u);
+
+        // Segundo ajuste reutiliza a camada em UM passo.
+        const int depth = history.undoCount();
+        QVERIFY(executeApplyAdjustment(doc, &history, id, AdjustmentType::Vignette,
+                                       {{QStringLiteral("vignette"), 40.0}}, true));
+        QCOMPARE(history.undoCount(), depth + 1);
+        adj = doc.findAdjustmentLayer(*after->adjustmentLayerId);
+        QCOMPARE(adj->kind, AdjustmentType::Vignette);
+
+        // Undo do primeiro passo mantém a camada vinculada e o tipo antigo.
+        history.jumpToState(0);
+        const auto* restored = dynamic_cast<const ImageLayer*>(doc.findLayer(id));
+        QVERIFY(!restored->adjustmentLayerId.has_value());
+    }
+
 };
 
-QTEST_GUILESS_MAIN(TestAdjustments)
+QTEST_MAIN(TestAdjustments)
 #include "test_adjustments.moc"

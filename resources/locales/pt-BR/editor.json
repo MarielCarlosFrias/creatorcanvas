@@ -438,7 +438,7 @@
   "batch.done.title": "Processamento em Lote Concluído",
   "batch.done.message": "%1 de %2 arquivos processados com sucesso.",
   "adjustments": {
-    "title": "Ajustes de Imagem - CreatorCanvas",
+    "title": "Ajustes",
     "brightnessContrast": "Brilho / Contraste",
     "hueSaturation": "Matiz / Saturação",
     "invert": "Inverter Cores",
@@ -461,7 +461,10 @@
     "highlights": "Realces",
     "vignetteStrength": "Intensidade",
     "vignetteHint": "Positivo escurece as bordas; negativo clareia.",
-    "channelMixerHint": "Ganho por canal de saída (100% = original)."
+    "channelMixerHint": "Ganho por canal de saída (100% = original).",
+    "strength": "Força",
+    "sliderA": "A",
+    "sliderB": "B"
   },
   "comps": {
     "title": "Composições de Camadas - CreatorCanvas",
