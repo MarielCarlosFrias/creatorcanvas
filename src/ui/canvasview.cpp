@@ -596,14 +596,28 @@ void CanvasView::paintEvent(QPaintEvent*)
     const QRectF canvasOnDevice = docToDevice().mapRect(
         QRectF(0, 0, m_document->width(), m_document->height()));
 
-    // Sombra suave profissional de prancheta (ambient shadow + key light shadow)
-    for (int spread = 16; spread >= 1; --spread) {
-        const qreal factor = 1.0 - (static_cast<qreal>(spread) / 16.0);
-        const int alpha = static_cast<int>(3 + factor * factor * (dark ? 36 : 22));
-        const qreal yShift = spread > 3 ? 2.0 : 1.0;
-        painter.fillRect(canvasOnDevice.adjusted(-spread, -spread + yShift, spread, spread + yShift),
-                         QColor(0, 0, 0, alpha));
+    // Sombra suave profissional de prancheta (ambient shadow + key light shadow).
+    // Cacheada: só refaz quando o rect do canvas ou o tema mudam — antes eram
+    // 16 fillRects do tamanho do canvas em CADA pintura.
+    if (m_shadowCache.isNull() || m_shadowCacheSize != size()
+        || m_shadowCacheDark != dark) {
+        const qreal dpr = devicePixelRatio();
+        m_shadowCache = QPixmap(size() * dpr);
+        m_shadowCache.setDevicePixelRatio(dpr);
+        m_shadowCache.fill(Qt::transparent);
+        QPainter sp(&m_shadowCache);
+        for (int spread = 16; spread >= 1; --spread) {
+            const qreal factor = 1.0 - (static_cast<qreal>(spread) / 16.0);
+            const int alpha = static_cast<int>(3 + factor * factor * (dark ? 36 : 22));
+            const qreal yShift = spread > 3 ? 2.0 : 1.0;
+            sp.fillRect(canvasOnDevice.adjusted(-spread, -spread + yShift, spread, spread + yShift),
+                        QColor(0, 0, 0, alpha));
+        }
+        sp.end();
+        m_shadowCacheSize = size();
+        m_shadowCacheDark = dark;
     }
+    painter.drawPixmap(0, 0, m_shadowCache);
     painter.restore();
 
     RenderOptions options;
@@ -624,11 +638,22 @@ void CanvasView::paintEvent(QPaintEvent*)
     // de aplicar uma máscara.
     const QImage& pixelSelection = m_document->pixelSelection();
     if (!pixelSelection.isNull() && !m_selectedId.isNull()) {
+        // A imagem do contorno (mesh preto/branco) só muda quando a máscara
+        // ou o documento mudam: reutilizar evita o loop de CPU por pintura.
+        const qint64 selectionKey =
+            qint64(m_document->revision()) * 1000003 + qint64(pixelSelection.cacheKey());
+        if (m_selectionOverlay.isNull() || m_selectionOverlayKey != selectionKey) {
+            m_selectionOverlay = QImage();   // obriga a reconstrução
+            m_selectionOverlayKey = selectionKey;
+        }
         Layer* selectionLayer = m_document->findLayer(m_selectedId);
         if (selectionLayer && selectionLayer->type() == LayerType::Image) {
             auto* imageLayer = static_cast<ImageLayer*>(selectionLayer);
             const QImage source = m_document->assets().decodedImage(imageLayer->assetId);
-            CanvasOverlayRenderer::drawPixelSelectionOutline(&painter, imageLayer, pixelSelection, source, docToDevice());
+            CanvasOverlayRenderer::drawPixelSelectionOutline(&painter, imageLayer,
+                                                             pixelSelection, source,
+                                                             docToDevice(),
+                                                             &m_selectionOverlay);
         }
     }
 

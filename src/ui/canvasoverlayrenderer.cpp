@@ -425,12 +425,25 @@ void CanvasOverlayRenderer::drawPixelSelectionOutline(QPainter* painter,
                                                       const ImageLayer* layer,
                                                       const QImage& pixelSelection,
                                                       const QImage& sourceImage,
-                                                      const QTransform& toDevice)
+                                                      const QTransform& toDevice,
+                                                      QImage* cachedOverlay)
 {
     if (!layer || pixelSelection.isNull() || sourceImage.isNull()
         || pixelSelection.size() != sourceImage.size())
         return;
 
+    // Caminho rápido: o caller trouxe o contorno já construído (a malha
+    // preto/branco só depende da máscara, não da câmera).
+    if (cachedOverlay && !cachedOverlay->isNull()
+        && cachedOverlay->size() == pixelSelection.size()) {
+        painter->save();
+        painter->setTransform(layer->transform.matrix(layer->contentBounds()) * toDevice);
+        painter->drawImage(QPointF(0, 0), *cachedOverlay);
+        painter->restore();
+        return;
+    }
+
+    // Caminho lento: constrói a malha (era feito em CADA pintura).
     QImage selectionOverlay(pixelSelection.size(), QImage::Format_ARGB32);
     selectionOverlay.fill(Qt::transparent);
 
@@ -455,6 +468,9 @@ void CanvasOverlayRenderer::drawPixelSelectionOutline(QPainter* painter,
             }
         }
     }
+
+    if (cachedOverlay)
+        *cachedOverlay = selectionOverlay;
 
     painter->save();
     painter->setTransform(layer->transform.matrix(layer->contentBounds()) * toDevice);

@@ -73,7 +73,10 @@ public:
                                           const ImageLayer* layer,
                                           const QImage& pixelSelection,
                                           const QImage& sourceImage,
-                                          const QTransform& toDevice);
+                                          const QTransform& toDevice,
+                                          /// Imagem do contorno já construída (cache do caller);
+                                          /// quando nula, é construída aqui (caminho lento).
+                                          QImage* cachedOverlay = nullptr);
 };
 
 } // namespace cc

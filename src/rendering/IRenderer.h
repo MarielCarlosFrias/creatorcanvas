@@ -101,11 +101,13 @@ public:
         quint64 revision = 0;
         QSize device;
         bool interactive = false;
+        double scale = 1.0;
 
         bool operator==(const Key& o) const
         {
             return layerId == o.layerId && revision == o.revision
-                && device == o.device && interactive == o.interactive;
+                && device == o.device && interactive == o.interactive
+                && qFuzzyCompare(scale, o.scale);
         }
     };
 
@@ -130,6 +132,7 @@ private:
     int m_hits = 0;
     int m_misses = 0;
     qint64 m_bytes = 0;
+    QPoint m_blitPoint;
 };
 
 /// Renderer usado pelo caminho livre (renderDocument e restantes pontos de

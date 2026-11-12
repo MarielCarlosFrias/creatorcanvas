@@ -13,6 +13,8 @@
 #include "core/document/NewDocumentSpec.h"
 #include "ui/adjustmentsdialog.h"
 #include "ui/webslicesdialog.h"
+#include "rendering/CanvasRenderer.h"
+#include "rendering/IRenderer.h"
 #include "ui/canvasview.h"
 #include "ui/slicepreviewwidget.h"
 #include "core/document/WebSlice.h"
@@ -226,8 +228,14 @@ private slots:
     }
 
 
+
+
+
+
+
 };
 
 QTEST_MAIN(TestMainWindowTabs)
 #include "test_mainwindow_tabs.moc"
+
 

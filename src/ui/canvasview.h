@@ -292,7 +292,22 @@ private:
 
     // AI Quick Background Removal cancel flag and thread tracking
     std::shared_ptr<std::atomic<bool>> m_quickAiCancelFlag;
+    bool m_advancedMode = false;
+
     QPointer<QThread> m_quickAiThread;
+
+    /// Cache da sombra ambiente da prancheta: 16 fillRects por pintura
+    /// custavam ~13 ms num canvas grande; agora é um pixmap blitado,
+    /// recalculado só quando o tamanho do canvas ou o tema mudam.
+    /// Overlay do contorno da selecção de pixéis: era um loop de CPU sobre
+    /// toda a máscara em CADA pintura (~3M pixels numa foto grande). Agora é
+    /// uma imagem cacheada, refeita só quando a máscara muda.
+    QImage m_selectionOverlay;
+    qint64 m_selectionOverlayKey = 0;
+
+    QPixmap m_shadowCache;
+    QSize m_shadowCacheSize;
+    bool m_shadowCacheDark = false;
     LayerId m_pendingQuickAiLayerId;
 };
 

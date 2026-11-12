@@ -1833,12 +1833,20 @@ namespace {
 bool layerCacheable(const Layer& layer, const RenderOptions& options)
 {
     if (layer.type() != LayerType::Text && layer.type() != LayerType::Shape
-        && layer.type() != LayerType::Vector && layer.type() != LayerType::Fill)
+        && layer.type() != LayerType::Vector && layer.type() != LayerType::Fill
+        && layer.type() != LayerType::Image)
         return false;
     // Nada de máscaras, efeitos ou blend-if: cada um tem semântica própria
     // e o objectivo aqui é cachear o caso comum, não todos.
-    if (layer.type() == LayerType::Image)
-        return false;
+    if (layer.type() == LayerType::Image) {
+        const auto& img = static_cast<const ImageLayer&>(layer);
+        if (!img.alphaMask.isNull() || !img.vectorMask.isNull())
+            return false;               // têm cache próprio de máscara
+        if (img.effects != ImageEffects{})
+            return false;
+        if (img.adjustmentLayerId)
+            return false;
+    }
     if (!layer.vectorMask.isNull())
         return false;
     if (!layer.blendIf.isDefault())
@@ -1851,15 +1859,23 @@ bool layerCacheable(const Layer& layer, const RenderOptions& options)
     return true;
 }
 
-constexpr qint64 kCacheBudgetBytes = 64 * 1024 * 1024;   // 64 MB
-constexpr int kCacheMaxEntries = 16;
+// Um documento com 30 camadas visíveis gera ~30 pixmaps do tamanho da área
+// visível (~3 MB cada): 64 MB faziam o cache thrashar (enchia, desalojava e
+// esvaziava entre pinturas — zero acertos). 256 MB cobre o caso normal; o
+// número de entradas é o limite de segurança.
+constexpr qint64 kCacheBudgetBytes = 256 * 1024 * 1024;   // 256 MB
+// O número de entradas tem de cobrir documentos com muitas camadas: com 16
+// um documento de 35 camadas NUNCA acertava o cache (cada insert desalojava
+// uma entrada viva). Quem limita a memória é o orçamento em bytes.
+constexpr int kCacheMaxEntries = 512;
 
 } // namespace
 
 // A chave do cache precisa de qHash para viver num QHash.
 inline size_t qHash(const CachingRenderer::Key& key, size_t seed = 0)
 {
-    return qHashMulti(seed, key.layerId, key.revision, key.device, key.interactive);
+    return qHashMulti(seed, key.layerId, key.revision, key.device,
+                      key.interactive, qRound(key.scale * 10000));
 }
 
 bool CachingRenderer::drawCachedLayer(QPainter* painter, const Layer& layer,
@@ -1875,13 +1891,19 @@ bool CachingRenderer::drawCachedLayer(QPainter* painter, const Layer& layer,
     if (device.isEmpty() || device.width() <= 0 || device.height() <= 0)
         return false;
 
-    const Key key{layer.id(), doc.revision(), device, options.interactive};
+    const Key key{layer.id(), doc.revision(), device, options.interactive,
+                  docToDevice.m11()};
 
     if (auto it = m_cache.find(key); it != m_cache.end()) {
         ++m_hits;
         m_lru.removeOne(key);
         m_lru.append(key);
-        painter->drawPixmap(canvasOnDevice.topLeft(), it->pixmap);
+        // O pixmap está em coordenadas de DISPOSITIVO: repor a identidade
+        // antes de colar, senão o blit sai reescalado (lento e deslocado).
+        painter->save();
+        painter->resetTransform();
+        painter->drawPixmap(m_blitPoint, it->pixmap);
+        painter->restore();
         return true;
     }
 
@@ -1919,7 +1941,11 @@ bool CachingRenderer::drawCachedLayer(QPainter* painter, const Layer& layer,
     m_lru.append(key);
     evictToFit();
 
-    painter->drawPixmap(canvasOnDevice.topLeft(), entry.pixmap);
+
+    painter->save();
+    painter->resetTransform();
+    painter->drawPixmap(m_blitPoint, entry.pixmap);
+    painter->restore();
     return true;
 }
 
