@@ -415,6 +415,45 @@ bool Document::setVectorLayerNodes(const LayerId& id, std::vector<VectorNode> no
     return true;
 }
 
+bool Document::setTextPathLayerId(const LayerId& textId, std::optional<LayerId> pathLayerId)
+{
+    Layer* textLayer = findLayer(textId);
+    if (!textLayer || textLayer->type() != LayerType::Text)
+        return false;
+    if (effectiveLocks(textId).all)
+        return false;
+    // O caminho tem de ser uma camada vectorial existente.
+    if (pathLayerId) {
+        const Layer* pathLayer = findLayer(*pathLayerId);
+        if (!pathLayer || pathLayer->type() != LayerType::Vector || *pathLayerId == textId)
+            return false;
+    }
+    auto* text = static_cast<TextLayer*>(textLayer);
+    if (text->pathLayerId == pathLayerId)
+        return true;
+    text->pathLayerId = pathLayerId;
+    bumpRevision();
+    emit layerPropertyChanged(textId);
+    return true;
+}
+
+bool Document::setTextPathOffset(const LayerId& textId, double offsetPct)
+{
+    Layer* layer = findLayer(textId);
+    if (!layer || layer->type() != LayerType::Text)
+        return false;
+    if (effectiveLocks(textId).all)
+        return false;
+    auto* text = static_cast<TextLayer*>(layer);
+    const double clamped = std::clamp(offsetPct, 0.0, 1.0);
+    if (qFuzzyCompare(text->pathOffsetPct, clamped))
+        return true;
+    text->pathOffsetPct = clamped;
+    bumpRevision();
+    emit layerPropertyChanged(textId);
+    return true;
+}
+
 bool Document::setAdjustmentKind(const LayerId& id, AdjustmentType kind)
 {
     Layer* layer = findLayer(id);

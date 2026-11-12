@@ -219,6 +219,13 @@ public:
     QSizeF box; // wrap box; empty = auto-size from font metrics
     TextAlignment align = TextAlignment::Center;
     TextEffects effects;
+
+    /// Texto em caminho (avançado): quando definido, o texto segue o
+    /// VectorLayer indicado em vez de ser desenhado em linhas rectas.
+    /// `pathOffsetPct` desloca o ponto de partida ao longo do caminho
+    /// (0..1). Efeitos de texto não se aplicam neste modo.
+    std::optional<LayerId> pathLayerId;
+    double pathOffsetPct = 0.0;
 };
 
 class ShapeLayer final : public Layer

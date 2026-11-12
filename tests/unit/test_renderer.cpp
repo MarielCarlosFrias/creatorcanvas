@@ -3,6 +3,7 @@
 #include "rendering/CanvasRenderer.h"
 #include "rendering/IRenderer.h"
 #include "core/layers/Gradient.h"
+#include "core/serialization/ProjectFile.h"
 
 #include <QImage>
 #include <QPainter>
@@ -432,6 +433,62 @@ private slots:
         QImage many(40, 30, QImage::Format_ARGB32);
         renderTo(many, doc);
         QVERIFY(many.pixelColor(20, 15) != QColor(0, 0, 0, 0));
+
+        clearRendererCaches();
+    }
+
+
+    void textOnPathRenders()
+    {
+        Document doc(120, 80);
+        auto path = std::make_unique<VectorLayer>();
+        VectorNode a; a.position = QPointF(10, 60);
+        VectorNode b; b.position = QPointF(110, 60);
+        path->nodes = {a, b};
+        path->closed = false;
+        const LayerId pathId = path->id();
+        QVERIFY(doc.addLayer(std::move(path)));
+
+        auto text = std::make_unique<TextLayer>();
+        text->content = QStringLiteral("ARCO");
+        text->sizePt = 24;
+        text->color = QColor(255, 255, 255);
+        const LayerId textId = text->id();
+        QVERIFY(doc.addLayer(std::move(text)));
+
+        // Sem vínculo: texto recto, alinhado ao topo da caixa.
+        QImage straight(120, 80, QImage::Format_ARGB32);
+        renderTo(straight, doc);
+
+        // Com vínculo: o texto segue a linha — pixmap diferente.
+        QVERIFY(doc.setTextPathLayerId(textId, pathId));
+        QImage curved(120, 80, QImage::Format_ARGB32);
+        renderTo(curved, doc);
+        QVERIFY2(curved != straight, "texto em caminho devia mudar o render");
+
+        // Offset diferente desloca os glifos.
+        QVERIFY(doc.setTextPathOffset(textId, 0.5));
+        QImage shifted(120, 80, QImage::Format_ARGB32);
+        renderTo(shifted, doc);
+        QVERIFY2(shifted != curved, "offset devia deslocar o texto");
+
+        // Round-trip: o vínculo e o offset sobrevivem a guardar/abrir.
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path2 = dir.filePath(QStringLiteral("textpath.creatorcanvas"));
+        QString error;
+        QVERIFY(cc::saveDocument(doc, path2, &error));
+        auto loaded = cc::loadDocument(path2, &error);
+        QVERIFY(loaded != nullptr);
+        const Layer* loadedText = nullptr;
+        for (const auto& child : loaded->rootGroup()->children) {
+            if (child && child->type() == LayerType::Text)
+                loadedText = child.get();
+        }
+        QVERIFY(loadedText != nullptr);
+        const auto* lt = dynamic_cast<const TextLayer*>(loadedText);
+        QVERIFY(lt->pathLayerId.has_value());
+        QCOMPARE(lt->pathOffsetPct, 0.5);
 
         clearRendererCaches();
     }

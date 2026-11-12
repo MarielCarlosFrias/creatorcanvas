@@ -1,6 +1,7 @@
 #include "textinspector.h"
 
 #include "services/textstylestore.h"
+#include "core/commands/TextPathCommands.h"
 #include "collapsiblesection.h"
 #include "localization/i18nservice.h"
 #include "core/history/CommandStack.h"
@@ -445,6 +446,28 @@ void TextInspector::buildUi()
     m_styleSection->setVisible(false);   // revelado pelo modo avançado
     layout->addWidget(m_styleSection);
 
+    // --- Texto em caminho (modo avançado; escondido por omissão) ---
+    m_pathSection = new CollapsibleSection(QStringLiteral("Texto em Caminho"), false, this);
+    auto* pathLayout = new QVBoxLayout;
+    pathLayout->setContentsMargins(4, 4, 4, 4);
+    m_pathCombo = new QComboBox(this);
+    m_pathCombo->addItem(QStringLiteral("(sem caminho)"), QUuid().toString());
+    pathLayout->addWidget(m_pathCombo);
+    auto* offsetRow = new QHBoxLayout;
+    offsetRow->addWidget(new QLabel(QStringLiteral("Deslocamento:"), this));
+    m_pathOffset = new QSlider(Qt::Horizontal, this);
+    m_pathOffset->setRange(0, 100);
+    m_pathOffset->setValue(0);
+    offsetRow->addWidget(m_pathOffset);
+    pathLayout->addLayout(offsetRow);
+    m_pathSection->setContentLayout(pathLayout);
+    m_pathSection->setVisible(false);
+    layout->addWidget(m_pathSection);
+
+    connect(m_pathCombo, qOverload<int>(&QComboBox::currentIndexChanged),
+            this, &TextInspector::onPathLinkChanged);
+    connect(m_pathOffset, &QSlider::valueChanged, this, &TextInspector::onPathOffsetChanged);
+
     layout->addStretch();
     auto* scroll = new QScrollArea(this);
     scroll->setWidgetResizable(true);
@@ -838,11 +861,6 @@ void TextInspector::refreshStyleCombo()
     }
 }
 
-void TextInspector::setAdvancedMode(bool advanced)
-{
-    if (m_styleSection)
-        m_styleSection->setVisible(advanced);
-}
 
 void TextInspector::applyTextStyle(const cc::TextStyle& style)
 {
@@ -909,6 +927,79 @@ void TextInspector::saveCurrentAsStyle()
     else
         QMessageBox::warning(this, QStringLiteral("Guardar estilo"),
                              QStringLiteral("Não foi possível guardar: nome vazio, duplicado ou erro de escrita."));
+}
+
+
+void TextInspector::refreshPathCombo()
+{
+    if (!m_pathCombo)
+        return;
+    const QString current = m_pathCombo->currentData().toString();
+    m_pathCombo->clear();
+    m_pathCombo->addItem(QStringLiteral("(sem caminho)"), QUuid().toString());
+    if (m_document) {
+        // Percorrer a árvore e listar as camadas vectoriais.
+        std::vector<const GroupLayer*> stack;
+        if (const GroupLayer* root = m_document->rootGroup())
+            stack.push_back(root);
+        while (!stack.empty()) {
+            const GroupLayer* group = stack.back();
+            stack.pop_back();
+            for (const auto& child : group->children) {
+                if (!child)
+                    continue;
+                if (child->type() == LayerType::Vector) {
+                    const QString name = child->name.isEmpty()
+                        ? QStringLiteral("VectorLayer") : child->name;
+                    m_pathCombo->addItem(name, child->id().toString(QUuid::WithoutBraces));
+                }
+                if (child->type() == LayerType::Group)
+                    stack.push_back(static_cast<const GroupLayer*>(child.get()));
+            }
+        }
+    }
+    if (!current.isEmpty()) {
+        const int index = m_pathCombo->findData(current);
+        if (index >= 0)
+            m_pathCombo->setCurrentIndex(index);
+    }
+}
+
+void TextInspector::onPathLinkChanged(int index)
+{
+    TextLayer* layer = nullptr;
+    if (index < 0 || !editingLayer(&layer) || !m_history || !m_pathCombo)
+        return;
+
+    const QString data = m_pathCombo->itemData(index).toString();
+    std::optional<LayerId> newPath;
+    if (!data.isEmpty()) {
+        const QUuid parsed(data);
+        if (!parsed.isNull())
+            newPath = parsed;
+    }
+    m_history->execute(std::make_unique<cc::SetTextPathLayerCommand>(
+        *m_document, m_id, layer->pathLayerId, newPath));
+    refresh();
+}
+
+void TextInspector::onPathOffsetChanged(int value)
+{
+    TextLayer* layer = nullptr;
+    if (!editingLayer(&layer) || !m_history)
+        return;
+    const double offset = std::clamp(value / 100.0, 0.0, 1.0);
+    m_history->execute(std::make_unique<cc::SetTextPathOffsetCommand>(
+        *m_document, m_id, layer->pathOffsetPct, offset));
+    refresh();
+}
+
+void TextInspector::setAdvancedMode(bool advanced)
+{
+    if (m_styleSection)
+        m_styleSection->setVisible(advanced);
+    if (m_pathSection)
+        m_pathSection->setVisible(advanced);
 }
 
 } // namespace cc

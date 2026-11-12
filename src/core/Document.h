@@ -120,6 +120,11 @@ public:
     bool setLayerTextAlign(const LayerId& id, TextAlignment align);
     bool setLayerLetterSpacing(const LayerId& id, double letterSpacingPx);
     bool setLayerLineHeight(const LayerId& id, double lineHeightMult);
+    /// Texto em caminho: vincula (ou desvincula, com nullopt) o texto a uma
+    /// camada vectorial. Só aceita camadas de texto e caminhos vectoriais.
+    bool setTextPathLayerId(const LayerId& textId, std::optional<LayerId> pathLayerId);
+    /// Desloca o ponto de partida do texto ao longo do caminho (0..1).
+    bool setTextPathOffset(const LayerId& textId, double offsetPct);
 
     // Propriedades de ShapeLayer (retângulos, elipses, linhas)
     // Passadas por valor para garantir compatibilidade com LayerPropertyCommand (Undo/Redo)

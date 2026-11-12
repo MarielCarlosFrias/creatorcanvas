@@ -7,6 +7,8 @@
 #include "core/DocumentController.h"
 #include "services/textstylestore.h"
 
+#include <optional>
+
 class QCheckBox;
 class QComboBox;
 class QLineEdit;
@@ -17,6 +19,7 @@ class QMessageBox;
 class QPushButton;
 class QLabel;
 class QSpinBox;
+class QSlider;
 class QToolButton;
 
 namespace cc {
@@ -42,11 +45,20 @@ public:
     void setHistory(CommandStack* history) { m_history = history; }
     void refresh();
     void commitPendingTextChange();
-    /// Modo avançado: revela a secção de estilos de texto (presets).
+    /// Modo avançado: revela as secções profissionais (estilos, texto em
+    /// caminho).
     void setAdvancedMode(bool advanced);
+
     /// Catálogo de estilos (built-ins + utilizador). Sem dono próprio: o
     /// MainWindow partilha a instância que já cria para os presets.
     void setStyleStore(cc::TextStyleStore* store);
+
+    /// Lista os caminhos (VectorLayers) disponíveis para texto em caminho.
+    void refreshPathCombo();
+
+private:
+    void onPathLinkChanged(int index);
+    void onPathOffsetChanged(int value);
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -79,6 +91,11 @@ private:
     QPushButton* m_styleSaveBtn = nullptr;
     QPushButton* m_styleRemoveBtn = nullptr;
     cc::TextStyleStore* m_styleStore = nullptr;
+
+    // Texto em caminho (modo avançado).
+    CollapsibleSection* m_pathSection = nullptr;
+    QComboBox* m_pathCombo = nullptr;
+    QSlider* m_pathOffset = nullptr;
     QSpinBox* m_size = nullptr;
     QToolButton* m_bold = nullptr;
     QToolButton* m_italic = nullptr;

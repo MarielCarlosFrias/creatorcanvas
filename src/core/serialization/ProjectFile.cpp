@@ -385,6 +385,10 @@ QJsonObject writeLayer(const Layer& layer)
         o.insert(QStringLiteral("align"), textAlignToString(text.align));
         o.insert(QStringLiteral("boxW"), text.box.width());
         o.insert(QStringLiteral("boxH"), text.box.height());
+        // Texto em caminho (avançado): id do VectorLayer + offset.
+        if (text.pathLayerId)
+            o.insert(QStringLiteral("pathLayerId"), text.pathLayerId->toString(QUuid::WithoutBraces));
+        o.insert(QStringLiteral("pathOffsetPct"), text.pathOffsetPct);
 
         QJsonObject effects;
         QJsonObject outline;
@@ -1230,6 +1234,15 @@ private:
                 .value_or(TextAlignment::Center);
         text->box = QSizeF(o.value(QStringLiteral("boxW")).toDouble(0.0),
                            o.value(QStringLiteral("boxH")).toDouble(0.0));
+        // Texto em caminho (avançado): valida o id lido — caminho removido
+        // ou de outro tipo equivem a "sem caminho" na renderização.
+        const QString pathId = o.value(QStringLiteral("pathLayerId")).toString();
+        if (!pathId.isEmpty()) {
+            const QUuid parsed = QUuid::fromString(pathId);
+            if (!parsed.isNull())
+                text->pathLayerId = parsed;
+        }
+        text->pathOffsetPct = std::clamp(o.value(QStringLiteral("pathOffsetPct")).toDouble(0.0), 0.0, 1.0);
 
         const QJsonObject effects = o.value(QStringLiteral("effects")).toObject();
         const QJsonObject outline = effects.value(QStringLiteral("outline")).toObject();

@@ -1,4 +1,6 @@
 #include "core/Document.h"
+#include "core/commands/TextPathCommands.h"
+#include "core/history/CommandStack.h"
 #include "core/layers/Layer.h"
 #include "core/serialization/ProjectFile.h"
 
@@ -61,7 +63,48 @@ private slots:
         QCOMPARE(loadedLayer->box, QSizeF(300, 120));
         QCOMPARE(loadedLayer->contentBounds(), QRectF(0, 0, 300, 120));
     }
+
+    void textOnPathModelAndUndo()
+    {
+        Document doc(120, 80);
+        auto path = std::make_unique<VectorLayer>();
+        VectorNode a; a.position = QPointF(10, 60);
+        VectorNode b; b.position = QPointF(110, 60);
+        path->nodes = {a, b};
+        path->closed = false;
+        const LayerId pathId = path->id();
+        QVERIFY(doc.addLayer(std::move(path)));
+
+        auto text = std::make_unique<TextLayer>();
+        text->content = QStringLiteral("ARCO");
+        const LayerId textId = text->id();
+        QVERIFY(doc.addLayer(std::move(text)));
+
+        CommandStack history;
+
+        // Vínculo válido pelo histórico.
+        QVERIFY(doc.setTextPathLayerId(textId, pathId));
+        auto* textLayer = dynamic_cast<TextLayer*>(doc.findLayer(textId));
+        QVERIFY(textLayer->pathLayerId.has_value());
+        QCOMPARE(*textLayer->pathLayerId, pathId);
+
+        // Rejeições: texto sobre texto, caminho sobre imagem, id inexistente.
+        QVERIFY(!doc.setTextPathLayerId(textId, textId));
+        QVERIFY(!doc.setTextPathLayerId(pathId, pathId));
+        QVERIFY(!doc.setTextPathLayerId(textId, LayerId{}));
+
+        // Offset é clampeado a 0..1.
+        QVERIFY(doc.setTextPathOffset(textId, 2.5));
+        QCOMPARE(textLayer->pathOffsetPct, 1.0);
+        QVERIFY(doc.setTextPathOffset(textId, -1.0));
+        QCOMPARE(textLayer->pathOffsetPct, 0.0);
+
+        // Desvincular volta ao estado sem caminho.
+        QVERIFY(doc.setTextPathLayerId(textId, std::nullopt));
+        QVERIFY(!textLayer->pathLayerId.has_value());
+    }
 };
 
 QTEST_GUILESS_MAIN(TestTextBox)
 #include "test_textbox.moc"
+

@@ -930,6 +930,48 @@ QImage composeLayers(const std::vector<std::unique_ptr<Layer>>& layers,
 /// rápido (desenho direto) e o caminho com buffer.
 bool subtreeNeedsCompositing(const GroupLayer* group);
 
+/// Desenha texto ao longo de um caminho (avançado): cada glifo é colocado
+/// no ponto do caminho correspondente ao seu avanço, rodado pela tangente.
+/// Não aplica efeitos de texto — documento de forma explícita.
+void drawTextAlongPath(QPainter* painter, const QFont& font, const QColor& color,
+                       const QString& content, const QPainterPath& path,
+                       double offsetPct)
+{
+    if (content.isEmpty() || path.isEmpty())
+        return;
+
+    const qreal pathLength = path.length();
+    if (pathLength <= 0.0)
+        return;
+
+    painter->save();
+    painter->setFont(font);
+    painter->setPen(color);
+    painter->setBrush(Qt::NoBrush);
+
+    const QFontMetricsF metrics(font);
+    qreal advance = pathLength * std::clamp(offsetPct, 0.0, 1.0);
+
+    for (int i = 0; i < content.size(); ++i) {
+        const QString ch = content.at(i);
+        const qreal w = metrics.horizontalAdvance(ch);
+        if (advance + w > pathLength)
+            break;                       // caminho acabou — o resto fica de fora
+        const qreal mid = advance + w * 0.5;
+        const QPointF point = path.pointAtPercent(mid / pathLength);
+        const qreal angle = path.angleAtPercent(mid / pathLength);
+
+        painter->save();
+        painter->translate(point);
+        painter->rotate(angle);
+        painter->drawText(QPointF(-w * 0.5, -metrics.ascent() * 0.5), ch);
+        painter->restore();
+
+        advance += w;
+    }
+    painter->restore();
+}
+
 void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
                const QRectF& canvasRect, float parentOpacity,
                const RenderOptions& options)
@@ -1068,6 +1110,38 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
         const bool isHollow = text.effects.hollow;
         const bool isKnockout = text.effects.knockout;
         const bool customLineHeight = !qFuzzyCompare(text.lineHeightMult, 1.0) && text.lineHeightMult > 0.0;
+
+        // Texto em caminho: só no caminho simples (sem efeitos) — documentado.
+        if (text.pathLayerId) {
+            if (const Layer* pathSource = doc.findLayer(*text.pathLayerId)) {
+                if (pathSource->type() == LayerType::Vector) {
+                    const auto* vec = static_cast<const VectorLayer*>(pathSource);
+                    if (!vec->nodes.empty()) {
+                        QPainterPath path;
+                        path.moveTo(vec->nodes.front().position);
+                        for (size_t i = 0; i < vec->nodes.size(); ++i) {
+                            const VectorNode& n = vec->nodes[i];
+                            const VectorNode& next = vec->nodes[(i + 1) % vec->nodes.size()];
+                            if (!vec->closed && i + 1 >= vec->nodes.size())
+                                break;
+                            path.cubicTo(n.position + n.handleOut,
+                                         next.position + next.handleIn,
+                                         next.position);
+                        }
+                        // O caminho vive no espaço LOCAL da camada vectorial:
+                        // compõe com a sua matriz antes de desenhar.
+                        painter->save();
+                        painter->setTransform(painter->transform()
+                                              * vec->transform.matrix(vec->contentBounds()));
+                        drawTextAlongPath(painter, font, text.color, text.content,
+                                          path, text.pathOffsetPct);
+                        painter->restore();
+                        break;
+                    }
+                }
+            }
+            // Vínculo inválido (caminho removido): cai no desenho normal.
+        }
 
         if (!hasOutline && !hasShadow && !hasGradient && !hasTexture && !isHollow && !isKnockout && !customLineHeight) {
             painter->setFont(font);
