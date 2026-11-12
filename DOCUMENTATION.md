@@ -214,7 +214,9 @@ The compositor still recomposes on every paint of a *changed* document, but unch
 
 - `IRenderer` (`rendering/IRenderer.h`) is the compositor seam: `renderDocument(doc, painter, transform, options)` + `clearCaches()`, with `name()` for diagnostics. `SoftwareRenderer` is the historical QPainter implementation; `CachingRenderer` adds a per-layer pixmap cache and is the process default — the free `renderDocument()` delegates to it, so canvas, exporters and the smoke test all benefit with zero call-site changes.
 - The cache only applies to the **fast path** (no clipping masks, no visible adjustment layers) and only to layers whose rasterization is expensive: **Text, Shape, Vector and Fill**. Image layers have their own mask caches and are excluded; groups, adjustments, clipped layers, layers with alpha/vector masks, `BlendIf`, or the live tool preview are also excluded rather than risk a stale pixmap.
-- Cache key: (layer id, `Document::revision()`, device canvas size, `interactive` mode). The revision is monotonic, so any document edit invalidates every old entry — stale pixmaps are impossible by construction. Budget: 16 entries / 64 MB with LRU eviction; `invalidateLayerCache(id)` / `invalidateAllLayerCaches()` / `clearRendererCaches()` drop entries explicitly.
+- Cache key: (layer id, `Document::revision()`, device canvas size, `interactive` mode, matrix scale). The revision is monotonic, so any document edit invalidates every old entry — stale pixmaps are impossible by construction. Budget: 512 entries / 256 MB with LRU eviction; `invalidateLayerCache(id)` / `invalidateAllLayerCaches()` / `clearRendererCaches()` drop entries explicitly.
+- Each entry covers only the layer's **visible device area** (a small text layer produces a small pixmap), and the blit resets the painter transform — the pixmap is in device coordinates, so it must not be re-scaled by the document transform. Image layers WITHOUT masks/effects/`BlendIf`/clip/preview are cached too; masked ones keep their own mask caches.
+- The canvas ambient shadow (16 fill-rects over the whole canvas per paint) and the pixel-selection marching-ants overlay (a CPU loop over the whole mask per paint) are both cached by the view and rebuilt only when their inputs change.
 - `ImageLayer` additionally keeps two **transient** caches (full-res and interactive ≤2048 px preview) for masked bitmaps, keyed by asset/mask revisions.
 
 ### Raster engine
@@ -480,7 +482,7 @@ Already on `main` (do not treat as future work): multi-select, group/align/distr
 Still ahead:
 
 1. **Split `CanvasView` / `MainWindow`** — isolate tools and overlays so the viewport is not a 2k+ line catch-all (Phase 1 delivered: `cc_tools` static library and `ICanvasTool` architecture integrated).
-2. **Compositing-path cache + GPU viewport** — the fast path is cached (`CachingRenderer`); the compositing path (clipping masks / adjustment layers) still recomposes, and a Vulkan/Direct3D (Qt RHI) backend behind `IRenderer` is the long-term seam.
+2. **Compositing-path cache + GPU viewport** — the fast path is cached (`CachingRenderer`, measured 3.1× on a 35-layer document); the compositing path (clipping masks / adjustment layers) still recomposes, and a Vulkan/Direct3D (Qt RHI) backend behind `IRenderer` is the long-term seam.
 3. **Richer blend modes** — only if compositing moves beyond the current twelve `QPainter` modes.
 4. **macOS** — real bundle, notarization, and CI; `MACOSX_BUNDLE` on the target is not a shipping product.
 
