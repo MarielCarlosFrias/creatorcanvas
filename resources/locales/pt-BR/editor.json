@@ -488,5 +488,9 @@
   "transformBar": {
     "aspectLock": "Manter proporção",
     "aspectShort": "🔗"
+  },
+  "advancedMode": {
+    "menu": "Modo Avançado",
+    "tip": "Revela ferramentas profissionais: histograma, edição de nós, refine edge, gradientes multi-stop, texto em caminho e ajustes em direto no inspector."
   }
 }

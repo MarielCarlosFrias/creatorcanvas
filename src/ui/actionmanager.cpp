@@ -347,6 +347,8 @@ void ActionManager::createActions(I18nService* i18n)
     shortcutsAction = new QAction(this);
     layerCompsAction = new QAction(this);
     webSlicesAction = new QAction(this);
+    toggleAdvancedModeAction = new QAction(this);
+    toggleAdvancedModeAction->setCheckable(true);
 
     startScreenAction = new QAction(this);
     startScreenAction->setIcon(ThemeIcons::actionNewDocument());
@@ -569,6 +571,8 @@ void ActionManager::retranslate(I18nService* i18n)
     settingsAction->setText(i18n->t("common", "menu.settings.open"));
     shortcutsAction->setText(i18n->t("common", "menu.settings.shortcuts"));
     layerCompsAction->setText(i18n->t("editor", "comps.menuOpen"));
+    toggleAdvancedModeAction->setText(i18n->t("editor", "advancedMode.menu"));
+    toggleAdvancedModeAction->setToolTip(i18n->t("editor", "advancedMode.tip"));
     webSlicesAction->setText(i18n->t("editor", "webSlices.menuOpen"));
     startScreenAction->setText(i18n->t("common", "start.screenAction"));
     aboutAction->setText(i18n->t("common", "menu.help.about"));

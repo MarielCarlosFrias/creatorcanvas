@@ -488,5 +488,9 @@
   "transformBar": {
     "aspectLock": "Bevara proportion",
     "aspectShort": "🔗"
+  },
+  "advancedMode": {
+    "menu": "Avancerat läge",
+    "tip": "Visar proffsverktyg: histogram, nodredigering, kantförfining, flerfärgsgraderingar, text längs bana och justeringar i inspektören."
   }
 }

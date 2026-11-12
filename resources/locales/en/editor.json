@@ -488,5 +488,9 @@
   "transformBar": {
     "aspectLock": "Keep aspect ratio",
     "aspectShort": "🔗"
+  },
+  "advancedMode": {
+    "menu": "Advanced Mode",
+    "tip": "Reveals professional tools: histogram, node editing, refine edge, multi-stop gradients, text on path and live inspector adjustments."
   }
 }

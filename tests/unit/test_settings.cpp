@@ -19,6 +19,8 @@ private slots:
         QCOMPARE(s.language(), QStringLiteral("en"));
         QCOMPARE(s.autosaveIntervalMinutes(), 5);
         QCOMPARE(s.gpuAccelerationEnabled(), false);
+        // Modo avançado DESLIGADO por omissão: quem começa vê o essencial.
+        QCOMPARE(s.advancedModeEnabled(), false);
     }
 
     void persistsValuesAcrossInstances()

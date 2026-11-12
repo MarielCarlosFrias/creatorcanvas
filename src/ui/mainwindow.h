@@ -316,6 +316,7 @@ private:
     QList<QAction*> m_adjustmentActions;
     QAction* m_layerCompsAction = nullptr;
     QAction* m_webSlicesAction = nullptr;
+    QAction* m_toggleAdvancedModeAction = nullptr;
     QAction* m_selectionOpsAction = nullptr;
     QMenu* m_selectionToolsMenu = nullptr;
     QMenu* m_retouchToolsMenu = nullptr;
@@ -337,6 +338,17 @@ private:
     bool m_suppressStartupInteractions = false;
     bool m_updatingResponsiveLayout = false;
     bool m_docksAutoHidden = false;
+
+    /// Modo avançado (View ▸ Modo Avançado, persistido). Esconde/exibe as
+    /// ferramentas profissionais em toda a UI. Os diálogos leem-no ao serem
+    /// construídos — são modais, por isso não precisam de sinal.
+    bool advancedMode() const { return m_advancedMode; }
+
+    /// Aplica o modo avançado actual à UI (chamado ao alternar e no arranque).
+    void applyAdvancedMode();
+
+private:
+    bool m_advancedMode = false;
     QList<QPair<QDockWidget*, bool>> m_savedDockVisibility;
 };
 

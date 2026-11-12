@@ -128,6 +128,7 @@ public:
     QAction* settingsAction = nullptr;
     QAction* shortcutsAction = nullptr;
     QAction* layerCompsAction = nullptr;
+    QAction* toggleAdvancedModeAction = nullptr;
     QAction* webSlicesAction = nullptr;
     QAction* startScreenAction = nullptr;
     QAction* aboutAction = nullptr;

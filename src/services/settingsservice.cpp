@@ -13,6 +13,8 @@ constexpr auto kConfirmExit      = "general/confirmBeforeExit";
 constexpr auto kShowGrid         = "canvas/showGridByDefault";
 constexpr auto kSnapToGrid       = "canvas/snapToGridByDefault";
 
+constexpr auto kAdvancedMode      = "advanced/mode";
+
 constexpr auto kWindowGeometry   = "window/geometry";
 constexpr auto kWindowState      = "window/state";
 
@@ -81,6 +83,8 @@ bool SettingsService::showGridByDefault() const { return value(kShowGrid, false)
 void SettingsService::setShowGridByDefault(bool enabled) { setValue(kShowGrid, enabled); }
 bool SettingsService::snapToGridByDefault() const { return value(kSnapToGrid, false).toBool(); }
 void SettingsService::setSnapToGridByDefault(bool enabled) { setValue(kSnapToGrid, enabled); }
+bool SettingsService::advancedModeEnabled() const { return value(kAdvancedMode, false).toBool(); }
+void SettingsService::setAdvancedModeEnabled(bool enabled) { setValue(kAdvancedMode, enabled); }
 
 QByteArray SettingsService::windowGeometry() const
 {

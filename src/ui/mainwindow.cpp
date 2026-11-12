@@ -230,6 +230,11 @@ MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
     buildStatusBar();
     updateWindowTitle();
 
+    // Modo avançado: estado inicial vindo das settings.
+    m_advancedMode = m_settings ? m_settings->advancedModeEnabled() : false;
+    if (m_toggleAdvancedModeAction)
+        m_toggleAdvancedModeAction->setChecked(m_advancedMode);
+
     connect(m_history.get(), &CommandStack::stateChanged, this, [this] {
         if (m_transformBar && m_document && !m_selectedId.isNull())
             m_transformBar->setLayer(*m_document, m_selectedId);
@@ -999,6 +1004,7 @@ void MainWindow::buildActions()
     m_adjustmentActions = m_actions->adjustmentActions;
     m_layerCompsAction = m_actions->layerCompsAction;
     m_webSlicesAction = m_actions->webSlicesAction;
+    m_toggleAdvancedModeAction = m_actions->toggleAdvancedModeAction;
     m_removeBgAiAction = m_actions->removeBgAiAction;
     m_removeBgAiQuickAction = m_actions->removeBgAiQuickAction;
     m_mockupAction = m_actions->mockupAction;
@@ -1341,6 +1347,14 @@ void MainWindow::connectActionSignals()
     connect(m_removeBgAiQuickAction, &QAction::triggered, this, [this] {
         if (m_canvas && m_document && !m_selectedId.isNull())
             m_canvas->removeBackgroundAiQuick(m_selectedId);
+    });
+
+    // Modo avançado: alterna a exposição das ferramentas profissionais.
+    connect(m_toggleAdvancedModeAction, &QAction::triggered, this, [this](bool on) {
+        if (m_settings)
+            m_settings->setAdvancedModeEnabled(on);
+        m_advancedMode = on;
+        applyAdvancedMode();
     });
 
     connect(m_layerCompsAction, &QAction::triggered, this, &MainWindow::openLayerComps);
@@ -2715,6 +2729,14 @@ void MainWindow::onTransformEdited(const LayerId& id, AffineTransform oldTransfo
         m_canvas->update();
     if (m_docController)
         m_docController->setModified(true);
+}
+
+void MainWindow::applyAdvancedMode()
+{
+    // Ponto único onde as features profissionais se ligam ao modo. Cada
+    // feature avançada acrescenta aqui a sua actualização de visibilidade
+    // (menus, páginas de diálogo, secções de inspector).
+    updateResponsiveLayout();
 }
 
 void MainWindow::openLayerComps()

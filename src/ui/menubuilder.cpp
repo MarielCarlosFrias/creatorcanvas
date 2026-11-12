@@ -191,6 +191,8 @@ void MenuBuilder::buildMenus(I18nService* i18n)
 
     // --- Janela ---
     windowMenu = m_menuBar->addMenu(QStringLiteral("Window"));
+    windowMenu->addSeparator();
+    windowMenu->addAction(m_actions->toggleAdvancedModeAction);
     windowMenu->addAction(m_actions->toggleLayersDockAction);
     windowMenu->addAction(m_actions->toggleTextDockAction);
     windowMenu->addAction(m_actions->toggleShapeDockAction);

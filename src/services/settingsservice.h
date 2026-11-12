@@ -44,6 +44,14 @@ public:
     bool snapToGridByDefault() const;
     void setSnapToGridByDefault(bool enabled);
 
+    /// Modo avançado: esconde as ferramentas profissionais (histograma,
+    /// edição de nós, refine edge, gradientes multi-stop, texto em
+    /// caminho, ajustes no inspector). A omissão é DESLIGADO — quem
+    /// começa vê o essencial; quem procura precisão liga uma vez e fica
+    /// gravado.
+    bool advancedModeEnabled() const;
+    void setAdvancedModeEnabled(bool enabled);
+
     // Window layout / workspace ---------------------------------------------
     QByteArray windowGeometry() const;
     void setWindowGeometry(const QByteArray &geometry);
