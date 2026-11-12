@@ -36,6 +36,8 @@ public:
 private:
     /// Desenha o documento em miniatura com os rectângulos das fatias por
     /// cima — é a prévia que torna o painel preciso sem adivinhar coordenadas.
+    /// Inclui sempre o rectângulo PENDENTE (o que os campos descrevem
+    /// agora), para se ver onde a fatia vai ficar antes de a adicionar.
     void updatePreview();
 
 private slots:

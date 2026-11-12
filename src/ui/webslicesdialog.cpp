@@ -117,6 +117,14 @@ WebSlicesDialog::WebSlicesDialog(Document& doc, CommandStack* history,
     buttons->addWidget(closeBtn);
     layout->addLayout(buttons);
 
+    // Prévia em tempo real: escrever coordenadas desenha o pendente sem
+    // precisar de adicionar a fatia primeiro.
+    for (QSpinBox* s : {m_xSpin, m_ySpin, m_wSpin, m_hSpin}) {
+        connect(s, &QSpinBox::valueChanged, this, [this]() { updatePreview(); });
+    }
+    connect(m_nameEdit, &QLineEdit::textChanged, this, [this]() { updatePreview(); });
+    connect(m_formatCombo, &QComboBox::currentIndexChanged, this, [this]() { updatePreview(); });
+
     connect(fromSelectionBtn, &QPushButton::clicked, this, &WebSlicesDialog::addFromSelection);
     connect(addBtn, &QPushButton::clicked, this, &WebSlicesDialog::addNumeric);
     connect(m_removeButton, &QPushButton::clicked, this, &WebSlicesDialog::removeSelected);
@@ -162,6 +170,22 @@ QString WebSlicesDialog::selectedSliceId() const
 
 void WebSlicesDialog::updatePreview()
 {
+    // Rectângulo pendente: o que os campos descrevem AGORA. Desenhado por
+    // cima das fatias guardadas, em cor de acento, para se ver onde a nova
+    // fatia vai cair antes de a adicionar — é todo o ponto da prévia.
+    auto pendingRect = [this]() -> QRectF {
+        if (!m_xSpin || !m_ySpin || !m_wSpin || !m_hSpin)
+            return {};
+        return QRectF(m_xSpin->value(), m_ySpin->value(),
+                      std::max(1, m_wSpin->value()), std::max(1, m_hSpin->value()));
+    };
+    const QRectF pending = pendingRect();
+    const QString pendingName = m_nameEdit ? m_nameEdit->text().trimmed() : QString();
+    const QString pendingFormat = m_formatCombo
+        ? m_formatCombo->currentData().toString() : QStringLiteral("png");
+
+    if (!m_previewLabel || m_doc.width() <= 0 || m_doc.height() <= 0)
+        return;
     if (!m_previewLabel || m_doc.width() <= 0 || m_doc.height() <= 0)
         return;
 
@@ -211,6 +235,30 @@ void WebSlicesDialog::updatePreview()
             labelRect.moveTop(r.top() + 1);
         painter.setPen(Qt::NoPen);
         painter.setBrush(QColor(color.red(), color.green(), color.blue(), 200));
+        painter.drawRect(labelRect);
+        painter.setPen(Qt::white);
+        painter.drawText(labelRect, Qt::AlignCenter, label);
+    }
+
+    // Pendente: tracejado mais grosso em cor de acento + etiqueta com nome.
+    if (!pending.isNull()) {
+        const QRectF r(pending.left() * scale, pending.top() * scale,
+                       pending.width() * scale, pending.height() * scale);
+        QPen pen(QColor(0x43, 0x78, 0xff), 2.0, Qt::SolidLine);
+        painter.setPen(pen);
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRect(r);
+
+        const QString label = pendingName.isEmpty()
+            ? QStringLiteral("nova [%1]").arg(pendingFormat.toUpper())
+            : QStringLiteral("%1 [%2]").arg(pendingName, pendingFormat.toUpper());
+        const QFontMetrics fm(labelFont);
+        const int tw = fm.horizontalAdvance(label) + 6;
+        QRectF labelRect(r.left(), r.top() - 12, tw, 12);
+        if (labelRect.top() < 0)
+            labelRect.moveTop(r.top() + 1);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QColor(0x43, 0x78, 0xff, 220));
         painter.drawRect(labelRect);
         painter.setPen(Qt::white);
         painter.drawText(labelRect, Qt::AlignCenter, label);

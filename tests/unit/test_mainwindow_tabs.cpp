@@ -3,6 +3,7 @@
 /// permanece onde está até carregar ele próprio noutra aba.
 #include <QtTest>
 #include <QDockWidget>
+#include <QSpinBox>
 #include <QTabBar>
 #include <QPainter>
 #include <QImage>
@@ -132,3 +133,5 @@ private slots:
 
 QTEST_MAIN(TestMainWindowTabs)
 #include "test_mainwindow_tabs.moc"
+
+
