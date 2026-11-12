@@ -169,6 +169,7 @@ MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
         QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
     m_presetStore =
         std::make_unique<PresetStore>(configDir + QStringLiteral("/presets.json"));
+    m_textStyleStore = std::make_unique<cc::TextStyleStore>(configDir + QStringLiteral("/text_styles.json"));
     m_history = std::make_unique<CommandStack>(
         m_settings ? m_settings->historyLimit() : 100);
     // GC de assets: quando comandos saem da pilha (limite, redo invalidado,
@@ -812,6 +813,8 @@ void MainWindow::buildLayersDock()
     });
 
     m_textInspector = new TextInspector(m_i18n, m_document, m_history.get(), this);
+    if (m_textInspector && m_textStyleStore)
+        m_textInspector->setStyleStore(m_textStyleStore.get());
     m_textDock = new QDockWidget(QString(), this);
     m_textDock->setObjectName(QStringLiteral("TextDock"));
     m_textDock->setMinimumWidth(Design::dockWidth(width()));

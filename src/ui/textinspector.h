@@ -5,12 +5,15 @@
 #include <QPointer>
 #include "core/Document.h"
 #include "core/DocumentController.h"
+#include "services/textstylestore.h"
 
 class QCheckBox;
 class QComboBox;
+class QLineEdit;
 class QDoubleSpinBox;
 class QFontComboBox;
 class QPlainTextEdit;
+class QMessageBox;
 class QPushButton;
 class QLabel;
 class QSpinBox;
@@ -19,6 +22,7 @@ class QToolButton;
 namespace cc {
 
 class I18nService;
+class CollapsibleSection;
 class CommandStack;
 
 /// Property panel for TextLayers: content, font, size, style, color, align, effects.
@@ -38,12 +42,20 @@ public:
     void setHistory(CommandStack* history) { m_history = history; }
     void refresh();
     void commitPendingTextChange();
+    /// Modo avançado: revela a secção de estilos de texto (presets).
+    void setAdvancedMode(bool advanced);
+    /// Catálogo de estilos (built-ins + utilizador). Sem dono próprio: o
+    /// MainWindow partilha a instância que já cria para os presets.
+    void setStyleStore(cc::TextStyleStore* store);
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
     void buildUi();
+    void applyTextStyle(const TextStyle& style);
+    void saveCurrentAsStyle();
+    void refreshStyleCombo();
     void retranslateUi();
     bool editingLayer(TextLayer** out) const;
     void touch();
@@ -59,6 +71,14 @@ private:
 
     QPlainTextEdit* m_content = nullptr;
     QFontComboBox* m_fontFamily = nullptr;
+
+    // Presets de estilo (modo avançado).
+    CollapsibleSection* m_styleSection = nullptr;
+    QComboBox* m_styleCombo = nullptr;
+    QPushButton* m_styleApplyBtn = nullptr;
+    QPushButton* m_styleSaveBtn = nullptr;
+    QPushButton* m_styleRemoveBtn = nullptr;
+    cc::TextStyleStore* m_styleStore = nullptr;
     QSpinBox* m_size = nullptr;
     QToolButton* m_bold = nullptr;
     QToolButton* m_italic = nullptr;

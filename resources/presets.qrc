@@ -2,5 +2,6 @@
 <RCC version="1.0">
     <qresource prefix="/">
         <file>presets/builtin.json</file>
-    </qresource>
+        <file>presets/text_styles.json</file>
+  </qresource>
 </RCC>

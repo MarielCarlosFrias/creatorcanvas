@@ -12,6 +12,7 @@
 #include "core/document/NewDocumentSpec.h"
 #include "core/geometry/LayerAlignment.h"
 #include "services/presetstore.h"
+#include "services/textstylestore.h"
 #include "services/autosaveservice.h"
 #include "services/recentfiles.h"
 
@@ -162,6 +163,7 @@ private:
     SettingsService* m_settings = nullptr;
     I18nService* m_i18n = nullptr;
     std::unique_ptr<PresetStore> m_presetStore;
+    std::unique_ptr<TextStyleStore> m_textStyleStore;
     std::unique_ptr<RecentFiles> m_recentFiles;
     std::unique_ptr<CommandStack> m_history;
     std::unique_ptr<DocumentController> m_docController;

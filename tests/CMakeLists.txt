@@ -16,6 +16,8 @@ function(cc_add_test name)
     )
 endfunction()
 
+cc_add_test(test_textstyles     unit/test_textstyles.cpp)
+
 cc_add_test(test_settings      unit/test_settings.cpp)
 cc_add_test(test_i18n          unit/test_i18n.cpp)
 cc_add_test(test_logging       unit/test_logging.cpp)

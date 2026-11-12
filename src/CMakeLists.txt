@@ -113,6 +113,8 @@ add_library(cc_services STATIC
     services/presetstore.cpp
     services/recentfiles.h
     services/recentfiles.cpp
+    services/textstylestore.h
+    services/textstylestore.cpp
     services/autosaveservice.h
     services/autosaveservice.cpp
     ${PROJECT_SOURCE_DIR}/resources/presets.qrc

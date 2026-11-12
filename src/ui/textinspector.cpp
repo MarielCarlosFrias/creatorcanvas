@@ -1,4 +1,6 @@
 #include "textinspector.h"
+
+#include "services/textstylestore.h"
 #include "collapsiblesection.h"
 #include "localization/i18nservice.h"
 #include "core/history/CommandStack.h"
@@ -7,6 +9,8 @@
 #include <QColorDialog>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QInputDialog>
+#include <QMessageBox>
 #include <QCheckBox>
 #include <QHBoxLayout>
 #include <QDoubleSpinBox>
@@ -410,6 +414,37 @@ void TextInspector::buildUi()
     m_perspectiveSection->setContentLayout(tiltLayout);
     layout->addWidget(m_perspectiveSection);
 
+    // --- Presets de estilo (modo avançado; escondido por omissão) ---
+    m_styleSection = new CollapsibleSection(QStringLiteral("Estilos de texto"), false, this);
+    auto* styleLayout = new QHBoxLayout;
+    styleLayout->setContentsMargins(4, 4, 4, 4);
+    m_styleCombo = new QComboBox(this);
+    m_styleApplyBtn = new QPushButton(QStringLiteral("Aplicar"), this);
+    m_styleSaveBtn = new QPushButton(QStringLiteral("Guardar estilo…"), this);
+    m_styleRemoveBtn = new QPushButton(QStringLiteral("Remover"), this);
+    connect(m_styleApplyBtn, &QPushButton::clicked, this, [this]() {
+        if (!m_styleCombo || !m_styleStore)
+            return;
+        const QString name = m_styleCombo->currentData().toString();
+        if (auto style = m_styleStore->find(name))
+            applyTextStyle(*style);
+    });
+    connect(m_styleSaveBtn, &QPushButton::clicked, this, &TextInspector::saveCurrentAsStyle);
+    connect(m_styleRemoveBtn, &QPushButton::clicked, this, [this]() {
+        if (!m_styleCombo || !m_styleStore)
+            return;
+        const QString name = m_styleCombo->currentData().toString();
+        if (m_styleStore->removeUserStyle(name))
+            refreshStyleCombo();
+    });
+    styleLayout->addWidget(m_styleCombo, 1);
+    styleLayout->addWidget(m_styleApplyBtn);
+    styleLayout->addWidget(m_styleSaveBtn);
+    styleLayout->addWidget(m_styleRemoveBtn);
+    m_styleSection->setContentLayout(styleLayout);
+    m_styleSection->setVisible(false);   // revelado pelo modo avançado
+    layout->addWidget(m_styleSection);
+
     layout->addStretch();
     auto* scroll = new QScrollArea(this);
     scroll->setWidgetResizable(true);
@@ -774,6 +809,106 @@ void TextInspector::retranslateUi()
     if (editingLayer(&layer))
         m_align->setCurrentIndex(static_cast<int>(layer->align));
     m_loading = false;
+}
+
+
+void TextInspector::setStyleStore(cc::TextStyleStore* store)
+{
+    m_styleStore = store;
+    refreshStyleCombo();
+}
+
+void TextInspector::refreshStyleCombo()
+{
+    if (!m_styleCombo)
+        return;
+    const QString current = m_styleCombo->currentText();
+    m_styleCombo->clear();
+    if (m_styleStore) {
+        for (const auto& style : m_styleStore->all()) {
+            const bool user = m_styleStore->isUserStyle(style.name);
+            m_styleCombo->addItem(user ? style.name + QStringLiteral(" *") : style.name,
+                                  style.name);
+        }
+    }
+    if (!current.isEmpty()) {
+        const int index = m_styleCombo->findData(current);
+        if (index >= 0)
+            m_styleCombo->setCurrentIndex(index);
+    }
+}
+
+void TextInspector::setAdvancedMode(bool advanced)
+{
+    if (m_styleSection)
+        m_styleSection->setVisible(advanced);
+}
+
+void TextInspector::applyTextStyle(const cc::TextStyle& style)
+{
+    TextLayer* layer = nullptr;
+    if (!editingLayer(&layer) || !m_history)
+        return;
+
+    // Cada propriedade é um comando próprio (undo granular); o efeito é um
+    // bloco único porque o inspector já o trata assim.
+    m_history->execute(std::make_unique<SetTextFontFamilyCommand>(
+        *m_document, m_id, QStringLiteral("text.fontFamily"),
+        &Document::setLayerFontFamily, layer->fontFamily, style.fontFamily));
+    m_history->execute(std::make_unique<SetTextSizeCommand>(
+        *m_document, m_id, QStringLiteral("text.size"),
+        &Document::setLayerTextSize, layer->sizePt, style.sizePt));
+    m_history->execute(std::make_unique<SetTextColorCommand>(
+        *m_document, m_id, QStringLiteral("text.color"),
+        &Document::setLayerTextColor, layer->color, style.color));
+    m_history->execute(std::make_unique<SetTextBoldCommand>(
+        *m_document, m_id, QStringLiteral("text.bold"),
+        &Document::setLayerTextBold, layer->bold, style.bold));
+    m_history->execute(std::make_unique<SetTextItalicCommand>(
+        *m_document, m_id, QStringLiteral("text.italic"),
+        &Document::setLayerTextItalic, layer->italic, style.italic));
+    m_history->execute(std::make_unique<SetTextLetterSpacingCommand>(
+        *m_document, m_id, QStringLiteral("text.letterSpacing"),
+        &Document::setLayerLetterSpacing, layer->letterSpacingPx, style.letterSpacingPx));
+    m_history->execute(std::make_unique<SetTextLineHeightCommand>(
+        *m_document, m_id, QStringLiteral("text.lineHeight"),
+        &Document::setLayerLineHeight, layer->lineHeightMult, style.lineHeightMult));
+    m_history->execute(std::make_unique<SetLayerTextEffectsCommand>(
+        *m_document, m_id, layer->effects, style.effects));
+
+    refresh();
+}
+
+void TextInspector::saveCurrentAsStyle()
+{
+    TextLayer* layer = nullptr;
+    if (!editingLayer(&layer) || !m_styleStore)
+        return;
+
+    bool ok = false;
+    const QString name = QInputDialog::getText(
+        this, QStringLiteral("Guardar estilo"),
+        QStringLiteral("Nome do estilo:"), QLineEdit::Normal,
+        m_styleCombo ? m_styleCombo->currentData().toString() : QString(), &ok);
+    if (!ok || name.trimmed().isEmpty())
+        return;
+
+    cc::TextStyle style;
+    style.name = name.trimmed();
+    style.fontFamily = layer->fontFamily;
+    style.sizePt = layer->sizePt;
+    style.bold = layer->bold;
+    style.italic = layer->italic;
+    style.color = layer->color;
+    style.letterSpacingPx = layer->letterSpacingPx;
+    style.lineHeightMult = layer->lineHeightMult;
+    style.effects = layer->effects;
+
+    if (m_styleStore->addUserStyle(style))
+        refreshStyleCombo();
+    else
+        QMessageBox::warning(this, QStringLiteral("Guardar estilo"),
+                             QStringLiteral("Não foi possível guardar: nome vazio, duplicado ou erro de escrita."));
 }
 
 } // namespace cc

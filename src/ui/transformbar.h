@@ -49,8 +49,8 @@ public:
 signals:
     /// Emitido a cada edição de campo; `oldTransform` é o estado antes
     /// desta edição concreta (para o comando de histórico).
-    void transformEdited(const cc::LayerId& id, cc::AffineTransform oldTransform,
-                         cc::AffineTransform newTransform);
+    void transformEdited(const LayerId& id, AffineTransform oldTransform,
+                         AffineTransform newTransform);
 
 private slots:
     void onFieldEdited();

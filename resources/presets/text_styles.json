@@ -1,0 +1,44 @@
+{
+    "styles": [
+        {
+            "name": "Título YouTube",
+            "fontFamily": "Sans Serif", "sizePt": 96, "bold": true, "italic": false,
+            "color": "#ffffff", "letterSpacing": 0, "lineHeight": 1,
+            "effects": {
+                "outline": { "enabled": true,  "color": "#000000", "width": 8 },
+                "shadow":  { "enabled": true,  "color": "#000000", "offsetX": 4, "offsetY": 6, "blur": 6 },
+                "gradient":{ "enabled": false, "type": 0, "color1": "#ffffff", "color2": "#ffcc00", "angle": 90 }
+            }
+        },
+        {
+            "name": "Selo / Badge",
+            "fontFamily": "Sans Serif", "sizePt": 40, "bold": true, "italic": false,
+            "color": "#111111", "letterSpacing": 2, "lineHeight": 1,
+            "effects": {
+                "outline": { "enabled": true,  "color": "#ffd400", "width": 5 },
+                "shadow":  { "enabled": false, "color": "#000000", "offsetX": 2, "offsetY": 2, "blur": 0 },
+                "gradient":{ "enabled": false, "type": 0, "color1": "#ffffff", "color2": "#ffd400", "angle": 90 }
+            }
+        },
+        {
+            "name": "Legenda limpa",
+            "fontFamily": "Sans Serif", "sizePt": 32, "bold": false, "italic": false,
+            "color": "#f5f5f5", "letterSpacing": 0, "lineHeight": 1.2,
+            "effects": {
+                "outline": { "enabled": false, "color": "#000000", "width": 0 },
+                "shadow":  { "enabled": true,  "color": "#000000", "offsetX": 2, "offsetY": 2, "blur": 4 },
+                "gradient":{ "enabled": false, "type": 0, "color1": "#ffffff", "color2": "#ffcc00", "angle": 90 }
+            }
+        },
+        {
+            "name": "Gradiente neon",
+            "fontFamily": "Sans Serif", "sizePt": 64, "bold": true, "italic": false,
+            "color": "#ffffff", "letterSpacing": 1, "lineHeight": 1,
+            "effects": {
+                "outline": { "enabled": true,  "color": "#1b1035", "width": 4 },
+                "shadow":  { "enabled": true,  "color": "#ff00aa", "offsetX": 0, "offsetY": 0, "blur": 12 },
+                "gradient":{ "enabled": true,  "type": 1, "color1": "#00e5ff", "color2": "#ff00aa", "angle": 45 }
+            }
+        }
+    ]
+}
