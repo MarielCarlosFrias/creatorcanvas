@@ -213,6 +213,8 @@ Export and the viewport share this function; `CanvasView` then draws editor over
 The compositor still recomposes on every paint of a *changed* document, but unchanged layers no longer pay rasterization again:
 
 - `IRenderer` (`rendering/IRenderer.h`) is the compositor seam: `renderDocument(doc, painter, transform, options)` + `clearCaches()`, with `name()` for diagnostics. `SoftwareRenderer` is the historical QPainter implementation; `CachingRenderer` adds a per-layer pixmap cache and is the process default — the free `renderDocument()` delegates to it, so canvas, exporters and the smoke test all benefit with zero call-site changes.
+- The **compositing path** (documents with clipping masks or visible adjustment layers) is cached too: one buffer per (document identity, revision, fingerprint, size, scale, interactive mode) — buffers above 96 MB are not cached, so a huge document cannot evict the layer cache. Measured 4.3× on a 5-image + clipped-text document.
+- Both cache keys include a cheap **document fingerprint** (type/visible/opacity/blend/locks/tag/clip/masks/assetId per layer — O(layers), far cheaper than recomposing). The revision alone was not enough: the project's convention permits *direct* field mutation (no revision bump), which used to serve stale pixmaps.
 - The cache only applies to the **fast path** (no clipping masks, no visible adjustment layers) and only to layers whose rasterization is expensive: **Text, Shape, Vector and Fill**. Image layers have their own mask caches and are excluded; groups, adjustments, clipped layers, layers with alpha/vector masks, `BlendIf`, or the live tool preview are also excluded rather than risk a stale pixmap.
 - Cache key: (layer id, `Document::revision()`, device canvas size, `interactive` mode, matrix scale). The revision is monotonic, so any document edit invalidates every old entry — stale pixmaps are impossible by construction. Budget: 512 entries / 256 MB with LRU eviction; `invalidateLayerCache(id)` / `invalidateAllLayerCaches()` / `clearRendererCaches()` drop entries explicitly.
 - Each entry covers only the layer's **visible device area** (a small text layer produces a small pixmap), and the blit resets the painter transform — the pixmap is in device coordinates, so it must not be re-scaled by the document transform. Image layers WITHOUT masks/effects/`BlendIf`/clip/preview are cached too; masked ones keep their own mask caches.
@@ -482,7 +484,7 @@ Already on `main` (do not treat as future work): multi-select, group/align/distr
 Still ahead:
 
 1. **Split `CanvasView` / `MainWindow`** — isolate tools and overlays so the viewport is not a 2k+ line catch-all (Phase 1 delivered: `cc_tools` static library and `ICanvasTool` architecture integrated).
-2. **Compositing-path cache + GPU viewport** — the fast path is cached (`CachingRenderer`, measured 3.1× on a 35-layer document); the compositing path (clipping masks / adjustment layers) still recomposes, and a Vulkan/Direct3D (Qt RHI) backend behind `IRenderer` is the long-term seam.
+2. **GPU viewport** — both rendering paths are cached now (`IRenderer`): the fast path measured 3.1× and the compositing path 4.3× on heavy documents. A Vulkan/Direct3D (Qt RHI) backend behind the same interface is the remaining seam.
 3. **Richer blend modes** — only if compositing moves beyond the current twelve `QPainter` modes.
 4. **macOS** — real bundle, notarization, and CI; `MACOSX_BUNDLE` on the target is not a shipping product.
 
