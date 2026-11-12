@@ -1,5 +1,7 @@
 #include "tooloptionsbar.h"
 
+#include <QDoubleSpinBox>
+
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QSlider>
@@ -33,6 +35,8 @@ int toolOptionsPageIndex(CanvasTool tool)
     case CanvasTool::Gradient:   return 9;
     case CanvasTool::Retouch:    return 10;
     case CanvasTool::Healing:    return 11;
+    case CanvasTool::Vector:
+    case CanvasTool::VectorNodes: return 12;   // página da caneta (traço)
     default:                     return 0;
     }
 }
@@ -651,6 +655,35 @@ void ToolOptionsBar::buildUi()
     healingLayout->addWidget(m_healingStrengthSlider);
     healingLayout->addWidget(m_healingStrengthValueLabel);
     healingLayout->addStretch();
+    QWidget* penPage = new QWidget(this);
+    QHBoxLayout* penLayout = new QHBoxLayout(penPage);
+    penLayout->setContentsMargins(4, 4, 4, 4);
+    penLayout->addWidget(new QLabel(QStringLiteral("Traço:"), this));
+    m_penColorBtn = new QPushButton(this);
+    m_penColorBtn->setFixedSize(28, 24);
+    m_penColorBtn->setStyleSheet(swatchStyle(m_penColor));
+    connect(m_penColorBtn, &QPushButton::clicked, this, [this] {
+        const QColor chosen = QColorDialog::getColor(m_penColor, this);
+        if (chosen.isValid()) {
+            m_penColor = chosen;
+            m_penColorBtn->setStyleSheet(swatchStyle(chosen));
+            if (m_canvas) m_canvas->setPenStrokeColor(chosen);
+        }
+    });
+    penLayout->addWidget(m_penColorBtn);
+    penLayout->addWidget(new QLabel(QStringLiteral("Espessura:"), this));
+    m_penWidthSpin = new QDoubleSpinBox(this);
+    m_penWidthSpin->setRange(1.0, 40.0);
+    m_penWidthSpin->setDecimals(0);
+    m_penWidthSpin->setValue(3.0);
+    m_penWidthSpin->setSuffix(QStringLiteral(" px"));
+    connect(m_penWidthSpin, qOverload<double>(&QDoubleSpinBox::valueChanged),
+            this, [this](double w) {
+                if (m_canvas) m_canvas->setPenStrokeWidth(w);
+            });
+    penLayout->addWidget(m_penWidthSpin);
+    penLayout->addStretch(1);
+
     m_stack->addWidget(healingPage);
 
     // Scroll Area wrapper

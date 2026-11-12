@@ -10,8 +10,10 @@
 #include <QImage>
 
 #include "core/Document.h"
+#include "core/document/NewDocumentSpec.h"
 #include "ui/adjustmentsdialog.h"
 #include "ui/webslicesdialog.h"
+#include "ui/canvasview.h"
 #include "ui/slicepreviewwidget.h"
 #include "core/document/WebSlice.h"
 #include "imageio/DocumentExporter.h"
@@ -222,7 +224,10 @@ private slots:
         QCOMPARE(w->value(), wBefore);
         QCOMPARE(h->value(), hBefore);
     }
+
+
 };
 
 QTEST_MAIN(TestMainWindowTabs)
 #include "test_mainwindow_tabs.moc"
+

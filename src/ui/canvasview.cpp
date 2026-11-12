@@ -787,7 +787,13 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
         }
     }
 
-    if (m_tool == CanvasTool::Eyedropper || ((event->modifiers() & Qt::AltModifier) && event->button() == Qt::LeftButton)) {
+    // A caneta (e os nós) usam Alt nos seus próprios gestos: nesses modos o
+    // atalho global de eyedropper não rouba o evento.
+    const bool toolOwnsAlt = m_activeTool
+        && (m_tool == CanvasTool::Vector || m_tool == CanvasTool::VectorNodes);
+    if (m_tool == CanvasTool::Eyedropper
+        || ((event->modifiers() & Qt::AltModifier) && event->button() == Qt::LeftButton
+            && !toolOwnsAlt)) {
         const QColor sampled = sampleColorAt(docPos);
         if (sampled.isValid()) {
             emit colorPicked(sampled);
@@ -1254,6 +1260,18 @@ void CanvasView::contextMenuEvent(QContextMenuEvent* event)
         return;
     }
 
+    // Caneta a desenhar: o botão direito fecha o caminho (gesto documentado
+    // da PenTool) em vez de abrir o menu do canvas.
+    if (m_tool == CanvasTool::Vector && m_activeTool) {
+        QMouseEvent synthetic(QEvent::MouseButtonPress,
+                              QPointF(event->pos()), QPointF(event->pos()),
+                              Qt::RightButton, Qt::RightButton, Qt::NoModifier);
+        m_activeTool->mousePress(&synthetic, deviceToDoc().map(QPointF(event->pos())),
+                                 makeToolContext());
+        event->accept();
+        return;
+    }
+
     const QPointF docPos = deviceToDoc().map(QPointF(event->pos()));
     Layer* layer = hitTestLayer(docPos, true);
     if (!layer && !m_selectedId.isNull())
@@ -1612,6 +1630,18 @@ void CanvasView::setPaintBrush(int brushType)
     if (m_paintTool)
         m_paintTool->setBrushType(brushType);
     update();
+}
+
+void CanvasView::setPenStrokeColor(const QColor& color)
+{
+    if (m_penTool)
+        m_penTool->setStrokeColor(color);
+}
+
+void CanvasView::setPenStrokeWidth(double width)
+{
+    if (m_penTool)
+        m_penTool->setStrokeWidth(width);
 }
 
 void CanvasView::setPaintColor(const QColor& color)

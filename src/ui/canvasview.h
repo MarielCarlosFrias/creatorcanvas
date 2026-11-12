@@ -112,6 +112,10 @@ public:
     // Configurações de Pintura Estilo Paint
     void setPaintBrush(int brushType); // ImageProcessing::BrushType
     void setPaintColor(const QColor& color);
+
+    /// Opções da caneta (traço do caminho Bézier).
+    void setPenStrokeColor(const QColor& color);
+    void setPenStrokeWidth(double width);
     void setPaintSize(int size);
     void setPaintOpacity(qreal opacity);
 

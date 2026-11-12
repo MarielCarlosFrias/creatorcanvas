@@ -501,10 +501,11 @@ private slots:
         QCOMPARE(vec->nodes.size(), 3u);          // nós criados para edição
         QVERIFY(!vec->path.isEmpty());            // e o caminho desenhado
         // Os nós ficam em espaço LOCAL centrado (a caneta subtrai o centro
-        // das âncoras): o renderer aplica a mesma convenção de matriz.
-        // Âncoras: (20,20), (100,60), (180,90) -> bbox centro (100, 55).
+        // das âncoras) e a posição da camada passa a ser esse centro.
+        // Âncoras: (20,20), (100,60), (180,90) -> centro (100, 55).
         const QPointF expectedFirst = QPointF(20, 20) - QPointF(100, 55);
         QCOMPARE(vec->nodes.front().position, expectedFirst);
+        QCOMPARE(vec->transform.position, QPointF(100, 55));
 
         // Editar um nó muda o CAMINHO desenhado (fonte de verdade única).
         const QPointF before = vec->path.pointAtPercent(0.0);

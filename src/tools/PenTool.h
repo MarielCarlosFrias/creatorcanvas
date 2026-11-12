@@ -47,9 +47,9 @@ private:
     bool m_drawing = false;
     bool m_hasSource = false;
 
-    QColor m_strokeColor = Qt::black;
+    QColor m_strokeColor = QColor(0x43, 0x78, 0xff);
     QColor m_fillColor = Qt::transparent;
-    double m_strokeWidth = 2.0;
+    double m_strokeWidth = 3.0;
 };
 
 } // namespace cc

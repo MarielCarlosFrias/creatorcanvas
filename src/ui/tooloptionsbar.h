@@ -7,6 +7,7 @@ class QLabel;
 class QSlider;
 class QComboBox;
 class QCheckBox;
+class QDoubleSpinBox;
 class QPushButton;
 class QStackedWidget;
 class QScrollArea;
@@ -79,6 +80,11 @@ private:
     QLabel* m_paintBrushLabel = nullptr;
     QComboBox* m_paintBrushCombo = nullptr;
     QPushButton* m_paintColorBtn = nullptr;
+
+    // Caneta (Bézier): cor e espessura do traço.
+    QPushButton* m_penColorBtn = nullptr;
+    QDoubleSpinBox* m_penWidthSpin = nullptr;
+    QColor m_penColor = QColor(0x43, 0x78, 0xff);
     QLabel* m_paintSizeLabel = nullptr;
     QSlider* m_paintSizeSlider = nullptr;
     QLabel* m_paintSizeValueLabel = nullptr;

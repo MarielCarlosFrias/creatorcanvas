@@ -74,10 +74,15 @@ void PenTool::mousePress(QMouseEvent* event, const QPointF& docPos, const ToolCo
             const QPointF center((minX + maxX) / 2.0, (minY + maxY) / 2.0);
             for (const QPointF& anchor : m_anchors) {
                 VectorNode node;
-                node.position = anchor - center;
+                node.position = anchor - center;   // centrado na origem
                 node.smooth = false;   // segmentos rectos até o utilizador os suavizar
                 vecLayer->nodes.push_back(node);
             }
+            // O `transform.position` guarda o CENTRO do conteúdo em
+            // coordenadas de documento — sem isto o caminho aparece
+            // deslocado pelo negativo do centro (é o que se via: o
+            // triângulo encostado ao canto superior esquerdo).
+            vecLayer->transform.position = center;
             vecLayer->path.translate(-center);
             vecLayer->rebuildPath();
 
