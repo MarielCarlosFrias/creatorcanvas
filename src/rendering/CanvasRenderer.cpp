@@ -1692,11 +1692,27 @@ void SoftwareRenderer::renderDocument(const Document& doc, QPainter* painter,
         if (doc.width() <= 0 || doc.height() <= 0)
             return;
 
-        const QImage acc = composeLayers(
-            root->children, doc, canvasRect, options, QTransform(),
-            QSize(doc.width(), doc.height()));
+        const QSize docSize(doc.width(), doc.height());
+
+        // Cache do compósito: documentos com recortes/ajustes eram
+        // reconstruídos por inteiro em CADA pintura.
+        if (compositeFromCache(painter, doc, docToDevice, canvasOnDevice, docSize,
+                               options)) {
+            painter->save();
+            painter->resetTransform();
+            painter->setPen(QPen(options.canvasBorder, 1.0));
+            painter->setBrush(Qt::NoBrush);
+            painter->drawRect(canvasOnDevice);
+            painter->restore();
+            return;
+        }
+
+        const QImage acc = composeLayers(root->children, doc, canvasRect, options,
+                                         QTransform(), docSize);
         if (acc.isNull())
             return;
+
+        storeComposite(acc, doc, docSize, docToDevice, options);
 
         painter->save();
         painter->setTransform(docToDevice);
@@ -1814,6 +1830,18 @@ bool SoftwareRenderer::drawCachedLayer(QPainter*, const Layer&, const Document&,
     return false;   // o renderer base não cacheia
 }
 
+bool SoftwareRenderer::compositeFromCache(QPainter*, const Document&,
+                                          const QTransform&, const QRectF&,
+                                          const QSize&, const RenderOptions&)
+{
+    return false;   // o renderer base não cacheia o compósito
+}
+
+void SoftwareRenderer::storeComposite(const QImage&, const Document&, const QSize&,
+                                      const QTransform&, const RenderOptions&)
+{
+}
+
 void SoftwareRenderer::clearCaches() {}
 
 void SoftwareRenderer::invalidateLayer(const QUuid&) {}
@@ -1830,6 +1858,64 @@ namespace {
 /// preenchimentos procedurais. Imagens ficam de fora (têm cache próprio de
 /// máscara e desenhá-las já é barato); grupos e ajustes só aparecem no
 /// caminho de composição, que nunca é cacheado.
+/// Impressão digital do estado visível da árvore de camadas. A revisão do
+/// documento apanha mutações pela API oficial; isto apanha também as
+/// mutações directas de campos (visible/opacity/transform/…), que a
+/// convenção do projeto permite em código de leitura. Custo: O(camadas),
+/// muito mais barato que recompor.
+quint64 documentFingerprint(const Document& doc)
+{
+    const GroupLayer* root = doc.rootGroup();
+    if (!root)
+        return 0;
+
+    quint64 seed = 0x9e3779b97f4a7c15ULL;
+    auto mix = [&seed](quint64 v) {
+        seed ^= v + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
+    };
+
+    std::vector<const GroupLayer*> stack{root};
+    int guard = 0;
+    while (!stack.empty() && guard++ < 4096) {
+        const GroupLayer* group = stack.back();
+        stack.pop_back();
+        mix(static_cast<quint64>(group->id().data1));
+        for (const auto& child : group->children) {
+            if (!child)
+                continue;
+            mix(static_cast<quint64>(child->type()));
+            mix(child->visible ? 1 : 0);
+            mix(static_cast<quint64>(child->opacity() * 1000.0f));
+            mix(static_cast<quint64>(child->blendMode));
+            mix(child->locked ? 1 : 0);
+            mix(static_cast<quint64>(child->colorTag));
+            mix(child->clipped ? 1 : 0);
+            mix(!child->vectorMask.isNull() ? 1 : 0);
+            if (child->type() == LayerType::Image) {
+                const auto* img = static_cast<const ImageLayer*>(child.get());
+                mix(!img->alphaMask.isNull() ? 1 : 0);
+                mix(static_cast<quint64>(img->assetId.data1));
+                mix(static_cast<quint64>(img->naturalWidth) * 31 + img->naturalHeight);
+                mix(img->adjustmentLayerId ? 1 : 0);
+            }
+            if (child->type() == LayerType::Vector) {
+                const auto* vec = static_cast<const VectorLayer*>(child.get());
+                mix(vec->nodes.size());
+                mix(vec->closed ? 1 : 0);
+            }
+            if (child->type() == LayerType::Group)
+                stack.push_back(static_cast<const GroupLayer*>(child.get()));
+        }
+    }
+    return seed;
+}
+
+/// Identidade do documento para a cache do compósito.
+QUuid compositeKey(const Document& doc)
+{
+    return doc.rootGroup() ? doc.rootGroup()->id() : QUuid();
+}
+
 bool layerCacheable(const Layer& layer, const RenderOptions& options)
 {
     if (layer.type() != LayerType::Text && layer.type() != LayerType::Shape
@@ -1868,14 +1954,23 @@ constexpr qint64 kCacheBudgetBytes = 256 * 1024 * 1024;   // 256 MB
 // um documento de 35 camadas NUNCA acertava o cache (cada insert desalojava
 // uma entrada viva). Quem limita a memória é o orçamento em bytes.
 constexpr int kCacheMaxEntries = 512;
+// Um compósito de documento grande não deve competir com a cache de camadas:
+// acima deste tamanho, não se cacheia (desenha directo).
+constexpr qint64 kMaxCompositeBytes = 96 * 1024 * 1024;   // 96 MB
 
 } // namespace
 
 // A chave do cache precisa de qHash para viver num QHash.
 inline size_t qHash(const CachingRenderer::Key& key, size_t seed = 0)
 {
-    return qHashMulti(seed, key.layerId, key.revision, key.device,
-                      key.interactive, qRound(key.scale * 10000));
+    return qHashMulti(seed, key.layerId, key.revision, key.fingerprint,
+                      key.device, key.interactive, qRound(key.scale * 10000));
+}
+
+inline size_t qHash(const CachingRenderer::CompositeKey& key, size_t seed = 0)
+{
+    return qHashMulti(seed, key.docId, key.revision, key.fingerprint,
+                      key.docSize, qRound(key.scale * 10000), key.interactive);
 }
 
 bool CachingRenderer::drawCachedLayer(QPainter* painter, const Layer& layer,
@@ -1891,8 +1986,8 @@ bool CachingRenderer::drawCachedLayer(QPainter* painter, const Layer& layer,
     if (device.isEmpty() || device.width() <= 0 || device.height() <= 0)
         return false;
 
-    const Key key{layer.id(), doc.revision(), device, options.interactive,
-                  docToDevice.m11()};
+    const Key key{layer.id(), doc.revision(), documentFingerprint(doc), device,
+                  options.interactive, docToDevice.m11()};
 
     if (auto it = m_cache.find(key); it != m_cache.end()) {
         ++m_hits;
@@ -1975,11 +2070,75 @@ void CachingRenderer::evictToFit()
     }
 }
 
+bool CachingRenderer::compositeFromCache(QPainter* painter, const Document& doc,
+                                        const QTransform& docToDevice,
+                                        const QRectF& canvasOnDevice,
+                                        const QSize& docSize,
+                                        const RenderOptions& options)
+{
+    Q_UNUSED(canvasOnDevice);   // o compósito é colado pela matriz do documento
+    if (!painter || docSize.isEmpty())
+        return false;
+
+    const CompositeKey key{compositeKey(doc), doc.revision(),
+                           documentFingerprint(doc), docSize,
+                           docToDevice.m11(), options.interactive};
+    if (auto it = m_compositeCache.find(key); it != m_compositeCache.end()) {
+        ++m_compositeHits;
+        // O compósito está em coordenadas de documento: colar com a mesma
+        // transformação usada para o construir.
+        painter->save();
+        painter->setTransform(docToDevice);
+        painter->setClipRect(QRectF(0, 0, docSize.width(), docSize.height()));
+        painter->setRenderHint(QPainter::SmoothPixmapTransform, !options.interactive);
+        painter->drawImage(0, 0, it.value());
+        painter->restore();
+        return true;
+    }
+    ++m_compositeMisses;
+    return false;
+}
+
+void CachingRenderer::storeComposite(const QImage& composite, const Document& doc,
+                                     const QSize& docSize,
+                                     const QTransform& docToDevice,
+                                     const RenderOptions& options)
+{
+    // Documentos enormes: um compósito de 100 MB+ não cabe no orçamento sem
+    // desalojar tudo o resto — nesses casos é melhor não cachear.
+    if (composite.isNull() || docSize.isEmpty())
+        return;
+    if (composite.sizeInBytes() > kMaxCompositeBytes)
+        return;
+
+    const CompositeKey key{compositeKey(doc), doc.revision(),
+                           documentFingerprint(doc), docSize,
+                           docToDevice.m11(), options.interactive};
+    m_compositeCache.insert(key, composite.copy());
+    m_bytes += composite.sizeInBytes();
+    if (m_compositeBytes + composite.sizeInBytes() > kMaxCompositeBytes)
+        evictComposites();
+}
+
+void CachingRenderer::evictComposites()
+{
+    while (!m_compositeCache.isEmpty()
+           && m_compositeBytes > kMaxCompositeBytes / 2) {
+        const auto oldest = m_compositeCache.constBegin();
+        m_compositeBytes -= oldest.value().sizeInBytes();
+        m_compositeCache.erase(oldest);
+    }
+}
+
 void CachingRenderer::clearCaches()
 {
     m_cache.clear();
     m_lru.clear();
     m_bytes = 0;
+    m_compositeCache.clear();
+    m_compositeBytes = 0;
+    m_compositeHits = 0;
+    m_compositeMisses = 0;
 }
 
 void CachingRenderer::invalidateLayer(const QUuid& layerId)

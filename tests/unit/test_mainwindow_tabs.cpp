@@ -233,9 +233,12 @@ private slots:
 
 
 
+
+
 };
 
 QTEST_MAIN(TestMainWindowTabs)
 #include "test_mainwindow_tabs.moc"
+
 
 

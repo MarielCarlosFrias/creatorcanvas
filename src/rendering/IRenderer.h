@@ -70,6 +70,21 @@ protected:
                                  const QTransform& docToDevice,
                                  const QRectF& canvasOnDevice,
                                  const RenderOptions& options);
+
+    /// Caminho de composição: desenha o compósito da cache, se existir.
+    /// A implementação base nunca cacheia.
+    virtual bool compositeFromCache(QPainter* painter, const Document& doc,
+                                    const QTransform& docToDevice,
+                                    const QRectF& canvasOnDevice,
+                                    const QSize& docSize,
+                                    const RenderOptions& options);
+
+    /// Caminho de composição: guarda o compósito acabado de construir.
+    /// No-op no renderer base.
+    virtual void storeComposite(const QImage& composite, const Document& doc,
+                                const QSize& docSize,
+                                const QTransform& docToDevice,
+                                const RenderOptions& options);
 };
 
 /// Renderer com cache por camada no caminho rápido (documentos sem
@@ -90,15 +105,26 @@ public:
     void invalidateLayer(const QUuid& layerId) override;
     void invalidateAllLayers() override;
 
+    bool compositeFromCache(QPainter* painter, const Document& doc,
+                            const QTransform& docToDevice,
+                            const QRectF& canvasOnDevice, const QSize& docSize,
+                            const RenderOptions& options) override;
+    void storeComposite(const QImage& composite, const Document& doc,
+                        const QSize& docSize, const QTransform& docToDevice,
+                        const RenderOptions& options) override;
+
     /// Estatísticas para diagnóstico (acertos/Total desde o arranque).
     int cacheHits() const { return m_hits; }
     int cacheMisses() const { return m_misses; }
+    int compositeHits() const { return m_compositeHits; }
+    int compositeMisses() const { return m_compositeMisses; }
 
     /// Chave do cache: camada + revisão do documento + tamanho do canvas no
     /// dispositivo + modo interactivo. Pública para o qHash poder usá-la.
     struct Key {
         QUuid layerId;
         quint64 revision = 0;
+        quint64 fingerprint = 0;
         QSize device;
         bool interactive = false;
         double scale = 1.0;
@@ -106,6 +132,7 @@ public:
         bool operator==(const Key& o) const
         {
             return layerId == o.layerId && revision == o.revision
+                && fingerprint == o.fingerprint
                 && device == o.device && interactive == o.interactive
                 && qFuzzyCompare(scale, o.scale);
         }
@@ -133,6 +160,35 @@ private:
     int m_misses = 0;
     qint64 m_bytes = 0;
     QPoint m_blitPoint;
+
+public:
+    /// Cache do compósito (caminho de composição): uma imagem por
+    /// (revisão, tamanho do documento, escala, modo interactivo).
+    struct CompositeKey {
+        // A identidade do documento é o id do grupo raiz: sem ela, dois
+        // documentos no mesmo processo (testes!) com a mesma revisão e
+        // tamanho colidiam na cache.
+        QUuid docId;
+        quint64 revision = 0;
+        quint64 fingerprint = 0;
+        QSize docSize;
+        double scale = 1.0;
+        bool interactive = false;
+
+        bool operator==(const CompositeKey& o) const
+        {
+            return docId == o.docId && revision == o.revision
+                && fingerprint == o.fingerprint && docSize == o.docSize
+                && qFuzzyCompare(scale, o.scale) && interactive == o.interactive;
+        }
+    };
+
+    QHash<CompositeKey, QImage> m_compositeCache;
+    qint64 m_compositeBytes = 0;
+    int m_compositeHits = 0;
+    int m_compositeMisses = 0;
+
+    void evictComposites();
 };
 
 /// Renderer usado pelo caminho livre (renderDocument e restantes pontos de
