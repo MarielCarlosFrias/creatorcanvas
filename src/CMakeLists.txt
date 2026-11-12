@@ -77,6 +77,8 @@ add_library(cc_core STATIC
     core/image/BackgroundRemover.cpp
     core/image/AdjustmentEngine.h
     core/image/AdjustmentEngine.cpp
+    core/image/ImageHistogram.h
+    core/image/ImageHistogram.cpp
     core/color/ColorSpace.h
     core/color/ColorSpace.cpp
     imageio/ImageImporter.h
@@ -194,6 +196,8 @@ add_executable(creatorcanvas
     ui/adjustmentsdialog.cpp
     ui/curveeditor.h
     ui/curveeditor.cpp
+    ui/histogramview.h
+    ui/histogramview.cpp
     ui/themeicons.h
     ui/themeicons.cpp
     ui/collapsiblesection.h

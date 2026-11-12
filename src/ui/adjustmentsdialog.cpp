@@ -1,6 +1,8 @@
 #include "adjustmentsdialog.h"
 
 #include "curveeditor.h"
+#include "histogramview.h"
+#include "core/image/ImageHistogram.h"
 #include "designtokens.h"
 #include "localization/i18nservice.h"
 
@@ -70,10 +72,13 @@ bool typeHasParams(AdjustmentType type)
 } // namespace
 
 AdjustmentsDialog::AdjustmentsDialog(const QImage& source, AdjustmentType initial,
-                                     I18nService* i18n, QWidget* parent)
+                                     I18nService* i18n, QWidget* parent,
+                                     bool advancedMode)
     : QDialog(parent)
     , m_source(source)
     , m_i18n(i18n)
+    , m_advancedMode(advancedMode)
+    , m_buildingUi(true)
 {
     m_request.type = initial;
     setWindowTitle(tr("title", QStringLiteral("Ajustes de Imagem - CreatorCanvas")));
@@ -87,6 +92,7 @@ AdjustmentsDialog::AdjustmentsDialog(const QImage& source, AdjustmentType initia
            qBound(480, qMin(640, available.height() - 48), available.height()));
 
     buildUi();
+    m_buildingUi = false;
     for (int i = 0; i < static_cast<int>(sizeof(kTypes) / sizeof(kTypes[0])); ++i) {
         if (kTypes[i] == initial) {
             m_typeList->setCurrentRow(i);
@@ -190,6 +196,16 @@ void AdjustmentsDialog::buildUi()
         }
     }
     rightColumn->addWidget(m_pages, 1);
+
+    // Histograma: ferramenta profissional, só em modo avançado.
+    if (m_advancedMode) {
+        m_histogramLabel = new QLabel(this);
+        m_histogramLabel->setStyleSheet(QStringLiteral("color: #9aa3b2; font-size: 11px;"));
+        rightColumn->addWidget(m_histogramLabel);
+        m_histogram = new HistogramView(this);
+        m_histogram->setMinimumHeight(90);
+        rightColumn->addWidget(m_histogram);
+    }
 
     rightColumn->addWidget(m_previewLabel, 1);
 
@@ -471,6 +487,28 @@ std::vector<CurvePoint>& AdjustmentsDialog::activeCurve()
     }
 }
 
+void AdjustmentsDialog::updateHistogram()
+{
+    if (!m_histogram || !m_histogramLabel)
+        return;
+    if (m_preview.isNull())
+        return;
+
+    const ImageHistogram hist = ::cc::computeHistogram(m_preview);
+    m_histogram->setHistogram(hist);
+
+    // Nos níveis, os marcadores mostram onde os blacks/whites caem.
+    int inBlack = -1, inWhite = -1, outBlack = -1, outWhite = -1;
+    if (m_request.type == AdjustmentType::Levels) {
+        inBlack = static_cast<int>(m_levelsMaster.inBlack * 255);
+        inWhite = static_cast<int>(m_levelsMaster.inWhite * 255);
+        outBlack = static_cast<int>(m_levelsMaster.outBlack * 255);
+        outWhite = static_cast<int>(m_levelsMaster.outWhite * 255);
+    }
+    m_histogram->setLevelMarkers(inBlack, inWhite, outBlack, outWhite);
+    m_histogramLabel->setText(tr("histogram", QStringLiteral("Histograma")));
+}
+
 void AdjustmentsDialog::onTypeChanged(int row)
 {
     if (row < 0 || row >= m_pages->count())
@@ -502,6 +540,10 @@ void AdjustmentsDialog::onChannelChanged(int)
 
 void AdjustmentsDialog::onParamChanged()
 {
+    //Durante a construção os controlos ainda não existem todos.
+    if (m_buildingUi)
+        return;
+
     if (m_request.type == AdjustmentType::Levels) {
         LevelsChannel& ch = activeLevels();
         ch.inBlack = static_cast<float>(m_inBlack->value()) / 255.0f;
@@ -596,6 +638,7 @@ void AdjustmentsDialog::updatePreview()
                              Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
     }
     m_preview = applyAdjustmentParameters(small, m_request.type, m_request.params);
+    updateHistogram();
     m_previewLabel->setPixmap(QPixmap::fromImage(m_preview)
                                   .scaled(m_previewLabel->size(), Qt::KeepAspectRatio,
                                           Qt::SmoothTransformation));

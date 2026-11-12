@@ -24,6 +24,7 @@ class QVBoxLayout;
 namespace cc {
 
 class CurveEditor;
+class HistogramView;
 class I18nService;
 
 /// Resultado do diálogo: tipo de ajuste + parâmetros serializados + o
@@ -47,7 +48,8 @@ class AdjustmentsDialog final : public QDialog
 
 public:
     AdjustmentsDialog(const QImage& source, AdjustmentType initial,
-                      I18nService* i18n = nullptr, QWidget* parent = nullptr);
+                      I18nService* i18n = nullptr, QWidget* parent = nullptr,
+                      bool advancedMode = false);
     ~AdjustmentsDialog() override = default;
 
     AdjustmentRequest request() const { return m_request; }
@@ -70,6 +72,8 @@ private:
     QWidget* buildVignettePage();
     QWidget* buildChannelMixerPage();
     void collectParams();
+    /// (Re)calcula o histograma da prévia actual (modo avançado).
+    void updateHistogram();
 
 public:
     void accept() override;
@@ -87,6 +91,16 @@ protected:
     QImage m_preview;
     AdjustmentRequest m_request;
     I18nService* m_i18n = nullptr;
+
+    /// O histograma é ferramenta profissional: só existe em modo avançado.
+    bool m_advancedMode = false;
+
+    /// Verdadeiro enquanto a UI está a ser construída. Os sliders emitem
+    /// valueChanged ao serem inicializados (ex.: inWhite=255), e os handlers
+    /// NÃO podem correr nessa altura — os ponteiros dos outros controlos
+    /// ainda não existem. Foi isto que fez o diálogo abrir directamente em
+    /// "Níveis" crashar.
+    bool m_buildingUi = false;
 
     QListWidget* m_typeList = nullptr;
     QStackedWidget* m_pages = nullptr;
@@ -113,6 +127,8 @@ protected:
 
     // Página de curvas.
     CurveEditor* m_curve = nullptr;
+    HistogramView* m_histogram = nullptr;
+    QLabel* m_histogramLabel = nullptr;
     std::vector<CurvePoint> m_curveMaster;
     std::vector<CurvePoint> m_curveR;
     std::vector<CurvePoint> m_curveG;

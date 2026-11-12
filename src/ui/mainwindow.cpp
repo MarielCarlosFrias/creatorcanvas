@@ -234,6 +234,7 @@ MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
     m_advancedMode = m_settings ? m_settings->advancedModeEnabled() : false;
     if (m_toggleAdvancedModeAction)
         m_toggleAdvancedModeAction->setChecked(m_advancedMode);
+    applyAdvancedMode();
 
     connect(m_history.get(), &CommandStack::stateChanged, this, [this] {
         if (m_transformBar && m_document && !m_selectedId.isNull())
@@ -2733,9 +2734,17 @@ void MainWindow::onTransformEdited(const LayerId& id, AffineTransform oldTransfo
 
 void MainWindow::applyAdvancedMode()
 {
-    // Ponto único onde as features profissionais se ligam ao modo. Cada
-    // feature avançada acrescenta aqui a sua actualização de visibilidade
-    // (menus, páginas de diálogo, secções de inspector).
+    // Ponto único onde as features profissionais se ligam ao modo.
+    // Ajustes profissionais (sombras/realces, vinheta, misturador de canais
+    // e mapa de gradiente) só aparecem no menu em modo avançado — o
+    // essencial (brilho/contraste, matiz, inverter, posterizar, threshold,
+    // níveis e curvas) está sempre disponível.
+    static const int kAdvancedAdjustmentIndices[] = {2, 3, 9, 10};
+    for (int i : kAdvancedAdjustmentIndices) {
+        if (i < m_adjustmentActions.size() && m_adjustmentActions[i])
+            m_adjustmentActions[i]->setVisible(m_advancedMode);
+    }
+
     updateResponsiveLayout();
 }
 
@@ -2767,7 +2776,7 @@ void MainWindow::openAdjustments(cc::AdjustmentType type)
     if (src.isNull())
         return;
 
-    cc::AdjustmentsDialog dlg(src, type, m_i18n, this);
+    cc::AdjustmentsDialog dlg(src, type, m_i18n, this, m_advancedMode);
     if (dlg.exec() != QDialog::Accepted)
         return;
     const cc::AdjustmentRequest req = dlg.request();

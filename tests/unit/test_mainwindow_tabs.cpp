@@ -129,9 +129,38 @@ private slots:
         // Curvas identidade: os 4 canais estão codificados (count + pontos).
         QVERIFY(!req.params.empty());
     }
+    void adjustmentsDialogConstructionNeverCrashes()
+    {
+        // Regressão real: abrir o diálogo directamente em "Níveis" crashava —
+        // os sliders da página emitiam valueChanged durante a construção,
+        // antes de m_gamma existir. Todos os tipos iniciais passam por aqui.
+        QImage src(64, 48, QImage::Format_ARGB32);
+        src.fill(qRgba(110, 130, 150, 255));
+
+        for (cc::AdjustmentType type : {cc::AdjustmentType::BrightnessContrast,
+                                       cc::AdjustmentType::HueSaturation,
+                                       cc::AdjustmentType::ShadowsHighlights,
+                                       cc::AdjustmentType::Vignette,
+                                       cc::AdjustmentType::Invert,
+                                       cc::AdjustmentType::Levels,
+                                       cc::AdjustmentType::Curves,
+                                       cc::AdjustmentType::ChannelMixer,
+                                       cc::AdjustmentType::GradientMap}) {
+            AdjustmentsDialog dlg(src, type, nullptr, nullptr, /*advancedMode=*/true);
+            const AdjustmentRequest req = dlg.request();
+            QVERIFY(req.valid);
+            QCOMPARE(req.type, type);
+        }
+
+        // Sem modo avançado não há histograma nem crash.
+        AdjustmentsDialog basic(src, cc::AdjustmentType::Levels);
+        QVERIFY(basic.request().valid);
+    }
 };
 
 QTEST_MAIN(TestMainWindowTabs)
 #include "test_mainwindow_tabs.moc"
+
+
 
 

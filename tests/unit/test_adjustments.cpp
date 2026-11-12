@@ -4,6 +4,7 @@
 #include "core/history/CommandStack.h"
 #include "core/image/AdjustmentEngine.h"
 #include "core/image/ImageProcessing.h"
+#include "core/image/ImageHistogram.h"
 #include "core/layers/Layer.h"
 
 #include <QImage>
@@ -237,6 +238,46 @@ private slots:
              {QStringLiteral("blueGain"), 1.0}});
         QCOMPARE(qGreen(mixed.pixel(24, 24)), 255);
         QCOMPARE(qRed(mixed.pixel(24, 24)), qRed(tinted.pixel(24, 24)));
+    }
+
+
+    void histogramCountsChannelsAndIgnoresTransparent()
+    {
+        QImage img(4, 2, QImage::Format_ARGB32);
+        img.fill(qRgba(0, 0, 0, 0));                       // tudo transparente
+        img.setPixel(0, 0, qRgba(255, 0, 0, 255));         // vermelho puro
+        img.setPixel(1, 0, qRgba(255, 0, 0, 255));         // vermelho puro
+        img.setPixel(2, 0, qRgba(0, 255, 0, 255));         // verde puro
+        img.setPixel(3, 0, qRgba(0, 0, 255, 128));         // azul semi
+
+        const ImageHistogram h = computeHistogram(img);
+        // Os 4 pixéis transparentes NÃO contam: só os 4 opacos existem.
+        QCOMPARE(h.luminance[0], 0u);          // nenhum opaco é preto puro
+        QCOMPARE(h.red[0], 2u);                // verde e azul têm canal R a 0
+        QCOMPARE(h.green[0], 3u);              // vermelho, vermelho e azul
+
+        // Imagem toda transparente: histograma a zeros.
+        QImage nothing(4, 2, QImage::Format_ARGB32);
+        nothing.fill(qRgba(0, 0, 0, 0));
+        QCOMPARE(computeHistogram(nothing).maxCount(), 0u);
+
+        // Dois vermelhos, um verde, um azul.
+        QCOMPARE(h.red[255], 2u);
+        QCOMPARE(h.green[255], 1u);
+        QCOMPARE(h.blue[255], 1u);   // o semi-transparente conta (alfa > 0)
+
+        // Luminância Rec.601: vermelho ~76, verde ~150, azul ~29.
+        QVERIFY(h.luminance[76] >= 2u);
+        QVERIFY(h.luminance[150] >= 1u);
+        QVERIFY(h.luminance[29] >= 1u);
+
+        // Pico para normalização do desenho: o verde a 0 aparece 3 vezes
+        // (vermelelho, vermelho e azul), mais que o vermelho a 255.
+        QCOMPARE(h.maxCount(), 3u);
+
+        // Imagem nula não estoura.
+        const ImageHistogram empty = computeHistogram(QImage());
+        QCOMPARE(empty.maxCount(), 0u);
     }
 
 };
