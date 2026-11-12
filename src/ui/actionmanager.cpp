@@ -319,6 +319,8 @@ void ActionManager::createActions(I18nService* i18n)
     toolHealingAction = makeTool(ThemeIcons::toolHealing(), QKeySequence(QStringLiteral("J")));
     toolEyedropperAction = makeTool(ThemeIcons::toolEyedropper(), QKeySequence(QStringLiteral("I")));
     toolPenAction = makeTool(ThemeIcons::toolPen(), QKeySequence(QStringLiteral("P")));
+    // Edição de nós: profissional, escondida fora do modo avançado.
+    toolVectorNodesAction = makeTool(ThemeIcons::toolPen(), QKeySequence(QStringLiteral("A")));
 
     // --- Filtros & IA ---
     removeBgAiAction = new QAction(this);
@@ -536,6 +538,7 @@ void ActionManager::retranslate(I18nService* i18n)
     setToolHint(toolRetouchAction,    "tools.retouch",    QStringLiteral("U"));
     setToolHint(toolHealingAction,    "tools.healing",    QStringLiteral("J"));
     setToolHint(toolPenAction,        "tools.pen",        QStringLiteral("P"));
+    setToolHint(toolVectorNodesAction, "tools.vectorNodes", QStringLiteral("A"));
 
     const QString eyedropperText = i18n->t("editor", "tools.eyedropper");
     toolEyedropperAction->setText(eyedropperText);
@@ -595,6 +598,7 @@ void ActionManager::selectToolByName(const QString& name)
     else if (name == QLatin1String("healing"))    target = toolHealingAction;
     else if (name == QLatin1String("eyedropper")) target = toolEyedropperAction;
     else if (name == QLatin1String("pen"))       target = toolPenAction;
+    else if (name == QLatin1String("vectornodes")) target = toolVectorNodesAction;
     if (target)
         target->trigger();
 }
@@ -702,7 +706,8 @@ void ActionManager::registerShortcutActions()
     add("tool.select", toolSelectAction); add("tool.marquee", toolMarqueeAction); add("tool.crop", toolCropAction);
     add("tool.scissors", toolScissorsAction); add("tool.wand", toolWandAction); add("tool.clone", toolCloneAction);
     add("tool.paint", toolPaintAction); add("tool.gradient", toolGradientAction); add("tool.flood", toolFloodAction);
-    add("tool.eyedropper", toolEyedropperAction); add("tool.pen", toolPenAction); add("tool.retouch", toolRetouchAction); add("tool.healing", toolHealingAction);
+    add("tool.eyedropper", toolEyedropperAction); add("tool.pen", toolPenAction);
+    add("tool.vectorNodes", toolVectorNodesAction); add("tool.retouch", toolRetouchAction); add("tool.healing", toolHealingAction);
     static const char* const adjustmentRegistry[] = {
         "adjustments.brightnessContrast", "adjustments.hueSaturation",
         "adjustments.shadowsHighlights", "adjustments.vignette",

@@ -705,6 +705,9 @@ void MainWindow::buildCentralWidget()
                     case CanvasTool::Vector:
                         if (m_toolPenAction) m_toolPenAction->setChecked(true);
                         break;
+                    case CanvasTool::VectorNodes:
+                        if (m_toolVectorNodesAction) m_toolVectorNodesAction->setChecked(true);
+                        break;
                     }
                 }
             });
@@ -998,6 +1001,7 @@ void MainWindow::buildActions()
     m_toolFloodAction = m_actions->toolFloodAction;
     m_toolEyedropperAction = m_actions->toolEyedropperAction;
     m_toolPenAction = m_actions->toolPenAction;
+    m_toolVectorNodesAction = m_actions->toolVectorNodesAction;
     m_toolMarqueeAction = m_actions->toolMarqueeAction;
     m_toolGradientAction = m_actions->toolGradientAction;
     m_toolRetouchAction = m_actions->toolRetouchAction;
@@ -1335,6 +1339,7 @@ void MainWindow::connectActionSignals()
     connect(m_toolFloodAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::FloodFill); });
     connect(m_toolEyedropperAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::Eyedropper); });
     connect(m_toolPenAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::Vector); });
+    connect(m_toolVectorNodesAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::VectorNodes); });
     connect(m_toolMarqueeAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::Marquee); });
     connect(m_toolGradientAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::Gradient); });
     connect(m_toolRetouchAction, &QAction::triggered, this, [this] { if (m_canvas) m_canvas->setTool(CanvasTool::Retouch); });
@@ -2744,6 +2749,9 @@ void MainWindow::applyAdvancedMode()
         if (i < m_adjustmentActions.size() && m_adjustmentActions[i])
             m_adjustmentActions[i]->setVisible(m_advancedMode);
     }
+
+    if (m_toolVectorNodesAction)
+        m_toolVectorNodesAction->setVisible(m_advancedMode);
 
     updateResponsiveLayout();
 }

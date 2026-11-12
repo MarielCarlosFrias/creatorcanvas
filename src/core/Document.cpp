@@ -399,6 +399,22 @@ bool Document::setLayerLinkGroup(const LayerId& id, std::optional<qint64> linkGr
     return true;
 }
 
+bool Document::setVectorLayerNodes(const LayerId& id, std::vector<VectorNode> nodes)
+{
+    Layer* layer = findLayer(id);
+    if (!layer || layer->type() != LayerType::Vector)
+        return false;
+    if (effectiveLocks(id).all)
+        return false;
+    auto* vec = static_cast<VectorLayer*>(layer);
+    if (vec->nodes == nodes)
+        return true;
+    vec->nodes = std::move(nodes);
+    bumpRevision();
+    emit layerPropertyChanged(id);
+    return true;
+}
+
 bool Document::setAdjustmentKind(const LayerId& id, AdjustmentType kind)
 {
     Layer* layer = findLayer(id);

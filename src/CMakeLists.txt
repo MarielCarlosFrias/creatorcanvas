@@ -154,6 +154,8 @@ add_library(cc_tools STATIC
     tools/HealingTool.cpp
     tools/PenTool.h
     tools/PenTool.cpp
+    tools/VectorNodeTool.h
+    tools/VectorNodeTool.cpp
 )
 target_link_libraries(cc_tools PUBLIC Qt6::Core Qt6::Gui cc_core cc_localization)
 target_include_directories(cc_tools PUBLIC ${PROJECT_SOURCE_DIR}/src)

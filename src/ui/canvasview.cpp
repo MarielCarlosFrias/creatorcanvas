@@ -20,6 +20,7 @@
 #include "tools/PaintTool.h"
 #include "tools/RasterTools.h"
 #include "tools/PenTool.h"
+#include "tools/VectorNodeTool.h"
 #include "designtokens.h"
 #include <QThread>
 
@@ -106,6 +107,7 @@ CanvasView::CanvasView(QWidget* parent)
     m_retouchTool = std::make_unique<RetouchTool>();
     m_healingTool = std::make_unique<HealingTool>();
     m_penTool = std::make_unique<PenTool>();
+    m_vectorNodeTool = std::make_unique<VectorNodeTool>();
     m_activeTool = m_selectTool.get();
 
     m_inlineTextEditor = new InlineTextEditor(this);
@@ -1388,6 +1390,9 @@ void CanvasView::setTool(CanvasTool tool)
         break;
     case CanvasTool::Vector:
         m_activeTool = m_penTool.get();
+        break;
+    case CanvasTool::VectorNodes:
+        m_activeTool = m_vectorNodeTool.get();
         break;
     }
 

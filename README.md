@@ -78,7 +78,7 @@ Most photo editing tools are either overly basic web canvas tools or intimidatin
 - Selection & Transform (shear, rotate, scale, flip).
 - Crop tool with standard aspect presets.
 - Raster Brush, Pencil, Airbrush, Eraser, Clone Stamp, and Flood Fill.
-- **Pen tool** — cubic Bézier paths with editable nodes and handles (`P`).
+- **Pen tool** — cubic Bézier paths with editable nodes and handles (`P`); in advanced mode a node editor (`A`) moves/inserts/deletes nodes and reshapes curves with one undo step per gesture.
 - **Gradient** — linear/radial, two colors with alpha, respects the active pixel selection.
 - **Retouch brush** — Blur, Sharpen, Smudge, Dodge, Burn and Sponge with size/strength controls.
 - **Spot Healing & Red Eye** — automatic nearby-source repair, one undo step per stroke.

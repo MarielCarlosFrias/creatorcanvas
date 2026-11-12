@@ -310,6 +310,13 @@ struct VectorNode {
     QPointF handleIn;   ///< Handle de entrada (control point da curva anterior)
     QPointF handleOut;  ///< Handle de saída (control point da próxima curva)
     bool smooth = true; ///< Se true, handles são espelhados (curva suave)
+
+    bool operator==(const VectorNode& o) const
+    {
+        return position == o.position && handleIn == o.handleIn
+            && handleOut == o.handleOut && smooth == o.smooth;
+    }
+    bool operator!=(const VectorNode& o) const { return !(*this == o); }
 };
 
 /// Camada vetorial com caminho Bézier cúbico. Pode ser preenchida e/ou ter contorno.

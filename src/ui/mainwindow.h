@@ -297,6 +297,7 @@ private:
     QAction* m_toolFloodAction = nullptr;
     QAction* m_toolEyedropperAction = nullptr;
     QAction* m_toolPenAction = nullptr;
+    QAction* m_toolVectorNodesAction = nullptr;
     QAction* m_toolMarqueeAction = nullptr;
     QAction* m_toolGradientAction = nullptr;
     QAction* m_toolRetouchAction = nullptr;

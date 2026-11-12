@@ -187,6 +187,7 @@ void MenuBuilder::buildMenus(I18nService* i18n)
     createToolsMenu = toolsMenu->addMenu(QString());
     createToolsMenu->addAction(m_actions->addTextAction);
     createToolsMenu->addAction(m_actions->toolPenAction);
+    createToolsMenu->addAction(m_actions->toolVectorNodesAction);
     createToolsMenu->addAction(m_actions->addRectAction);
 
     // --- Janela ---

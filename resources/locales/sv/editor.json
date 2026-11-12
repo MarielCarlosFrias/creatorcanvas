@@ -225,7 +225,8 @@
     "healing.radius": "Radie",
     "healing.strength": "Styrka",
     "eyedropper.hint": "Tryck på ritytan för att plocka upp en färg. (Tisp: håller du inne Alt med något annat verktyg valt kommer du också åt pipetten)",
-    "pen": "Penna (Bézier)"
+    "pen": "Penna (Bézier)",
+    "vectorNodes": "Nodredigering (bana)"
   },
   "section": {
     "typography": "Typografi",

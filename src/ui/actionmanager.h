@@ -108,6 +108,7 @@ public:
     QAction* toolFloodAction = nullptr;
     QAction* toolEyedropperAction = nullptr;
     QAction* toolPenAction = nullptr;
+    QAction* toolVectorNodesAction = nullptr;
     QAction* toolRetouchAction = nullptr;
     QAction* toolHealingAction = nullptr;
 

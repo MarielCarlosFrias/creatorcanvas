@@ -225,7 +225,8 @@
     "healing.radius": "Radius",
     "healing.strength": "Strength",
     "eyedropper.hint": "Click the canvas to sample a color. (Tip: holding Alt with any tool also activates the eyedropper)",
-    "pen": "Pen (Bézier)"
+    "pen": "Pen (Bézier)",
+    "vectorNodes": "Node Edit (path)"
   },
   "section": {
     "typography": "Typography",

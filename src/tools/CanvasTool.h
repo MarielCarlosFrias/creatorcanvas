@@ -32,7 +32,8 @@ enum class CanvasTool {
     Gradient,  // preenchimento com gradiente
     Retouch,   // blur/sharpen/smudge/dodge/burn/sponge
     Healing,
-    Vector     // caneta / curvas Bezier
+    Vector,    // caneta / curvas Bezier
+    VectorNodes // edição de nós do caminho (avançado)
 };
 
 using CanvasToolType = CanvasTool;

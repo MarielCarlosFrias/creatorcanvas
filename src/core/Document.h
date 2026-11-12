@@ -78,6 +78,9 @@ public:
     bool setLayerClipped(const LayerId& id, bool clipped);
     bool setLayerLinkGroup(const LayerId& id, std::optional<qint64> linkGroup);
     bool setLayerVectorMask(const LayerId& id, QImage mask);
+    /// Substitui os nós de uma camada vectorial (edição de caminho Bézier).
+    /// Devolve false se a camada não existir ou não for vectorial.
+    bool setVectorLayerNodes(const LayerId& id, std::vector<VectorNode> nodes);
     /// Vincula uma camada de ajuste a uma camada de imagem (ajuste não destrutivo).
     /// Se |adjustmentLayerId| for nulo, remove o vínculo existente.
     bool setLayerAdjustmentLayerId(const LayerId& imageLayerId,

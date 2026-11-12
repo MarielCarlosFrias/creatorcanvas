@@ -225,7 +225,8 @@
     "healing.radius": "Raio",
     "healing.strength": "Intensidade",
     "eyedropper.hint": "Clique no canvas para amostrar a cor. (Dica: segurar Alt em qualquer ferramenta também ativa o conta-gotas)",
-    "pen": "Caneta (Bézier)"
+    "pen": "Caneta (Bézier)",
+    "vectorNodes": "Edição de Nós (caminho)"
   },
   "section": {
     "typography": "Tipografia",

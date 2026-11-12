@@ -32,6 +32,7 @@ class GradientTool;
 class RetouchTool;
 class HealingTool;
 class PenTool;
+class VectorNodeTool;
 
 /// Interactive document viewport: pan, zoom, selection with transform
 /// handles, gestures, inline text editing, software rendering, and raster tools.
@@ -282,6 +283,7 @@ private:
     std::unique_ptr<RetouchTool> m_retouchTool;
     std::unique_ptr<HealingTool> m_healingTool;
     std::unique_ptr<PenTool> m_penTool;
+    std::unique_ptr<VectorNodeTool> m_vectorNodeTool;
     ICanvasTool* m_activeTool = nullptr;
 
     // AI Quick Background Removal cancel flag and thread tracking

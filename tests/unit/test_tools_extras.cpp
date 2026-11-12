@@ -9,6 +9,7 @@
 #include "tools/MarqueeTool.h"
 #include "tools/PaintExtras.h"
 #include "tools/HealingTool.h"
+#include "tools/VectorNodeTool.h"
 
 using namespace cc;
 
@@ -373,6 +374,77 @@ private slots:
         const QColor center = QColor::fromRgba(qUnpremultiply(result.pixel(16, 16)));
         QVERIFY(center.red() < 120);
     }
+
+    void vectorNodeToolMovesInsertsAndDeletes()
+    {
+        Document doc(80, 60);
+        auto vec = std::make_unique<VectorLayer>();
+        VectorNode a; a.position = QPointF(10, 10);
+        VectorNode b; b.position = QPointF(60, 40);
+        VectorNode c; c.position = QPointF(20, 50);
+        vec->nodes = {a, b, c};
+        vec->closed = false;
+        const LayerId id = vec->id();
+        QVERIFY(doc.addLayer(std::move(vec)));
+        CommandStack history;
+
+        VectorNodeTool tool;
+        ToolContext ctx;
+        ctx.document = &doc;
+        ctx.history = &history;
+        ctx.selectedLayerId = id;
+        ctx.zoom = 1.0;
+        ctx.requestUpdate = [] {};
+        ctx.requestStatusMessage = [](const QString&) {};
+        tool.activate(ctx);
+
+        // 1) Arrastar o primeiro nó move-o e commitA UM passo de undo.
+        const QPointF nodePos = static_cast<VectorLayer*>(doc.findLayer(id))->nodes[0].position;
+        QMouseEvent press = makeMouse(QEvent::MouseButtonPress, nodePos);
+        tool.mousePress(&press, nodePos, ctx);
+        const QPointF moved(30, 25);
+        QMouseEvent move = makeMouse(QEvent::MouseMove, moved);
+        tool.mouseMove(&move, moved, ctx);
+        QMouseEvent release = makeMouse(QEvent::MouseButtonRelease, moved);
+        tool.mouseRelease(&release, moved, ctx);
+
+        auto* vecLayer = dynamic_cast<VectorLayer*>(doc.findLayer(id));
+        QVERIFY(vecLayer);
+        QCOMPARE(vecLayer->nodes[0].position, QPointF(30, 25));
+        QCOMPARE(history.undoCount(), 1);
+
+        // Undo volta ao estado original; reido reaplica.
+        history.undo();
+        QCOMPARE(dynamic_cast<VectorLayer*>(doc.findLayer(id))->nodes[0].position,
+                 QPointF(10, 10));
+        history.redo();
+        QCOMPARE(dynamic_cast<VectorLayer*>(doc.findLayer(id))->nodes[0].position,
+                 QPointF(30, 25));
+
+        // 2) Duplo-clique num nó apaga-o (mínimo 2 ficam).
+        const QPointF node2 = dynamic_cast<VectorLayer*>(doc.findLayer(id))->nodes[1].position;
+        QMouseEvent dbl = makeMouse(QEvent::MouseButtonDblClick, node2);
+        tool.mouseDoubleClick(&dbl, node2, ctx);
+        vecLayer = dynamic_cast<VectorLayer*>(doc.findLayer(id));
+        QCOMPARE(vecLayer->nodes.size(), 2u);
+        QCOMPARE(history.undoCount(), 2);
+
+        // 3) Clicar no caminho insere um nó novo.
+        const QPointF mid((vecLayer->nodes[0].position.x() + vecLayer->nodes[1].position.x()) / 2,
+                          (vecLayer->nodes[0].position.y() + vecLayer->nodes[1].position.y()) / 2);
+        QMouseEvent press2 = makeMouse(QEvent::MouseButtonPress, mid);
+        tool.mousePress(&press2, mid, ctx);
+        vecLayer = dynamic_cast<VectorLayer*>(doc.findLayer(id));
+        QCOMPARE(vecLayer->nodes.size(), 3u);
+
+        // 4) O setter do Document recusa camadas que não são vectoriais.
+        auto text = std::make_unique<TextLayer>();
+        const LayerId textId = text->id();
+        QVERIFY(doc.addLayer(std::move(text)));
+        QVERIFY(!doc.setVectorLayerNodes(textId, {}));
+        QVERIFY(doc.setVectorLayerNodes(id, vecLayer->nodes));   // idempotente = true
+    }
+
 };
 
 QTEST_MAIN(TestToolsExtras)
