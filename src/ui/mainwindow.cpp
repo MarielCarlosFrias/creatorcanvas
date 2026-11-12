@@ -2764,9 +2764,11 @@ void MainWindow::applyAdvancedMode()
     if (m_refineEdgeAction)
         m_refineEdgeAction->setVisible(m_advancedMode);
 
-    // Inspector de imagem: secção de ajustes vivos só em modo avançado.
+    // Inspectores: secções profissionais só em modo avançado.
     if (m_imageInspector)
         m_imageInspector->setAdvancedMode(m_advancedMode);
+    if (m_shapeInspector)
+        m_shapeInspector->setAdvancedMode(m_advancedMode);
 
     updateResponsiveLayout();
 }

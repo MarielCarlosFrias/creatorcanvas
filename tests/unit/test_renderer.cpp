@@ -2,6 +2,7 @@
 #include "core/layers/Layer.h"
 #include "rendering/CanvasRenderer.h"
 #include "rendering/IRenderer.h"
+#include "core/layers/Gradient.h"
 
 #include <QImage>
 #include <QPainter>
@@ -373,6 +374,64 @@ private slots:
         QImage afterInvalidate(60, 40, QImage::Format_ARGB32);
         renderTo(afterInvalidate, doc);
         QCOMPARE(afterInvalidate, edited);
+
+        clearRendererCaches();
+    }
+
+
+    void conicalAndMultiStopGradients()
+    {
+        Document doc(40, 30);
+        auto shape = std::make_unique<ShapeLayer>();
+        shape->kind = ShapeKind::Rectangle;
+        shape->fill = Qt::red;
+        shape->transform.position = QPointF(0, 0);
+        const LayerId id = shape->id();
+        QVERIFY(doc.addLayer(std::move(shape)));
+
+        auto* layer = dynamic_cast<ShapeLayer*>(doc.findLayer(id));
+        QVERIFY(layer);
+
+        // Baseline: cor sólida.
+        QImage solid(40, 30, QImage::Format_ARGB32);
+        renderTo(solid, doc);
+        const QColor solidColor = solid.pixelColor(20, 15);
+
+        // 1) Multi-stop linear: preto -> branco -> preto (3 paragens).
+        layer->gradient.enabled = true;
+        layer->gradient.kind = GradientKind::Linear;
+        layer->gradient.angleDeg = 0;
+        layer->gradient.stops = {{0.0f, Qt::black}, {0.5f, Qt::white}, {1.0f, Qt::black}};
+        QImage multi(40, 30, QImage::Format_ARGB32);
+        renderTo(multi, doc);
+        QVERIFY(multi.pixelColor(20, 15) != solidColor);
+        // O meio é branco e as pontas escuras — assinatura do multi-stop.
+        QVERIFY2(multi.pixelColor(20, 15).red() > 200,
+                 qPrintable(QStringLiteral("meio devia ser claro: %1")
+                            .arg(multi.pixelColor(20, 15).red())));
+        QVERIFY2(multi.pixelColor(2, 15).red() < 60,
+                 qPrintable(QStringLiteral("ponta devia ser escura: %1")
+                            .arg(multi.pixelColor(2, 15).red())));
+
+        // 2) Cónico: duas zonas de cor distintas a 0.5 do ângulo.
+        layer->gradient.kind = GradientKind::Conical;
+        layer->gradient.angleDeg = 0;
+        layer->gradient.stops = {{0.0f, Qt::black}, {0.5f, Qt::white}, {1.0f, Qt::black}};
+        QImage conical(40, 30, QImage::Format_ARGB32);
+        renderTo(conical, doc);
+        QVERIFY2(conical.pixelColor(38, 15) != conical.pixelColor(20, 15),
+                 "cónico devia variar ao longo do ângulo");
+
+        // 3) Série de paragens não estoura o render (32 paragens).
+        layer->gradient.stops.clear();
+        for (int i = 0; i < 32; ++i) {
+            const double t2 = static_cast<double>(i) / 31.0;
+            layer->gradient.stops.push_back(
+                {static_cast<float>(t2), QColor::fromHsvF(t2, 1.0, 1.0)});
+        }
+        QImage many(40, 30, QImage::Format_ARGB32);
+        renderTo(many, doc);
+        QVERIFY(many.pixelColor(20, 15) != QColor(0, 0, 0, 0));
 
         clearRendererCaches();
     }

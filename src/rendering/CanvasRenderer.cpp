@@ -32,6 +32,15 @@ QBrush gradientBrush(const Gradient& g, const QRectF& rect)
               [](const GradientStop& a, const GradientStop& b) {
                   return a.position < b.position;
               });
+    if (g.kind == GradientKind::Conical) {
+        // Cónico: centro do rect + ângulo inicial; as voltas são as stops.
+        const QPointF c(rect.left() + rect.width() * g.center.x(),
+                        rect.top() + rect.height() * g.center.y());
+        QConicalGradient qg(c, g.angleDeg);
+        for (const auto& s : stops)
+            qg.setColorAt(qBound(0.0, double(s.position), 1.0), s.color);
+        return QBrush(qg);
+    }
     if (g.kind == GradientKind::Radial) {
         const QPointF c(rect.left() + rect.width() * g.center.x(),
                         rect.top() + rect.height() * g.center.y());

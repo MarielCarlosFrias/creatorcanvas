@@ -28,6 +28,26 @@
 
 namespace cc {
 
+/// Nomes estáveis do tipo de gradiente (serializados no manifest).
+inline QString gradientKindName(GradientKind kind)
+{
+    switch (kind) {
+    case GradientKind::Radial:   return QStringLiteral("radial");
+    case GradientKind::Conical:  return QStringLiteral("conical");
+    case GradientKind::Linear:   break;
+    }
+    return QStringLiteral("linear");
+}
+
+/// Leitura tolerante: kind desconhecido cai no linear (projectos antigos).
+inline GradientKind gradientKindFromName(const QString& name)
+{
+    if (name == QLatin1String("radial"))   return GradientKind::Radial;
+    if (name == QLatin1String("conical"))  return GradientKind::Conical;
+    return GradientKind::Linear;
+}
+
+
 namespace {
 
 Q_LOGGING_CATEGORY(lcSerialization, "cc.serialization")
@@ -192,9 +212,7 @@ QJsonObject gradientToJson(const Gradient& g)
 {
     QJsonObject o;
     o.insert(QStringLiteral("enabled"), g.enabled);
-    o.insert(QStringLiteral("kind"),
-             g.kind == GradientKind::Radial ? QStringLiteral("radial")
-                                            : QStringLiteral("linear"));
+    o.insert(QStringLiteral("kind"), gradientKindName(g.kind));
     o.insert(QStringLiteral("angle"), g.angleDeg);
     o.insert(QStringLiteral("centerX"), g.center.x());
     o.insert(QStringLiteral("centerY"), g.center.y());

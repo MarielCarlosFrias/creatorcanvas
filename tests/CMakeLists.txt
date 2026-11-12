@@ -153,6 +153,7 @@ cc_add_test(test_mainwindow_tabs unit/test_mainwindow_tabs.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/histogramview.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/adjustmentsection.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/refineedgedialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/gradientstopeditor.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/recoverydialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/mockupdialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/batchdialog.cpp

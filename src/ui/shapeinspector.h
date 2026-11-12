@@ -17,6 +17,8 @@ class QComboBox;
 
 namespace cc {
 
+class GradientStopEditor;
+
 class I18nService;
 class CommandStack;
 
@@ -40,6 +42,9 @@ public:
 
     // Recarrega todos os valores da camada selecionada para a interface
     void refresh();
+
+    /// Modo avançado: revela o editor multi-stop de gradiente.
+    void setAdvancedMode(bool advanced);
 
 private:
     // Constrói os layouts e widgets visuais
@@ -77,6 +82,8 @@ private:
     QDoubleSpinBox* m_gradientAngleSpin = nullptr;
     QPushButton* m_gradientStartBtn = nullptr;
     QPushButton* m_gradientEndBtn = nullptr;
+    GradientStopEditor* m_stopEditor = nullptr;
+    QLabel* m_stopEditorLabel = nullptr;
     QLabel* m_gradientKindLabel = nullptr;
     QLabel* m_gradientAngleLabel = nullptr;
     QLabel* m_gradientStartLabel = nullptr;

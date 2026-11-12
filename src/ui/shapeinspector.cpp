@@ -1,5 +1,7 @@
 #include "shapeinspector.h"
 
+#include "gradientstopeditor.h"
+
 // Inclusão dos serviços de internacionalização e histórico de comandos
 #include "localization/i18nservice.h"
 #include "core/history/CommandStack.h"
@@ -168,6 +170,8 @@ void ShapeInspector::refresh()
 
     // Gradiente
     m_gradientOn->setChecked(layer->gradient.enabled);
+    if (m_stopEditor)
+        m_stopEditor->setGradient(layer->gradient);
     m_gradientKindCombo->setCurrentIndex(
         layer->gradient.kind == GradientKind::Radial ? 1 : 0);
     m_gradientAngleSpin->setValue(layer->gradient.angleDeg);
@@ -349,8 +353,12 @@ void ShapeInspector::buildUi()
 
     m_gradientOn = new QCheckBox(m_gradientBox);
     m_gradientForm->addRow(m_gradientOn);
+    m_stopEditorLabel = new QLabel(m_gradientBox);
     m_gradientKindLabel = new QLabel(m_gradientBox);
     m_gradientKindCombo = new QComboBox(m_gradientBox);
+    m_gradientKindCombo->addItem(QStringLiteral("Linear"));
+    m_gradientKindCombo->addItem(QStringLiteral("Radial"));
+    m_gradientKindCombo->addItem(QStringLiteral("Cónico"));
     m_gradientForm->addRow(m_gradientKindLabel, m_gradientKindCombo);
 
     m_gradientAngleLabel = new QLabel(m_gradientBox);
@@ -368,6 +376,7 @@ void ShapeInspector::buildUi()
     m_gradientEndBtn = new QPushButton(m_gradientBox);
     m_gradientForm->addRow(m_gradientEndLabel, m_gradientEndBtn);
 
+
     auto readGradientFromUi = [this]() -> Gradient {
         ShapeLayer* layer = nullptr;
         Gradient g;
@@ -375,15 +384,29 @@ void ShapeInspector::buildUi()
             return g;
         g = layer->gradient;
         g.enabled = m_gradientOn->isChecked();
-        g.kind = m_gradientKindCombo->currentIndex() == 1
-                     ? GradientKind::Radial : GradientKind::Linear;
+        switch (m_gradientKindCombo->currentIndex()) {
+        case 1:  g.kind = GradientKind::Radial;   break;
+        case 2:  g.kind = GradientKind::Conical;  break;
+        default: g.kind = GradientKind::Linear;   break;
+        }
         g.angleDeg = m_gradientAngleSpin->value();
+        if (m_stopEditor && m_stopEditor->isVisible())
+            g.stops = m_stopEditor->gradient().stops;   // multi-stop
         if (g.stops.size() < 2) {
             g.stops = {{0.0f, QColor(255, 210, 0)}, {1.0f, QColor(255, 45, 0)}};
         }
         return g;
     };
 
+    // Editor multi-stop (modo avançado; escondido por omissão).
+    m_stopEditor = new GradientStopEditor(m_gradientBox);
+    m_gradientForm->addRow(m_stopEditorLabel, m_stopEditor);
+    m_stopEditor->setVisible(false);
+    connect(m_stopEditor, &GradientStopEditor::gradientChanged, this, [this, readGradientFromUi]() {
+        if (m_loading)
+            return;
+        commitGradient(readGradientFromUi());
+    });
     connect(m_gradientOn, &QCheckBox::toggled, this, [this, readGradientFromUi](bool) {
         if (m_loading) return;
         commitGradient(readGradientFromUi());
@@ -591,6 +614,15 @@ void ShapeInspector::buildUi()
 }
 
 // Atualiza todos os textos com base no serviço de internacionalização
+
+void ShapeInspector::setAdvancedMode(bool advanced)
+{
+    if (m_stopEditor)
+        m_stopEditor->setVisible(advanced);
+    if (m_stopEditorLabel)
+        m_stopEditorLabel->setVisible(advanced);
+}
+
 void ShapeInspector::commitGradient(Gradient next)
 {
     ShapeLayer* layer = nullptr;

@@ -9,7 +9,7 @@
 
 namespace cc {
 
-enum class GradientKind { Linear, Radial };
+enum class GradientKind { Linear, Radial, Conical };
 
 struct GradientStop
 {
@@ -29,7 +29,7 @@ struct Gradient
 {
     bool enabled = false;
     GradientKind kind = GradientKind::Linear;
-    double angleDeg = 90.0;        ///< Linear: direcao em graus (0 = Leste, 90 = Sul)
+    double angleDeg = 90.0;        ///< Linear: direcao / Conical: ângulo inicial (0 = Leste)
     QPointF center{0.5, 0.5};      ///< Radial: centro relativo ao retangulo (0..1)
     double radius = 0.75;          ///< Radial: raio relativo ao maior lado
     QVector<GradientStop> stops;    ///< ordenado por position ao desenhar

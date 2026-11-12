@@ -206,6 +206,8 @@ add_executable(creatorcanvas
     ui/adjustmentsection.cpp
     ui/refineedgedialog.h
     ui/refineedgedialog.cpp
+    ui/gradientstopeditor.h
+    ui/gradientstopeditor.cpp
     ui/themeicons.h
     ui/themeicons.cpp
     ui/collapsiblesection.h
