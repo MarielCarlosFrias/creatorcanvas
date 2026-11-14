@@ -15,6 +15,7 @@
 #include "core/document/NewDocumentSpec.h"
 #include "ui/imageinspector.h"
 #include "ui/adjustmentsection.h"
+#include "ui/layercompsdialog.h"
 #include "ui/adjustmentsdialog.h"
 #include "ui/webslicesdialog.h"
 #include "rendering/CanvasRenderer.h"
@@ -345,6 +346,51 @@ private slots:
         qInfo() << "pixeis diferentes (cache vs sem cache):" << diff << "de"
                 << a.width() * a.height();
         QVERIFY2(diff == 0, "o render em cache devia ser idêntico ao sem cache");
+    }
+
+    void layerCompsDialogRoundTrip()
+    {
+        // Ponta a ponta: guardar o estado, mudar o documento, aplicar a
+        // composição (restaura) e remover — tudo pelo diálogo, com undo.
+        Document doc(100, 80);
+        auto shape = std::make_unique<ShapeLayer>();
+        shape->kind = ShapeKind::Rectangle;
+        shape->fill = QColor(40, 180, 60);
+        shape->points = QPolygonF({QPointF(0, 0), QPointF(40, 30)});
+        shape->transform.position = QPointF(50, 40);
+        shape->visible = true;
+        const LayerId id = shape->id();
+        QVERIFY(doc.addLayer(std::move(shape)));
+        CommandStack history;
+
+        LayerCompsDialog dlg(doc, &history);
+        const QString compId = dlg.saveCompWithName(QStringLiteral("Original"));
+        QVERIFY(!compId.isEmpty());
+        QCOMPARE(doc.layerComps().size(), 1u);
+
+        // Mover e esconder a camada.
+        doc.setLayerVisible(id, false);
+        AffineTransform moved = doc.findLayer(id)->transform;
+        moved.position = QPointF(20, 20);
+        doc.setLayerTransform(id, moved);
+
+        // Aplicar a composição tem de repor visibilidade e posição.
+        dlg.applyCompById(compId);
+        const Layer* restored = doc.findLayer(id);
+        QVERIFY(restored != nullptr);
+        QVERIFY(restored->visible);
+        QCOMPARE(restored->transform.position, QPointF(50, 40));
+
+        // Undo desfaz a aplicação (volta ao estado mexido).
+        history.undo();
+        QVERIFY(!doc.findLayer(id)->visible);
+        QCOMPARE(doc.findLayer(id)->transform.position, QPointF(20, 20));
+
+        // Remover a composição.
+        dlg.removeCompById(compId);
+        QVERIFY(doc.layerComps().empty());
+        history.undo();
+        QCOMPARE(doc.layerComps().size(), 1u);
     }
 };
 

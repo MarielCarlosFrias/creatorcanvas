@@ -30,6 +30,16 @@ public:
 
 private slots:
     void refreshList();
+
+public:
+    /// Guarda o estado actual como composição com este nome (sem diálogo
+    /// modal — testável e reutilizável). Devolve o id criado, ou vazio.
+    QString saveCompWithName(const QString& name);
+
+    /// Aplica/remova uma composição pelo id (sem depender da selecção na
+    /// lista — testável e reutilizável). Devolve true se algo mudou.
+    bool applyCompById(const QString& id);
+    bool removeCompById(const QString& id);
     void saveCurrentState();
     void applySelected();
     void removeSelected();

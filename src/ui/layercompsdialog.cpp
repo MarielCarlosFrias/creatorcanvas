@@ -101,6 +101,27 @@ QString LayerCompsDialog::selectedCompId() const
     return item ? item->data(Qt::UserRole).toString() : QString();
 }
 
+QString LayerCompsDialog::saveCompWithName(const QString& name)
+{
+    const QString trimmed = name.trimmed();
+    if (trimmed.isEmpty())
+        return {};
+    LayerComp comp = compFromDocument(m_doc, trimmed,
+                                      m_visibilityCheck->isChecked(),
+                                      m_positionCheck->isChecked(),
+                                      m_appearanceCheck->isChecked());
+    if (comp.states.empty())
+        return {};
+
+    // Guardar o id ANTES do move: std::move esvazia o QString e devolver
+    // comp.id depois daria uma string vazia (era o bug — o comp era
+    // adicionado mas o id devolvido não servia para nada).
+    const QString newId = comp.id;
+    executeAddLayerComp(m_doc, m_history, std::move(comp));
+    refreshList();
+    return newId;
+}
+
 void LayerCompsDialog::saveCurrentState()
 {
     bool ok = false;
@@ -111,34 +132,43 @@ void LayerCompsDialog::saveCurrentState()
     if (!ok || name.trimmed().isEmpty())
         return;
 
-    LayerComp comp = compFromDocument(m_doc, name.trimmed(),
-                                      m_visibilityCheck->isChecked(),
-                                      m_positionCheck->isChecked(),
-                                      m_appearanceCheck->isChecked());
-    if (comp.states.empty())
-        return;
-    executeAddLayerComp(m_doc, m_history, std::move(comp));
+    saveCompWithName(name);
+}
+
+bool LayerCompsDialog::applyCompById(const QString& id)
+{
+    if (id.isEmpty() || !executeApplyLayerComp(m_doc, m_history, id))
+        return false;
     refreshList();
+    return true;
+}
+
+bool LayerCompsDialog::removeCompById(const QString& id)
+{
+    if (id.isEmpty())
+        return false;
+    bool found = false;
+    for (const auto& comp : m_doc.layerComps())
+        if (comp.id == id) {
+            found = true;
+            break;
+        }
+    if (!found)
+        return false;
+    executeRemoveLayerComp(m_doc, m_history, id);
+    refreshList();
+    return true;
 }
 
 void LayerCompsDialog::applySelected()
 {
-    const QString id = selectedCompId();
-    if (id.isEmpty())
-        return;
-    if (executeApplyLayerComp(m_doc, m_history, id)) {
-        refreshList();
+    if (applyCompById(selectedCompId()))
         accept();
-    }
 }
 
 void LayerCompsDialog::removeSelected()
 {
-    const QString id = selectedCompId();
-    if (id.isEmpty())
-        return;
-    executeRemoveLayerComp(m_doc, m_history, id);
-    refreshList();
+    removeCompById(selectedCompId());
 }
 
 } // namespace cc
