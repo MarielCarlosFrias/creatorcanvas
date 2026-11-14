@@ -1,4 +1,7 @@
 #include "core/document/WebSlice.h"
+#include "core/Document.h"
+#include "core/layers/Layer.h"
+#include "ui/imageinspector.h"
 #include "ui/canvasoverlayrenderer.h"
 
 #include <QImage>
@@ -90,7 +93,66 @@ private slots:
         const QImage withBad = renderWithSlices(slices);
         QVERIFY(withBad.size() == img.size());
     }
+    void pixelSelectionOverlayTintsAreaAndAntsEdges()
+    {
+        using namespace cc;
+        Document doc(20, 20);
+        QImage img(20, 20, QImage::Format_ARGB32);
+        img.fill(qRgba(255, 255, 255, 255));
+        const LayerId asset = doc.assets().addImage(img, QStringLiteral("png"));
+        auto layer = std::make_unique<ImageLayer>();
+        layer->assetId = asset;
+        layer->naturalWidth = 20;
+        layer->naturalHeight = 20;
+        const LayerId id = layer->id();
+        QVERIFY(doc.addLayer(std::move(layer)));
+
+        // Selecção: quadrado 5x5 no canto.
+        QImage sel(20, 20, QImage::Format_Alpha8);
+        sel.fill(0);
+        for (int y = 5; y < 10; ++y)
+            for (int x = 5; x < 10; ++x)
+                sel.scanLine(y)[x] = 255;
+        doc.setPixelSelection(sel);
+
+        // Constrói o overlay (caminho lento, sem cache do caller). O painter
+        // tem de ser válido — a função também desenha o resultado.
+        QImage target(20, 20, QImage::Format_ARGB32);
+        target.fill(Qt::transparent);
+        QPainter painter(&target);
+        QImage overlay;
+        CanvasOverlayRenderer::drawPixelSelectionOutline(
+            &painter, static_cast<ImageLayer*>(doc.findLayer(id)), sel, img,
+            QTransform(), &overlay);
+
+        QVERIFY(!overlay.isNull());
+        QCOMPARE(overlay.size(), QSize(20, 20));
+
+        // Área selecionada: véu accent semi-transparente.
+        const QRgb inside = overlay.pixel(7, 7);
+        QCOMPARE(qRed(inside), 0x43);
+        QCOMPARE(qGreen(inside), 0x78);
+        QCOMPARE(qBlue(inside), 0xff);
+        QVERIFY(qAlpha(inside) > 0 && qAlpha(inside) < 255);
+
+        // Fora da selecção: transparente.
+        QCOMPARE(qAlpha(overlay.pixel(15, 15)), 0);
+
+        // Fronteira: antenas preto/branco opacas.
+        bool hasWhite = false, hasBlack = false;
+        for (int y = 4; y <= 10; ++y) {
+            for (int x = 4; x <= 10; ++x) {
+                const QRgb p = overlay.pixel(x, y);
+                if (p == qRgba(255, 255, 255, 255)) hasWhite = true;
+                if (p == qRgba(0, 0, 0, 255)) hasBlack = true;
+            }
+        }
+        QVERIFY2(hasWhite && hasBlack, "a fronteira devia ter antenas preto/branco");
+    }
 };
+
+
 
 QTEST_MAIN(TestOverlays)
 #include "test_overlays.moc"
+

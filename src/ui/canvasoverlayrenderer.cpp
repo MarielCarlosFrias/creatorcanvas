@@ -428,7 +428,9 @@ void CanvasOverlayRenderer::drawPixelSelectionOutline(QPainter* painter,
                                                       const QTransform& toDevice,
                                                       QImage* cachedOverlay)
 {
-    if (!layer || pixelSelection.isNull() || sourceImage.isNull()
+    // painter incluído: a função também DESENHA o resultado, por isso um
+    // ponteiro nulo crasharia (apanhado por um teste que passava null).
+    if (!painter || !layer || pixelSelection.isNull() || sourceImage.isNull()
         || pixelSelection.size() != sourceImage.size())
         return;
 
@@ -444,14 +446,23 @@ void CanvasOverlayRenderer::drawPixelSelectionOutline(QPainter* painter,
     }
 
     // Caminho lento: constrói a malha (era feito em CADA pintura).
+    // Véu subtil sobre a área selecionada (torna-a legível em qualquer
+    // fundo — antes só a fronteira era desenhada, e em fotos claras ou
+    // escuras a selecção "desaparecia") + antenas preto/branco, que
+    // garantem contraste sobre qualquer cor.
     QImage selectionOverlay(pixelSelection.size(), QImage::Format_ARGB32);
     selectionOverlay.fill(Qt::transparent);
+
+    const QRgb tint = qRgba(0x43, 0x78, 0xff, 26);   // accent a ~10%
+    constexpr int kSelectedThreshold = 8;
 
     for (int y = 0; y < pixelSelection.height(); ++y) {
         QRgb* dst = reinterpret_cast<QRgb*>(selectionOverlay.scanLine(y));
         const uchar* src = pixelSelection.constScanLine(y);
         for (int x = 0; x < pixelSelection.width(); ++x) {
             const uchar here = src[x];
+            if (here >= kSelectedThreshold)
+                dst[x] = tint;
             const uchar left = x > 0 ? src[x - 1] : here;
             const uchar right = x + 1 < pixelSelection.width() ? src[x + 1] : here;
             const uchar up = y > 0 ? pixelSelection.constScanLine(y - 1)[x] : here;
