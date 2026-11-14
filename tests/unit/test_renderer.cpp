@@ -300,6 +300,76 @@ private slots:
 
         clearRendererCaches();
     }
+
+    void layerCacheKeepsEachLayerPosition()
+    {
+        // Regressão: com 2+ camadas cacheadas, o ponto de blit era membro
+        // único do renderer — a segunda camada era colada na posição da
+        // primeira (a imagem saltava de sítio e de tamanho).
+        Document doc(100, 100);
+        auto bg = std::make_unique<BackgroundLayer>();
+        bg->fill = Qt::black;
+        doc.addLayer(std::move(bg));
+
+        // Duas camadas em pontos distantes: se a cache trocar as colagens,
+        // uma aparece no lugar da outra.
+        // (Shapes sem pontos têm bounds degeneradas — nada desenham.)
+        auto s1 = std::make_unique<ShapeLayer>();
+        s1->kind = ShapeKind::Rectangle;
+        s1->fill = QColor(255, 0, 0);
+        s1->points = QPolygonF({QPointF(0, 0), QPointF(20, 20)});
+        s1->transform.position = QPointF(10, 10);
+        doc.addLayer(std::move(s1));
+        auto s2 = std::make_unique<ShapeLayer>();
+        s2->kind = ShapeKind::Rectangle;
+        s2->fill = QColor(0, 255, 0);
+        s2->points = QPolygonF({QPointF(0, 0), QPointF(20, 20)});
+        s2->transform.position = QPointF(70, 70);
+        doc.addLayer(std::move(s2));
+        // Camada de imagem (o cenário do relatório: foto importada).
+        QImage photo(40, 40, QImage::Format_ARGB32);
+        photo.fill(qRgba(0, 0, 255, 255));
+        const LayerId asset = doc.assets().addImage(photo, QStringLiteral("png"));
+        auto imgLayer = std::make_unique<ImageLayer>();
+        imgLayer->assetId = asset;
+        imgLayer->naturalWidth = 40;
+        imgLayer->naturalHeight = 40;
+        imgLayer->transform.position = QPointF(50, 50);
+        doc.addLayer(std::move(imgLayer));
+
+        // Referência: sempre sem cache.
+        auto renderNoCache = [&doc]() {
+            clearRendererCaches();
+            QImage img(100, 100, QImage::Format_ARGB32);
+            renderTo(img, doc);
+            return img;
+        };
+        const QImage ref = renderNoCache();
+        const QImage ref2 = renderNoCache();
+        QCOMPARE(ref2, ref);   // determinismo
+
+        // Com cache: aquecimento + pintura cacheada.
+        clearRendererCaches();
+        QImage warm(100, 100, QImage::Format_ARGB32);
+        renderTo(warm, doc);
+        QCOMPARE(warm, ref);
+        QImage cached(100, 100, QImage::Format_ARGB32);
+        renderTo(cached, doc);
+        QCOMPARE(cached, ref);
+
+        // Ambas as cores visíveis (nenhuma comida pela outra).
+        int red = 0, green = 0, blue = 0;
+        for (int y = 0; y < 100; ++y)
+            for (int x = 0; x < 100; ++x) {
+                const QColor c = cached.pixelColor(x, y);
+                if (c == QColor(255, 0, 0)) ++red;
+                if (c == QColor(0, 255, 0)) ++green;
+                if (c == QColor(0, 0, 255)) ++blue;
+            }
+        QVERIFY2(red > 0 && green > 0 && blue > 0,
+                 "as três camadas deviam ser visíveis");
+        clearRendererCaches();
+    }
 };
 
 

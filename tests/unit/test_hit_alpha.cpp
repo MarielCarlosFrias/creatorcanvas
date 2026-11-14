@@ -5,6 +5,7 @@
 // 4. Clique na parte opaca da imagem -> seleciona a IMAGEM
 #include "ui/canvasview.h"
 #include "core/Document.h"
+#include "rendering/CanvasRenderer.h"
 #include "core/layers/Layer.h"
 
 #include <QContextMenuEvent>
@@ -148,6 +149,60 @@ private slots:
                               canvas.mapToGlobal(shapeDevice));
         QApplication::sendEvent(&canvas, &ctx);
         QCOMPARE(canvas.selectedLayers().first(), shapeId);
+    }
+
+    void imageHandlesMatchRenderedExtent()
+    {
+        // A caixa de transformação tem de cobrir EXACTAMENTE a área
+        // desenhada da imagem — se uma das duas usar um espaço de
+        // coordenadas diferente, o utilizador vê a forma mudar de tamanho
+        // ao arrastar (sintoma relatado: "buga a visualização do layout").
+        Document doc(100, 100);
+        QImage photo(40, 30, QImage::Format_ARGB32);
+        photo.fill(qRgba(10, 200, 10, 255));
+        const LayerId asset = doc.assets().addImage(photo, QStringLiteral("png"));
+        auto layer = std::make_unique<ImageLayer>();
+        layer->assetId = asset;
+        layer->naturalWidth = 40;
+        layer->naturalHeight = 30;
+        layer->transform.position = QPointF(50, 50);
+        const LayerId id = layer->id();
+        QVERIFY(doc.addLayer(std::move(layer)));
+
+        QImage out(100, 100, QImage::Format_ARGB32);
+        out.fill(Qt::black);
+        {
+            QPainter p(&out);
+            cc::RenderOptions opt;
+            opt.drawCheckerboard = false;
+            cc::renderDocument(doc, &p, QTransform(), opt);
+        }
+        QRect drawn;
+        for (int y = 0; y < 100; ++y)
+            for (int x = 0; x < 100; ++x)
+                if (out.pixelColor(x, y) == QColor(10, 200, 10))
+                    drawn |= QRect(x, y, 1, 1);
+        QVERIFY2(!drawn.isEmpty(), "a imagem devia ser visível");
+        QCOMPARE(drawn.width(), 40);
+        QCOMPARE(drawn.height(), 30);
+
+        const Layer* l = doc.findLayer(id);
+        const CanvasHandles handles = CanvasGestureHandler::computeHandles(
+            *l, QTransform());
+        // Extensão (max - min) dos 8 handles da caixa; points[8] é o handle
+        // de ROTAÇÃO, que fica acima da caixa e não conta para a extensão.
+        QPointF mn(1e9, 1e9), mx(-1e9, -1e9);
+        for (int i = 0; i < 8; ++i) {
+            const QPointF& p = handles.points[static_cast<size_t>(i)];
+            mn.setX(std::min(mn.x(), p.x()));
+            mn.setY(std::min(mn.y(), p.y()));
+            mx.setX(std::max(mx.x(), p.x()));
+            mx.setY(std::max(mx.y(), p.y()));
+        }
+        QVERIFY2(mx.x() > mn.x() && mx.y() > mn.y(), "handles deviam existir");
+        QCOMPARE(qRound(mx.x() - mn.x()), drawn.width());
+        QCOMPARE(qRound(mx.y() - mn.y()), drawn.height());
+        QCOMPARE(QPoint(qRound(mn.x()), qRound(mn.y())), drawn.topLeft());
     }
 };
 

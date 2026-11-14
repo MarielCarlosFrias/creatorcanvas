@@ -148,6 +148,9 @@ protected:
 private:
     struct Entry {
         QPixmap pixmap;
+        /// Onde colar no dispositivo — pertence à ENTRADA (cada camada tem a
+        /// sua área visível), não ao renderer.
+        QPoint blitPoint;
         qint64 bytes = 0;
     };
 
@@ -159,7 +162,6 @@ private:
     int m_hits = 0;
     int m_misses = 0;
     qint64 m_bytes = 0;
-    QPoint m_blitPoint;
 
 public:
     /// Cache do compósito (caminho de composição): uma imagem por

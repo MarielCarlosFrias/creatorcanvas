@@ -1997,7 +1997,7 @@ bool CachingRenderer::drawCachedLayer(QPainter* painter, const Layer& layer,
         // antes de colar, senão o blit sai reescalado (lento e deslocado).
         painter->save();
         painter->resetTransform();
-        painter->drawPixmap(m_blitPoint, it->pixmap);
+        painter->drawPixmap(it->blitPoint, it->pixmap);
         painter->restore();
         return true;
     }
@@ -2029,6 +2029,10 @@ bool CachingRenderer::drawCachedLayer(QPainter* painter, const Layer& layer,
     if (entry.pixmap.isNull())
         return false;
     entry.bytes = static_cast<qint64>(img.sizeInBytes());
+    // O ponto de blit é por ENTRADA (cada camada tem a sua área). O pixmap
+    // cobre o canvas inteiro, por isso a colagem é na origem do canvas no
+    // dispositivo — que é onde a transformação local o desenhou.
+    entry.blitPoint = canvasOnDevice.topLeft().toPoint();
 
     dropLayer(layer.id());
     m_bytes += entry.bytes;
@@ -2039,7 +2043,7 @@ bool CachingRenderer::drawCachedLayer(QPainter* painter, const Layer& layer,
 
     painter->save();
     painter->resetTransform();
-    painter->drawPixmap(m_blitPoint, entry.pixmap);
+    painter->drawPixmap(entry.blitPoint, entry.pixmap);
     painter->restore();
     return true;
 }
