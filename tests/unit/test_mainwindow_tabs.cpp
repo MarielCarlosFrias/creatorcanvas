@@ -5,12 +5,16 @@
 #include <QDockWidget>
 #include <QMouseEvent>
 #include <QSpinBox>
+#include <QSlider>
 #include <QTabBar>
 #include <QPainter>
 #include <QImage>
+#include <QTemporaryDir>
 
 #include "core/Document.h"
 #include "core/document/NewDocumentSpec.h"
+#include "ui/imageinspector.h"
+#include "ui/adjustmentsection.h"
 #include "ui/adjustmentsdialog.h"
 #include "ui/webslicesdialog.h"
 #include "rendering/CanvasRenderer.h"
@@ -235,10 +239,59 @@ private slots:
 
 
 
+    void imageInspectorLiveAdjustmentsCreateLinkedLayer()
+    {
+        // A secção de ajustes do inspector (modo avançado) tem de criar uma
+        // camada de ajuste LIGADA à imagem — nunca cozer pixéis.
+        QTemporaryDir tmp;
+        QVERIFY(tmp.isValid());
+        SettingsService settings(tmp.filePath("settings.json"));
+        I18nService i18n(&settings);
+        QVERIFY(i18n.loadAvailableLanguages());
+
+        Document doc(64, 48);
+        QImage img(64, 48, QImage::Format_ARGB32);
+        img.fill(qRgba(120, 130, 140, 255));
+        const LayerId asset = doc.assets().addImage(img, QStringLiteral("png"));
+        auto layer = std::make_unique<ImageLayer>();
+        layer->assetId = asset;
+        layer->naturalWidth = 64;
+        layer->naturalHeight = 48;
+        const LayerId id = layer->id();
+        QVERIFY(doc.addLayer(std::move(layer)));
+        CommandStack history;
+
+        ImageInspector inspector(&i18n, &doc, &history);
+        inspector.setAdvancedMode(true);
+        inspector.setSelectedLayer(id);
+
+        auto* section = inspector.findChild<AdjustmentsSection*>();
+        QVERIFY(section != nullptr);
+        QVERIFY(section->isVisibleTo(&inspector));
+
+        auto* slider = section->findChild<QSlider*>();
+        QVERIFY(slider != nullptr);
+        slider->setValue(30);
+        QTest::qWait(20);
+
+        const auto* imgLayer = dynamic_cast<const ImageLayer*>(doc.findLayer(id));
+        QVERIFY(imgLayer != nullptr);
+        QVERIFY2(imgLayer->adjustmentLayerId.has_value(),
+                 "mover o slider devia criar a camada de ajuste ligada");
+        const AdjustmentLayer* adj = doc.findAdjustmentLayer(*imgLayer->adjustmentLayerId);
+        QVERIFY(adj != nullptr);
+        QCOMPARE(adj->kind, AdjustmentType::BrightnessContrast);
+        QVERIFY(!adj->parameters.empty());
+        QCOMPARE(imgLayer->assetId, asset);
+        QCOMPARE(history.undoCount(), 1);
+    }
+
 };
+
 
 QTEST_MAIN(TestMainWindowTabs)
 #include "test_mainwindow_tabs.moc"
+
 
 
 

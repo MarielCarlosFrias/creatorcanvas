@@ -111,12 +111,13 @@ QString trAdj(I18nService* i18n, const QString& key, const QString& fallback)
 
 void ImageInspector::setAdvancedMode(bool advanced)
 {
+    m_liveAdjustmentsAdvanced = advanced;
     if (m_liveAdjustmentsContainer)
         m_liveAdjustmentsContainer->setVisible(advanced);
     if (m_liveAdjustmentsSection)
         m_liveAdjustmentsSection->setVisible(advanced);
     // Ao revelar, já carrega o estado da camada selecionada.
-    if (advanced && m_liveAdjustmentsSection && m_liveAdjustmentsContainer->isVisible())
+    if (advanced && m_liveAdjustmentsSection)
         m_liveAdjustmentsSection->setContext(m_document, m_history, m_id);
 }
 
@@ -152,7 +153,10 @@ void ImageInspector::setSelectedLayer(const LayerId& id)
     }
 
     // A secção de ajustes vivos segue a camada selecionada (modo avançado).
-    if (m_liveAdjustmentsContainer && m_liveAdjustmentsContainer->isVisible())
+    // NUNCA usar isVisible() como porta: ele é falso quando o inspector está
+    // dentro de um dock escondido (arranque, modo compacto) e a secção
+    // ficaria sem documento — foi exactamente o que aconteceu.
+    if (m_liveAdjustmentsSection && m_liveAdjustmentsAdvanced)
         m_liveAdjustmentsSection->setContext(m_document, m_history, m_id);
 
     refresh();

@@ -219,6 +219,9 @@ private:
     class CollapsibleSection* m_adjustmentsSection = nullptr;
     class CollapsibleSection* m_liveAdjustmentsContainer = nullptr;
     AdjustmentsSection* m_liveAdjustmentsSection = nullptr;
+    /// O modo avançado está ligado. A visibilidade do widget NÃO serve de
+    /// porta: é falsa quando o inspector está num dock escondido.
+    bool m_liveAdjustmentsAdvanced = false;
     class CollapsibleSection* m_perspectiveSection = nullptr;
     class CollapsibleSection* m_mockupSection = nullptr;
     QPushButton* m_mockupButton = nullptr;
