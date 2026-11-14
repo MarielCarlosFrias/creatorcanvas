@@ -27,6 +27,7 @@ public:
     void mouseRelease(QMouseEvent* event, const QPointF& docPos, const ToolContext& ctx) override;
     void mouseDoubleClick(QMouseEvent* event, const QPointF& docPos, const ToolContext& ctx) override;
     void drawOverlay(QPainter* painter, const ToolContext& ctx) override;
+    void keyPress(QKeyEvent* event, const ToolContext& ctx) override;
 
     /// Custo de acesso a um nó/handle em píxeis de documento.
     static constexpr double kHitDistance = 7.0;
@@ -40,11 +41,20 @@ private:
 
     void rebuildPath();
 
+    /// Apaga o nó sob o cursor (ou o último arrastado) e commita um passo.
+    void deleteSelectedNode(const ToolContext& ctx);
+    /// Fecha/abre o caminho e commita um passo.
+    void toggleClosed(const ToolContext& ctx);
+    /// Índice do nó selecionado (-1 = nenhum) para o readout de posição.
+    int selectedNodeIndex() const { return m_dragIndex; }
+
     VectorLayer* m_layer = nullptr;
     std::vector<VectorNode> m_startNodes;   // estado ao prgemid o gesto
     QPainterPath m_path;
     Drag m_drag = Drag::None;
     int m_dragIndex = -1;
+    /// Nó seleccionado (sobrevive ao release do mouse) — usado pelo Delete.
+    int m_selectedNode = -1;
     bool m_altPressed = false;
 };
 

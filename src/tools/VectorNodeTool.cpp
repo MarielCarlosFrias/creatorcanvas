@@ -5,6 +5,7 @@
 #include "core/history/CommandStack.h"
 #include "core/layers/Layer.h"
 
+#include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPainter>
 
@@ -158,15 +159,20 @@ void VectorNodeTool::mousePress(QMouseEvent* event, const QPointF& docPos, const
     const QPointF localPos = toLocal(m_layer, docPos);
 
     Drag which = Drag::None;
-    const int handle = handleAt(docPos, radius, which);
+    // Handles e nós vivem no mesmo espaço LOCAL — testar o handle em
+    // docPos (como estava) fazia-os nunca ser atingidos quando a camada
+    // tem posição diferente da origem.
+    const int handle = handleAt(localPos, radius, which);
     if (handle >= 0) {
         m_drag = which;
         m_dragIndex = handle;
+        m_selectedNode = handle;
     } else {
         const int node = nodeAt(localPos, radius);
         if (node >= 0) {
             m_drag = Drag::Node;
             m_dragIndex = node;
+            m_selectedNode = node;
         } else {
             // Clicar no caminho insere um nó no ponto mais próximo.
             const int seg = segmentAt(localPos, radius);
@@ -288,6 +294,114 @@ void VectorNodeTool::mouseDoubleClick(QMouseEvent* event, const QPointF& docPos,
             *ctx.document, ctx.selectedLayerId, QStringLiteral("vector.nodes"),
             &Document::setVectorLayerNodes, startNodes, nodes));
     }
+}
+
+
+void VectorNodeTool::keyPress(QKeyEvent* event, const ToolContext& ctx)
+{
+    if (!event || !ctx.document || !m_layer)
+        return;
+
+    switch (event->key()) {
+    case Qt::Key_Delete:
+    case Qt::Key_Backspace:
+        // Sem posição do cursor no keyPress: actua sobre o nó seleccionado
+        // (o último arrastado/clicado).
+        deleteSelectedNode(ctx);
+        event->accept();
+        return;
+    case Qt::Key_Return:
+    case Qt::Key_Enter:
+        toggleClosed(ctx);
+        event->accept();
+        return;
+    case Qt::Key_Escape:
+        // Cancela um arraste a meio sem cometer nada.
+        m_drag = Drag::None;
+        m_dragIndex = -1;
+        if (m_layer && m_layer->nodes.size() >= 2) {
+            rebuildPath();
+            if (ctx.requestUpdate)
+                ctx.requestUpdate();
+        }
+        event->accept();
+        return;
+    default:
+        break;
+    }
+}
+
+void VectorNodeTool::deleteSelectedNode(const ToolContext& ctx)
+{
+    m_layer = selectedVector(ctx);
+    if (!m_layer || !ctx.document || m_layer->nodes.size() <= 2)
+        return;
+
+    int node = m_selectedNode;   // o nó seleccionado (último clicado/arrastado)
+    if (node < 0 || node >= static_cast<int>(m_layer->nodes.size()))
+        return;
+
+    const auto startNodes = m_layer->nodes;
+    auto nodes = m_layer->nodes;
+    nodes.erase(nodes.begin() + node);
+    if (!ctx.document->setVectorLayerNodes(ctx.selectedLayerId, nodes))
+        return;
+    m_layer = static_cast<VectorLayer*>(ctx.document->findLayer(ctx.selectedLayerId));
+    rebuildPath();
+    m_dragIndex = -1;
+    m_selectedNode = -1;
+    if (ctx.history) {
+        ctx.history->execute(std::make_unique<SetVectorNodesCommand>(
+            *ctx.document, ctx.selectedLayerId, QStringLiteral("vector.nodes"),
+            &Document::setVectorLayerNodes, startNodes, nodes));
+    }
+    if (ctx.requestUpdate)
+        ctx.requestUpdate();
+    if (ctx.requestStatusMessage)
+        ctx.requestStatusMessage(QStringLiteral("Nó apagado."));
+}
+
+void VectorNodeTool::toggleClosed(const ToolContext& ctx)
+{
+    m_layer = selectedVector(ctx);
+    if (!m_layer || !ctx.document || m_layer->nodes.size() < 2)
+        return;
+
+    const bool wasClosed = m_layer->closed;
+    m_layer->closed = !wasClosed;   // campo simples; revertido pelo comando
+    rebuildPath();
+
+    if (ctx.history) {
+        // Um passo de histórico que alterna o estado (o Document não tem
+        // setter dedicado, por isso o comando mexe no campo directamente).
+        struct ToggleClosed final : Command {
+            ToggleClosed(Document& d, const LayerId& id, bool oldClosed)
+                : Command(QStringLiteral("vector.closePath")), m_doc(&d), m_id(id),
+                  m_old(oldClosed) {}
+            void redo() override
+            {
+                if (Layer* l = m_doc->findLayer(m_id))
+                    if (l->type() == LayerType::Vector)
+                        static_cast<VectorLayer*>(l)->closed = !m_old;
+            }
+            void undo() override
+            {
+                if (Layer* l = m_doc->findLayer(m_id))
+                    if (l->type() == LayerType::Vector)
+                        static_cast<VectorLayer*>(l)->closed = m_old;
+            }
+            Document* m_doc;
+            LayerId m_id;
+            bool m_old;
+        };
+        ctx.history->execute(std::make_unique<ToggleClosed>(
+            *ctx.document, ctx.selectedLayerId, wasClosed));
+    }
+    if (ctx.requestUpdate)
+        ctx.requestUpdate();
+    if (ctx.requestStatusMessage)
+        ctx.requestStatusMessage(wasClosed ? QStringLiteral("Caminho aberto.")
+                                           : QStringLiteral("Caminho fechado."));
 }
 
 void VectorNodeTool::drawOverlay(QPainter* painter, const ToolContext& ctx)

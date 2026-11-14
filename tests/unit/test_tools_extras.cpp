@@ -1,4 +1,5 @@
 #include <QImage>
+#include <QKeyEvent>
 #include <QMouseEvent>
 #include <QTest>
 
@@ -552,6 +553,79 @@ private slots:
 
 
 
+
+    void nodeToolKeyboardOps()
+    {
+        // Delete remove o nó seleccionado; Enter alterna caminho
+        // fechado/aberto; cada um é um passo de undo.
+        Document doc(200, 120);
+        auto vec = std::make_unique<VectorLayer>();
+        // Como a caneta cria: nós em espaço LOCAL centrado e a posição da
+        // camada = centro das âncoras.
+        const QPointF anchors[3] = {QPointF(20, 60), QPointF(100, 20), QPointF(180, 80)};
+        const QPointF center((anchors[0].x() + anchors[2].x()) / 2,
+                             (anchors[0].y() + anchors[1].y() + anchors[2].y()) / 3);
+        for (const QPointF& a : anchors) {
+            VectorNode n;
+            n.position = a - center;
+            vec->nodes.push_back(n);
+        }
+        vec->transform.position = center;
+        vec->rebuildPath();
+        const LayerId id = vec->id();
+        QVERIFY(doc.addLayer(std::move(vec)));
+        CommandStack history;
+
+        VectorNodeTool tool;
+        ToolContext ctx;
+        ctx.document = &doc;
+        ctx.history = &history;
+        ctx.selectedLayerId = id;
+        ctx.zoom = 1.0;
+        ctx.requestUpdate = [] {};
+        ctx.requestStatusMessage = [](const QString&) {};
+        tool.activate(ctx);
+
+        auto key = [](int k) {
+            return QKeyEvent(QEvent::KeyPress, k, Qt::NoModifier);
+        };
+
+        // Selecciona o nó do meio por clique.
+        auto* vecLayer = dynamic_cast<VectorLayer*>(doc.findLayer(id));
+        const QPointF grabDoc = vecLayer->transform.matrix(vecLayer->contentBounds())
+                                    .map(vecLayer->nodes[1].position);
+        QMouseEvent press = makeMouse(QEvent::MouseButtonPress, grabDoc);
+        tool.mousePress(&press, grabDoc, ctx);
+        QMouseEvent release = makeMouse(QEvent::MouseButtonRelease, grabDoc);
+        tool.mouseRelease(&release, grabDoc, ctx);
+
+        // Delete remove o nó do meio.
+        QKeyEvent del = key(Qt::Key_Delete);
+        tool.keyPress(&del, ctx);
+        vecLayer = dynamic_cast<VectorLayer*>(doc.findLayer(id));
+        QCOMPARE(vecLayer->nodes.size(), 2u);
+        QCOMPARE(vecLayer->nodes[0].position, anchors[0] - center);
+        QCOMPARE(history.undoCount(), 1);
+        history.undo();
+        QCOMPARE(dynamic_cast<VectorLayer*>(doc.findLayer(id))->nodes.size(), 3u);
+
+        // Enter fecha o caminho.
+        QVERIFY(!dynamic_cast<VectorLayer*>(doc.findLayer(id))->closed);
+        QKeyEvent enter = key(Qt::Key_Return);
+        tool.keyPress(&enter, ctx);
+        QVERIFY(dynamic_cast<VectorLayer*>(doc.findLayer(id))->closed);
+        // O undo anterior tirou o comando de delete da pilha: agora só resta
+        // o do Enter (1 passo).
+        QCOMPARE(history.undoCount(), 1);
+        history.undo();
+        QVERIFY(!dynamic_cast<VectorLayer*>(doc.findLayer(id))->closed);
+
+        // Escape não estoura e não cria histórico.
+        const int depth = history.undoCount();
+        QKeyEvent esc = key(Qt::Key_Escape);
+        tool.keyPress(&esc, ctx);
+        QCOMPARE(history.undoCount(), depth);
+    }
 };
 
 QTEST_MAIN(TestToolsExtras)
