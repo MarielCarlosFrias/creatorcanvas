@@ -483,8 +483,8 @@ Already on `main` (do not treat as future work): multi-select, group/align/distr
 
 Still ahead:
 
-1. **Split `CanvasView` / `MainWindow`** — isolate tools and overlays so the viewport is not a 2k+ line catch-all (Phase 1 delivered: `cc_tools` static library and `ICanvasTool` architecture integrated).
-2. **GPU viewport** — both rendering paths are cached now (`IRenderer`): the fast path measured 3.1× and the compositing path 4.3× on heavy documents. A Vulkan/Direct3D (Qt RHI) backend behind the same interface is the remaining seam.
+1. **Split `CanvasView` / `MainWindow`** — mostly done: overlays live in `CanvasOverlayRenderer` (492 lines), handle/hit-testing in `CanvasGestureHandler` (213), the context menu in `CanvasContextMenu` (212), inline text in `InlineTextEditor` (122). `CanvasView` (1951 lines) is now viewport/transform management and event orchestration; the zoom/transform block would be the next extraction.
+2. **GPU viewport** — blocked by the environment, not by the code: the `IRenderer` seam exists and both rendering paths are cached (fast path 3.1×, compositing path 4.3×), but a QRhi needs a native surface, which does not exist under `QT_QPA_PLATFORM=offscreen`. Any Vulkan/Direct3D/RHI backend must be written and verified on a machine with a real display before it can ship.
 3. **Richer blend modes** — only if compositing moves beyond the current twelve `QPainter` modes.
 4. **macOS** — real bundle, notarization, and CI; `MACOSX_BUNDLE` on the target is not a shipping product.
 
