@@ -2005,8 +2005,11 @@ bool CachingRenderer::drawCachedLayer(QPainter* painter, const Layer& layer,
     ++m_misses;
 
     // Rasteriza a camada sozinha numa imagem do tamanho do canvas no
-    // dispositivo: a transformação é a mesma do caminho rápido, deslocada
-    // para a origem do canvas no dispositivo (para poder colar depois).
+    // dispositivo. A transformação mantém a ESCALA mas perde a translação
+    // (o pan): assim o pixmap é independente do pan e a cache continua
+    // válida quando o utilizador arrasta a vista — com o pan incluído, o
+    // pixmap velho era reutilizado e a imagem ficava parada enquanto os
+    // handles se moviam (era o "a forma muda de sítio" relatado).
     QImage img(device, QImage::Format_ARGB32_Premultiplied);
     if (img.isNull())
         return false;
@@ -2014,7 +2017,9 @@ bool CachingRenderer::drawCachedLayer(QPainter* painter, const Layer& layer,
 
     QPainter local(&img);
     QTransform localTransform = docToDevice;
-    localTransform.translate(-canvasOnDevice.left(), -canvasOnDevice.top());
+    localTransform.setMatrix(localTransform.m11(), localTransform.m12(), 0.0,
+                             localTransform.m21(), localTransform.m22(), 0.0,
+                             0.0, 0.0, 1.0);
     local.setTransform(localTransform);
     local.setRenderHint(QPainter::Antialiasing, true);
     local.setRenderHint(QPainter::TextAntialiasing, true);

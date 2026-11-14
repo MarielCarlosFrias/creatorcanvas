@@ -286,6 +286,66 @@ private slots:
         QCOMPARE(history.undoCount(), 1);
     }
 
+
+    void canvasViewCachedRenderMatchesWithViewportTransform()
+    {
+        // Reprodução do relato: com uma CanvasView REAL (transformação de
+        // viewport, dispositivo widget), o render em cache tem de ser
+        // idêntico ao sem cache — se um pixmap for colado no sítio ou no
+        // tamanho errado, a imagem "salta" no canvas.
+        Document doc(900, 600);
+        auto bg = std::make_unique<BackgroundLayer>();
+        bg->fill = QColor(40, 50, 80);
+        doc.addLayer(std::move(bg));
+
+        // Foto grande (como uma importação real).
+        QImage photo(1200, 800, QImage::Format_ARGB32);
+        photo.fill(qRgba(80, 140, 200, 255));
+        const LayerId asset = doc.assets().addImage(photo, QStringLiteral("png"));
+        auto layer = std::make_unique<ImageLayer>();
+        layer->assetId = asset;
+        layer->naturalWidth = 1200;
+        layer->naturalHeight = 800;
+        layer->transform.position = QPointF(450, 300);
+        doc.addLayer(std::move(layer));
+
+        // Texto por cima (também cacheável) para haver 2 camadas em jogo.
+        auto text = std::make_unique<TextLayer>();
+        text->content = QStringLiteral("TESTE");
+        text->sizePt = 96;
+        text->transform.position = QPointF(450, 150);
+        doc.addLayer(std::move(text));
+
+        CanvasView view;
+        view.setDocument(&doc);
+        view.resize(1200, 800);
+        view.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&view));
+        QTest::qWait(200);
+
+        // Aquecer a cache e capturar.
+        view.repaint();
+        QTest::qWait(50);
+        const QPixmap warm = view.grab();
+
+        // Limpar e capturar de novo (referência sem cache).
+        clearRendererCaches();
+        view.repaint();
+        QTest::qWait(50);
+        const QPixmap cold = view.grab();
+
+        const QImage a = warm.toImage().convertToFormat(QImage::Format_ARGB32);
+        const QImage b = cold.toImage().convertToFormat(QImage::Format_ARGB32);
+        QCOMPARE(a.size(), b.size());
+        int diff = 0;
+        for (int y = 0; y < a.height(); ++y)
+            for (int x = 0; x < a.width(); ++x)
+                if (a.pixelColor(x, y) != b.pixelColor(x, y))
+                    ++diff;
+        qInfo() << "pixeis diferentes (cache vs sem cache):" << diff << "de"
+                << a.width() * a.height();
+        QVERIFY2(diff == 0, "o render em cache devia ser idêntico ao sem cache");
+    }
 };
 
 

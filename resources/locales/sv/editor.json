@@ -466,7 +466,8 @@
     "channelMixerHint": "Förstärkning per utkanal (100% = original).",
     "strength": "Styrka",
     "sliderA": "A",
-    "sliderB": "B"
+    "sliderB": "B",
+    "histogram": "Histogram"
   },
   "comps": {
     "title": "Lagerkompositioner - CreatorCanvas",

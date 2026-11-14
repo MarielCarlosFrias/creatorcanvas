@@ -370,6 +370,64 @@ private slots:
                  "as três camadas deviam ser visíveis");
         clearRendererCaches();
     }
+
+    void layerCacheIsPanInvariant()
+    {
+        // Regressão: a chave da cache usava a escala (m11) mas o pixmap era
+        // renderizado COM o pan — ao arrastar a vista, a imagem em cache
+        // ficava parada enquanto os handles se moviam.
+        Document doc(100, 100);
+        auto bg = std::make_unique<BackgroundLayer>();
+        bg->fill = Qt::black;
+        doc.addLayer(std::move(bg));
+        QImage photo(40, 40, QImage::Format_ARGB32);
+        photo.fill(qRgba(50, 200, 50, 255));
+        const LayerId asset = doc.assets().addImage(photo, QStringLiteral("png"));
+        auto layer = std::make_unique<ImageLayer>();
+        layer->assetId = asset;
+        layer->naturalWidth = 40;
+        layer->naturalHeight = 40;
+        layer->transform.position = QPointF(50, 50);
+        doc.addLayer(std::move(layer));
+
+        // Base: escala 1, sem translação (aquece a cache).
+        clearRendererCaches();
+        QImage base(100, 100, QImage::Format_ARGB32);
+        base.fill(Qt::magenta);   // sentinela: regiono não pintado fica magenta
+        {
+            QPainter p(&base);
+            cc::renderDocument(doc, &p, QTransform(), {});
+        }
+
+        // Agora com pan (+40, +25): a cache ACERTA e o resultado tem de ser
+        // o mesmo que desenhar sem cache com essa transformação.
+        QTransform panned;
+        panned.translate(40, 25);
+        QImage pannedCached(100, 100, QImage::Format_ARGB32);
+        pannedCached.fill(Qt::magenta);
+        {
+            QPainter p(&pannedCached);
+            cc::renderDocument(doc, &p, panned, {});
+        }
+
+        clearRendererCaches();
+        QImage pannedRef(100, 100, QImage::Format_ARGB32);
+        pannedRef.fill(Qt::magenta);
+        {
+            QPainter p(&pannedRef);
+            cc::renderDocument(doc, &p, panned, {});
+        }
+
+        QCOMPARE(pannedCached.size(), pannedRef.size());
+        int diff = 0;
+        for (int y = 0; y < pannedCached.height(); ++y)
+            for (int x = 0; x < pannedCached.width(); ++x)
+                if (pannedCached.pixelColor(x, y) != pannedRef.pixelColor(x, y))
+                    ++diff;
+        QVERIFY2(diff == 0, qPrintable(QStringLiteral(
+            "cache com pan devia igualar ao sem cache; %1 pixeis diferem").arg(diff)));
+        clearRendererCaches();
+    }
 };
 
 

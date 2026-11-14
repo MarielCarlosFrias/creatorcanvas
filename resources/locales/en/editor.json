@@ -469,7 +469,8 @@
     "channelMixerHint": "Gain per output channel (100% = original).",
     "strength": "Strength",
     "sliderA": "A",
-    "sliderB": "B"
+    "sliderB": "B",
+    "histogram": "Histogram"
   },
   "comps": {
     "title": "Layer Comps - CreatorCanvas",

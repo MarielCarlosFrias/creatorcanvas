@@ -469,7 +469,8 @@
     "channelMixerHint": "Ganho por canal de saída (100% = original).",
     "strength": "Força",
     "sliderA": "A",
-    "sliderB": "B"
+    "sliderB": "B",
+    "histogram": "Histograma"
   },
   "comps": {
     "title": "Composições de Camadas - CreatorCanvas",
