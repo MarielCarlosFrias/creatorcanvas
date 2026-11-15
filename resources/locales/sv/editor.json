@@ -512,5 +512,10 @@
       "editInMiniPaint": "Redigera i MiniPaint...",
       "editInMiniPaint.tooltip": "Öppna detta bildlager i den externa redigeraren MiniPaint"
     }
+  },
+  "textPath": {
+    "title": "Text längs bana",
+    "none": "(ingen bana)",
+    "offset": "Förskjutning:"
   }
 }

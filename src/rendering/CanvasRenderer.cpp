@@ -955,9 +955,12 @@ void drawTextAlongPath(QPainter* painter, const QFont& font, const QColor& color
     for (int i = 0; i < content.size(); ++i) {
         const QString ch = content.at(i);
         const qreal w = metrics.horizontalAdvance(ch);
-        if (advance + w > pathLength)
-            break;                       // caminho acabou — o resto fica de fora
-        const qreal mid = advance + w * 0.5;
+        // Texto maior que o caminho: em vez de DESAPARECER (o resto era
+        // descartado e o utilizador via o texto sumir sem explicação), os
+        // glifos que passam do fim continuam na última posição/tangente —
+        // sempre visíveis, como no Photoshop.
+        const bool overflow = advance + w > pathLength;
+        const qreal mid = overflow ? pathLength : advance + w * 0.5;
         const QPointF point = path.pointAtPercent(mid / pathLength);
         const qreal angle = path.angleAtPercent(mid / pathLength);
 
@@ -967,6 +970,8 @@ void drawTextAlongPath(QPainter* painter, const QFont& font, const QColor& color
         painter->drawText(QPointF(-w * 0.5, -metrics.ascent() * 0.5), ch);
         painter->restore();
 
+        if (overflow)
+            break;
         advance += w;
     }
     painter->restore();
@@ -1128,13 +1133,21 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
                                          next.position + next.handleIn,
                                          next.position);
                         }
-                        // O caminho vive no espaço LOCAL da camada vectorial:
-                        // compõe com a sua matriz antes de desenhar.
+                        // O caminho vive no espaço LOCAL da camada VECTORIAL,
+                        // mas o painter está em doc→dispositivo composto com
+                        // a matriz da camada de TEXTO. Composição correcta:
+                        // textMatrix⁻¹ ∘ vecMatrix traz o caminho para o
+                        // espaço local do texto, onde o painter o desenha.
+                        // (Sem isto o texto não aparecia: as coordenadas
+                        // eram transformadas duas vezes.)
+                        const QTransform toTextLocal =
+                            layer.transform.matrix(layer.contentBounds()).inverted()
+                            * vec->transform.matrix(vec->contentBounds());
+                        const QPainterPath pathInTextSpace =
+                            toTextLocal.map(path);
                         painter->save();
-                        painter->setTransform(painter->transform()
-                                              * vec->transform.matrix(vec->contentBounds()));
                         drawTextAlongPath(painter, font, text.color, text.content,
-                                          path, text.pathOffsetPct);
+                                          pathInTextSpace, text.pathOffsetPct);
                         painter->restore();
                         break;
                     }
@@ -1993,11 +2006,13 @@ bool CachingRenderer::drawCachedLayer(QPainter* painter, const Layer& layer,
         ++m_hits;
         m_lru.removeOne(key);
         m_lru.append(key);
-        // O pixmap está em coordenadas de DISPOSITIVO: repor a identidade
-        // antes de colar, senão o blit sai reescalado (lento e deslocado).
+        // O pixmap é renderizado SEM o pan (só escala), por isso é
+        // pan-invariante: a colagem tem de usar a origem ACTUAL do canvas,
+        // não a guardada na entrada (era o bug — com pan, a imagem ficava
+        // deslocada pelo pan antigo).
         painter->save();
         painter->resetTransform();
-        painter->drawPixmap(it->blitPoint, it->pixmap);
+        painter->drawPixmap(canvasOnDevice.topLeft().toPoint(), it->pixmap);
         painter->restore();
         return true;
     }
@@ -2037,7 +2052,6 @@ bool CachingRenderer::drawCachedLayer(QPainter* painter, const Layer& layer,
     // O ponto de blit é por ENTRADA (cada camada tem a sua área). O pixmap
     // cobre o canvas inteiro, por isso a colagem é na origem do canvas no
     // dispositivo — que é onde a transformação local o desenhou.
-    entry.blitPoint = canvasOnDevice.topLeft().toPoint();
 
     dropLayer(layer.id());
     m_bytes += entry.bytes;
@@ -2046,9 +2060,10 @@ bool CachingRenderer::drawCachedLayer(QPainter* painter, const Layer& layer,
     evictToFit();
 
 
+    // Colar na origem ACTUAL do canvas (o pixmap é pan-invariante).
     painter->save();
     painter->resetTransform();
-    painter->drawPixmap(entry.blitPoint, entry.pixmap);
+    painter->drawPixmap(canvasOnDevice.topLeft().toPoint(), entry.pixmap);
     painter->restore();
     return true;
 }

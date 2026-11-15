@@ -515,5 +515,10 @@
       "editInMiniPaint": "Edit in MiniPaint...",
       "editInMiniPaint.tooltip": "Open this image layer in the external MiniPaint editor"
     }
+  },
+  "textPath": {
+    "title": "Text on Path",
+    "none": "(no path)",
+    "offset": "Offset:"
   }
 }

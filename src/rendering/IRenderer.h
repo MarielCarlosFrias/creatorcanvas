@@ -148,9 +148,6 @@ protected:
 private:
     struct Entry {
         QPixmap pixmap;
-        /// Onde colar no dispositivo — pertence à ENTRADA (cada camada tem a
-        /// sua área visível), não ao renderer.
-        QPoint blitPoint;
         qint64 bytes = 0;
     };
 

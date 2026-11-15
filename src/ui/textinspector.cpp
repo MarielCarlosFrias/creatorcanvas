@@ -447,14 +447,21 @@ void TextInspector::buildUi()
     layout->addWidget(m_styleSection);
 
     // --- Texto em caminho (modo avançado; escondido por omissão) ---
-    m_pathSection = new CollapsibleSection(QStringLiteral("Texto em Caminho"), false, this);
+    // Nada de strings fixas: o projecto exige i18n em todos os catálogos.
+    const QString pathNoneText = m_i18n ? m_i18n->t("editor", "textPath.none")
+                                        : QStringLiteral("(sem caminho)");
+    m_pathSection = new CollapsibleSection(
+        m_i18n ? m_i18n->t("editor", "textPath.title") : QStringLiteral("Texto em Caminho"),
+        false, this);
     auto* pathLayout = new QVBoxLayout;
     pathLayout->setContentsMargins(4, 4, 4, 4);
     m_pathCombo = new QComboBox(this);
-    m_pathCombo->addItem(QStringLiteral("(sem caminho)"), QUuid().toString());
+    m_pathCombo->addItem(pathNoneText, QUuid().toString());
     pathLayout->addWidget(m_pathCombo);
     auto* offsetRow = new QHBoxLayout;
-    offsetRow->addWidget(new QLabel(QStringLiteral("Deslocamento:"), this));
+    offsetRow->addWidget(new QLabel(
+        m_i18n ? m_i18n->t("editor", "textPath.offset") : QStringLiteral("Deslocamento:"),
+        this));
     m_pathOffset = new QSlider(Qt::Horizontal, this);
     m_pathOffset->setRange(0, 100);
     m_pathOffset->setValue(0);
@@ -800,6 +807,8 @@ void TextInspector::retranslateUi()
         m_effectsSection->setTitle(m_i18n->t("editor", "section.textEffects"));
     if (m_gradientSection)
         m_gradientSection->setTitle(m_i18n->t("editor", "section.gradient"));
+    if (m_pathSection)
+        m_pathSection->setTitle(m_i18n->t("editor", "textPath.title"));
     if (m_textureSection)
         m_textureSection->setTitle(m_i18n ? m_i18n->t("editor", "section.textureFill") : QStringLiteral("Texture / Image Fill"));
     if (m_perspectiveSection)

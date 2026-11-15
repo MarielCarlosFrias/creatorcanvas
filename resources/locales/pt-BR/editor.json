@@ -515,5 +515,10 @@
       "editInMiniPaint": "Editar no MiniPaint...",
       "editInMiniPaint.tooltip": "Abrir esta camada de imagem no editor externo MiniPaint"
     }
+  },
+  "textPath": {
+    "title": "Texto em Caminho",
+    "none": "(sem caminho)",
+    "offset": "Deslocamento:"
   }
 }
