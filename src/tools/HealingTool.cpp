@@ -167,7 +167,7 @@ void HealingTool::mousePress(QMouseEvent* event, const QPointF& docPos, const To
                 const QTransform matrix = layer->transform.matrix(layer->contentBounds());
                 const QPoint dstLocal = matrix.inverted().map(docPos).toPoint();
 
-                ImageProcessing::spotHeal(m_workingImage, dstLocal, m_srcPointLocal, m_radius, m_strength);
+                m_workingImage = ImageProcessing::spotHeal(m_workingImage, dstLocal, m_srcPointLocal, m_radius, m_strength);
 
                 if (ctx.setLayerPreview)
                     ctx.setLayerPreview(img->id(), m_workingImage);
@@ -206,7 +206,7 @@ void HealingTool::mouseMove(QMouseEvent* event, const QPointF& docPos, const Too
             } else {
                 // Re-trabalha a partir da cópia original para evitar acúmulo de artefatos
                 m_workingImage = ctx.document->assets().decodedImage(img->assetId);
-                ImageProcessing::spotHeal(m_workingImage, dstLocal, m_srcPointLocal, m_radius, m_strength);
+                m_workingImage = ImageProcessing::spotHeal(m_workingImage, dstLocal, m_srcPointLocal, m_radius, m_strength);
             }
 
             if (ctx.setLayerPreview)

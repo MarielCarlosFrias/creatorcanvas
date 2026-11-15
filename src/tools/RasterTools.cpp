@@ -168,6 +168,7 @@ void CloneStampTool::mousePress(QMouseEvent* event, const QPointF& docPos, const
         if (layer && layer->type() == LayerType::Image) {
             const QTransform matrix = layer->transform.matrix(layer->contentBounds());
             m_srcPointLocal = matrix.inverted().map(docPos).toPoint();
+            m_currentSrcLocal = m_srcPointLocal;
             m_srcLayerId = layer->id();
             m_hasSource = true;
 
@@ -201,11 +202,14 @@ void CloneStampTool::mousePress(QMouseEvent* event, const QPointF& docPos, const
             if (!m_workingImage.isNull())
                 m_workingImage = m_workingImage.copy(); // detached: não corrompe o cache do asset
             if (!m_workingImage.isNull()) {
+                m_srcSnapshot = m_workingImage.copy();
                 m_isCloning = true;
                 const QTransform matrix = layer->transform.matrix(layer->contentBounds());
                 const QPoint dstLocal = matrix.inverted().map(docPos).toPoint();
+                m_cloneOffset = dstLocal - m_srcPointLocal;
+                m_currentSrcLocal = m_srcPointLocal;
 
-                ImageProcessing::cloneStamp(m_workingImage, m_workingImage, m_srcPointLocal, dstLocal, m_radius, m_opacity, m_hardness);
+                m_workingImage = ImageProcessing::cloneStamp(m_workingImage, m_srcSnapshot, m_srcPointLocal, dstLocal, m_radius, m_opacity, m_hardness);
                 // A5: prévia via overlay — nenhum asset temporário por move
                 if (ctx.setLayerPreview)
                     ctx.setLayerPreview(img->id(), m_workingImage);
@@ -233,8 +237,10 @@ void CloneStampTool::mouseMove(QMouseEvent* event, const QPointF& docPos, const 
             auto* img = static_cast<ImageLayer*>(layer);
             const QTransform matrix = layer->transform.matrix(layer->contentBounds());
             const QPoint dstLocal = matrix.inverted().map(docPos).toPoint();
+            m_currentSrcLocal = dstLocal - m_cloneOffset;
 
-            ImageProcessing::cloneStamp(m_workingImage, m_workingImage, m_srcPointLocal, dstLocal, m_radius, m_opacity, m_hardness);
+            const QImage& srcImg = !m_srcSnapshot.isNull() ? m_srcSnapshot : m_workingImage;
+            m_workingImage = ImageProcessing::cloneStamp(m_workingImage, srcImg, m_currentSrcLocal, dstLocal, m_radius, m_opacity, m_hardness);
             if (ctx.setLayerPreview)
                 ctx.setLayerPreview(img->id(), m_workingImage);
 
@@ -282,6 +288,8 @@ void CloneStampTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, con
 
     m_isCloning = false;
     m_workingImage = QImage();
+    m_srcSnapshot = QImage();
+    m_currentSrcLocal = m_srcPointLocal;
     if (ctx.requestUpdate)
         ctx.requestUpdate();
 }
@@ -293,7 +301,7 @@ void CloneStampTool::drawOverlay(QPainter* painter, const ToolContext& ctx)
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing, true);
 
-    // If source origin is set, draw red crosshair
+    // If source origin is set, draw red crosshair (moving with stroke during cloning)
     if (m_hasSource) {
         Layer* srcLayer = ctx.document->findLayer(m_srcLayerId);
         if (!srcLayer && !ctx.selectedLayerId.isNull())
@@ -302,7 +310,8 @@ void CloneStampTool::drawOverlay(QPainter* painter, const ToolContext& ctx)
         if (srcLayer && srcLayer->type() == LayerType::Image) {
             const QTransform layerToDoc = srcLayer->transform.matrix(srcLayer->contentBounds());
             const QTransform layerToDevice = layerToDoc * ctx.docToDevice;
-            const QPointF srcScreen = layerToDevice.map(QPointF(m_srcPointLocal));
+            const QPoint displaySrc = m_isCloning ? m_currentSrcLocal : m_srcPointLocal;
+            const QPointF srcScreen = layerToDevice.map(QPointF(displaySrc));
 
             QPen srcPen(QColor(255, 60, 60), 2.0);
             srcPen.setCosmetic(true);
@@ -335,6 +344,8 @@ void CloneStampTool::cancel(const ToolContext& ctx)
         ctx.clearLayerPreview(); // documento nunca foi mutado
     m_isCloning = false;
     m_workingImage = QImage();
+    m_srcSnapshot = QImage();
+    m_currentSrcLocal = m_srcPointLocal;
     if (ctx.requestUpdate)
         ctx.requestUpdate();
 }
@@ -409,8 +420,11 @@ void FloodFillTool::mousePress(QMouseEvent* event, const QPointF& docPos, const 
             const QTransform matrix = imgLayer->transform.matrix(imgLayer->contentBounds());
             const QPoint imgPos = matrix.inverted().map(docPos).toPoint();
             if (imgPos.x() >= 0 && imgPos.x() < oldImg.width() && imgPos.y() >= 0 && imgPos.y() < oldImg.height()) {
-                QImage filledImg = oldImg;
-                ImageProcessing::floodFill(filledImg, imgPos, m_color, m_tolerance);
+                const QImage filledImg = ImageProcessing::floodFill(oldImg, imgPos, m_color, m_tolerance);
+                if (filledImg.isNull()) {
+                    event->accept();
+                    return;
+                }
                 const LayerId newAssetId = ctx.document->assets().addImage(filledImg);
                 const QString cmdName = ctx.i18n ? ctx.i18n->t("editor", "canvas.command.floodFill") : QStringLiteral("Flood Fill");
 

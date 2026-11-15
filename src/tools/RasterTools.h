@@ -59,7 +59,10 @@ private:
 
     bool m_hasSource = false;
     QPoint m_srcPointLocal;
+    QPoint m_currentSrcLocal;
+    QPoint m_cloneOffset;
     LayerId m_srcLayerId;
+    QImage m_srcSnapshot;
 
     bool m_isCloning = false;
     QPointF m_hoverDocPos;

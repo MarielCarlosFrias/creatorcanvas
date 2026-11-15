@@ -815,10 +815,11 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
         }
     }
 
-    // A caneta (e os nós) usam Alt nos seus próprios gestos: nesses modos o
-    // atalho global de eyedropper não rouba o evento.
+    // A caneta, os nós, o carimbo e a ferramenta de recuperação usam Alt nos seus próprios gestos:
+    // nesses modos o atalho global de eyedropper não rouba o evento.
     const bool toolOwnsAlt = m_activeTool
-        && (m_tool == CanvasTool::Vector || m_tool == CanvasTool::VectorNodes);
+        && (m_tool == CanvasTool::Vector || m_tool == CanvasTool::VectorNodes
+            || m_tool == CanvasTool::CloneStamp || m_tool == CanvasTool::Healing);
     if (m_tool == CanvasTool::Eyedropper
         || ((event->modifiers() & Qt::AltModifier) && event->button() == Qt::LeftButton
             && !toolOwnsAlt)) {

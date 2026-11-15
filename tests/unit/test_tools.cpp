@@ -1,10 +1,12 @@
 #include <QTest>
 #include <QImage>
+#include <QKeyEvent>
 #include "tools/SelectTool.h"
 #include "tools/PaintTool.h"
 #include "tools/CropTool.h"
 #include "tools/ScissorsTool.h"
 #include "tools/RasterTools.h"
+#include "tools/PenTool.h"
 #include "core/Document.h"
 
 class TestTools : public QObject
@@ -92,6 +94,94 @@ private slots:
         QCOMPARE(fill.color(), QColor(Qt::green));
         fill.setTolerance(30);
         QCOMPARE(fill.tolerance(), 30);
+    }
+
+    void testFloodFillExecution()
+    {
+        cc::Document doc(100, 100);
+
+        auto imgLayer = std::make_unique<cc::ImageLayer>();
+        QImage blackImg(100, 100, QImage::Format_ARGB32);
+        blackImg.fill(Qt::black);
+        const cc::LayerId assetId = doc.assets().addImage(blackImg);
+        imgLayer->assetId = assetId;
+        imgLayer->naturalWidth = 100;
+        imgLayer->naturalHeight = 100;
+        imgLayer->transform.position = QPointF(50, 50);
+        imgLayer->name = QStringLiteral("TestImage");
+
+        const cc::LayerId layerId = imgLayer->id();
+        doc.addLayer(std::move(imgLayer));
+
+        cc::FloodFillTool fillTool;
+        fillTool.setColor(Qt::white);
+        fillTool.setTolerance(20);
+
+        cc::ToolContext ctx;
+        ctx.document = &doc;
+        ctx.selectedLayerId = layerId;
+
+        QMouseEvent press(QEvent::MouseButtonPress, QPointF(50, 50), QPointF(50, 50),
+                          Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        fillTool.mousePress(&press, QPointF(50, 50), ctx);
+
+        auto* afterLayer = static_cast<cc::ImageLayer*>(doc.findLayer(layerId));
+        QVERIFY(afterLayer != nullptr);
+        QVERIFY(afterLayer->assetId != assetId);
+
+        const QImage result = doc.assets().decodedImage(afterLayer->assetId);
+        QVERIFY(!result.isNull());
+        QCOMPARE(result.pixelColor(50, 50), QColor(Qt::white));
+    }
+
+    void testPenToolReturnKeyAndFinish()
+    {
+        cc::Document doc(200, 200);
+
+        cc::PenTool pen;
+        pen.setStrokeColor(Qt::blue);
+        pen.setFillColor(Qt::red);
+
+        cc::ToolContext ctx;
+        ctx.document = &doc;
+
+        pen.activate(ctx);
+
+        QMouseEvent p1(QEvent::MouseButtonPress, QPointF(10, 10), QPointF(10, 10),
+                       Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        pen.mousePress(&p1, QPointF(10, 10), ctx);
+
+        QMouseEvent p2(QEvent::MouseButtonPress, QPointF(50, 10), QPointF(50, 10),
+                       Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        pen.mousePress(&p2, QPointF(50, 10), ctx);
+
+        QMouseEvent p3(QEvent::MouseButtonPress, QPointF(50, 50), QPointF(50, 50),
+                       Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        pen.mousePress(&p3, QPointF(50, 50), ctx);
+
+        QVERIFY(pen.hasPath());
+        QCOMPARE(pen.m_anchors.size(), size_t(3));
+
+        // Pressionar Enter para finalizar e criar a VectorLayer
+        QKeyEvent enterKey(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
+        pen.keyPress(&enterKey, ctx);
+
+        // Caminho ativo agora deve estar limpo
+        QVERIFY(!pen.hasPath());
+
+        // Deve existir uma nova camada VectorLayer no documento
+        const auto& children = doc.rootGroup()->children;
+        bool foundVector = false;
+        for (const auto& child : children) {
+            if (child->type() == cc::LayerType::Vector) {
+                foundVector = true;
+                auto* vl = static_cast<cc::VectorLayer*>(child.get());
+                QCOMPARE(vl->nodes.size(), size_t(3));
+                QVERIFY(vl->closed);
+                break;
+            }
+        }
+        QVERIFY(foundVector);
     }
 };
 

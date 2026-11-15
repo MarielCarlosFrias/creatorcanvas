@@ -23,8 +23,11 @@ public:
     void mousePress(QMouseEvent* event, const QPointF& docPos, const ToolContext& ctx) override;
     void mouseMove(QMouseEvent* event, const QPointF& docPos, const ToolContext& ctx) override;
     void mouseRelease(QMouseEvent* event, const QPointF& docPos, const ToolContext& ctx) override;
+    void keyPress(QKeyEvent* event, const ToolContext& ctx) override;
     void drawOverlay(QPainter* painter, const ToolContext& ctx) override;
     void cancel(const ToolContext& ctx) override;
+
+    void finishPath(const ToolContext& ctx);
 
     /// Âncoras do caminho em construção — viram os nós da VectorLayer, para
     /// a edição de nós funcionar desde o primeiro momento.
@@ -44,6 +47,7 @@ private:
     QPainterPath m_path;
     QPointF m_lastPoint;
     QPointF m_currentHandle;
+    QPointF m_currentHover;
     bool m_drawing = false;
     bool m_hasSource = false;
 

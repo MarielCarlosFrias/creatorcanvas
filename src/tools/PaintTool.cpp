@@ -67,7 +67,11 @@ void PaintTool::mousePress(QMouseEvent* event, const QPointF& docPos, const Tool
         newImgLayer->assetId = assetId;
 
         const LayerId createdId = newImgLayer->id();
-        ctx.document->addLayer(std::move(newImgLayer));
+        if (ctx.history) {
+            ctx.history->execute(std::make_unique<AddLayerCommand>(*ctx.document, std::move(newImgLayer)));
+        } else {
+            ctx.document->addLayer(std::move(newImgLayer));
+        }
         if (ctx.selectLayer)
             ctx.selectLayer(createdId);
         layer = ctx.document->findLayer(createdId);
@@ -224,7 +228,7 @@ void PaintTool::drawOverlay(QPainter* painter, const ToolContext& ctx)
     painter->setRenderHint(QPainter::Antialiasing, true);
 
     const QPointF devP = ctx.docToDevice.map(m_currentDocPos);
-    const double radius = std::max(2.0, m_params.size * ctx.zoom);
+    const double radius = std::max(2.0, (m_params.size * 0.5) * ctx.zoom);
 
     QPen cursorPen(QColor(255, 255, 255, 200), 1.0);
     painter->setPen(cursorPen);
