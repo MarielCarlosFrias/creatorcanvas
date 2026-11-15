@@ -24,7 +24,9 @@ public:
 
     /// Define o conteúdo: imagem do documento já renderizada, fatias e o
     /// pendente (em coordenadas de documento).
-    void setDocumentImage(const QImage& image);
+    void setDocumentImage(const QImage& image, const QSize& documentSize = QSize());
+    void setDocumentSize(const QSize& size);
+    QSize documentSize() const { return m_documentSize; }
     void setSlices(const std::vector<WebSlice>& slices);
     void setPending(const QRectF& docRect);
 
@@ -46,14 +48,18 @@ protected:
     void mouseReleaseEvent(QMouseEvent* event) override;
 
 private:
-    enum class Drag { None, Move, TopLeft, TopRight, BottomLeft, BottomRight };
+    enum class Drag { None, Move, TopLeft, TopRight, BottomLeft, BottomRight, Create };
 
     QRectF documentRect() const;                 // rect do documento dentro do widget
     QPointF docFromWidget(const QPoint& p) const;
     Drag hitTest(const QPoint& widgetPos) const;
-    void applyCursor(Drag mode);
+    void applyCursor(Drag mode, const QPoint& pos = QPoint());
+
+    qreal docWidth() const;
+    qreal docHeight() const;
 
     QImage m_documentImage;
+    QSize m_documentSize;
     std::vector<WebSlice> m_slices;
     QRectF m_pending;
     bool m_interactive = false;
@@ -61,6 +67,7 @@ private:
     Drag m_drag = Drag::None;
     QPointF m_grabOffset;
     QSizeF m_grabSize;
+    QPointF m_createStart;
 };
 
 } // namespace cc

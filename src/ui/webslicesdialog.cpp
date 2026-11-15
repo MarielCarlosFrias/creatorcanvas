@@ -45,8 +45,8 @@ WebSlicesDialog::WebSlicesDialog(Document& doc, CommandStack* history,
 
     m_preview = new SlicePreviewWidget(this);
     m_preview->setMinimumHeight(150);
-    // Arrastar/redimensionar o pendente é ferramenta profissional.
-    m_preview->setInteractive(m_advancedMode);
+    // Sempre interactivo: permite desenhar e ajustar fatias directamente na prévia.
+    m_preview->setInteractive(true);
     layout->addWidget(m_preview, 1);
 
     m_list = new QListWidget(this);
@@ -148,6 +148,27 @@ WebSlicesDialog::WebSlicesDialog(Document& doc, CommandStack* history,
         const bool has = !selectedSliceId().isEmpty();
         m_removeButton->setEnabled(has);
         m_exportButton->setEnabled(!m_doc.webSlices().empty());
+        if (has) {
+            const QString id = selectedSliceId();
+            for (const auto& slice : m_doc.webSlices()) {
+                if (slice.id == id) {
+                    if (m_nameEdit)
+                        m_nameEdit->setText(slice.name);
+                    const int idx = m_formatCombo->findData(slice.exportFormat);
+                    if (idx >= 0)
+                        m_formatCombo->setCurrentIndex(idx);
+                    if (m_xSpin && m_ySpin && m_wSpin && m_hSpin) {
+                        const QSignalBlocker b1(m_xSpin), b2(m_ySpin), b3(m_wSpin), b4(m_hSpin);
+                        m_xSpin->setValue(qRound(slice.rect.x()));
+                        m_ySpin->setValue(qRound(slice.rect.y()));
+                        m_wSpin->setValue(qRound(slice.rect.width()));
+                        m_hSpin->setValue(qRound(slice.rect.height()));
+                    }
+                    updatePreview();
+                    break;
+                }
+            }
+        }
     });
 
     refreshList();
@@ -211,7 +232,7 @@ void WebSlicesDialog::updatePreview()
                          std::max(1, m_wSpin->value()), std::max(1, m_hSpin->value()));
     }
 
-    m_preview->setDocumentImage(img);
+    m_preview->setDocumentImage(img, QSize(m_doc.width(), m_doc.height()));
     m_preview->setSlices(m_doc.webSlices());
     m_preview->setPending(pending);
 }

@@ -14,10 +14,34 @@ SlicePreviewWidget::SlicePreviewWidget(QWidget* parent)
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 }
 
-void SlicePreviewWidget::setDocumentImage(const QImage& image)
+void SlicePreviewWidget::setDocumentImage(const QImage& image, const QSize& documentSize)
 {
     m_documentImage = image;
+    if (documentSize.isValid() && documentSize.width() > 0 && documentSize.height() > 0)
+        m_documentSize = documentSize;
+    else if (!m_documentSize.isValid() && !image.isNull())
+        m_documentSize = image.size();
     update();
+}
+
+void SlicePreviewWidget::setDocumentSize(const QSize& size)
+{
+    m_documentSize = size;
+    update();
+}
+
+qreal SlicePreviewWidget::docWidth() const
+{
+    if (m_documentSize.isValid() && m_documentSize.width() > 0)
+        return m_documentSize.width();
+    return m_documentImage.isNull() ? 1.0 : m_documentImage.width();
+}
+
+qreal SlicePreviewWidget::docHeight() const
+{
+    if (m_documentSize.isValid() && m_documentSize.height() > 0)
+        return m_documentSize.height();
+    return m_documentImage.isNull() ? 1.0 : m_documentImage.height();
 }
 
 void SlicePreviewWidget::setSlices(const std::vector<WebSlice>& slices)
@@ -47,8 +71,8 @@ QRectF SlicePreviewWidget::documentRect() const
     const qreal margin = 8.0;
     const qreal availW = std::max(1.0, static_cast<qreal>(width()) - 2 * margin);
     const qreal availH = std::max(1.0, static_cast<qreal>(height()) - 2 * margin);
-    const qreal imageRatio = static_cast<qreal>(m_documentImage.width())
-                             / std::max(1, m_documentImage.height());
+    const qreal imageRatio = static_cast<qreal>(docWidth())
+                             / std::max<qreal>(1.0, docHeight());
     const qreal availRatio = availW / availH;
 
     qreal w = availW;
@@ -68,8 +92,8 @@ QPointF SlicePreviewWidget::docFromWidget(const QPoint& p) const
     const QRectF doc = documentRect();
     if (doc.isEmpty() || m_documentImage.isNull())
         return {};
-    const qreal sx = m_documentImage.width() / doc.width();
-    const qreal sy = m_documentImage.height() / doc.height();
+    const qreal sx = docWidth() / doc.width();
+    const qreal sy = docHeight() / doc.height();
     return QPointF((p.x() - doc.left()) * sx, (p.y() - doc.top()) * sy);
 }
 
@@ -78,8 +102,8 @@ QRectF SlicePreviewWidget::pendingWidgetRect() const
     const QRectF doc = documentRect();
     if (doc.isEmpty() || m_pending.isNull())
         return {};
-    const qreal sx = doc.width() / std::max(1, m_documentImage.width());
-    const qreal sy = doc.height() / std::max(1, m_documentImage.height());
+    const qreal sx = doc.width() / std::max<qreal>(1.0, docWidth());
+    const qreal sy = doc.height() / std::max<qreal>(1.0, docHeight());
     return QRectF(doc.left() + m_pending.left() * sx,
                   doc.top() + m_pending.top() * sy,
                   m_pending.width() * sx,
@@ -109,7 +133,7 @@ SlicePreviewWidget::Drag SlicePreviewWidget::hitTest(const QPoint& widgetPos) co
     return Drag::None;
 }
 
-void SlicePreviewWidget::applyCursor(Drag mode)
+void SlicePreviewWidget::applyCursor(Drag mode, const QPoint& pos)
 {
     switch (mode) {
     case Drag::Move:
@@ -123,8 +147,14 @@ void SlicePreviewWidget::applyCursor(Drag mode)
     case Drag::BottomLeft:
         setCursor(Qt::SizeBDiagCursor);
         break;
+    case Drag::Create:
+        setCursor(Qt::CrossCursor);
+        break;
     case Drag::None:
-        unsetCursor();
+        if (!pos.isNull() && documentRect().contains(pos))
+            setCursor(Qt::CrossCursor);
+        else
+            unsetCursor();
         break;
     }
 }
@@ -157,8 +187,8 @@ void SlicePreviewWidget::paintEvent(QPaintEvent*)
     labelFont.setBold(true);
     p.setFont(labelFont);
 
-    const qreal sx = doc.width() / std::max(1, m_documentImage.width());
-    const qreal sy = doc.height() / std::max(1, m_documentImage.height());
+    const qreal sx = doc.width() / std::max<qreal>(1.0, docWidth());
+    const qreal sy = doc.height() / std::max<qreal>(1.0, docHeight());
     auto toWidget = [&](const QRectF& r) {
         return QRectF(doc.left() + r.left() * sx, doc.top() + r.top() * sy,
                       r.width() * sx, r.height() * sy);
@@ -210,9 +240,20 @@ void SlicePreviewWidget::mousePressEvent(QMouseEvent* event)
     if (!m_interactive || event->button() != Qt::LeftButton)
         return;
     m_drag = hitTest(event->pos());
-    if (m_drag == Drag::None)
-        return;
     const QPointF docPos = docFromWidget(event->pos());
+    if (m_drag == Drag::None) {
+        // Se clicar em cima do documento na prévia, inicia a seleção/desenho de uma nova fatia
+        const QRectF doc = documentRect();
+        if (doc.contains(event->pos())) {
+            m_drag = Drag::Create;
+            m_createStart = docPos;
+            m_pending = QRectF(docPos, QSizeF(1, 1));
+            emit pendingEdited(m_pending);
+            update();
+            event->accept();
+        }
+        return;
+    }
     m_grabOffset = docPos - QPointF(m_pending.left(), m_pending.top());
     m_grabSize = QSizeF(m_pending.width(), m_pending.height());
     event->accept();
@@ -224,14 +265,32 @@ void SlicePreviewWidget::mouseMoveEvent(QMouseEvent* event)
         return;
 
     if (m_drag == Drag::None) {
-        applyCursor(hitTest(event->pos()));
+        applyCursor(hitTest(event->pos()), event->pos());
         return;
     }
 
     const QPointF docPos = docFromWidget(event->pos());
-    const qreal docW = std::max(1, m_documentImage.width());
-    const qreal docH = std::max(1, m_documentImage.height());
+    const qreal docW = docWidth();
+    const qreal docH = docHeight();
     QRectF next = m_pending;
+
+    if (m_drag == Drag::Create) {
+        const qreal minX = std::clamp(std::min(m_createStart.x(), docPos.x()), 0.0, docW);
+        const qreal maxX = std::clamp(std::max(m_createStart.x(), docPos.x()), 0.0, docW);
+        const qreal minY = std::clamp(std::min(m_createStart.y(), docPos.y()), 0.0, docH);
+        const qreal maxY = std::clamp(std::max(m_createStart.y(), docPos.y()), 0.0, docH);
+        next = QRectF(QPointF(minX, minY), QPointF(maxX, maxY)).normalized();
+        const qreal minSize = 4.0;
+        if (next.width() < minSize)
+            next.setWidth(minSize);
+        if (next.height() < minSize)
+            next.setHeight(minSize);
+        m_pending = next;
+        emit pendingEdited(next.normalized());
+        update();
+        event->accept();
+        return;
+    }
 
     switch (m_drag) {
     case Drag::Move:
@@ -254,6 +313,7 @@ void SlicePreviewWidget::mouseMoveEvent(QMouseEvent* event)
         next = QRectF(QPointF(m_pending.left(), m_pending.top()),
                       QPointF(docPos.x() - m_grabOffset.x(), docPos.y() - m_grabOffset.y()));
         break;
+    case Drag::Create:
     case Drag::None:
         return;
     }
