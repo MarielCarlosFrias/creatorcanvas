@@ -458,6 +458,30 @@ void TextInspector::buildUi()
     m_pathCombo = new QComboBox(this);
     m_pathCombo->addItem(pathNoneText, QUuid().toString());
     pathLayout->addWidget(m_pathCombo);
+
+    // Orientação: sem um caminho vectorial a combo fica com uma única
+    // opção e o utilizador não percebe onde arranjar um. Dizemos quantos
+    // existem e oferecemos um botão que passa para a caneta (P).
+    m_pathHintLabel = new QLabel(this);
+    m_pathHintLabel->setWordWrap(true);
+    m_pathHintLabel->setStyleSheet(QStringLiteral("color: #9aa3b2; font-size: 11px;"));
+    pathLayout->addWidget(m_pathHintLabel);
+
+    m_createPathButton = new QPushButton(
+        m_i18n ? m_i18n->t("editor", "textPath.createWithPen")
+               : QStringLiteral("✏️ Desenhar caminho com a caneta (P)"),
+        this);
+    connect(m_createPathButton, &QPushButton::clicked, this, [this]() {
+        // Pede à janela para activar a caneta (pelo mesmo caminho do
+        // menu/atalho) em vez de mexer em ferramentas a partir daqui.
+        emit requestTool(CanvasTool::Vector);
+        if (m_pathHintLabel)
+            m_pathHintLabel->setText(m_i18n
+                ? m_i18n->t("editor", "textPath.hintDrawing")
+                : QStringLiteral("Clique para criar os pontos do caminho; botão direito fecha. "
+                                 "O texto passa a seguir o caminho assim que o ligar acima."));
+    });
+    pathLayout->addWidget(m_createPathButton);
     auto* offsetRow = new QHBoxLayout;
     offsetRow->addWidget(new QLabel(
         m_i18n ? m_i18n->t("editor", "textPath.offset") : QStringLiteral("Deslocamento:"),
@@ -945,7 +969,11 @@ void TextInspector::refreshPathCombo()
         return;
     const QString current = m_pathCombo->currentData().toString();
     m_pathCombo->clear();
-    m_pathCombo->addItem(QStringLiteral("(sem caminho)"), QUuid().toString());
+    // i18n: era string fixa em português.
+    m_pathCombo->addItem(m_i18n ? m_i18n->t("editor", "textPath.none")
+                                : QStringLiteral("(sem caminho)"),
+                         QUuid().toString());
+    int pathCount = 0;
     if (m_document) {
         // Percorrer a árvore e listar as camadas vectoriais.
         std::vector<const GroupLayer*> stack;
@@ -959,8 +987,11 @@ void TextInspector::refreshPathCombo()
                     continue;
                 if (child->type() == LayerType::Vector) {
                     const QString name = child->name.isEmpty()
-                        ? QStringLiteral("VectorLayer") : child->name;
+                        ? (m_i18n ? m_i18n->t("editor", "textPath.defaultPathName")
+                                  : QStringLiteral("Caminho"))
+                        : child->name;
                     m_pathCombo->addItem(name, child->id().toString(QUuid::WithoutBraces));
+                    ++pathCount;
                 }
                 if (child->type() == LayerType::Group)
                     stack.push_back(static_cast<const GroupLayer*>(child.get()));
@@ -971,6 +1002,22 @@ void TextInspector::refreshPathCombo()
         const int index = m_pathCombo->findData(current);
         if (index >= 0)
             m_pathCombo->setCurrentIndex(index);
+    }
+
+    // Orientação contextual: quantos caminhos existem e o que fazer se não
+    // houver nenhum — era o que deixava o utilizador perdido.
+    if (m_pathHintLabel) {
+        if (pathCount == 0) {
+            m_pathHintLabel->setText(m_i18n
+                ? m_i18n->t("editor", "textPath.hintNone")
+                : QStringLiteral("Ainda não existe nenhum caminho. Use a caneta (P) para "
+                                 "desenhar um e ele aparece aqui."));
+        } else {
+            m_pathHintLabel->setText(m_i18n
+                ? m_i18n->t("editor", "textPath.hintCount", {QString::number(pathCount)})
+                : QStringLiteral("%1 caminho(s) disponível(is) — escolha um acima.")
+                      .arg(pathCount));
+        }
     }
 }
 

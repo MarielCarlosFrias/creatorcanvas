@@ -360,6 +360,10 @@
       "adjustment": "Adjustment",
       "refineEdge": "Refine Edge",
       "editInMiniPaint": "Edit in MiniPaint"
+    },
+    "status": {
+      "nodeEditHint": "Nodes: drag to move, Alt+release breaks smoothness, double-click deletes, click on the path inserts.",
+      "nodeEditNoPath": "No path to edit — draw one with the pen (P)."
     }
   },
   "filters": {
@@ -519,6 +523,11 @@
   "textPath": {
     "title": "Text on Path",
     "none": "(no path)",
-    "offset": "Offset:"
+    "offset": "Offset:",
+    "createWithPen": "✏️ Draw path with pen (P)",
+    "hintDrawing": "Click to add the path points; right-click closes it. The text will follow the path as soon as you link it above.",
+    "hintNone": "There is no path yet. Use the pen (P) to draw one and it will show up here.",
+    "hintCount": "%1 path(s) available — pick one above.",
+    "defaultPathName": "Path"
   }
 }

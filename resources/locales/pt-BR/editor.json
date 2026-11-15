@@ -360,6 +360,10 @@
       "adjustment": "Ajuste",
       "refineEdge": "Refinar Borda",
       "editInMiniPaint": "Editar no MiniPaint"
+    },
+    "status": {
+      "nodeEditHint": "Nós: arraste para mover, Alt+largar quebra a suavidade, duplo-clique apaga, clique no caminho insere.",
+      "nodeEditNoPath": "Sem caminho para editar — desenhe um com a caneta (P)."
     }
   },
   "filters": {
@@ -519,6 +523,11 @@
   "textPath": {
     "title": "Texto em Caminho",
     "none": "(sem caminho)",
-    "offset": "Deslocamento:"
+    "offset": "Deslocamento:",
+    "createWithPen": "✏️ Desenhar caminho com a caneta (P)",
+    "hintDrawing": "Clique para criar os pontos do caminho; o botão direito fecha. O texto passa a seguir o caminho assim que o ligar acima.",
+    "hintNone": "Ainda não existe nenhum caminho. Use a caneta (P) para desenhar um e ele aparece aqui.",
+    "hintCount": "%1 caminho(s) disponível(is) — escolha um acima.",
+    "defaultPathName": "Caminho"
   }
 }

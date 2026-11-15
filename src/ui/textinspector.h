@@ -2,6 +2,8 @@
 
 #include <QWidget>
 
+#include "tools/CanvasTool.h"
+
 #include <QPointer>
 #include "core/Document.h"
 #include "core/DocumentController.h"
@@ -43,6 +45,7 @@ public:
     void setSelectedLayer(const LayerId& id);
     void setDocument(Document* document);
     void setHistory(CommandStack* history) { m_history = history; }
+
     void refresh();
     void commitPendingTextChange();
     /// Modo avançado: revela as secções profissionais (estilos, texto em
@@ -95,6 +98,8 @@ private:
     // Texto em caminho (modo avançado).
     CollapsibleSection* m_pathSection = nullptr;
     QComboBox* m_pathCombo = nullptr;
+    QLabel* m_pathHintLabel = nullptr;
+    QPushButton* m_createPathButton = nullptr;
     QSlider* m_pathOffset = nullptr;
     QSpinBox* m_size = nullptr;
     QToolButton* m_bold = nullptr;
@@ -154,6 +159,13 @@ private:
     class CollapsibleSection* m_gradientSection = nullptr;
     class CollapsibleSection* m_textureSection = nullptr;
     class CollapsibleSection* m_perspectiveSection = nullptr;
+
+signals:
+    /// Pede à janela para activar uma ferramenta (ex.: a caneta, para
+    /// desenhar o caminho do texto). A inspect GUI não mexe em ferramentas
+    /// directamente.
+    void requestTool(CanvasTool tool);
+
 };
 
 } // namespace cc

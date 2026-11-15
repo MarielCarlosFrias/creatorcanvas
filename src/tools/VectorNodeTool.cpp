@@ -1,6 +1,7 @@
 #include "VectorNodeTool.h"
 
 #include "core/Document.h"
+#include "localization/i18nservice.h"
 #include "core/commands/LayerPropertyCommands.h"
 #include "core/history/CommandStack.h"
 #include "core/layers/Layer.h"
@@ -31,6 +32,31 @@ QPointF toLocal(const VectorLayer* layer, const QPointF& docPos)
     return layer->transform.matrix(layer->contentBounds()).inverted().map(docPos);
 }
 
+/// Id do último VectorLayer da árvore (o mais recentemente criado costuma
+/// ser o que o utilizador quer editar). LayerId nulo se não existir nenhum.
+LayerId lastVectorLayerId(const Document& doc)
+{
+    const GroupLayer* root = doc.rootGroup();
+    if (!root)
+        return {};
+    std::vector<const GroupLayer*> stack{root};
+    LayerId last;
+    int guard = 0;
+    while (!stack.empty() && guard++ < 4096) {
+        const GroupLayer* group = stack.back();
+        stack.pop_back();
+        for (const auto& child : group->children) {
+            if (!child)
+                continue;
+            if (child->type() == LayerType::Vector)
+                last = child->id();
+            if (child->type() == LayerType::Group)
+                stack.push_back(static_cast<const GroupLayer*>(child.get()));
+        }
+    }
+    return last;
+}
+
 /// Camada vectorial selecionada agora, ou nullptr. Resolvida a cada evento —
 /// a selecção pode mudar enquanto a ferramenta está activa.
 VectorLayer* selectedVector(const ToolContext& ctx)
@@ -50,15 +76,32 @@ void VectorNodeTool::activate(const ToolContext& ctx)
     m_layer = selectedVector(ctx);
     m_drag = Drag::None;
     m_dragIndex = -1;
+
+    // Se a camada selecionada não é um caminho, escolhemos o ÚLTIMO caminho
+    // do documento: pedir ao utilizador para "seleccionar uma camada de
+    // caminho" deixava a ferramenta inutilizável (não havia forma de saber
+    // qual era).
+    if (!m_layer && ctx.document && ctx.selectLayer) {
+        const LayerId last = lastVectorLayerId(*ctx.document);
+        if (!last.isNull()) {
+            ctx.selectLayer(last);
+            m_layer = selectedVector(ctx);
+        }
+    }
+
+    const QString hint = ctx.i18n
+        ? ctx.i18n->t("editor", "canvas.status.nodeEditHint")
+        : QStringLiteral("Nós: arraste para mover, Alt+largar quebra a suavidade, "
+                         "duplo-clique apaga, clique no caminho insere.");
+    const QString noPath = ctx.i18n
+        ? ctx.i18n->t("editor", "canvas.status.nodeEditNoPath")
+        : QStringLiteral("Sem caminho para editar — desenhe um com a caneta (P).");
     if (m_layer && m_layer->nodes.size() >= 2) {
         rebuildPath();
         if (ctx.requestStatusMessage)
-            ctx.requestStatusMessage(QStringLiteral(
-                "Nós: arraste para mover, Alt+largar quebra a suavidade, duplo-clique apaga, "
-                "clique no caminho insere."));
+            ctx.requestStatusMessage(hint);
     } else if (ctx.requestStatusMessage) {
-        ctx.requestStatusMessage(QStringLiteral(
-            "Seleccione uma camada de caminho (caneta) para editar os nós."));
+        ctx.requestStatusMessage(noPath);
     }
 }
 

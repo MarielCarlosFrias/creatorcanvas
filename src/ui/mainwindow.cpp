@@ -820,6 +820,18 @@ void MainWindow::buildLayersDock()
     m_textInspector = new TextInspector(m_i18n, m_document, m_history.get(), this);
     if (m_textInspector && m_textStyleStore)
         m_textInspector->setStyleStore(m_textStyleStore.get());
+    if (m_textInspector) {
+        connect(m_textInspector, &TextInspector::requestTool, this,
+                [this](CanvasTool tool) {
+                    // A inspecto GUI pede uma ferramenta (ex.: caneta para
+                    // desenhar o caminho do texto) — trata pela mesma
+                    // Acção que o menu usaria.
+                    if (m_actions)
+                        m_actions->selectToolByName(
+                            tool == CanvasTool::Vector ? QStringLiteral("pen")
+                                                       : QStringLiteral("select"));
+                });
+    }
     m_textDock = new QDockWidget(QString(), this);
     m_textDock->setObjectName(QStringLiteral("TextDock"));
     m_textDock->setMinimumWidth(Design::dockWidth(width()));

@@ -357,6 +357,10 @@
       "adjustment": "Justering",
       "refineEdge": "Förfina kant",
       "editInMiniPaint": "Redigera i MiniPaint"
+    },
+    "status": {
+      "nodeEditHint": "Noder: dra för att flytta, Alt+släpp bryter jämnheten, dubbelklick tar bort, klicka på banan för att infoga.",
+      "nodeEditNoPath": "Ingen bana att redigera — rita en med pennan (P)."
     }
   },
   "filters": {
@@ -516,6 +520,11 @@
   "textPath": {
     "title": "Text längs bana",
     "none": "(ingen bana)",
-    "offset": "Förskjutning:"
+    "offset": "Förskjutning:",
+    "createWithPen": "✏️ Rita bana med penna (P)",
+    "hintDrawing": "Klicka för att lägga till punkter; högerklick stänger banan. Texten följer banan så snart du länkar den ovan.",
+    "hintNone": "Det finns ingen bana ännu. Använd pennan (P) för att rita en, då visas den här.",
+    "hintCount": "%1 bana(or) tillgänglig(a) — välj en ovan.",
+    "defaultPathName": "Bana"
   }
 }
