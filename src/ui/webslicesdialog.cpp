@@ -218,25 +218,53 @@ void WebSlicesDialog::updatePreview()
 
 QString WebSlicesDialog::addSliceFromSelection()
 {
-    if (m_selectedLayer.isNull())
-        return {};
-    const Layer* layer = m_doc.findLayer(m_selectedLayer);
-    if (!layer || m_doc.pixelSelection().isNull())
+    QRectF docRect;
+
+    // 1. Tentar pela seleção ativa de pixels (Marquee, Varinha, Tesoura)
+    if (!m_doc.pixelSelection().isNull()) {
+        const QImage selection = SelectionEngine::normalize(m_doc.pixelSelection());
+        const QRect bbox = SelectionEngine::boundingBox(selection);
+        if (!bbox.isEmpty()) {
+            if (selection.size() == QSize(m_doc.width(), m_doc.height()) || m_selectedLayer.isNull()) {
+                // A seleção já está no espaço de coordenadas do documento
+                docRect = QRectF(bbox);
+            } else {
+                // A seleção está no espaço de bitmap da camada
+                const Layer* layer = m_doc.findLayer(m_selectedLayer);
+                if (layer) {
+                    const QRectF layerBounds = layer->contentBounds();
+                    if (!layerBounds.isEmpty()) {
+                        const qreal sx = layerBounds.width() / std::max(1, selection.width());
+                        const qreal sy = layerBounds.height() / std::max(1, selection.height());
+                        const QRectF localRect(bbox.x() * sx, bbox.y() * sy,
+                                               bbox.width() * sx, bbox.height() * sy);
+                        docRect = layer->transform.matrix(layerBounds).mapRect(localRect).normalized();
+                    }
+                } else {
+                    docRect = QRectF(bbox);
+                }
+            }
+        }
+    }
+
+    // 2. Se não houver seleção de pixels, usar os limites da camada selecionada
+    if ((docRect.isEmpty() || docRect.width() < 1.0 || docRect.height() < 1.0) && !m_selectedLayer.isNull()) {
+        const Layer* layer = m_doc.findLayer(m_selectedLayer);
+        if (layer) {
+            const QRectF layerBounds = layer->contentBounds();
+            if (!layerBounds.isEmpty()) {
+                docRect = layer->transform.matrix(layerBounds).mapRect(layerBounds).normalized();
+            }
+        }
+    }
+
+    if (docRect.isEmpty() || docRect.width() < 1.0 || docRect.height() < 1.0)
         return {};
 
-    // A selecção vive no espaço do bitmap da camada; a fatia é em espaço
-    // de documento. A matriz tem de ser construída com o contentBounds da
-    // CAMADA (antes passava a bbox, o que deslocava a fatia sempre que a
-    // camada não estava na origem).
-    const QImage selection = SelectionEngine::normalize(m_doc.pixelSelection());
-    const QRect bbox = SelectionEngine::boundingBox(selection);
-    if (bbox.isEmpty())
+    // Mantém dentro do documento
+    docRect = docRect.intersected(QRectF(0, 0, m_doc.width(), m_doc.height()));
+    if (docRect.isEmpty() || docRect.width() < 1.0 || docRect.height() < 1.0)
         return {};
-    const QRectF layerBounds = layer->contentBounds();
-    if (layerBounds.isEmpty())
-        return {};
-    const QRectF docRect =
-        layer->transform.matrix(layerBounds).mapRect(QRectF(bbox)).normalized();
 
     WebSlice slice;
     slice.name = m_nameEdit->text().trimmed().isEmpty()
@@ -245,6 +273,15 @@ QString WebSlicesDialog::addSliceFromSelection()
     slice.rect = docRect;
     slice.kind = SliceKind::Image;
     slice.exportFormat = m_formatCombo->currentData().toString();
+
+    // Sincroniza campos numéricos
+    if (m_xSpin && m_ySpin && m_wSpin && m_hSpin) {
+        const QSignalBlocker b1(m_xSpin), b2(m_ySpin), b3(m_wSpin), b4(m_hSpin);
+        m_xSpin->setValue(qRound(docRect.x()));
+        m_ySpin->setValue(qRound(docRect.y()));
+        m_wSpin->setValue(qRound(docRect.width()));
+        m_hSpin->setValue(qRound(docRect.height()));
+    }
 
     const QString newId = slice.id;   // id ANTES do move
     executeAddWebSlice(m_doc, m_history, std::move(slice));

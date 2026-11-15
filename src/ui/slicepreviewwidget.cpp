@@ -266,8 +266,10 @@ void SlicePreviewWidget::mouseMoveEvent(QMouseEvent* event)
         next.setWidth(minSize);
     if (next.height() < minSize)
         next.setHeight(minSize);
-    next.moveLeft(std::clamp(next.left(), 0.0, docW - next.width()));
-    next.moveTop(std::clamp(next.top(), 0.0, docH - next.height()));
+    const double maxLeft = std::max(0.0, docW - next.width());
+    const double maxTop = std::max(0.0, docH - next.height());
+    next.moveLeft(std::clamp(next.left(), 0.0, maxLeft));
+    next.moveTop(std::clamp(next.top(), 0.0, maxTop));
 
     m_pending = next;
     emit pendingEdited(next.normalized());

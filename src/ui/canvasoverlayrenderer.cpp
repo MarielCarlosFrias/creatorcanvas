@@ -452,8 +452,8 @@ void CanvasOverlayRenderer::drawWebSlices(QPainter* painter,
         QRectF labelRect(screenRect.left(), screenRect.top() - 16, textWidth, 16);
         if (labelRect.top() < 0)
             labelRect.moveTop(screenRect.top() + 2);   // não sai da vista
-        labelRect.setLeft(std::clamp<double>(labelRect.left(), 0.0,
-                                               painter->device()->width() - textWidth));
+        const double maxLabelLeft = std::max(0.0, static_cast<double>(painter->device()->width() - textWidth));
+        labelRect.setLeft(std::clamp<double>(labelRect.left(), 0.0, maxLabelLeft));
         painter->setPen(Qt::NoPen);
         painter->setBrush(QColor(color.red(), color.green(), color.blue(), 190));
         painter->drawRoundedRect(labelRect, 3, 3);

@@ -182,8 +182,10 @@ void CropTool::mouseMove(QMouseEvent* event, const QPointF& docPos, const ToolCo
 
         left = std::clamp(left, 0.0, std::max(0.0, right - 10.0));
         top = std::clamp(top, 0.0, std::max(0.0, bottom - 10.0));
-        right = std::clamp(right, left + 10.0, maxW);
-        bottom = std::clamp(bottom, top + 10.0, maxH);
+        const double minRight = left + 10.0;
+        right = std::clamp(right, minRight, std::max(minRight, maxW));
+        const double minBottom = top + 10.0;
+        bottom = std::clamp(bottom, minBottom, std::max(minBottom, maxH));
 
         if (m_aspectRatio > 0.0) {
             const double curW = right - left;

@@ -56,44 +56,54 @@ void ScissorsTool::mousePress(QMouseEvent* event, const QPointF& docPos, const T
         }
     }
 
+    QPointF pt;
     if (layer && layer->type() == LayerType::Image) {
         const QTransform matrix = layer->transform.matrix(layer->contentBounds());
-        const QPointF localPos = matrix.inverted().map(docPos);
-
-        // Se clicar próximo ao primeiro nó, fecha o polígono automaticamente
-        if (m_isDrawing && m_polygon.size() >= 3) {
-            const QTransform layerToDevice = matrix * ctx.docToDevice;
-            const QPointF firstScreen = layerToDevice.map(m_polygon.first());
-            const QPointF clickScreen = ctx.docToDevice.map(docPos);
-            if (QLineF(firstScreen, clickScreen).length() <= 10.0) {
-                applyCut(ctx);
-                event->accept();
-                return;
-            }
-        }
-
-        m_polygon << localPos;
-        m_currentHover = localPos;
-        m_isDrawing = true;
-        if (ctx.requestUpdate)
-            ctx.requestUpdate();
-        event->accept();
+        pt = matrix.inverted().map(docPos);
+    } else {
+        pt = docPos;
     }
+
+    // Se clicar próximo ao primeiro nó, fecha o polígono automaticamente
+    if (m_isDrawing && m_polygon.size() >= 3) {
+        QPointF firstScreen;
+        if (layer && layer->type() == LayerType::Image) {
+            const QTransform layerToDevice = layer->transform.matrix(layer->contentBounds()) * ctx.docToDevice;
+            firstScreen = layerToDevice.map(m_polygon.first());
+        } else {
+            firstScreen = ctx.docToDevice.map(m_polygon.first());
+        }
+        const QPointF clickScreen = ctx.docToDevice.map(docPos);
+        if (QLineF(firstScreen, clickScreen).length() <= 10.0) {
+            applyCut(ctx);
+            event->accept();
+            return;
+        }
+    }
+
+    m_polygon << pt;
+    m_currentHover = pt;
+    m_isDrawing = true;
+    if (ctx.requestUpdate)
+        ctx.requestUpdate();
+    event->accept();
 }
 
 void ScissorsTool::mouseMove(QMouseEvent* event, const QPointF& docPos, const ToolContext& ctx)
 {
     Q_UNUSED(event);
-    if (!m_isDrawing || !ctx.document || ctx.selectedLayerId.isNull())
+    if (!m_isDrawing || !ctx.document)
         return;
 
-    Layer* layer = ctx.document->findLayer(ctx.selectedLayerId);
+    Layer* layer = !ctx.selectedLayerId.isNull() ? ctx.document->findLayer(ctx.selectedLayerId) : nullptr;
     if (layer && layer->type() == LayerType::Image) {
         const QTransform matrix = layer->transform.matrix(layer->contentBounds());
         m_currentHover = matrix.inverted().map(docPos);
-        if (ctx.requestUpdate)
-            ctx.requestUpdate();
+    } else {
+        m_currentHover = docPos;
     }
+    if (ctx.requestUpdate)
+        ctx.requestUpdate();
 }
 
 void ScissorsTool::mouseDoubleClick(QMouseEvent* event, const QPointF& docPos, const ToolContext& ctx)
@@ -127,25 +137,21 @@ void ScissorsTool::keyPress(QKeyEvent* event, const ToolContext& ctx)
 
 void ScissorsTool::applyCut(const ToolContext& ctx)
 {
-    if (!ctx.document || ctx.selectedLayerId.isNull() || m_polygon.size() < 3) {
+    if (!ctx.document || m_polygon.size() < 3) {
         cancel(ctx);
         return;
     }
 
-    Layer* layer = ctx.document->findLayer(ctx.selectedLayerId);
-    if (!layer || layer->type() != LayerType::Image) {
-        cancel(ctx);
-        return;
+    Layer* layer = !ctx.selectedLayerId.isNull() ? ctx.document->findLayer(ctx.selectedLayerId) : nullptr;
+    QSize targetSize(ctx.document->width(), ctx.document->height());
+    if (layer && layer->type() == LayerType::Image) {
+        auto* imgLayer = static_cast<ImageLayer*>(layer);
+        const QImage oldImg = ctx.document->assets().decodedImage(imgLayer->assetId);
+        if (!oldImg.isNull())
+            targetSize = oldImg.size();
     }
 
-    auto* imgLayer = static_cast<ImageLayer*>(layer);
-    const QImage oldImg = ctx.document->assets().decodedImage(imgLayer->assetId);
-    if (oldImg.isNull()) {
-        cancel(ctx);
-        return;
-    }
-
-    QImage selection(oldImg.size(), QImage::Format_Alpha8);
+    QImage selection(targetSize, QImage::Format_Alpha8);
     selection.fill(0);
     QPainter maskPainter(&selection);
     maskPainter.setPen(Qt::NoPen);
@@ -173,22 +179,24 @@ void ScissorsTool::applyCut(const ToolContext& ctx)
 
 void ScissorsTool::drawOverlay(QPainter* painter, const ToolContext& ctx)
 {
-    if (!ctx.document || ctx.selectedLayerId.isNull() || m_polygon.isEmpty())
+    if (!ctx.document || m_polygon.isEmpty())
         return;
 
-    Layer* layer = ctx.document->findLayer(ctx.selectedLayerId);
-    if (!layer || layer->type() != LayerType::Image)
-        return;
-
-    const QTransform layerToDoc = layer->transform.matrix(layer->contentBounds());
-    const QTransform layerToDevice = layerToDoc * ctx.docToDevice;
+    Layer* layer = !ctx.selectedLayerId.isNull() ? ctx.document->findLayer(ctx.selectedLayerId) : nullptr;
+    QTransform pointToDevice;
+    if (layer && layer->type() == LayerType::Image) {
+        const QTransform layerToDoc = layer->transform.matrix(layer->contentBounds());
+        pointToDevice = layerToDoc * ctx.docToDevice;
+    } else {
+        pointToDevice = ctx.docToDevice;
+    }
 
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing, true);
 
     QPolygonF screenPoly;
     for (const QPointF& pt : m_polygon)
-        screenPoly << layerToDevice.map(pt);
+        screenPoly << pointToDevice.map(pt);
 
     if (screenPoly.size() >= 3) {
         painter->setBrush(QColor(0, 220, 255, 45));
@@ -208,7 +216,7 @@ void ScissorsTool::drawOverlay(QPainter* painter, const ToolContext& ctx)
 
     if (m_isDrawing) {
         QPointF lastPt = screenPoly.last();
-        QPointF hoverPt = layerToDevice.map(m_currentHover);
+        QPointF hoverPt = pointToDevice.map(m_currentHover);
         painter->setPen(QPen(QColor(255, 255, 255, 200), 1.0, Qt::DotLine));
         painter->drawLine(lastPt, hoverPt);
     }
