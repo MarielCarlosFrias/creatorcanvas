@@ -33,6 +33,13 @@ public:
     /// a edição de nós funcionar desde o primeiro momento.
     std::vector<QPointF> m_anchors;
 
+    struct NodeData {
+        QPointF pos;
+        QPointF handleIn;   // relativo a pos
+        QPointF handleOut;  // relativo a pos
+        bool smooth = false;
+    };
+
     void setStrokeColor(const QColor& c) { m_strokeColor = c; }
     QColor strokeColor() const { return m_strokeColor; }
     void setStrokeWidth(double w) { m_strokeWidth = w; }
@@ -44,12 +51,16 @@ public:
     QPainterPath path() const { return m_path; }
 
 private:
+    void rebuildCurrentPath();
+    void syncAnchors();
+
+    std::vector<NodeData> m_nodes;
     QPainterPath m_path;
     QPointF m_lastPoint;
-    QPointF m_currentHandle;
     QPointF m_currentHover;
     bool m_drawing = false;
-    bool m_hasSource = false;
+    bool m_isDraggingHandle = false;
+    bool m_closed = false;
 
     QColor m_strokeColor = QColor(0x43, 0x78, 0xff);
     QColor m_fillColor = Qt::transparent;

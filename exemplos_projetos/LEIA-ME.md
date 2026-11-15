@@ -1,6 +1,6 @@
 # Projetos de Exemplo e Prática — CreatorCanvas
 
-Esta pasta contém **6 projetos prontos no formato oficial (`.creatorcanvas`)**, criados especificamente para você praticar cada uma das ferramentas do programa de forma direta, sem precisar começar do zero.
+Esta pasta contém **8 projetos prontos no formato oficial (`.creatorcanvas`)**, criados especificamente para você praticar cada uma das ferramentas do programa de forma direta, sem precisar começar do zero.
 
 ---
 
@@ -9,6 +9,7 @@ Esta pasta contém **6 projetos prontos no formato oficial (`.creatorcanvas`)**,
 2. Clique em **"Abrir Projeto"** na tela inicial ou vá em **Arquivo > Abrir...** (`Ctrl + O`).
 3. Navegue até esta pasta: `~/creatorcanvas/exemplos_projetos/`
 4. Selecione o projeto desejado e clique em **Abrir**.
+5. Você também pode acessar diretamente pelo menu **Ajuda > Projetos de Exemplo para Prática...**.
 
 ---
 
@@ -39,8 +40,12 @@ Esta pasta contém **6 projetos prontos no formato oficial (`.creatorcanvas`)**,
 ### 4. `04_Cenario_Vetor_Logotipo.creatorcanvas` (1200×800 px)
 * **Objetivo:** Dominar curvas suaves de Bézier e nós vetoriais.
 * **Ferramentas para Treinar:**
-  * **Caneta (`P`):** Clique no último nó do traçado aberto para continuar desenhando e aperte `Enter` para fechar a forma.
-  * **Edição de Nós (`A`):** Clique em qualquer nó da curva. Puxe as alças circulares para ajustar o raio e a suavidade da curva à vontade. Duplo clique adiciona novos nós.
+  * **Caneta (`P`):**
+    * **Clique e solte:** Cria nós de canto retos.
+    * **Clique e arraste:** Puxa alças tangentes de curvatura Bézier em tempo real, gerando curvas suaves e orgânicas!
+    * **Linha elástica com prévia de curva:** Enquanto move o cursor, o programa mostra exatamente como a curva vai ficar antes de você clicar.
+    * **Fechar caminho:** Clique de volta sobre o primeiro ponto (destacado em verde com anel pulsante) ou aperte `Enter`.
+  * **Edição de Nós (`A`):** Clique em qualquer nó das camadas `Simbolo_Asa_Curvas` ou `Detalhe_Interno`. Puxe as alças circulares para ajustar a curvatura, ou dê duplo clique para adicionar nós.
 
 ### 5. `05_Cenario_Web_Slices.creatorcanvas` (1920×1080 px)
 * **Objetivo:** Fatiar um layout web completo em seções para exportação rápida.
@@ -57,3 +62,17 @@ Esta pasta contém **6 projetos prontos no formato oficial (`.creatorcanvas`)**,
   * **Corte (`C`):** Pressione `C` e mude na barra superior a proporção para **1:1** (Quadrado para Instagram) ou **9:16** (Vertical para Reels/Stories).
   * Posicione a grade sobre o Sol poente e o horizonte.
   * Pressione `Enter` para aplicar o corte ou `Esc` para cancelar.
+
+### 7. `07_Cenario_Tipografia_Efeitos.creatorcanvas` (1080×1350 px - Cartaz Vertical)
+* **Objetivo:** Criar cartazes e peças publicitárias com efeitos tipográficos avançados.
+* **Ferramentas para Treinar:**
+  * **Texto (`T`) & Inspetor de Texto:** Selecione a camada `Titulo_Principal`.
+  * **Efeitos de Texto:** Experimente ativar e desativar **Sombra Projetada**, **Contorno (Stroke)** e alterar fontes instaladas.
+  * **Alinhamento & Distribuição:** Alinhe os blocos de texto e explore o espaçamento entre linhas.
+
+### 8. `08_Cenario_Gradientes_Composicao.creatorcanvas` (1200×800 px)
+* **Objetivo:** Explorar Modos de Mesclagem de camadas (Blend Modes) e sobreposição de iluminação criativa.
+* **Ferramentas para Treinar:**
+  * **Painel de Camadas:** Selecione `Luz_Magenta (Screen)` ou `Luz_Ciano (Screen)`.
+  * **Modos de Mesclagem:** Alterne entre **Normal**, **Screen**, **Multiply**, **Overlay** e **Color Dodge** para ver a fusão das luzes e do fundo instantaneamente.
+  * **Opacidade da Camada:** Experimente dosar a intensidade de cada camada com o controle deslizante de opacidade.

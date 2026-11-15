@@ -367,51 +367,99 @@ std::unique_ptr<Document> buildCenario04()
 
     auto bg = std::make_unique<BackgroundLayer>();
     bg->name = QStringLiteral("Fundo Tech");
-    bg->fill = QColor(0x0f, 0x17, 0x2a);
+    bg->fill = QColor(0x0a, 0x0f, 0x1d);
     doc->addLayer(std::move(bg));
 
+    // Asa vetorial estilizada 1 (emblema principal)
     auto vec = std::make_unique<VectorLayer>();
     vec->name = QStringLiteral("Simbolo_Asa_Curvas");
-    vec->fill = QColor(0x38, 0xbd, 0xf8, 60);
+    vec->fill = QColor(0x38, 0xbd, 0xf8, 70);
     vec->stroke = QColor(0x38, 0xbd, 0xf8);
     vec->strokeWidth = 4.0;
     vec->fillEnabled = true;
     vec->strokeEnabled = true;
-    vec->closed = false;
+    vec->closed = true;
+    vec->transform.position = QPointF(600, 340);
 
     VectorNode n1;
-    n1.position = QPointF(350, 420);
-    n1.handleOut = QPointF(420, 320);
+    n1.position = QPointF(-220, 60);
+    n1.handleIn = QPointF(-20, 40);
+    n1.handleOut = QPointF(40, -80);
     n1.smooth = true;
 
     VectorNode n2;
-    n2.position = QPointF(550, 300);
-    n2.handleIn = QPointF(480, 260);
-    n2.handleOut = QPointF(640, 350);
+    n2.position = QPointF(-70, -110);
+    n2.handleIn = QPointF(-70, -10);
+    n2.handleOut = QPointF(80, 10);
     n2.smooth = true;
 
     VectorNode n3;
-    n3.position = QPointF(750, 420);
-    n3.handleIn = QPointF(700, 360);
-    n3.handleOut = QPointF(800, 480);
+    n3.position = QPointF(190, -70);
+    n3.handleIn = QPointF(-60, -40);
+    n3.handleOut = QPointF(40, 70);
     n3.smooth = true;
 
     VectorNode n4;
-    n4.position = QPointF(650, 520);
-    n4.handleIn = QPointF(720, 520);
-    n4.handleOut = QPointF(560, 500);
+    n4.position = QPointF(130, 90);
+    n4.handleIn = QPointF(40, -30);
+    n4.handleOut = QPointF(-70, 30);
     n4.smooth = true;
 
-    vec->nodes = {n1, n2, n3, n4};
+    VectorNode n5;
+    n5.position = QPointF(-40, 95);
+    n5.handleIn = QPointF(50, 5);
+    n5.handleOut = QPointF(-50, -5);
+    n5.smooth = true;
+
+    vec->nodes = {n1, n2, n3, n4, n5};
     vec->rebuildPath();
     doc->addLayer(std::move(vec));
+
+    // Elemento vetorial secundário interno (asa menor)
+    auto innerVec = std::make_unique<VectorLayer>();
+    innerVec->name = QStringLiteral("Detalhe_Interno");
+    innerVec->fill = QColor(0x81, 0x8c, 0xf8, 90);
+    innerVec->stroke = QColor(0xc7, 0xd2, 0xfe);
+    innerVec->strokeWidth = 3.0;
+    innerVec->fillEnabled = true;
+    innerVec->strokeEnabled = true;
+    innerVec->closed = true;
+    innerVec->transform.position = QPointF(600, 340);
+
+    VectorNode in1;
+    in1.position = QPointF(-130, 40);
+    in1.handleIn = QPointF(-10, 25);
+    in1.handleOut = QPointF(25, -50);
+    in1.smooth = true;
+
+    VectorNode in2;
+    in2.position = QPointF(-30, -50);
+    in2.handleIn = QPointF(-40, -5);
+    in2.handleOut = QPointF(45, 5);
+    in2.smooth = true;
+
+    VectorNode in3;
+    in3.position = QPointF(100, -25);
+    in3.handleIn = QPointF(-35, -20);
+    in3.handleOut = QPointF(20, 35);
+    in3.smooth = true;
+
+    VectorNode in4;
+    in4.position = QPointF(50, 55);
+    in4.handleIn = QPointF(25, -15);
+    in4.handleOut = QPointF(-45, 10);
+    in4.smooth = true;
+
+    innerVec->nodes = {in1, in2, in3, in4};
+    innerVec->rebuildPath();
+    doc->addLayer(std::move(innerVec));
 
     auto guide = std::make_unique<TextLayer>();
     guide->name = QStringLiteral("🎯 GUIA DE VETORES");
     guide->content = QStringLiteral("EXERCÍCIO DE CURVAS VETORIAIS:\n\n"
-                                    "1. Caneta (P): Clique perto do último ponto para continuar o traçado e aperte Enter para fechar.\n"
-                                    "2. Edição de Nós (A): Clique em qualquer um dos 4 nós para ver suas alças de curvatura (Bézier).\n"
-                                    "3. Arraste as alças para criar curvas mais suaves ou cantos afiados!");
+                                    "1. Caneta (P): Clique e arraste para puxar curvas suaves com alças Bézier!\n"
+                                    "2. Edição de Nós (A): Clique em qualquer nó da 'Simbolo_Asa_Curvas' para inspecionar e puxar suas alças.\n"
+                                    "3. Pressione Enter para fechar caminhos ou Esc para cancelar.");
     guide->sizePt = 14.0;
     guide->bold = true;
     guide->color = QColor(0x38, 0xbd, 0xf8);
@@ -596,6 +644,160 @@ std::unique_ptr<Document> buildCenario06()
     return doc;
 }
 
+// -------------------------------------------------------------
+// 07. Tipografia e Efeitos Visuais (1080x1350 - Cartaz Vertical)
+// -------------------------------------------------------------
+std::unique_ptr<Document> buildCenario07()
+{
+    auto doc = std::make_unique<Document>(1080, 1350);
+
+    auto bg = std::make_unique<BackgroundLayer>();
+    bg->name = QStringLiteral("Fundo Cósmico");
+    bg->fill = QColor(0x0b, 0x0f, 0x19);
+    doc->addLayer(std::move(bg));
+
+    // Círculo de brilho de fundo
+    auto glow = std::make_unique<ShapeLayer>();
+    glow->name = QStringLiteral("Brilho_Neon_Fundo");
+    glow->kind = ShapeKind::Ellipse;
+    glow->fill = QColor(0x63, 0x66, 0xf1, 80);
+    glow->strokeWidth = 0.0;
+    glow->stroke = Qt::transparent;
+    glow->points = {QPointF(-250, -250), QPointF(250, 250)};
+    glow->transform.position = QPointF(540, 480);
+    doc->addLayer(std::move(glow));
+
+    // Título Principal com Sombra
+    auto title = std::make_unique<TextLayer>();
+    title->name = QStringLiteral("Titulo_Principal");
+    title->content = QStringLiteral("CREATIVE\nHORIZONS");
+    title->sizePt = 76.0;
+    title->bold = true;
+    title->color = QColor(0xff, 0xff, 0xff);
+    title->align = TextAlignment::Center;
+    title->effects.shadow.enabled = true;
+    title->effects.shadow.color = QColor(0, 0, 0, 230);
+    title->effects.shadow.offsetX = 6.0;
+    title->effects.shadow.offsetY = 8.0;
+    title->effects.shadow.blur = 18.0;
+    title->effects.outline.enabled = true;
+    title->effects.outline.color = QColor(0x81, 0x8c, 0xf8);
+    title->effects.outline.width = 3.0;
+    title->transform.position = QPointF(540, 460);
+    doc->addLayer(std::move(title));
+
+    // Subtítulo
+    auto sub = std::make_unique<TextLayer>();
+    sub->name = QStringLiteral("Subtitulo_Design");
+    sub->content = QStringLiteral("MASTER DIGITAL ART & TYPOGRAPHY");
+    sub->sizePt = 16.0;
+    sub->bold = true;
+    sub->color = QColor(0x38, 0xbd, 0xf8);
+    sub->align = TextAlignment::Center;
+    sub->transform.position = QPointF(540, 620);
+    doc->addLayer(std::move(sub));
+
+    // Guia do Usuário
+    auto guide = std::make_unique<TextLayer>();
+    guide->name = QStringLiteral("🎯 GUIA DE TIPOGRAFIA");
+    guide->content = QStringLiteral("EXERCÍCIO DE TIPOGRAFIA E EFEITOS:\n\n"
+                                    "1. Selecione a camada 'Titulo_Principal' no painel à direita.\n"
+                                    "2. No Inspetor de Texto, experimente alterar a cor, adicionar contorno ou sombra projetada.\n"
+                                    "3. Use a ferramenta de Texto (T) para editar o conteúdo ou testar novas fontes instaladas!\n"
+                                    "4. Ajuste a escala e o espaçamento para obter uma composição equilibrada.");
+    guide->sizePt = 14.0;
+    guide->bold = true;
+    guide->color = QColor(0xfb, 0xbf, 0x24);
+    guide->align = TextAlignment::Center;
+    guide->transform.position = QPointF(540, 1000);
+    doc->addLayer(std::move(guide));
+
+    return doc;
+}
+
+// -------------------------------------------------------------
+// 08. Modos de Mesclagem e Composição (1200x800)
+// -------------------------------------------------------------
+std::unique_ptr<Document> buildCenario08()
+{
+    auto doc = std::make_unique<Document>(1200, 800);
+
+    auto bg = std::make_unique<BackgroundLayer>();
+    bg->name = QStringLiteral("Fundo Escuro");
+    bg->fill = QColor(0x11, 0x18, 0x27);
+    doc->addLayer(std::move(bg));
+
+    // Luz Magenta com Blend Mode Screen
+    auto light1 = std::make_unique<ShapeLayer>();
+    light1->name = QStringLiteral("Luz_Magenta (Screen)");
+    light1->kind = ShapeKind::Ellipse;
+    light1->fill = QColor(0xec, 0x48, 0x99);
+    light1->strokeWidth = 0.0;
+    light1->stroke = Qt::transparent;
+    light1->blendMode = BlendMode::Screen;
+    light1->setOpacity(0.85f);
+    light1->points = {QPointF(-200, -200), QPointF(200, 200)};
+    light1->transform.position = QPointF(480, 360);
+    doc->addLayer(std::move(light1));
+
+    // Luz Ciano com Blend Mode Screen
+    auto light2 = std::make_unique<ShapeLayer>();
+    light2->name = QStringLiteral("Luz_Ciano (Screen)");
+    light2->kind = ShapeKind::Ellipse;
+    light2->fill = QColor(0x06, 0xb6, 0xd4);
+    light2->strokeWidth = 0.0;
+    light2->stroke = Qt::transparent;
+    light2->blendMode = BlendMode::Screen;
+    light2->setOpacity(0.85f);
+    light2->points = {QPointF(-200, -200), QPointF(200, 200)};
+    light2->transform.position = QPointF(720, 360);
+    doc->addLayer(std::move(light2));
+
+    // Luz Amarela Superior
+    auto light3 = std::make_unique<ShapeLayer>();
+    light3->name = QStringLiteral("Luz_Dourada (Overlay)");
+    light3->kind = ShapeKind::Ellipse;
+    light3->fill = QColor(0xf5, 0x9e, 0x0b);
+    light3->strokeWidth = 0.0;
+    light3->stroke = Qt::transparent;
+    light3->blendMode = BlendMode::Overlay;
+    light3->setOpacity(0.75f);
+    light3->points = {QPointF(-150, -150), QPointF(150, 150)};
+    light3->transform.position = QPointF(600, 260);
+    doc->addLayer(std::move(light3));
+
+    // Título em destaque
+    auto badge = std::make_unique<TextLayer>();
+    badge->name = QStringLiteral("Texto_Neon");
+    badge->content = QStringLiteral("NEON PULSE");
+    badge->sizePt = 54.0;
+    badge->bold = true;
+    badge->color = Qt::white;
+    badge->align = TextAlignment::Center;
+    badge->effects.shadow.enabled = true;
+    badge->effects.shadow.color = QColor(0, 0, 0, 200);
+    badge->effects.shadow.blur = 14.0;
+    badge->transform.position = QPointF(600, 370);
+    doc->addLayer(std::move(badge));
+
+    // Guia do Usuário
+    auto guide = std::make_unique<TextLayer>();
+    guide->name = QStringLiteral("🎯 GUIA DE MESCLAGEM");
+    guide->content = QStringLiteral("EXERCÍCIO DE MODOS DE MESCLAGEM (BLEND MODES):\n\n"
+                                    "1. Selecione a camada 'Luz_Magenta (Screen)' ou 'Luz_Ciano (Screen)' no painel à direita.\n"
+                                    "2. No topo do painel de camadas, clique no menu suspenso de Modo de Mesclagem.\n"
+                                    "3. Troque entre 'Multiply', 'Overlay', 'Color Dodge' e veja a interação das cores em tempo real!\n"
+                                    "4. Ajuste a Opacidade de cada camada para dosar a intensidade da iluminação.");
+    guide->sizePt = 14.0;
+    guide->bold = true;
+    guide->color = QColor(0xa7, 0xf3, 0xd0);
+    guide->align = TextAlignment::Center;
+    guide->transform.position = QPointF(600, 680);
+    doc->addLayer(std::move(guide));
+
+    return doc;
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -620,7 +822,9 @@ int main(int argc, char* argv[])
     saveWithThumb(*buildCenario04(), dir.filePath(QStringLiteral("04_Cenario_Vetor_Logotipo.creatorcanvas")));
     saveWithThumb(*buildCenario05(), dir.filePath(QStringLiteral("05_Cenario_Web_Slices.creatorcanvas")));
     saveWithThumb(*buildCenario06(), dir.filePath(QStringLiteral("06_Cenario_Enquadramento_Crop.creatorcanvas")));
+    saveWithThumb(*buildCenario07(), dir.filePath(QStringLiteral("07_Cenario_Tipografia_Efeitos.creatorcanvas")));
+    saveWithThumb(*buildCenario08(), dir.filePath(QStringLiteral("08_Cenario_Gradientes_Composicao.creatorcanvas")));
 
-    std::cout << "Todos os 6 projetos de exemplo foram gerados com sucesso!\n";
+    std::cout << "Todos os 8 projetos de exemplo foram gerados com sucesso!\n";
     return 0;
 }

@@ -575,6 +575,62 @@ private slots:
         QVERIFY(!saveDocument(doc, QString(), &error));
         QVERIFY(!error.isEmpty());
     }
+
+    void vectorLayerRoundTrip()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath("vector_test.creatorcanvas");
+
+        Document doc(800, 600);
+        auto vec = std::make_unique<VectorLayer>();
+        const LayerId vecId = vec->id();
+        vec->name = QStringLiteral("MyVectorCurve");
+        vec->fill = QColor(100, 150, 250);
+        vec->stroke = QColor(255, 0, 100);
+        vec->strokeWidth = 3.5;
+        vec->fillEnabled = true;
+        vec->strokeEnabled = true;
+        vec->closed = true;
+
+        VectorNode n1;
+        n1.position = QPointF(100, 100);
+        n1.handleOut = QPointF(30, -20);
+        n1.smooth = true;
+
+        VectorNode n2;
+        n2.position = QPointF(200, 150);
+        n2.handleIn = QPointF(-40, 10);
+        n2.handleOut = QPointF(50, -10);
+        n2.smooth = true;
+
+        VectorNode n3;
+        n3.position = QPointF(150, 250);
+        n3.handleIn = QPointF(20, -30);
+        n3.smooth = false;
+
+        vec->nodes = {n1, n2, n3};
+        vec->rebuildPath();
+        doc.addLayer(std::move(vec));
+
+        QString error;
+        QVERIFY2(saveDocument(doc, path, &error), qPrintable(error));
+
+        auto loaded = loadDocument(path, &error);
+        QVERIFY2(loaded != nullptr, qPrintable(error));
+
+        auto* loadedVec = dynamic_cast<VectorLayer*>(loaded->findLayer(vecId));
+        QVERIFY2(loadedVec != nullptr, "VectorLayer must be preserved upon deserialization");
+        QCOMPARE(loadedVec->name, QStringLiteral("MyVectorCurve"));
+        QCOMPARE(loadedVec->nodes.size(), size_t(3));
+        QCOMPARE(loadedVec->nodes[0].position, QPointF(100, 100));
+        QCOMPARE(loadedVec->nodes[0].handleOut, QPointF(30, -20));
+        QCOMPARE(loadedVec->nodes[1].handleIn, QPointF(-40, 10));
+        QCOMPARE(loadedVec->nodes[2].smooth, false);
+        QCOMPARE(loadedVec->closed, true);
+        QCOMPARE(loadedVec->strokeWidth, 3.5);
+        QVERIFY(!loadedVec->path.isEmpty());
+    }
 };
 
 QTEST_GUILESS_MAIN(TestSerialization)

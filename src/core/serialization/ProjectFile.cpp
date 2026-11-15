@@ -1097,6 +1097,8 @@ private:
             return readText(o, id, out);
         if (type == QLatin1String("shape"))
             return readShape(o, id, out);
+        if (type == QLatin1String("vector"))
+            return readVector(o, id, out);
         if (type == QLatin1String("background"))
             return readBackground(o, id, out);
         if (type == QLatin1String("adjustment"))
@@ -1387,6 +1389,37 @@ private:
             o.value(QStringLiteral("patternOffsetY")).toDouble(0.0));
         finishLayer(*fill, o, id);
         *out = std::move(fill);
+        return true;
+    }
+
+    bool readVector(const QJsonObject& o, const LayerId& id,
+                    std::unique_ptr<Layer>* out)
+    {
+        auto vec = std::make_unique<VectorLayer>();
+        vec->fill = colorFromString(o.value(QStringLiteral("fill")).toString());
+        vec->stroke = colorFromString(o.value(QStringLiteral("stroke")).toString());
+        vec->strokeWidth = o.value(QStringLiteral("strokeWidth")).toDouble(2.0);
+        vec->fillEnabled = o.value(QStringLiteral("fillEnabled")).toBool(true);
+        vec->strokeEnabled = o.value(QStringLiteral("strokeEnabled")).toBool(true);
+        vec->closed = o.value(QStringLiteral("closed")).toBool(false);
+
+        const QJsonArray nodesArray = o.value(QStringLiteral("nodes")).toArray();
+        for (const QJsonValue& val : nodesArray) {
+            const QJsonObject n = val.toObject();
+            VectorNode node;
+            node.position = QPointF(n.value(QStringLiteral("x")).toDouble(),
+                                    n.value(QStringLiteral("y")).toDouble());
+            node.handleIn = QPointF(n.value(QStringLiteral("handleInX")).toDouble(),
+                                    n.value(QStringLiteral("handleInY")).toDouble());
+            node.handleOut = QPointF(n.value(QStringLiteral("handleOutX")).toDouble(),
+                                     n.value(QStringLiteral("handleOutY")).toDouble());
+            node.smooth = n.value(QStringLiteral("smooth")).toBool(false);
+            vec->nodes.push_back(node);
+        }
+
+        vec->rebuildPath();
+        finishLayer(*vec, o, id);
+        *out = std::move(vec);
         return true;
     }
 
