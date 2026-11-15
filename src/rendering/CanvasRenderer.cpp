@@ -1458,8 +1458,6 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
             if (vector.closed)
                 base.closeSubpath();
         }
-        QPainterPath transformedPath = base;
-        transformedPath = vector.transform.matrix(vector.contentBounds()).map(transformedPath);
         QPen pen(vector.stroke, vector.strokeWidth);
         pen.setCosmetic(false);
         if (vector.strokeEnabled)
@@ -1471,7 +1469,7 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
         else
             painter->setBrush(Qt::NoBrush);
         painter->setRenderHint(QPainter::Antialiasing, true);
-        painter->drawPath(transformedPath);
+        painter->drawPath(base);
         break;
     }
     }
