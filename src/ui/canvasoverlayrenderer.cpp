@@ -141,6 +141,49 @@ void CanvasOverlayRenderer::drawGrid(QPainter* painter,
     painter->restore();
 }
 
+void CanvasOverlayRenderer::drawPixelGrid(QPainter* painter,
+                                          int docW,
+                                          int docH,
+                                          const QTransform& toDevice,
+                                          bool darkTheme)
+{
+    if (docW <= 0 || docH <= 0)
+        return;
+
+    painter->save();
+    painter->resetTransform();
+
+    // Grade sutil de 1px por pixel para precisão cirúrgica no zoom alto (Figma / Photoshop style)
+    const QColor pixelGridColor = darkTheme ? QColor(0xff, 0xff, 0xff, 18)
+                                            : QColor(0x00, 0x00, 0x00, 20);
+    painter->setPen(QPen(pixelGridColor, 0));
+    painter->setBrush(Qt::NoBrush);
+
+    const QTransform inv = toDevice.inverted();
+    const QRectF visibleDoc = inv.mapRect(QRectF(painter->viewport())).intersected(QRectF(0, 0, docW, docH));
+    if (visibleDoc.isEmpty()) {
+        painter->restore();
+        return;
+    }
+
+    const int startX = qMax(0, static_cast<int>(std::floor(visibleDoc.left())));
+    const int endX = qMin(docW, static_cast<int>(std::ceil(visibleDoc.right())));
+    const int startY = qMax(0, static_cast<int>(std::floor(visibleDoc.top())));
+    const int endY = qMin(docH, static_cast<int>(std::ceil(visibleDoc.bottom())));
+
+    for (int x = startX; x <= endX; ++x) {
+        const QPointF p1 = toDevice.map(QPointF(x, visibleDoc.top()));
+        const QPointF p2 = toDevice.map(QPointF(x, visibleDoc.bottom()));
+        painter->drawLine(p1, p2);
+    }
+    for (int y = startY; y <= endY; ++y) {
+        const QPointF p1 = toDevice.map(QPointF(visibleDoc.left(), y));
+        const QPointF p2 = toDevice.map(QPointF(visibleDoc.right(), y));
+        painter->drawLine(p1, p2);
+    }
+    painter->restore();
+}
+
 void CanvasOverlayRenderer::drawSafeZones(QPainter* painter,
                                           int docW,
                                           int docH,

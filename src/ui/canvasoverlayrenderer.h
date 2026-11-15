@@ -43,6 +43,12 @@ public:
                          int gridSpacing,
                          const QTransform& toDevice);
 
+    static void drawPixelGrid(QPainter* painter,
+                              int docW,
+                              int docH,
+                              const QTransform& toDevice,
+                              bool darkTheme = true);
+
     static void drawSafeZones(QPainter* painter,
                               int docW,
                               int docH,

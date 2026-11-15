@@ -695,6 +695,9 @@ void CanvasView::paintEvent(QPaintEvent*)
 
     if (m_showGrid) {
         CanvasOverlayRenderer::drawGrid(&painter, m_document->width(), m_document->height(), m_gridSpacing, docToDevice());
+    } else if (m_zoom >= 8.0) {
+        // Pixel Grid automático para precisão cirúrgica em zoom ultra-alto (estilo Figma / Photoshop)
+        CanvasOverlayRenderer::drawPixelGrid(&painter, m_document->width(), m_document->height(), docToDevice(), dark);
     }
 
     if (m_safeZoneMode > 0) {
