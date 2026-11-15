@@ -254,7 +254,7 @@ Image Inspector live preview writes a temporary asset via `Document::setImageLay
 - **Select Subject (AI):** `Select ▸ Select Subject (AI)` (`Ctrl+Alt+S`) turns the ONNX silhouette into a pixel selection instead of a cutout — the layer keeps its background and the subject can be copied to a new layer, feathered, inverted or composited. See §7.
 - **Snap:** `SnapEngine` against canvas edges/centers and sibling bounds; optional snap-to-grid.
 - **Overlays:** selection, multi-selection bounds, snap guides, grid, safe zones (`0` none, `1` YouTube, `2` Instagram, `3` TikTok), **web-slice rects with name/format labels** (drawn whenever the document has slices — the panel is the model, the canvas is the feedback), crop/scissors/clone previews, brush cursor.
-- **Text on path** (advanced mode, text inspector): links the text layer to a vector layer so the glyphs follow the Bézier path, with a start-offset slider (0..1). Text effects are not applied in this mode (documented); an invalid link (path deleted / wrong type) falls back to straight text. `pathLayerId` + `pathOffsetPct` are serialized and validated on load.
+- **Text on path** (advanced mode, text inspector): links the text layer to a vector layer so the glyphs follow the Bézier path, with a start-offset slider (0..1). Text longer than the path keeps drawing at the path end instead of vanishing. Text effects are not applied in this mode (documented); an invalid link (path deleted / wrong type) falls back to straight text. `pathLayerId` + `pathOffsetPct` are serialized and validated on load.
 - **Text-style presets** (advanced mode, text inspector): `TextStyleStore` ships four built-ins (`Título YouTube`, `Selo / Badge`, `Legenda limpa`, `Gradiente neon`) and persists user styles as JSON (`text_styles.json`). Applying a style pushes font/size/colour/spacing/effects through their own `Command`s (granular undo); saving captures the current text layer.
 - **DnD:** dropped image files import as layers.
 - **Clipping mask (Photoshop-style):**
@@ -437,7 +437,7 @@ Batch runs over many files at once are driven by `BatchDialog` (UI layer), which
 36. `test_canvas_gesture_handler` — transform handle computation and hit testing
 37. `test_image_presets` — preset filter pixel behaviour
 38. `test_mockup_dialog` — mockup dialog state (logo disabled until a source is set)
-39. `test_mainwindow_tabs` — selecting a layer keeps the active inspector tab; adjustments dialog request contract (non-destructive by default)
+39. `test_mainwindow_tabs` — selecting a layer keeps the active inspector tab; adjustments dialog request contract (non-destructive by default); adjustments section creates the linked layer; Layer Comps and Web Slices dialogs end-to-end (save/apply/remove, numeric and from-selection slices, real slice export)
 40. `test_overlays` — web-slice overlay: nothing drawn without slices, rect + label drawn with slices (clamped inside the view), multiple slices cycle colours and invalid rects are ignored
 
 Several UI tests compile the corresponding `src/ui/*.cpp` file directly into the test executable instead of linking `creatorcanvas` (e.g. `test_mainwindow_tabs` compiles `mainwindow.cpp` and its dialog dependencies). When adding a test, keep this pattern and keep the symbols single-defined — a duplicated non-inline definition across translation units is an ODR violation (this bit `HealingTool` once already).
