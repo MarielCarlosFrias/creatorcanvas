@@ -23,7 +23,7 @@ namespace {
 /// dispositivo — é a mesma que o renderer aplica.
 QTransform nodeMatrix(const ToolContext& ctx, const VectorLayer* layer)
 {
-    return ctx.docToDevice * layer->transform.matrix(layer->contentBounds());
+    return layer->transform.matrix(layer->contentBounds()) * ctx.docToDevice;
 }
 
 /// Inverso: ponto do documento -> espaço local do caminho.

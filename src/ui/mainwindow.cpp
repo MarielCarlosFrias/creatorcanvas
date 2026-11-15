@@ -1482,6 +1482,8 @@ void MainWindow::buildToolBars()
     m_toolGradientAction->setIcon(ThemeIcons::toolGradient());
     m_toolFloodAction->setIcon(ThemeIcons::toolFlood());
     m_toolEyedropperAction->setIcon(ThemeIcons::toolEyedropper());
+    m_toolPenAction->setIcon(ThemeIcons::toolPen());
+    m_toolVectorNodesAction->setIcon(ThemeIcons::toolVectorNodes());
     m_addTextAction->setIcon(ThemeIcons::toolText());
     m_addRectAction->setIcon(ThemeIcons::toolShape());
 
@@ -1506,6 +1508,8 @@ void MainWindow::buildToolBars()
     m_toolsBar->addSeparator();
     m_toolsBar->addAction(m_addTextAction);        // criação
     m_toolsBar->addAction(m_addRectAction);
+    m_toolsBar->addAction(m_toolPenAction);        // caneta vetorial (P)
+    m_toolsBar->addAction(m_toolVectorNodesAction);// editar nós (A)
 
     // Barra Superior de Ações Rápidas (Novo, Abrir, Salvar, Exportar, Desfazer, Zoom, Grade)
     m_quickToolBar = new QToolBar(QStringLiteral("QuickAccess"), this);
@@ -1548,7 +1552,7 @@ void MainWindow::buildToolBars()
                        m_toolCloneAction, m_toolRetouchAction,
                        m_toolHealingAction, m_toolEyedropperAction,
                        static_cast<QAction*>(nullptr), m_addTextAction,
-                       m_addRectAction}) {
+                       m_addRectAction, m_toolPenAction, m_toolVectorNodesAction}) {
         if (!a)
             m_toolsBarCompact->addSeparator();
         else
@@ -2844,7 +2848,7 @@ void MainWindow::applyAdvancedMode()
     }
 
     if (m_toolVectorNodesAction)
-        m_toolVectorNodesAction->setVisible(m_advancedMode);
+        m_toolVectorNodesAction->setVisible(true);
 
     // Refine Edge só faz sentido com selecção e em modo avançado.
     if (m_refineEdgeAction)

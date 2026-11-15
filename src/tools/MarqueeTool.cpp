@@ -45,22 +45,36 @@ void MarqueeTool::mousePress(QMouseEvent* event, const QPointF& docPos, const To
 
 void MarqueeTool::mouseMove(QMouseEvent* event, const QPointF& docPos, const ToolContext& ctx)
 {
-    Q_UNUSED(event);
     if (!m_dragging)
         return;
-    m_endDoc = docPos;
+    QPointF end = docPos;
+    if (event && event->modifiers().testFlag(Qt::ShiftModifier)) {
+        const double dx = docPos.x() - m_startDoc.x();
+        const double dy = docPos.y() - m_startDoc.y();
+        const double side = std::max(std::abs(dx), std::abs(dy));
+        end = QPointF(m_startDoc.x() + (dx >= 0 ? side : -side),
+                      m_startDoc.y() + (dy >= 0 ? side : -side));
+    }
+    m_endDoc = end;
     if (ctx.requestUpdate)
         ctx.requestUpdate();
 }
 
 void MarqueeTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const ToolContext& ctx)
 {
-    Q_UNUSED(event);
     if (!m_dragging || !ctx.document)
         return;
 
     m_dragging = false;
-    m_endDoc = docPos;
+    QPointF end = docPos;
+    if (event && event->modifiers().testFlag(Qt::ShiftModifier)) {
+        const double dx = docPos.x() - m_startDoc.x();
+        const double dy = docPos.y() - m_startDoc.y();
+        const double side = std::max(std::abs(dx), std::abs(dy));
+        end = QPointF(m_startDoc.x() + (dx >= 0 ? side : -side),
+                      m_startDoc.y() + (dy >= 0 ? side : -side));
+    }
+    m_endDoc = end;
 
     QRectF rect(m_startDoc, m_endDoc);
     rect = rect.normalized();
@@ -123,9 +137,10 @@ void MarqueeTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const 
 void MarqueeTool::keyPress(QKeyEvent* event, const ToolContext& ctx)
 {
     if (event->key() == Qt::Key_Escape) {
-        // Esc limpa a seleção ativa (padrão Photoshop).
+        // Esc limpa a seleção ativa (padrão Photoshop) com histórico Undo
         if (ctx.document && !ctx.document->pixelSelection().isNull()) {
-            ctx.document->clearPixelSelection();
+            executeSetPixelSelection(*ctx.document, ctx.history, QImage(),
+                                     QStringLiteral("selection.clear"));
             if (ctx.requestStatusMessage) {
                 const QString msg = ctx.i18n
                     ? ctx.i18n->t("editor", "canvas.status.selectionCleared")

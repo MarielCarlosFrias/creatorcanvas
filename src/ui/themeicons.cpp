@@ -1436,4 +1436,25 @@ QIcon ThemeIcons::toolHealing(const QColor& color)
     });
 }
 
+QIcon ThemeIcons::toolVectorNodes(const QColor& color)
+{
+    return makeMultiSizeIcon([color](QPainter& p, int s) {
+        const qreal scale = s / 24.0;
+        // Curva Bezier estilizada com nós âncora
+        p.setPen(QPen(color, 1.6 * scale, Qt::SolidLine, Qt::RoundCap));
+        p.setBrush(Qt::NoBrush);
+        QPainterPath curve;
+        curve.moveTo(4 * scale, 18 * scale);
+        curve.cubicTo(6 * scale, 6 * scale, 18 * scale, 6 * scale, 20 * scale, 18 * scale);
+        p.drawPath(curve);
+
+        // Pontos de ancoragem (nós)
+        p.setPen(QPen(QColor(20, 20, 20), 1.0 * scale));
+        p.setBrush(QColor(60, 160, 255));
+        p.drawRect(QRectF(2.5 * scale, 16.5 * scale, 3.5 * scale, 3.5 * scale));
+        p.drawRect(QRectF(18.0 * scale, 16.5 * scale, 3.5 * scale, 3.5 * scale));
+        p.drawRect(QRectF(10.25 * scale, 7.25 * scale, 3.5 * scale, 3.5 * scale));
+    });
+}
+
 } // namespace cc

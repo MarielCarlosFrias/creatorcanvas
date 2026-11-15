@@ -99,8 +99,8 @@ void PenTool::mousePress(QMouseEvent* event, const QPointF& docPos, const ToolCo
 {
     if (!ctx.document) return;
 
-    // Alt+clique ou botão direito: fecha o caminho e finaliza
-    if (event->button() == Qt::RightButton || (event->button() == Qt::LeftButton && (event->modifiers() & Qt::AltModifier))) {
+    // Botão direito, Ctrl+clique ou Alt+clique: fecha o caminho e finaliza
+    if (event->button() == Qt::RightButton || (event->button() == Qt::LeftButton && (event->modifiers() & (Qt::AltModifier | Qt::ControlModifier)))) {
         if (!m_path.isEmpty()) {
             finishPath(ctx);
         }

@@ -25,7 +25,7 @@ void HealingTool::activate(const ToolContext& ctx)
             ? (ctx.i18n ? ctx.i18n->t("editor", "canvas.status.redEyeHelp")
                         : QStringLiteral("Red Eye: click the red pupil to neutralize it."))
             : (ctx.i18n ? ctx.i18n->t("editor", "canvas.status.healHelp")
-                        : QStringLiteral("Spot Healing: Alt+Click to set source, then click to heal."));
+                        : QStringLiteral("Spot Healing: Right-Click or Shift+Click to set source, then click to heal."));
         ctx.requestStatusMessage(msg);
     }
     if (ctx.requestUpdate)
@@ -97,9 +97,9 @@ void HealingTool::mousePress(QMouseEvent* event, const QPointF& docPos, const To
         }
     }
 
-    // Alt+clique: definir fonte (origem)
+    // Definir fonte (origem) com Botão Direito ou Alt/Shift/Ctrl + Clique
     const bool isSourceSet = (event->button() == Qt::RightButton)
-                          || (event->button() == Qt::LeftButton && (event->modifiers() & Qt::AltModifier));
+                          || (event->button() == Qt::LeftButton && (event->modifiers() & (Qt::AltModifier | Qt::ShiftModifier | Qt::ControlModifier)));
 
     if (isSourceSet) {
         Layer* layer = nullptr;

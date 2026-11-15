@@ -59,6 +59,19 @@ void ScissorsTool::mousePress(QMouseEvent* event, const QPointF& docPos, const T
     if (layer && layer->type() == LayerType::Image) {
         const QTransform matrix = layer->transform.matrix(layer->contentBounds());
         const QPointF localPos = matrix.inverted().map(docPos);
+
+        // Se clicar próximo ao primeiro nó, fecha o polígono automaticamente
+        if (m_isDrawing && m_polygon.size() >= 3) {
+            const QTransform layerToDevice = matrix * ctx.docToDevice;
+            const QPointF firstScreen = layerToDevice.map(m_polygon.first());
+            const QPointF clickScreen = ctx.docToDevice.map(docPos);
+            if (QLineF(firstScreen, clickScreen).length() <= 10.0) {
+                applyCut(ctx);
+                event->accept();
+                return;
+            }
+        }
+
         m_polygon << localPos;
         m_currentHover = localPos;
         m_isDrawing = true;
@@ -98,6 +111,17 @@ void ScissorsTool::keyPress(QKeyEvent* event, const ToolContext& ctx)
     } else if (event->key() == Qt::Key_Escape) {
         cancel(ctx);
         event->accept();
+    } else if (event->key() == Qt::Key_Backspace || event->key() == Qt::Key_Delete) {
+        if (m_isDrawing && m_polygon.size() > 1) {
+            m_polygon.removeLast();
+            m_currentHover = m_polygon.last();
+            if (ctx.requestUpdate)
+                ctx.requestUpdate();
+            event->accept();
+        } else if (m_isDrawing && m_polygon.size() <= 1) {
+            cancel(ctx);
+            event->accept();
+        }
     }
 }
 

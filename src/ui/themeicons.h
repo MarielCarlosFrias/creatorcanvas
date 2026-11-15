@@ -30,6 +30,7 @@ public:
     static QIcon toolRetouch(const QColor& color = QColor(220, 220, 220));
     static QIcon toolHealing(const QColor& color = QColor(220, 220, 220));
     static QIcon toolShape(const QColor& color = QColor(220, 220, 220));
+    static QIcon toolVectorNodes(const QColor& color = QColor(220, 220, 220));
 
     // --- Layer Controls ---
     static QIcon layerVisibility(bool visible);

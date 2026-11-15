@@ -319,8 +319,7 @@ void ActionManager::createActions(I18nService* i18n)
     toolHealingAction = makeTool(ThemeIcons::toolHealing(), QKeySequence(QStringLiteral("J")));
     toolEyedropperAction = makeTool(ThemeIcons::toolEyedropper(), QKeySequence(QStringLiteral("I")));
     toolPenAction = makeTool(ThemeIcons::toolPen(), QKeySequence(QStringLiteral("P")));
-    // Edição de nós: profissional, escondida fora do modo avançado.
-    toolVectorNodesAction = makeTool(ThemeIcons::toolPen(), QKeySequence(QStringLiteral("A")));
+    toolVectorNodesAction = makeTool(ThemeIcons::toolVectorNodes(), QKeySequence(QStringLiteral("A")));
 
     // --- Filtros & IA ---
     removeBgAiAction = new QAction(this);

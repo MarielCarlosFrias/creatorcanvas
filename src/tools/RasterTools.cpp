@@ -139,9 +139,9 @@ void CloneStampTool::mousePress(QMouseEvent* event, const QPointF& docPos, const
         return;
     }
 
-    // Setting origin with Right Button or Alt/Shift+LeftClick
+    // Setting origin with Right Button or Alt/Shift/Ctrl+LeftClick
     const bool isOriginSet = (event->button() == Qt::RightButton)
-                          || (event->button() == Qt::LeftButton && (event->modifiers() & (Qt::AltModifier | Qt::ShiftModifier)));
+                          || (event->button() == Qt::LeftButton && (event->modifiers() & (Qt::AltModifier | Qt::ShiftModifier | Qt::ControlModifier)));
 
     if (isOriginSet) {
         Layer* layer = nullptr;

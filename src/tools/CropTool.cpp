@@ -342,31 +342,31 @@ void CropTool::drawOverlay(QPainter* painter, const ToolContext& ctx)
     darkPath.addPolygon(layerToDevice.map(QPolygonF(m_cropRect)));
     painter->fillPath(darkPath, QColor(0, 0, 0, 160));
 
-    const QRectF screenCrop = layerToDevice.mapRect(m_cropRect);
+    const QPolygonF screenCropPoly = layerToDevice.map(QPolygonF(m_cropRect));
     QPen borderPen(Qt::white, 2.0);
     borderPen.setCosmetic(true);
     painter->setPen(borderPen);
-    painter->drawRect(screenCrop);
+    painter->drawPolygon(screenCropPoly);
 
     QPen gridPen(QColor(255, 255, 255, 120), 1.0);
     gridPen.setStyle(Qt::DashLine);
     gridPen.setCosmetic(true);
     painter->setPen(gridPen);
 
-    const double sw = screenCrop.width();
-    const double sh = screenCrop.height();
-    const double sx = screenCrop.x();
-    const double sy = screenCrop.y();
-
-    painter->drawLine(QPointF(sx + sw / 3.0, sy), QPointF(sx + sw / 3.0, sy + sh));
-    painter->drawLine(QPointF(sx + 2.0 * sw / 3.0, sy), QPointF(sx + 2.0 * sw / 3.0, sy + sh));
-    painter->drawLine(QPointF(sx, sy + sh / 3.0), QPointF(sx + sw, sy + sh / 3.0));
-    painter->drawLine(QPointF(sx, sy + 2.0 * sh / 3.0), QPointF(sx + sw, sy + 2.0 * sh / 3.0));
-
     const double w = m_cropRect.width();
     const double h = m_cropRect.height();
     const double x = m_cropRect.x();
     const double y = m_cropRect.y();
+
+    // Linhas da regra dos terços orientadas com a rotação da camada
+    painter->drawLine(layerToDevice.map(QPointF(x + w / 3.0, y)),
+                      layerToDevice.map(QPointF(x + w / 3.0, y + h)));
+    painter->drawLine(layerToDevice.map(QPointF(x + 2.0 * w / 3.0, y)),
+                      layerToDevice.map(QPointF(x + 2.0 * w / 3.0, y + h)));
+    painter->drawLine(layerToDevice.map(QPointF(x, y + h / 3.0)),
+                      layerToDevice.map(QPointF(x + w, y + h / 3.0)));
+    painter->drawLine(layerToDevice.map(QPointF(x, y + 2.0 * h / 3.0)),
+                      layerToDevice.map(QPointF(x + w, y + 2.0 * h / 3.0)));
 
     const QPointF pts[8] = {
         layerToDevice.map(m_cropRect.topLeft()),
