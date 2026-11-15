@@ -164,3 +164,7 @@ cc_add_test(test_mainwindow_tabs unit/test_mainwindow_tabs.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/shortcutdialog.cpp
 )
 
+add_executable(generate_sample_projects ${PROJECT_SOURCE_DIR}/tools/generate_sample_projects.cpp)
+target_link_libraries(generate_sample_projects PRIVATE Qt6::Widgets cc_core cc_rendering miniz)
+target_include_directories(generate_sample_projects PRIVATE ${PROJECT_SOURCE_DIR}/src)
+

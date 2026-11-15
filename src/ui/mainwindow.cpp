@@ -1057,6 +1057,7 @@ void MainWindow::connectActionSignals()
     // --- Arquivo ---
     connect(m_newAction, &QAction::triggered, this, &MainWindow::newDocument);
     connect(m_openAction, &QAction::triggered, this, &MainWindow::openDocument);
+    connect(m_actions->sampleProjectsAction, &QAction::triggered, this, &MainWindow::openSampleProjects);
     connect(m_saveAction, &QAction::triggered, this, &MainWindow::saveDocument);
     connect(m_saveAsAction, &QAction::triggered, this, &MainWindow::saveDocumentAs);
     connect(m_importAction, &QAction::triggered, this, &MainWindow::importImageViaDialog);
@@ -2714,6 +2715,22 @@ void MainWindow::openDocument()
         this,
         m_i18n->t("common", "dialog.open.title"),
         QString(),
+        QStringLiteral("CreatorCanvas (*.creatorcanvas)"));
+    if (path.isEmpty())
+        return;
+    openFromPath(path);
+}
+
+void MainWindow::openSampleProjects()
+{
+    QString examplesDir = QDir(QCoreApplication::applicationDirPath() + QStringLiteral("/../exemplos_projetos")).canonicalPath();
+    if (examplesDir.isEmpty() || !QDir(examplesDir).exists()) {
+        examplesDir = QStringLiteral("/home/theking1x/creatorcanvas/exemplos_projetos");
+    }
+    const QString path = QFileDialog::getOpenFileName(
+        this,
+        QStringLiteral("Abrir Projeto de Exemplo / Prática"),
+        examplesDir,
         QStringLiteral("CreatorCanvas (*.creatorcanvas)"));
     if (path.isEmpty())
         return;

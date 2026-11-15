@@ -136,6 +136,7 @@ private:
     bool saveDocument();
     bool saveDocumentAs();
     void openDocument();
+    void openSampleProjects();
     void refreshRecentMenu();
     bool confirmDiscardUnsavedChanges();
     void openSettings();

@@ -210,6 +210,7 @@ void MenuBuilder::buildMenus(I18nService* i18n)
 
     helpMenu = m_menuBar->addMenu(QString());
     helpMenu->addAction(m_actions->startScreenAction);
+    helpMenu->addAction(m_actions->sampleProjectsAction);
     helpMenu->addSeparator();
     helpMenu->addAction(m_actions->aboutAction);
     helpMenu->addAction(m_actions->aboutQtAction);

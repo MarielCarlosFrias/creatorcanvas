@@ -359,6 +359,9 @@ void ActionManager::createActions(I18nService* i18n)
     startScreenAction = new QAction(this);
     startScreenAction->setIcon(ThemeIcons::actionNewDocument());
 
+    sampleProjectsAction = new QAction(this);
+    sampleProjectsAction->setIcon(ThemeIcons::actionOpenFolder());
+
     aboutAction = new QAction(this);
     aboutAction->setIcon(ThemeIcons::actionAbout());
 
@@ -586,6 +589,7 @@ void ActionManager::retranslate(I18nService* i18n)
     toggleAdvancedModeAction->setToolTip(i18n->t("editor", "advancedMode.tip"));
     webSlicesAction->setText(i18n->t("editor", "webSlices.menuOpen"));
     startScreenAction->setText(i18n->t("common", "start.screenAction"));
+    sampleProjectsAction->setText(QStringLiteral("Projetos de Exemplo para Prática…"));
     aboutAction->setText(i18n->t("common", "menu.help.about"));
     aboutQtAction->setText(i18n->t("common", "menu.help.aboutQt"));
 }

@@ -134,6 +134,7 @@ public:
     QAction* refineEdgeAction = nullptr;
     QAction* webSlicesAction = nullptr;
     QAction* startScreenAction = nullptr;
+    QAction* sampleProjectsAction = nullptr;
     QAction* aboutAction = nullptr;
     QAction* aboutQtAction = nullptr;
 
