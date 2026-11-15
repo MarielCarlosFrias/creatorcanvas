@@ -294,6 +294,34 @@ Image Inspector live preview writes a temporary asset via `Document::setImageLay
   - Layer reordering executes through `ReorderLayerCommand` on the `CommandStack`, preserving non-destructive undo/redo history.
 - **Adjustments panel** (`Image ▸ Adjustments…`) — 11 entries: Brightness/Contrast, Hue/Saturation, Shadows/Highlights, Vignette, Invert, Posterize, Threshold, Levels (per channel), Curves (per channel, spline shown from the same LUT the engine uses), Channel Mixer, Gradient Map. Live preview (scaled to 480 px), non-destructive by default. In **advanced mode** the panel also shows a live histogram (channels + luminance, with the Levels in/out markers drawn on it).
 - **Advanced mode** (`Window ▸ Advanced Mode`) — reveals the professional surface: histogram in adjustments, the four advanced adjustment types (Shadows/Highlights, Vignette, Channel Mixer, Gradient Map), the live adjustments section in the image inspector, node editing, text-style presets, the Refine Edge panel, the multi-stop gradient editor (linear/radial/**conical**), and text on path. Off by default and persisted in `SettingsService` (`advanced/mode`).
+
+### How to use the advanced tools (quick guide)
+
+Everything below requires **advanced mode** first (`Window ▸ Advanced Mode`); it persists across sessions.
+
+**Draw a Bézier path → put text on it**
+1. Press `P` (or Tools ▸ Create ▸ Pen). Click to add anchor points, **right-click** to close the path — a vector layer is created and selected automatically.
+2. Add a text layer (`T`), open the **Text** inspector and expand **Text on Path**.
+3. The combo lists the available paths by name (with `(no path)` first). If none exists yet, the panel says so and offers a button that switches to the pen for you.
+4. Pick the path; the glyphs follow it. The **offset** slider slides the text along the curve. Text longer than the path keeps drawing at its end instead of vanishing.
+
+**Edit the path's nodes**
+1. With the path (vector) layer selected, press `A` (Tools ▸ Create ▸ Edit Nodes). If a non-path layer is selected, the tool picks the most recent path automatically.
+2. Drag the squares to move nodes, drag the amber dots to bend the curve, click on the path to insert a node, double-click (or `Delete`) to remove one, `Alt`+release breaks smoothness, `Enter` toggles the path closed/open, `Esc` cancels an in-flight drag. Each gesture is one undo step.
+
+**Non-destructive adjustments**
+1. Select an image layer, open **Image ▸ Adjustments…** (or the live section in the Image inspector in advanced mode).
+2. Pick a type (Brightness/Contrast, Hue/Saturation, Shadows/Highlights, Vignette, Invert, Posterize, Threshold, Levels, Curves, Channel Mixer, Gradient Map), tune it with the live preview (and histogram for Levels/Curves).
+3. **Non-destructive** is checked by default: a linked adjustment layer is created/updated and the original pixels are never baked. Uncheck it to bake into the asset like the old filters did.
+
+**Slices**
+1. Draw/open a document, then **File ▸ Web Slices**.
+2. Type X/Y/W/H, or make a selection first and click *From selection* (the slice lands where the selection is, mapped through the layer transform).
+3. In advanced mode you can drag/resize the pending rectangle directly on the preview. *Export all…* writes one image per slice.
+
+**Layer comps**
+1. Compose the document, open **Layer ▸ Layer Comps**.
+2. Tick what to capture (visibility / position / appearance), *Save current state*, then change the document freely — applying a comp restores exactly that state, and it's one undo step.
 - **Web-slice preview** — the slices panel renders a miniature of the document with each slice rect and label drawn on top (same colour cycling as the canvas), plus the **pending** rectangle described by the X/Y/W/H fields, updated live on every keystroke/spinner change (solid accent outline + `nova [FORMAT]` label), so the final position is judged *before* adding the slice. In **advanced mode** the pending rectangle can be dragged (move) and resized (corner handles) directly on the preview, writing the new document coordinates back into the fields (`SlicePreviewWidget`).
 - **Workspace layouts:** `Window ▸ Workspace Layout` (`WorkspaceLayoutDialog`) saves the current dock geometry/state under a user-chosen name and restores or deletes saved layouts; layouts persist in `SettingsService`.
 - **Customizable shortcuts:** every registered action is listed in `Help ▸ Keyboard Shortcuts` (`ShortcutDialog`); individual shortcuts can be reassigned, reset to default, or reset in bulk. Defaults are captured at startup and user overrides persist in `QSettings` (`ActionManager::persistShortcut`).
