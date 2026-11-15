@@ -71,6 +71,8 @@ QString buildQss(const Skin& k)
     s += "QToolBar { background-color: " + k.base1 + "; border: none; min-height: 40px; }";
     s += "QToolBar#ToolsToolBar { border-right: 1px solid " + k.line + "; padding: 6px 4px; spacing: 4px; }";
     s += "QToolBar#ToolsToolBar QToolButton { min-width: 36px; min-height: 36px; border-radius: 6px; }";
+    s += "QToolBar#ToolsCompactToolBar QToolButton { min-width: 32px; min-height: 32px; border-radius: 5px; }";
+    s += "QToolBar#ToolsToolBar QToolButton::menu-indicator, QToolBar#ToolsCompactToolBar QToolButton::menu-indicator { image: none; width: 0px; }";
     s += "QToolBar#QuickAccessToolBar { border-bottom: 1px solid " + k.line + "; padding: 4px 10px; spacing: 4px; }";
     s += "QToolBar#ToolOptionsBar { background-color: " + k.base2 + "; border-bottom: 1px solid " + k.line + "; min-height: 38px; }";
 

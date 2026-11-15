@@ -64,6 +64,7 @@ cc_add_test(test_ui_phase1 unit/test_ui_phase1.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/historypanel.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/textinspector.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/darktheme.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/toolslotbutton.cpp
 )
 cc_add_test(test_photocraft unit/test_photocraft.cpp)
 cc_add_test(test_selection_engine unit/test_selection_engine.cpp)
@@ -162,6 +163,7 @@ cc_add_test(test_mainwindow_tabs unit/test_mainwindow_tabs.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/actionmanager.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/menubuilder.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/shortcutdialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/toolslotbutton.cpp
 )
 
 add_executable(generate_sample_projects ${PROJECT_SOURCE_DIR}/tools/generate_sample_projects.cpp)

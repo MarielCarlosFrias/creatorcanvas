@@ -7,6 +7,7 @@
 #include <QMenu>
 #include <QPainter>
 #include <QImage>
+#include <QActionGroup>
 
 #include "ui/themeicons.h"
 #include "ui/collapsiblesection.h"
@@ -15,6 +16,7 @@
 #include "ui/historypanel.h"
 #include "ui/textinspector.h"
 #include "ui/darktheme.h"
+#include "ui/toolslotbutton.h"
 #include "core/history/CommandStack.h"
 #include "core/history/DocumentCommands.h"
 #include "localization/i18nservice.h"
@@ -573,6 +575,53 @@ private slots:
         actions.first()->trigger();
         QVERIFY(received);
         QCOMPARE(receivedType, cc::AdjustmentType::BrightnessContrast);
+    }
+
+    void testToolSlotButton()
+    {
+        // 1. Criação de ações para um slot (ex: Seleção de Pixels: Marquee, Scissors, Wand)
+        auto* act1 = new QAction(QStringLiteral("Marquee Tool"), this);
+        act1->setCheckable(true);
+        act1->setIcon(ThemeIcons::toolMarquee());
+
+        auto* act2 = new QAction(QStringLiteral("Lasso Tool"), this);
+        act2->setCheckable(true);
+        act2->setIcon(ThemeIcons::toolScissors());
+
+        auto* act3 = new QAction(QStringLiteral("Magic Wand Tool"), this);
+        act3->setCheckable(true);
+        act3->setIcon(ThemeIcons::toolWand());
+
+        auto* group = new QActionGroup(this);
+        group->addAction(act1);
+        group->addAction(act2);
+        group->addAction(act3);
+        act1->setChecked(true);
+
+        // 2. Inicializa o ToolSlotButton com as 3 ações
+        ToolSlotButton slotBtn({act1, act2, act3});
+        QCOMPARE(slotBtn.toolActions().size(), 3);
+        QCOMPARE(slotBtn.currentAction(), act1);
+        QCOMPARE(slotBtn.popupMode(), QToolButton::DelayedPopup);
+        QVERIFY(slotBtn.menu() != nullptr);
+        QCOMPARE(slotBtn.menu()->actions().size(), 3);
+
+        // 3. Simula seleção de outra ferramenta via atalho / toggled
+        act2->setChecked(true);
+        QCOMPARE(slotBtn.currentAction(), act2);
+        QCOMPARE(slotBtn.text(), QStringLiteral("Lasso Tool"));
+
+        // 4. Simula seleção via menu / triggered
+        act3->trigger();
+        QCOMPARE(slotBtn.currentAction(), act3);
+        QCOMPARE(slotBtn.text(), QStringLiteral("Magic Wand Tool"));
+
+        // 5. Verifica slot com ferramenta única (sem menu nem popup)
+        auto* singleAct = new QAction(QStringLiteral("Move Tool"), this);
+        ToolSlotButton singleBtn({singleAct});
+        QCOMPARE(singleBtn.toolActions().size(), 1);
+        QCOMPARE(singleBtn.currentAction(), singleAct);
+        QVERIFY(singleBtn.menu() == nullptr);
     }
 };
 

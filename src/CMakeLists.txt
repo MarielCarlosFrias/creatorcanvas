@@ -248,6 +248,8 @@ add_executable(creatorcanvas
     ui/slicepreviewwidget.cpp
     ui/transformbar.h
     ui/transformbar.cpp
+    ui/toolslotbutton.h
+    ui/toolslotbutton.cpp
 )
 target_link_libraries(creatorcanvas
     PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets

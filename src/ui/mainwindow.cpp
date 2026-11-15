@@ -43,6 +43,7 @@
 #include "ui/shortcutdialog.h"
 #include "ui/workspacelayout.h"
 #include "ui/menubuilder.h"
+#include "ui/toolslotbutton.h"
 
 #include <QActionGroup>
 #include <QApplication>
@@ -1488,29 +1489,53 @@ void MainWindow::buildToolBars()
     m_addTextAction->setIcon(ThemeIcons::toolText());
     m_addRectAction->setIcon(ThemeIcons::toolShape());
 
-    // Agrupadas por função, com separadores — 12 botões idênticos em fila
-    // sem agrupamento era o principal ponto de confusão da barra.
-    m_toolsBar->addAction(m_toolSelectAction);   // seleção/mover
-    m_toolsBar->addAction(m_toolMarqueeAction);  // seleção retangular/elíptica
-    m_toolsBar->addAction(m_toolScissorsAction); // seleção à mão livre
-    m_toolsBar->addAction(m_toolWandAction);     // seleção por cor
-    m_toolsBar->addSeparator();
-    m_toolsBar->addAction(m_toolCropAction);     // corte
-    m_toolsBar->addSeparator();
-    m_toolsBar->addAction(m_toolPaintAction);    // pintura
-    m_toolsBar->addAction(m_toolGradientAction); // gradiente
-    m_toolsBar->addAction(m_toolFloodAction);    // balde
-    m_toolsBar->addSeparator();
-    m_toolsBar->addAction(m_toolCloneAction);    // retoque
-    m_toolsBar->addAction(m_toolRetouchAction);
-    m_toolsBar->addAction(m_toolHealingAction);
-    m_toolsBar->addSeparator();
-    m_toolsBar->addAction(m_toolEyedropperAction); // util
-    m_toolsBar->addSeparator();
-    m_toolsBar->addAction(m_addTextAction);        // criação
-    m_toolsBar->addAction(m_addRectAction);
-    m_toolsBar->addAction(m_toolPenAction);        // caneta vetorial (P)
-    m_toolsBar->addAction(m_toolVectorNodesAction);// editar nós (A)
+    // Agrupadas em 9 slots consolidados estilo Photoshop / Illustrator com suporte
+    // a menu flyout via clique longo ou botão direito e triângulo indicador no canto.
+    auto populateTools = [this](QToolBar* bar) {
+        auto addSlot = [bar](const QList<QAction*>& actions) {
+            auto* btn = new ToolSlotButton(actions, bar);
+            btn->setIconSize(bar->iconSize());
+            bar->addWidget(btn);
+            return btn;
+        };
+
+        // Slot 1: Mover & Seleção de Camadas (V)
+        addSlot({m_toolSelectAction});
+
+        // Slot 2: Seleção de Pixels (M, X, W)
+        addSlot({m_toolMarqueeAction, m_toolScissorsAction, m_toolWandAction});
+
+        // Slot 3: Corte / Crop (C)
+        addSlot({m_toolCropAction});
+
+        bar->addSeparator();
+
+        // Slot 4: Pintura & Preenchimento (B, Shift+G, G)
+        addSlot({m_toolPaintAction, m_toolFloodAction, m_toolGradientAction});
+
+        // Slot 5: Retoque & Restauração (J, S, U)
+        addSlot({m_toolHealingAction, m_toolCloneAction, m_toolRetouchAction});
+
+        bar->addSeparator();
+
+        // Slot 6: Vetores & Curvas Bézier (P, A)
+        addSlot({m_toolPenAction, m_toolVectorNodesAction});
+
+        // Slot 7: Texto & Tipografia (Ctrl+T)
+        addSlot({m_addTextAction});
+
+        // Slot 8: Formas Geométricas (R, O, L)
+        addSlot({m_addRectAction, m_addRoundedRectAction, m_addEllipseAction,
+                 m_addLineAction, m_addArrowRightAction, m_addArrowCurvedAction,
+                 m_addStarAction, m_addBadgeAction, m_addSpeechBubbleAction, m_addHeartAction});
+
+        bar->addSeparator();
+
+        // Slot 9: Conta-gotas & Amostrador (I)
+        addSlot({m_toolEyedropperAction});
+    };
+
+    populateTools(m_toolsBar);
 
     // Barra Superior de Ações Rápidas (Novo, Abrir, Salvar, Exportar, Desfazer, Zoom, Grade)
     m_quickToolBar = new QToolBar(QStringLiteral("QuickAccess"), this);
@@ -1537,7 +1562,7 @@ void MainWindow::buildToolBars()
     m_quickToolBar->addAction(m_toggleSnapAction);
 
     // Barra Superior de Opções de Ferramentas (Tool Options Bar)
-    // Barra compacta (horizontal) para janelas estreitas: as MESMAS actions,
+    // Barra compacta (horizontal) para janelas estreitas: os MESMOS 9 slots,
     // então o estado "checked" fica sincronizado automaticamente.
     m_toolsBarCompact = new QToolBar(QStringLiteral("ToolsCompact"), this);
     m_toolsBarCompact->setObjectName(QStringLiteral("ToolsCompactToolBar"));
@@ -1546,19 +1571,7 @@ void MainWindow::buildToolBars()
     m_toolsBarCompact->setOrientation(Qt::Horizontal);
     m_toolsBarCompact->setToolButtonStyle(Qt::ToolButtonIconOnly);
     m_toolsBarCompact->setIconSize(QSize(20, 20));
-    for (QAction* a : {m_toolSelectAction, m_toolMarqueeAction,
-                       m_toolScissorsAction, m_toolWandAction,
-                       m_toolCropAction, m_toolPaintAction,
-                       m_toolGradientAction, m_toolFloodAction,
-                       m_toolCloneAction, m_toolRetouchAction,
-                       m_toolHealingAction, m_toolEyedropperAction,
-                       static_cast<QAction*>(nullptr), m_addTextAction,
-                       m_addRectAction, m_toolPenAction, m_toolVectorNodesAction}) {
-        if (!a)
-            m_toolsBarCompact->addSeparator();
-        else
-            m_toolsBarCompact->addAction(a);
-    }
+    populateTools(m_toolsBarCompact);
     // Linha própria: em 800–1024 px, juntá-la aos atalhos rápidos fazia os
     // últimos botões desaparecerem sem qualquer indicação de overflow.
     addToolBarBreak(Qt::TopToolBarArea);
