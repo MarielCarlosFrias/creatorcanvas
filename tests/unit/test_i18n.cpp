@@ -275,6 +275,47 @@ private slots:
         QVERIFY2(used.size() > 100,
                  "varredura de i18n não encontrou chamadas t(...) — caminho errado?");
 
+        // --- Chaves DINÂMICAS: o scan acima só vê t("ns", "chave") com dois
+        // literais. Os diálogos novos usam um helper tr("chave", ...) que
+        // monta a chave como QStringLiteral("<prefixo>.") + chave — foi
+        // assim que o rótulo do histograma apareceu cru na UI. Aqui varremos
+        // esses ficheiros: prefixos usados em cada ficheiro × chaves literais
+        // passadas ao helper tr().
+        QSet<QString> dynamicUsed;
+        const QStringList dialogFiles = {
+            QStringLiteral("adjustmentsdialog.cpp"), QStringLiteral("adjustmentsection.cpp"),
+            QStringLiteral("layercompsdialog.cpp"), QStringLiteral("refineedgedialog.cpp"),
+            QStringLiteral("webslicesdialog.cpp"),
+        };
+        for (const QString& dialogFile : dialogFiles) {
+            const QString dialogPath = root + QStringLiteral("/src/ui/") + dialogFile;
+            QFile f(dialogPath);
+            if (!f.open(QIODevice::ReadOnly))
+                continue;
+            const QString source = QString::fromUtf8(f.readAll());
+            // Prefixos: QStringLiteral("xxx.") usados em chamadas t(...).
+            QSet<QString> prefixes;
+            // [A-Za-z0-9_] e não apenas minúsculas: prefixos como
+            // "refineEdge" e "webSlices" têm maiúsculas e eram ignorados.
+            const QRegularExpression prefixPattern(QStringLiteral(
+                R"(t\(\s*\"[A-Za-z0-9_\-]+\"\s*,\s*QStringLiteral\(\"([A-Za-z0-9_]+)\.\"\))"));
+            for (auto it = prefixPattern.globalMatch(source); it.hasNext();)
+                prefixes.insert(it.next().captured(1));
+            // Chaves: tr("chave", ...).
+            const QRegularExpression keyPattern(QStringLiteral(
+                R"(\btr\(\s*\"([A-Za-z0-9_]+)\"\s*,)"));
+            for (auto it = keyPattern.globalMatch(source); it.hasNext();) {
+                const QString key = it.next().captured(1);
+                for (const QString& prefix : prefixes)
+                    dynamicUsed.insert(QStringLiteral("editor.") + prefix + QStringLiteral(".") + key);
+            }
+        }
+        QVERIFY2(dynamicUsed.size() >= 10,
+                 qPrintable(QStringLiteral("nenhuma chave dinâmica encontrada — o scan dos diálogos "
+                                           "está correcto? ficheiros: %1")
+                            .arg(dialogFiles.join(QLatin1Char(' ')))));
+        used.unite(dynamicUsed);
+
         QStringList missing;
         for (const QString& lang : languages) {
             for (const QString& key : used) {
