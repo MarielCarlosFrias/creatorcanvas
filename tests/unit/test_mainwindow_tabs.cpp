@@ -392,6 +392,77 @@ private slots:
         history.undo();
         QCOMPARE(doc.layerComps().size(), 1u);
     }
+
+    void webSlicesDialogRoundTrip()
+    {
+        // Ponta a ponta: criar fatias (numérica e a partir da selecção),
+        // verificar o rect em espaço de documento, exportar uma e remover.
+        Document doc(200, 160);
+        QImage photo(100, 80, QImage::Format_ARGB32);
+        photo.fill(qRgba(50, 200, 50, 255));
+        const LayerId asset = doc.assets().addImage(photo, QStringLiteral("png"));
+        auto layer = std::make_unique<ImageLayer>();
+        layer->assetId = asset;
+        layer->naturalWidth = 100;
+        layer->naturalHeight = 80;
+        layer->transform.position = QPointF(100, 80);   // centro do documento
+        const LayerId id = layer->id();
+        QVERIFY(doc.addLayer(std::move(layer)));
+        CommandStack history;
+
+        WebSlicesDialog dlg(doc, &history, id);
+
+        // 1) Numérica.
+        const QString s1 = dlg.addSliceNumeric(10, 20, 60, 40, QStringLiteral("png"),
+                                               QStringLiteral("thumb"));
+        QVERIFY(!s1.isEmpty());
+        QCOMPARE(doc.webSlices().size(), 1u);
+        QCOMPARE(doc.webSlices().front().rect, QRectF(10, 20, 60, 40));
+
+        // 2) A partir da selecção: quadrado 20x20 no bitmap (centro),
+        // que deve cair no centro do documento (100,80).
+        QImage sel(100, 80, QImage::Format_Alpha8);
+        sel.fill(0);
+        for (int y = 30; y < 50; ++y) {
+            uchar* row = sel.scanLine(y);
+            for (int x = 40; x < 60; ++x)
+                row[x] = 255;
+        }
+        doc.setPixelSelection(sel);
+        const QString s2 = dlg.addSliceFromSelection();
+        QVERIFY(!s2.isEmpty());
+        QCOMPARE(doc.webSlices().size(), 2u);
+        const QRectF selSlice = doc.webSlices().back().rect;
+        // A camada está centrada em (100,80) e o bitmap é 100x80: o centro
+        // da selecção (pixel 50,40) cai exactamente no centro do documento.
+        QVERIFY2(qAbs(selSlice.center().x() - 100.0) < 2.0
+                 && qAbs(selSlice.center().y() - 80.0) < 2.0,
+                 qPrintable(QStringLiteral("fatia da selecção no sítio errado: (%1,%2 %3x%4)")
+                            .arg(selSlice.x()).arg(selSlice.y())
+                            .arg(selSlice.width()).arg(selSlice.height())));
+
+        // 3) Undo/redo da criação.
+        history.undo();
+        QCOMPARE(doc.webSlices().size(), 1u);
+        history.redo();
+        QCOMPARE(doc.webSlices().size(), 2u);
+
+        // 4) Exportar uma fatia para ficheiro real.
+        QTemporaryDir tmp;
+        QVERIFY(tmp.isValid());
+        const QString out = tmp.filePath(QStringLiteral("thumb.png"));
+        QString error;
+        QVERIFY2(cc::exportSliceToImage(doc, doc.webSlices().front().rect, out,
+                                        QStringLiteral("png"), -1, 1.0, &error),
+                 qPrintable(error));
+        QVERIFY(QFile::exists(out));
+
+        // 5) Remover.
+        QVERIFY(dlg.removeSliceById(s1));
+        QCOMPARE(doc.webSlices().size(), 1u);
+        history.undo();
+        QCOMPARE(doc.webSlices().size(), 2u);
+    }
 };
 
 

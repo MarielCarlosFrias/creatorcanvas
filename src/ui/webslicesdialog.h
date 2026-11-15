@@ -50,6 +50,19 @@ private slots:
     void removeSelected();
     void exportAll();
 
+public:
+    /// Adiciona uma fatia por valores (sem depender dos spins — testável e
+    /// reutilizável). Devolve o id criado, ou vazio.
+    QString addSliceNumeric(int x, int y, int w, int h,
+                            const QString& format, const QString& name);
+
+    /// Adiciona uma fatia a partir da selecção de píxeis activa (como a
+    /// caneta/pen: a bounding box é mapeada pela matriz da camada).
+    QString addSliceFromSelection();
+
+    /// Remove uma fatia pelo id. Devolve true se algo mudou.
+    bool removeSliceById(const QString& id);
+
 private:
     QString tr(const char* key, const QString& fallback) const;
     QString selectedSliceId() const;

@@ -216,54 +216,92 @@ void WebSlicesDialog::updatePreview()
     m_preview->setPending(pending);
 }
 
-void WebSlicesDialog::addFromSelection()
+QString WebSlicesDialog::addSliceFromSelection()
 {
     if (m_selectedLayer.isNull())
-        return;
+        return {};
     const Layer* layer = m_doc.findLayer(m_selectedLayer);
     if (!layer || m_doc.pixelSelection().isNull())
-        return;
+        return {};
 
     // A selecção vive no espaço do bitmap da camada; a fatia é em espaço
-    // de documento — atravessa a transformação da camada.
+    // de documento. A matriz tem de ser construída com o contentBounds da
+    // CAMADA (antes passava a bbox, o que deslocava a fatia sempre que a
+    // camada não estava na origem).
     const QImage selection = SelectionEngine::normalize(m_doc.pixelSelection());
     const QRect bbox = SelectionEngine::boundingBox(selection);
     if (bbox.isEmpty())
-        return;
-    const QRectF docRect = layer->transform.matrix(QRectF(bbox)).mapRect(QRectF(bbox));
+        return {};
+    const QRectF layerBounds = layer->contentBounds();
+    if (layerBounds.isEmpty())
+        return {};
+    const QRectF docRect =
+        layer->transform.matrix(layerBounds).mapRect(QRectF(bbox)).normalized();
 
     WebSlice slice;
     slice.name = m_nameEdit->text().trimmed().isEmpty()
         ? QStringLiteral("slice_%1").arg(m_doc.webSlices().size() + 1)
         : m_nameEdit->text().trimmed();
-    slice.rect = docRect.normalized();
+    slice.rect = docRect;
     slice.kind = SliceKind::Image;
     slice.exportFormat = m_formatCombo->currentData().toString();
+
+    const QString newId = slice.id;   // id ANTES do move
     executeAddWebSlice(m_doc, m_history, std::move(slice));
     refreshList();
+    return newId;
+}
+
+void WebSlicesDialog::addFromSelection()
+{
+    addSliceFromSelection();
+}
+
+QString WebSlicesDialog::addSliceNumeric(int x, int y, int w, int h,
+                                        const QString& format, const QString& name)
+{
+    const QString trimmed = name.trimmed();
+    WebSlice slice;
+    slice.name = trimmed.isEmpty()
+        ? QStringLiteral("slice_%1").arg(m_doc.webSlices().size() + 1)
+        : trimmed;
+    slice.rect = QRectF(x, y, std::max(1, w), std::max(1, h));
+    slice.kind = SliceKind::Image;
+    slice.exportFormat = format.isEmpty() ? QStringLiteral("png") : format;
+
+    const QString newId = slice.id;   // id ANTES do move (std::move esvazia)
+    executeAddWebSlice(m_doc, m_history, std::move(slice));
+    refreshList();
+    return newId;
 }
 
 void WebSlicesDialog::addNumeric()
 {
-    WebSlice slice;
-    slice.name = m_nameEdit->text().trimmed().isEmpty()
-        ? QStringLiteral("slice_%1").arg(m_doc.webSlices().size() + 1)
-        : m_nameEdit->text().trimmed();
-    slice.rect = QRectF(m_xSpin->value(), m_ySpin->value(),
-                        std::max(1, m_wSpin->value()), std::max(1, m_hSpin->value()));
-    slice.kind = SliceKind::Image;
-    slice.exportFormat = m_formatCombo->currentData().toString();
-    executeAddWebSlice(m_doc, m_history, std::move(slice));
+    addSliceNumeric(m_xSpin->value(), m_ySpin->value(),
+                    m_wSpin->value(), m_hSpin->value(),
+                    m_formatCombo->currentData().toString(), m_nameEdit->text());
+}
+
+bool WebSlicesDialog::removeSliceById(const QString& id)
+{
+    if (id.isEmpty())
+        return false;
+    bool found = false;
+    for (const auto& slice : m_doc.webSlices())
+        if (slice.id == id) {
+            found = true;
+            break;
+        }
+    if (!found)
+        return false;
+    executeRemoveWebSlice(m_doc, m_history, id);
     refreshList();
+    return true;
 }
 
 void WebSlicesDialog::removeSelected()
 {
-    const QString id = selectedSliceId();
-    if (id.isEmpty())
-        return;
-    executeRemoveWebSlice(m_doc, m_history, id);
-    refreshList();
+    removeSliceById(selectedSliceId());
 }
 
 void WebSlicesDialog::exportAll()
