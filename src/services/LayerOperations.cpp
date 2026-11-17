@@ -1,4 +1,4 @@
-#include "core/operations/LayerOperations.h"
+#include "services/LayerOperations.h"
 
 #include <QPainter>
 #include <algorithm>

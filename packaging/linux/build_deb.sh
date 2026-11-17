@@ -52,6 +52,20 @@ if [ -d "$PROJECT_DIR/resources/models" ]; then
           "$DEBROOT/usr/share/creatorcanvas/models/"
 fi
 
+# O editor externo MiniPaint (Image > Edit in MiniPaint) é um executável
+# separado ligado dinamicamente a SFML 3. O install do CMake já lhe aplica
+# RUNPATH $ORIGIN/../lib/creatorcanvas, por isso as bibliotecas SFML entram
+# ao lado do onnxruntime: o pacote funciona sem o sistema ter SFML (era o
+# mesmo motivo do bundle do onnxruntime).
+MINIPAINT_BIN="$DEBROOT/usr/bin/minipaint-standalone"
+if [ -x "$MINIPAINT_BIN" ]; then
+    SFML_LIB_DIR="$DEBROOT/usr/lib/creatorcanvas"
+    mkdir -p "$SFML_LIB_DIR"
+    for lib in $(ldd "$MINIPAINT_BIN" | awk '/libsfml-/ {print $3}'); do
+        [ -n "$lib" ] && cp -L "$lib" "$SFML_LIB_DIR/" && echo "==> Bundled $(basename "$lib")"
+    done
+fi
+
 cat > "$DEBROOT/DEBIAN/control" <<EOF
 Package: $PKG_NAME
 Version: $VERSION

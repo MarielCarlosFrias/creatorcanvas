@@ -1,6 +1,6 @@
 #include "core/Document.h"
 #include "core/history/CommandStack.h"
-#include "core/operations/LayerOperations.h"
+#include "services/LayerOperations.h"
 #include "core/layers/Layer.h"
 
 #include <QtTest>

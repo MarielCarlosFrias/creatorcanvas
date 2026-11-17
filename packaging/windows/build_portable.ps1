@@ -2,7 +2,10 @@
 #   powershell -File packaging\windows\build_portable.ps1 -BuildDir build\windows-release
 param([string]$BuildDir = "build\windows-release")
 
-cmake --build $BuildDir --config Release --target creatorcanvas
+# minipaint-standalone is built in-tree (CC_MINIPAINT_SOURCE_DIR defaults to
+# 3rdparty/minipaint); building creatorcanvas drags it via a POST_BUILD copy,
+# but naming it keeps the intent obvious.
+cmake --build $BuildDir --config Release --target creatorcanvas minipaint-standalone
 
 $OutDir = "packaging\windows\CreatorCanvas-portable"
 if (Test-Path $OutDir) { Remove-Item -Recurse -Force $OutDir }
@@ -15,6 +18,24 @@ if (Test-Path "3rdparty\onnxruntime\lib\onnxruntime.dll") {
     Copy-Item "3rdparty\onnxruntime\lib\onnxruntime.dll" $OutDir
 } elseif (Test-Path "$BuildDir\bin\Release\onnxruntime.dll") {
     Copy-Item "$BuildDir\bin\Release\onnxruntime.dll" $OutDir
+}
+
+# External editor (Image > Edit in MiniPaint): the standalone plus the SFML
+# 3 DLLs it links dynamically. Windows resolves DLLs next to the executable,
+# so they live in the package root beside CreatorCanvas.exe.
+$MiniPaint = "$BuildDir\bin\Release\minipaint-standalone.exe"
+if (Test-Path $MiniPaint) {
+    Copy-Item $MiniPaint $OutDir
+    $sfmlCandidates = @()
+    $sfmlCandidates += (Get-ChildItem "$BuildDir\bin\Release\sfml-*.dll" -ErrorAction SilentlyContinue)
+    if ($env:SFML_DIR) { $sfmlCandidates += (Get-ChildItem "$env:SFML_DIR\bin\sfml-*.dll" -ErrorAction SilentlyContinue) }
+    if ($sfmlCandidates.Count -eq 0) {
+        Write-Warning "SFML DLLs not found next to $MiniPaint or in `$env:SFML_DIR - the portable package will miss MiniPaint's runtime. Install SFML 3 and rebuild."
+    } else {
+        Copy-Item $sfmlCandidates $OutDir
+    }
+} else {
+    Write-Host ">> MiniPaint standalone not built (SFML 3 missing?) - 'Edit in MiniPaint' will be disabled in this package."
 }
 
 # Copy default models if available

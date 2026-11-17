@@ -284,7 +284,7 @@ Image Inspector live preview writes a temporary asset via `Document::setImageLay
   - Selection convention: the pixel selection (`Document::pixelSelection`) lives in the **active layer bitmap space** (same as wand/scissors), so masking/`applyMask` stays consistent; with no image layer selected the marquee uses document space. The AI subject selection (§7) produces its mask in the same space through `SelectionEngine::fromAlphaMask()`.
   - Shortcuts: `V` select, `M` marquee, `X` scissors, `W` wand, `C` crop, `B` brush, `G` gradient, `Shift+G` bucket, `S` clone, `U` retouch, `J` healing, `I` eyedropper, `P` pen (Bézier vector paths — creating a `VectorLayer`), `A` node editing.
   - **Pen gestures:** left-click adds anchor points; **right-click (or Alt+left-click) closes the path** and creates the layer — the view forwards both gestures to the tool instead of opening the canvas menu / the eyedropper while the pen is active. Stroke colour and width live in the tool-options row (same row as the other tools' options); the defaults are visible on the dark theme (accent blue, 3 px).
-  - Tool groups are separated in the toolbar (selection / cut / paint / retouch / utility / create) and mirrored in the **Tools** menu.
+  - Tool groups are consolidated into **9 Photoshop-style flyout slots** (`ToolSlotButton`, `src/ui/toolslotbutton.{h,cpp}`): one visible tool per slot with a click-hold flyout for the siblings; `Shift`+slot key cycles the visible tool. The same slots and actions are mirrored in the **Tools** menu.
   - Viewport delegates mouse and paint events to `m_activeTool` before legacy fallback handlers. Every `CanvasToolType` in the enum is wired to its own class (`Vector` → `PenTool`, `VectorNodes` → `VectorNodeTool`); a tool without a class of its own is a bug, not a fallback.
   - **Node editing** (advanced mode, `A` or Tools ▸ Edit Nodes) — for the selected `VectorLayer`: drag nodes to move them, drag the orange handles to reshape the curve (mirrored while `smooth`), click on the path to insert a node, double-click a node to delete it (a minimum of 2 is kept), `Alt`+release breaks smoothness. Keys: `Delete`/`Backspace` deletes the selected node (the last one clicked or dragged), `Enter` toggles the path closed/open, `Esc` cancels an in-flight drag. Handles and nodes are hit-tested in the same **local** (content-centred) space; handles of zero length are ignored so they cannot steal a node drag. Each gesture is one undo step via `SetVectorNodesCommand` (`Document::setVectorLayerNodes`).
   - **Numeric transform bar** (`TransformBar`, on the tool-options row): X/Y/W/H/rotation of the selected layer. W/H set scale from the natural size (image layers only; other types keep the fields disabled rather than lying), aspect ratio locked by default, mirror sign preserved. Each edit is one `SetLayerTransformCommand` (mergeable — dragging a spin is a single undo step). The bar refreshes on undo/redo.
@@ -335,7 +335,7 @@ Everything below requires **advanced mode** first (`Window ▸ Advanced Mode`); 
 
 Breakpoints and tokens live in `src/ui/designtokens.h` (`BreakXS` 620, `BreakSM` 980, `BreakMD` 1440, `UltraCompactWidth` 840, `EditorMinWidth` 800, `HintBreakWidth` 1380).
 
-- **Toolbars:** below `BreakSM`, or when the window height cannot fit the 14 vertical tools (`< 760px` and width `< 1300`), the left toolbar is replaced by a horizontal compact toolbar that shares the *same* `QAction`s. The tool options bar always gets its own row.
+- **Toolbars:** below `BreakSM`, or when the window height cannot fit the 9 flyout tool slots (`< 760px` and width `< 1300`), the left toolbar is replaced by a horizontal compact toolbar that shares the *same* `QAction`s. The tool options bar always gets its own row.
 - **Tool options:** under 1100 px the option labels are hidden and sliders shrink to 64 px, so controls are not clipped; the bar is horizontally scrollable as a last resort.
 - **Docks:** at `<= UltraCompactWidth` all inspectors except Layers are auto-hidden, with the user's previous visibility saved and restored when the window grows (Window ▸ Panels still works).
 - **Canvas zoom:** `CanvasView` keeps a `m_autoFit` mode. While fit, a resize re-fits the document; after any manual zoom/pan a resize preserves the zoom and keeps the content centered. Changing tools never resets zoom.
@@ -407,8 +407,11 @@ The manifest also carries the document color space, the pixel selection, and the
 
 - PNG (lossless), JPEG (flattened onto background), WebP
 - Scale multiplier and JPEG/WebP quality
+- `transparentBackground` flag on `exportDocumentToImage()`/`exportLayerToImage()`: keeps the alpha channel (PNG/WebP) or flattens onto white when off — JPEG is always opaque
 - Calls `renderDocument()` off-screen without editor overlays
 - Exporting a clipped layer applies the same mask (`renderSiblingLayers`), so the file matches the screen
+
+`ExportDialog` (`src/ui/exportdialog.{h,cpp}`) is the `File ▸ Export As...` surface: scope control (full canvas vs selected layer), one row of platform preset chips (Original, Instagram, Story/TikTok, YouTube, Twitter/X — each applies format/quality/scale), the output card (format, quality, scale, transparency), a live checkerboard preview and the estimated file size (proxy render scaled by pixel ratio). Translating between languages re-renders the preview in place.
 
 Batch runs over many files at once are driven by `BatchDialog` (UI layer), which reuses the same import/render/export pipeline.
 
@@ -505,6 +508,8 @@ Renders the editor at 1600×1000, 1280×800, 1024×700, 900×620 and 800×520 fo
 
 Install rules also stage locales, presets, desktop/AppStream files, and the SVG icon.
 
+**MiniPaint (external editor):** *Image ▸ Edit in MiniPaint* launches `minipaint-standalone`, a Paint-like editor module built **in-tree** from the vendored copy under `3rdparty/minipaint` (SFML 3). `CC_MINIPAINT_SOURCE_DIR` (cache var) selects that tree by default; `-DCC_MINIPAINT_SOURCE_DIR=OFF` skips the build (then `CC_MINIPAINT_BINARY`, a prebuilt executable, or `PATH` discovery applies — without any of them the menu action ships disabled and the startup log records it). A missing SFML only disables the module, never fails the configure. `MiniPaintBridge` (`src/services/minipaintbridge.cpp`) exports the selected layer to a temporary PNG, launches `minipaint-standalone --input <png> --output <png> --tool <name> --brush-size <n> --primary-color <RRGGBBAA> --secondary-color <RRGGBBAA> --title <text>`, and re-imports the result (exit 0 = saved, 2 = cancelled). The editor links SFML 3 dynamically and ships with its `$ORIGIN`-relative rpath: the DEB bundles the `libsfml-*.so.*` files under `lib/creatorcanvas` (same trick as `libonnxruntime`), the Windows portable ZIP copies the `sfml-*.dll` files next to the executable, and the AppImage lets `linuxdeploy` pick them up automatically. CI installs `libsfml-dev` so the module is exercised on every run.
+
 ## 14. Roadmap
 
 Already on `main` (do not treat as future work): multi-select, group/align/distribute, grid, safe zones, templates, extra raster tools, modular `cc_tools` architecture, Photoshop-style layer drag-and-drop, clipping masks, perspective mockups, pen (Bézier) tool, batch processing, workspace layouts, customizable shortcuts, the adjustments panel (curves/levels with a non-destructive path), layer comps and web slices with export.
@@ -516,7 +521,7 @@ Still ahead:
 3. **Richer blend modes** — only if compositing moves beyond the current twelve `QPainter` modes.
 4. **macOS** — real bundle, notarization, and CI; `MACOSX_BUNDLE` on the target is not a shipping product.
 
-Delivered after `v0.2.1` (do not treat as future work): per-layer render cache with the `IRenderer` seam, the adjustments panel with a non-destructive path, live adjustments in the image inspector (advanced mode), layer comps, web slices with preview and export, pen/node editing, numeric transform, Select Subject (AI).
+Delivered after `v0.2.1` (do not treat as future work): per-layer render cache with the `IRenderer` seam, the adjustments panel with a non-destructive path, live adjustments in the image inspector (advanced mode), layer comps, web slices with preview and export, pen/node editing, numeric transform, Select Subject (AI), Photoshop-style flyout tool slots, and the export dialog restructure (preset chips, transparency option, live checkerboard preview).
 
 ## 15. Conventions
 
@@ -533,12 +538,13 @@ Logs live under the OS application data directory used by `LogService` / `Settin
 - **No ICC profile pipeline** — the document and layers *model* a color space (`sRGB`, Adobe RGB, Display P3, CMYK, Grayscale, Lab) and the renderer converts when `isColorConversionSupported()` allows it, but there is no ICC profile loading or colour management engine.
 - **Still images only** — no timeline or video export.
 - **Software compositor, no general cache** — every paint of a dirty document walks the full tree (masked image layers have transient caches); large documents will hitch.
-- **The inspector adjustment path is destructive** — preview is live, but committing bakes a new raster asset. The non-destructive `AdjustmentLayer` type exists and renders at render time; there is no inspector integration.
+- **Adjustment commits are non-destructive by default** — the *Adjustments* dialog exposes a "Não-destrutivo (camada de ajuste)" checkbox, checked by default, and `executeApplyAdjustment()` creates/updates an `AdjustmentLayer` that renders at render time (undo/redo as a single command); unchecking it bakes a new raster asset as before. Image layers linked to an adjustment layer can be re-edited live from the image inspector (advanced mode) via `setAdjustmentParameters()`.
 - **Public `Layer` fields** — UI or tests can mutate `visible` / `transform` / etc. without a `Command`. That bypasses undo.
+- **MiniPaint needs SFML 3 at build time** — *Image ▸ Edit in MiniPaint* is built in-tree from `3rdparty/minipaint` and the packaging bundles/ declares its SFML runtime, but a machine without SFML 3 dev packages cannot compile that module (it is skipped, not fatal). CI installs `libsfml-dev`; the Windows job builds without it, so the editor is not covered there yet.
 - **UI concentration** — most interaction lives in `canvasview.cpp` and `mainwindow.cpp`.
 - **Marquee + transformed layers** — the marquee is mapped through the layer inverse transform and collapsed to a bounding rectangle, so a rotated layer gets an axis-aligned selection in its own bitmap space.
 - **Retouch/Healing run on the UI thread** — the brush patch is small, but each stroke event still converts/duplicates the full layer bitmap; multi-megapixel layers can feel heavy.
-- **Spot Healing auto-source** — the source is sampled from a fixed offset to the right (clamped to bounds); there is no Alt-click source picking or patch-match synthesis.
+- **Spot Healing source is picked per stroke, not per click** — right-click (or `Shift`+click) sets the healing source point, then clicking heals; locked pixels are still respected. There is no patch-match synthesis (the patch is cloned from the source point).
 - **Gradients** — three kinds (linear, radial, conical) and multi-stop ramps; the conical type is serialized as `"conical"` (older readers fall back to linear) and the editor is advanced-mode only.
 - **No `platform/` isolation** — Windows vs Unix still appears in CMake and isolated `#ifdef`s (e.g. ONNX).
 - **`Q_OBJECT` + `unique_ptr`** — incomplete type in the header still breaks the generated destructor; include the full type.

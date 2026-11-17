@@ -96,8 +96,6 @@ cc_enable_warnings(cc_core)
 add_library(cc_rendering STATIC
     rendering/CanvasRenderer.h
     rendering/CanvasRenderer.cpp
-    core/operations/LayerOperations.h
-    core/operations/LayerOperations.cpp
 )
 target_link_libraries(cc_rendering PUBLIC Qt6::Gui cc_core)
 target_include_directories(cc_rendering PUBLIC ${PROJECT_SOURCE_DIR}/src)
@@ -109,6 +107,8 @@ add_library(cc_services STATIC
     services/logservice.cpp
     services/settingsservice.h
     services/settingsservice.cpp
+    services/LayerOperations.h
+    services/LayerOperations.cpp
     services/presetstore.h
     services/presetstore.cpp
     services/recentfiles.h
@@ -314,6 +314,54 @@ install(DIRECTORY ${ONNX_DIR}/lib/
         OPTIONAL
         FILES_MATCHING PATTERN "libonnxruntime*.so*")
 
+# ===================================================================
+# Optional external editor: MiniPaint standalone
+# ===================================================================
+# MiniPaintBridge (services/minipaintbridge.cpp) delegates
+# "Image > Edit in MiniPaint" to a separate SFML editor and resolves
+# "minipaint-standalone" from the application directory, a sibling
+# minipaint/build/ tree, or PATH. The MiniPaint source lives in its own
+# repository, so it is not built here: point CC_MINIPAINT_BINARY at a built
+# executable and it is staged next to CreatorCanvas (build tree, staging and
+# install), which is the lookup the bridge tries first. When no binary is
+# configured the menu action ships disabled.
+set(CC_MINIPAINT_BINARY "" CACHE FILEPATH
+    "Path to the minipaint-standalone executable (Image > Edit in MiniPaint)")
+if(NOT CC_MINIPAINT_BINARY)
+    find_program(CC_MINIPAINT_BINARY NAMES minipaint-standalone)
+endif()
+if(CC_MINIPAINT_IN_TREE)
+    # Built by the root CMakeLists via CC_MINIPAINT_SOURCE_DIR: install and
+    # stage the real target (carries INSTALL_RPATH, no file-path guessing).
+    message(STATUS "  MiniPaint standalone:   built in-tree (CC_MINIPAINT_SOURCE_DIR)")
+
+    install(TARGETS minipaint-standalone
+            RUNTIME DESTINATION bin
+            BUNDLE DESTINATION .)
+
+    # Build tree: drop it beside CreatorCanvas so local runs find it.
+    add_custom_command(TARGET creatorcanvas POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    $<TARGET_FILE:minipaint-standalone>
+                    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/minipaint-standalone
+            COMMENT "Staging MiniPaint standalone for local runs")
+elseif(CC_MINIPAINT_BINARY AND EXISTS ${CC_MINIPAINT_BINARY})
+    message(STATUS "  MiniPaint standalone:   ${CC_MINIPAINT_BINARY}")
+
+    install(PROGRAMS ${CC_MINIPAINT_BINARY}
+            RUNTIME DESTINATION bin
+            OPTIONAL)
+
+    # Build tree: drop it beside CreatorCanvas so local runs find it.
+    add_custom_command(TARGET creatorcanvas POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    ${CC_MINIPAINT_BINARY}
+                    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/minipaint-standalone
+            COMMENT "Staging MiniPaint standalone for local runs")
+else()
+    message(STATUS "  MiniPaint standalone:   not found (Image > Edit in MiniPaint disabled; set CC_MINIPAINT_BINARY)")
+endif()
+
 add_custom_target(stage ALL
         COMMAND ${CMAKE_COMMAND} -E make_directory
                 ${CC_STAGING_DIR}/bin
@@ -326,3 +374,17 @@ add_custom_target(stage ALL
                 ${ONNX_DIR}/lib
                 ${CC_STAGING_DIR}/lib/creatorcanvas
         COMMENT "Staging CreatorCanvas for packaging")
+
+# Packaging tree: MiniPaint rides along when it is configured, so the
+# installed CreatorCanvas finds its editor beside it.
+if(CC_MINIPAINT_IN_TREE)
+    add_custom_command(TARGET stage POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    $<TARGET_FILE:minipaint-standalone>
+                    ${CC_STAGING_DIR}/bin/minipaint-standalone)
+elseif(CC_MINIPAINT_BINARY AND EXISTS ${CC_MINIPAINT_BINARY})
+    add_custom_command(TARGET stage POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    ${CC_MINIPAINT_BINARY}
+                    ${CC_STAGING_DIR}/bin/minipaint-standalone)
+endif()

@@ -84,9 +84,9 @@ Most photo editing tools are either overly basic web canvas tools or intimidatin
 - **Gradient** — linear/radial, two colors with alpha, respects the active pixel selection.
 - **Text on path** (advanced mode) — glue text to a Bézier path from the pen tool and slide it along the curve. Shape/background fills additionally support **multi-stop** ramps and **conical** sweeps (advanced mode).
 - **Retouch brush** — Blur, Sharpen, Smudge, Dodge, Burn and Sponge with size/strength controls.
-- **Spot Healing & Red Eye** — automatic nearby-source repair, one undo step per stroke.
+- **Spot Healing & Red Eye** — right-click (or `Shift`+click) sets the healing source, then paint to heal; one undo step per stroke.
 - **Perspective Mockup** — 4-point warp with live preview and free-form mode (`Esc` cancels).
-- Grouped toolbar with flyout-free organization: selection, cut, paint, retouch, utility and create groups.
+- Toolbar consolidated into 9 Photoshop-style flyout slots: click-hold a slot to reach its sibling tools, `Shift`+slot key to cycle (same actions in the **Tools** menu).
 
 ### 🖥️ Responsive Layout & Workspace
 - Breakpoint-driven chrome (620 / 980 / 1440 px): the vertical tool rail turns into a compact horizontal bar on narrow or short windows, tool options compact themselves, and inspectors auto-hide with their previous visibility restored.
@@ -138,6 +138,7 @@ CreatorCanvas Architecture
 - C++20 compliant compiler (GCC 11+, Clang 14+, MSVC 2022)
 - CMake ≥ 3.24 & Ninja
 - Qt 6.x development packages (Core, Gui, Widgets, Test)
+- **SFML 3.0** (Graphics, Window, System) — powers *Image ▸ Edit in MiniPaint*; without it the editor is simply not built
 
 ### 🐧 Linux (Ubuntu / Debian)
 
@@ -175,6 +176,8 @@ build\windows-release\bin\Release\CreatorCanvas.exe
 ```
 
 > **Windows Packaging**: The repository contains pre-configured packaging scripts in `packaging/windows/` (NSIS installer script and portable distribution script).
+
+> **Built-in external editor**: *Image ▸ Edit in MiniPaint* launches `minipaint-standalone`, built in-tree from the vendored module in `3rdparty/minipaint` (SFML 3). It lands in `bin/` beside `CreatorCanvas`, is shipped by the install rules and bundled with its SFML libraries in the packages. To build a different checkout instead, set `-DCC_MINIPAINT_SOURCE_DIR=/path/to/minipaint`, or disable it with `-DCC_MINIPAINT_SOURCE_DIR=OFF` (then `CC_MINIPAINT_BINARY`/`PATH` discovery still applies).
 
 ---
 
