@@ -7,11 +7,10 @@
 
 #include <QBuffer>
 #include <QButtonGroup>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
-#include <QFormLayout>
 #include <QFrame>
-#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLayout>
@@ -24,6 +23,21 @@
 
 namespace cc {
 
+namespace {
+
+constexpr int kPreviewThumbSide = 320;
+constexpr int kDebounceMs = 150;
+
+QLabel* makeCaption(const QString& text, QWidget* parent)
+{
+    auto* label = new QLabel(text, parent);
+    label->setStyleSheet(QStringLiteral(
+        "color: #9aa0a6; font-size: 10px; font-weight: bold;"));
+    return label;
+}
+
+} // namespace
+
 ExportDialog::ExportDialog(const Document* doc, I18nService* i18n,
                            const QUuid& selectedLayerId, QWidget* parent)
     : QDialog(parent)
@@ -31,69 +45,110 @@ ExportDialog::ExportDialog(const Document* doc, I18nService* i18n,
     , m_i18n(i18n)
     , m_selectedLayerId(selectedLayerId)
 {
+    setMinimumSize(660, 460);
+    resize(840, 520);
     buildUi();
     if (m_i18n) {
         connect(m_i18n, &I18nService::languageChanged,
                 this, &ExportDialog::retranslateUi);
     }
-    retranslateUi();
-    updateQualityEnabled();
 
     // Debounce timer: heavy preview render runs only after the user stops
     // changing settings for ~150 ms, avoiding continuous expensive renders.
     m_previewDebounceTimer = new QTimer(this);
     m_previewDebounceTimer->setSingleShot(true);
-    m_previewDebounceTimer->setInterval(150);
+    m_previewDebounceTimer->setInterval(kDebounceMs);
     connect(m_previewDebounceTimer, &QTimer::timeout, this,
             &ExportDialog::updatePreview);
 
-    updatePreview();
+    retranslateUi();
+    updateControlsEnabled();
 }
 
 void ExportDialog::buildUi()
 {
-    setMinimumSize(520, 360);
-    setMaximumSize(1200, 900);
-    resize(700, 440);
-    setSizeGripEnabled(true);
-    auto* mainLayout = new QHBoxLayout(this);
-    mainLayout->setSizeConstraint(QLayout::SetMinimumSize);
-    mainLayout->setSpacing(16);
+    auto* mainLayout = new QVBoxLayout(this);
+    mainLayout->setContentsMargins(16, 16, 16, 14);
+    mainLayout->setSpacing(14);
 
-    // Left Column: Configuration Controls
+    auto* contentLayout = new QHBoxLayout;
+    contentLayout->setSpacing(20);
+    mainLayout->addLayout(contentLayout, 1);
+
+    // ------------------------------------------------------------------
+    // Left column: scope, quick presets and output options
+    // ------------------------------------------------------------------
     auto* leftWidget = new QWidget(this);
     auto* leftLayout = new QVBoxLayout(leftWidget);
     leftLayout->setContentsMargins(0, 0, 0, 0);
+    leftLayout->setSpacing(8);
 
-    // Scope selection (Entire Canvas vs Selected Layer)
-    auto* scopeBox = new QGroupBox(this);
-    auto* scopeLayout = new QHBoxLayout(scopeBox);
-    m_scopeEntire = new QRadioButton(this);
+    m_scopeCaption = makeCaption(QString(), leftWidget);
+    leftLayout->addWidget(m_scopeCaption);
+
+    // Scope selection: segmented control (Entire Canvas vs Selected Layer)
+    auto* scopeRow = new QHBoxLayout;
+    scopeRow->setSpacing(0);
+    m_scopeEntire = new QRadioButton(leftWidget);
     m_scopeEntire->setChecked(true);
-    m_scopeLayer = new QRadioButton(this);
+    m_scopeEntire->setCursor(Qt::PointingHandCursor);
+    m_scopeLayer = new QRadioButton(leftWidget);
+    m_scopeLayer->setCursor(Qt::PointingHandCursor);
+    const QString segmentedStyle = QStringLiteral(
+        "QRadioButton {"
+        "  background-color: #2b2d30;"
+        "  color: #e8eaed;"
+        "  border: 1px solid #3c4043;"
+        "  border-radius: 6px;"
+        "  padding: 7px 14px;"
+        "  font-size: 12px;"
+        "}"
+        "QRadioButton:hover { background-color: #35373b; border-color: #5f6368; }"
+        "QRadioButton:checked {"
+        "  background-color: #1a73e8;"
+        "  border-color: #1a73e8;"
+        "  color: #ffffff;"
+        "  font-weight: bold;"
+        "}"
+        "QRadioButton:disabled { color: #6b7075; border-color: #33363a; }"
+        "QRadioButton::indicator { width: 0px; height: 0px; }");
+    m_scopeEntire->setStyleSheet(segmentedStyle);
+    m_scopeLayer->setStyleSheet(segmentedStyle);
     m_scopeGroup = new QButtonGroup(this);
     m_scopeGroup->addButton(m_scopeEntire, 0);
     m_scopeGroup->addButton(m_scopeLayer, 1);
-    scopeLayout->addWidget(m_scopeEntire);
-    scopeLayout->addWidget(m_scopeLayer);
+    scopeRow->addWidget(m_scopeEntire);
+    scopeRow->addWidget(m_scopeLayer);
+    scopeRow->addStretch();
 
     const bool hasSelectedLayer = m_doc && !m_selectedLayerId.isNull() &&
                                   m_doc->findLayer(m_selectedLayerId) != nullptr;
     m_scopeLayer->setEnabled(hasSelectedLayer);
+    if (hasSelectedLayer && m_doc) {
+        if (const auto* layer = m_doc->findLayer(m_selectedLayerId)) {
+            if (!layer->name.trimmed().isEmpty())
+                m_scopeLayer->setToolTip(layer->name.trimmed());
+        }
+    }
 
-    leftLayout->addWidget(scopeBox);
+    leftLayout->addLayout(scopeRow);
+    leftLayout->addSpacing(10);
 
-    // Quick Presets Chips Bar (Instagram, Story, YouTube, Original)
-    auto* chipsContainer = new QWidget(this);
+    m_presetsCaption = makeCaption(QString(), leftWidget);
+    leftLayout->addWidget(m_presetsCaption);
+
+    // Quick presets chips bar (Original, Instagram, Story, YouTube, X)
+    auto* chipsContainer = new QWidget(leftWidget);
     auto* chipsLayout = new QHBoxLayout(chipsContainer);
-    chipsLayout->setContentsMargins(0, 2, 0, 4);
-    chipsLayout->setSpacing(6);
+    chipsLayout->setContentsMargins(0, 0, 0, 0);
+    chipsLayout->setSpacing(8);
 
     m_presetChipsGroup = new QButtonGroup(this);
-    m_presetChipsGroup->setExclusive(true);
+    m_presetChipsGroup->setExclusive(false);
 
-    auto makePresetChip = [this, chipsLayout](const QString& label, const QIcon& icon, const QString& presetId) {
-        auto* chip = new QPushButton(icon, label, this);
+    auto makePresetChip = [this, chipsLayout, chipsContainer](const QString& iconKey,
+                                                              const QString& presetId) {
+        auto* chip = new QPushButton(chipsContainer);
         chip->setCheckable(true);
         chip->setCursor(Qt::PointingHandCursor);
         chip->setStyleSheet(QStringLiteral(
@@ -101,8 +156,8 @@ void ExportDialog::buildUi()
             "  background-color: #2b2d30;"
             "  color: #e8eaed;"
             "  border: 1px solid #3c4043;"
-            "  border-radius: 12px;"
-            "  padding: 4px 10px;"
+            "  border-radius: 14px;"
+            "  padding: 6px 12px;"
             "  font-size: 11px;"
             "}"
             "QPushButton:hover {"
@@ -114,221 +169,349 @@ void ExportDialog::buildUi()
             "  color: #ffffff;"
             "  border-color: #1a73e8;"
             "  font-weight: bold;"
-            "}"
-        ));
+            "}"));
         m_presetChipsGroup->addButton(chip);
         chipsLayout->addWidget(chip);
         m_presetChips.insert(presetId, chip);
         connect(chip, &QPushButton::clicked, this, [this, presetId] {
             applyPresetById(presetId);
         });
+        (void)iconKey;
         return chip;
     };
 
-    auto* origChip = makePresetChip(
-        m_i18n ? m_i18n->t("editor", "export.preset.original") : QStringLiteral("Original"),
-        QIcon(), QStringLiteral("original"));
-    origChip->setChecked(true);
-    makePresetChip(QStringLiteral("Instagram"), QIcon(ThemeIcons::brandInstagram(16)), QStringLiteral("ig_post"));
-    makePresetChip(QStringLiteral("Story / Reels"), QIcon(ThemeIcons::brandTiktok(16)), QStringLiteral("story"));
-    makePresetChip(QStringLiteral("YouTube"), QIcon(ThemeIcons::brandYoutube(16)), QStringLiteral("yt_thumb"));
+    makePresetChip(QString(), QStringLiteral("original"));
+    makePresetChip(QStringLiteral("instagram"), QStringLiteral("ig_post"));
+    makePresetChip(QStringLiteral("story"), QStringLiteral("story"));
+    makePresetChip(QStringLiteral("youtube"), QStringLiteral("yt_thumb"));
+    makePresetChip(QStringLiteral("banner"), QStringLiteral("x_banner"));
     chipsLayout->addStretch();
 
     leftLayout->addWidget(chipsContainer);
+    leftLayout->addSpacing(6);
 
-    auto* form = new QFormLayout;
-    form->setSpacing(10);
-    form->setRowWrapPolicy(QFormLayout::WrapLongRows);
+    m_outputCaption = makeCaption(QString(), leftWidget);
+    leftLayout->addWidget(m_outputCaption);
 
-    // Presets dropdown
-    m_presetCombo = new QComboBox(this);
-    m_presetCombo->addItem(m_i18n ? m_i18n->t("editor", "export.preset.original")
-                                 : QStringLiteral("Original"), QStringLiteral("original"));
-    m_presetCombo->addItem(m_i18n ? m_i18n->t("editor", "export.preset.ytThumb")
-                                 : QStringLiteral("YouTube Thumbnail (1280x720)"), QStringLiteral("yt_thumb"));
-    m_presetCombo->addItem(m_i18n ? m_i18n->t("editor", "export.preset.igPost")
-                                 : QStringLiteral("Instagram Post (1080x1080)"), QStringLiteral("ig_post"));
-    m_presetCombo->addItem(m_i18n ? m_i18n->t("editor", "export.preset.story")
-                                 : QStringLiteral("Story / TikTok (1080x1920)"), QStringLiteral("story"));
-    m_presetCombo->addItem(m_i18n ? m_i18n->t("editor", "export.preset.xBanner")
-                                 : QStringLiteral("Twitter/X Banner (1500x500)"), QStringLiteral("x_banner"));
+    // Output options (format, quality, scale, transparency)
+    auto* outputCard = new QFrame(leftWidget);
+    outputCard->setStyleSheet(QStringLiteral(
+        "QFrame#outputCard {"
+        "  background-color: #202124;"
+        "  border: 1px solid #3c4043;"
+        "  border-radius: 8px;"
+        "}"));
+    outputCard->setObjectName(QStringLiteral("outputCard"));
+    auto* outputLayout = new QVBoxLayout(outputCard);
+    outputLayout->setContentsMargins(16, 14, 16, 14);
+    outputLayout->setSpacing(12);
 
-    m_presetLabel = new QLabel(this);
-    form->addRow(m_presetLabel, m_presetCombo);
+    const QString fieldLabelStyle = QStringLiteral("color: #e8eaed; font-size: 12px;");
+    const QString comboStyle = QStringLiteral(
+        "QComboBox {"
+        "  background-color: #2b2d30;"
+        "  color: #e8eaed;"
+        "  border: 1px solid #3c4043;"
+        "  border-radius: 6px;"
+        "  padding: 5px 10px;"
+        "  min-width: 140px;"
+        "  font-size: 12px;"
+        "}"
+        "QComboBox:hover { border-color: #5f6368; }"
+        "QComboBox::drop-down { border: none; width: 18px; }"
+        "QComboBox QAbstractItemView {"
+        "  background-color: #2b2d30;"
+        "  color: #e8eaed;"
+        "  border: 1px solid #3c4043;"
+        "  selection-background-color: #1a73e8;"
+        "}");
+    const QString spinStyle = QStringLiteral(
+        "QSpinBox {"
+        "  background-color: #2b2d30;"
+        "  color: #e8eaed;"
+        "  border: 1px solid #3c4043;"
+        "  border-radius: 6px;"
+        "  padding: 5px 8px;"
+        "  min-width: 70px;"
+        "  font-size: 12px;"
+        "}"
+        "QSpinBox:hover { border-color: #5f6368; }"
+        "QSpinBox:disabled { color: #6b7075; }");
 
-    // Format
-    m_format = new QComboBox(this);
-    m_format->addItem(m_i18n ? m_i18n->t("editor", "export.format.png")
-                            : QStringLiteral("PNG"), QStringLiteral("png"));
-    m_format->addItem(m_i18n ? m_i18n->t("editor", "export.format.jpeg")
-                            : QStringLiteral("JPEG"), QStringLiteral("jpeg"));
-    m_format->addItem(m_i18n ? m_i18n->t("editor", "export.format.webp")
-                            : QStringLiteral("WebP"), QStringLiteral("webp"));
+    auto addFieldRow = [&](QLabel*& labelOut, QWidget* control) {
+        auto* row = new QHBoxLayout;
+        labelOut = new QLabel(outputCard);
+        labelOut->setStyleSheet(fieldLabelStyle);
+        row->addWidget(labelOut);
+        row->addStretch();
+        row->addWidget(control);
+        outputLayout->addLayout(row);
+        return row;
+    };
 
-    m_formatLabel = new QLabel(this);
-    form->addRow(m_formatLabel, m_format);
+    m_format = new QComboBox(outputCard);
+    m_format->setStyleSheet(comboStyle);
+    m_format->addItem(QStringLiteral("PNG"), QStringLiteral("png"));
+    m_format->addItem(QStringLiteral("JPEG"), QStringLiteral("jpeg"));
+    m_format->addItem(QStringLiteral("WebP"), QStringLiteral("webp"));
+    addFieldRow(m_formatLabel, m_format);
 
-    // Quality (for JPEG / WebP)
-    m_quality = new QSpinBox(this);
+    m_quality = new QSpinBox(outputCard);
     m_quality->setRange(1, 100);
     m_quality->setValue(92);
+    m_quality->setStyleSheet(spinStyle);
+    addFieldRow(m_qualityLabel, m_quality);
 
-    m_qualityLabel = new QLabel(this);
-    form->addRow(m_qualityLabel, m_quality);
+    m_scale = new QComboBox(outputCard);
+    m_scale->setStyleSheet(comboStyle);
+    m_scale->addItem(QStringLiteral("50%"), 0.5);
+    m_scale->addItem(QStringLiteral("100%"), 1.0);
+    m_scale->addItem(QStringLiteral("150%"), 1.5);
+    m_scale->addItem(QStringLiteral("200%"), 2.0);
+    m_scale->setCurrentIndex(m_scale->findData(1.0));
+    addFieldRow(m_scaleLabel, m_scale);
 
-    // Scale
-    m_scale = new QComboBox(this);
-    m_scale->addItem(m_i18n ? m_i18n->t("editor", "export.scale.50")
-                           : QStringLiteral("50%"), 0.5);
-    m_scale->addItem(m_i18n ? m_i18n->t("editor", "export.scale.100")
-                           : QStringLiteral("100%"), 1.0);
-    m_scale->addItem(m_i18n ? m_i18n->t("editor", "export.scale.150")
-                           : QStringLiteral("150%"), 1.5);
-    m_scale->addItem(m_i18n ? m_i18n->t("editor", "export.scale.200")
-                           : QStringLiteral("200%"), 2.0);
-    m_scale->setCurrentIndex(1); // 100%
+    // Transparent background: only meaningful when the format keeps alpha.
+    m_transparent = new QCheckBox(outputCard);
+    m_transparent->setChecked(true);
+    m_transparent->setCursor(Qt::PointingHandCursor);
+    m_transparent->setStyleSheet(QStringLiteral(
+        "QCheckBox { color: #e8eaed; font-size: 12px; spacing: 8px; }"
+        "QCheckBox::indicator {"
+        "  width: 16px; height: 16px;"
+        "  border: 1px solid #5f6368;"
+        "  border-radius: 4px;"
+        "  background-color: #2b2d30;"
+        "}"
+        "QCheckBox::indicator:checked {"
+        "  background-color: #1a73e8;"
+        "  border-color: #1a73e8;"
+        "  image: none;"
+        "}"
+        "QCheckBox:disabled { color: #6b7075; }"));
+    auto* transparentRow = new QHBoxLayout;
+    m_transparentLabel = new QLabel(outputCard);
+    m_transparentLabel->setStyleSheet(fieldLabelStyle);
+    m_transparentLabel->setBuddy(m_transparent);
+    transparentRow->addWidget(m_transparentLabel);
+    transparentRow->addStretch();
+    transparentRow->addWidget(m_transparent);
+    outputLayout->addLayout(transparentRow);
 
-    m_scaleLabel = new QLabel(this);
-    form->addRow(m_scaleLabel, m_scale);
-
-    leftLayout->addLayout(form);
+    leftLayout->addWidget(outputCard);
     leftLayout->addStretch();
 
-    // Dialog Button Box
-    auto* buttons = new QDialogButtonBox(
-        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-    connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
-    leftLayout->addWidget(buttons);
-
-    // Right Column: Live Preview & File Size Estimation (inspired by PhotoCraft)
+    // ------------------------------------------------------------------
+    // Right column: live preview and estimated file size
+    // ------------------------------------------------------------------
     auto* rightWidget = new QWidget(this);
     auto* rightLayout = new QVBoxLayout(rightWidget);
     rightLayout->setContentsMargins(0, 0, 0, 0);
+    rightLayout->setSpacing(8);
 
-    auto* previewFrame = new QFrame(this);
+    m_previewCaption = makeCaption(QString(), rightWidget);
+    rightLayout->addWidget(m_previewCaption);
+
+    auto* previewFrame = new QFrame(rightWidget);
+    previewFrame->setObjectName(QStringLiteral("previewFrame"));
+    previewFrame->setStyleSheet(QStringLiteral(
+        "QFrame#previewFrame {"
+        "  background-color: #17181a;"
+        "  border: 1px solid #3c4043;"
+        "  border-radius: 8px;"
+        "}"));
     previewFrame->setFrameShape(QFrame::StyledPanel);
-    previewFrame->setStyleSheet(QStringLiteral("background-color: #202124; border-radius: 6px;"));
     auto* frameLayout = new QVBoxLayout(previewFrame);
+    frameLayout->setContentsMargins(12, 12, 12, 12);
     frameLayout->setAlignment(Qt::AlignCenter);
 
     m_previewImageLabel = new QLabel(previewFrame);
-    m_previewImageLabel->setMinimumSize(160, 120);
+    m_previewImageLabel->setMinimumSize(180, 140);
     m_previewImageLabel->setSizePolicy(QSizePolicy::Expanding,
                                        QSizePolicy::Expanding);
     m_previewImageLabel->setAlignment(Qt::AlignCenter);
     frameLayout->addWidget(m_previewImageLabel);
 
-    rightLayout->addWidget(previewFrame);
+    rightLayout->addWidget(previewFrame, 1);
 
     auto* infoLayout = new QHBoxLayout;
-    m_dimensionLabel = new QLabel(this);
-    m_dimensionLabel->setStyleSheet(QStringLiteral("font-weight: bold; color: #e8eaed;"));
-
-    m_fileSizeLabel = new QLabel(this);
-    m_fileSizeLabel->setStyleSheet(QStringLiteral("color: #8ab4f8; font-weight: bold;"));
-
+    infoLayout->setSpacing(8);
+    m_dimensionLabel = new QLabel(rightWidget);
+    m_fileSizeLabel = new QLabel(rightWidget);
+    m_dimensionLabel->setStyleSheet(QStringLiteral(
+        "background-color: #2b2d30; border: 1px solid #3c4043; border-radius: 10px;"
+        " color: #e8eaed; font-size: 11px; font-weight: bold; padding: 4px 10px;"));
+    m_fileSizeLabel->setStyleSheet(QStringLiteral(
+        "background-color: #2b2d30; border: 1px solid #3c4043; border-radius: 10px;"
+        " color: #8ab4f8; font-size: 11px; font-weight: bold; padding: 4px 10px;"));
     infoLayout->addWidget(m_dimensionLabel);
     infoLayout->addStretch();
     infoLayout->addWidget(m_fileSizeLabel);
-
     rightLayout->addLayout(infoLayout);
 
-    mainLayout->addWidget(leftWidget, 1);
-    mainLayout->addWidget(rightWidget, 1);
+    contentLayout->addWidget(leftWidget, 3);
+    contentLayout->addWidget(rightWidget, 2);
 
+    // ------------------------------------------------------------------
+    // Bottom dialog buttons
+    // ------------------------------------------------------------------
+    auto* buttons = new QDialogButtonBox(
+        QDialogButtonBox::Cancel | QDialogButtonBox::Ok, this);
+    connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    mainLayout->addWidget(buttons);
+
+    // ------------------------------------------------------------------
     // Signal connections
-    connect(m_presetCombo, qOverload<int>(&QComboBox::currentIndexChanged),
-            this, &ExportDialog::updatePreset);
+    // ------------------------------------------------------------------
     connect(m_format, qOverload<int>(&QComboBox::currentIndexChanged),
             this, [this]() {
-                updateQualityEnabled();
+                updateControlsEnabled();
+                if (!m_applyingPreset) {
+                    m_currentPreset = QStringLiteral("custom");
+                    updatePresetChips();
+                }
                 estimateFileSize();
             });
     connect(m_quality, qOverload<int>(&QSpinBox::valueChanged),
-            this, &ExportDialog::estimateFileSize);
+            this, [this]() {
+                if (!m_applyingPreset) {
+                    m_currentPreset = QStringLiteral("custom");
+                    updatePresetChips();
+                }
+                estimateFileSize();
+            });
     connect(m_scale, qOverload<int>(&QComboBox::currentIndexChanged),
             this, [this]() {
+                if (!m_applyingPreset) {
+                    m_currentPreset = QStringLiteral("custom");
+                    updatePresetChips();
+                }
                 m_previewDebounceTimer->start();
             });
+    connect(m_transparent, &QCheckBox::toggled, this, [this](bool checked) {
+        // Programmatic (un)checks while the format lacks alpha must not
+        // overwrite the remembered choice: those happen while disabled.
+        if (m_transparent->isEnabled())
+            m_transparentWanted = checked;
+        m_previewDebounceTimer->start();
+    });
     connect(m_scopeGroup, &QButtonGroup::idClicked,
             this, [this]() {
                 m_previewDebounceTimer->start();
             });
 }
 
-void ExportDialog::updateQualityEnabled()
+void ExportDialog::updateControlsEnabled()
 {
+    if (!m_format || !m_quality || !m_transparent)
+        return;
+
     const QString fmt = m_format->currentData().toString();
     m_quality->setEnabled(fmt != QLatin1String("png"));
+
+    // JPEG has no alpha channel: transparency is unavailable and forced off.
+    // The user's choice is remembered and restored when the format supports
+    // alpha again, so switching format to JPEG and back does not silently
+    // discard a "transparent PNG" intent. The checkbox is disabled BEFORE the
+    // forced uncheck so the toggled handler ignores the programmatic change.
+    const bool supportsAlpha = (fmt != QLatin1String("jpeg"));
+    if (!supportsAlpha)
+    {
+        m_transparentWanted = m_transparent->isChecked();
+        m_transparent->setEnabled(false);
+        if (m_transparent->isChecked())
+            m_transparent->setChecked(false);
+    }
+    else
+    {
+        if (m_transparent->isChecked() != m_transparentWanted)
+            m_transparent->setChecked(m_transparentWanted);
+        m_transparent->setEnabled(true);
+    }
+    if (m_transparentLabel)
+        m_transparentLabel->setEnabled(supportsAlpha);
 }
 
 void ExportDialog::applyPresetById(const QString& presetId)
 {
-    const int idx = m_presetCombo->findData(presetId);
-    if (idx >= 0) {
-        m_presetCombo->setCurrentIndex(idx);
-    }
+    applyPreset(presetId);
 }
 
-void ExportDialog::updatePreset()
+void ExportDialog::applyPreset(const QString& presetId)
 {
-    const QString preset = m_presetCombo->currentData().toString();
-    if (auto* chip = m_presetChips.value(preset, nullptr)) {
-        chip->setChecked(true);
-    }
+    m_applyingPreset = true;
+    m_currentPreset = presetId;
+    updatePresetChips();
 
-    if (!m_doc)
-        return;
-
-    if (preset == QLatin1String("original")) {
+    if (presetId == QLatin1String("original")) {
         for (int i = 0; i < m_scale->count(); ++i) {
             if (qAbs(m_scale->itemData(i).toDouble() - 1.0) < 0.05) {
                 m_scale->setCurrentIndex(i);
                 break;
             }
         }
+        m_applyingPreset = false;
+        updateControlsEnabled();
+        m_previewDebounceTimer->start();
+        return;
+    }
+
+    if (!m_doc) {
+        m_applyingPreset = false;
         return;
     }
 
     const double docW = m_doc->width();
     const double docH = m_doc->height();
-    if (docW <= 0 || docH <= 0)
+    if (docW <= 0 || docH <= 0) {
+        m_applyingPreset = false;
         return;
+    }
 
     double targetW = docW;
-    if (preset == QLatin1String("yt_thumb")) {
+    if (presetId == QLatin1String("yt_thumb")) {
         targetW = 1280.0;
-        m_format->setCurrentIndex(1); // JPEG
+        m_format->setCurrentIndex(m_format->findData(QStringLiteral("jpeg")));
         m_quality->setValue(92);
-    } else if (preset == QLatin1String("ig_post")) {
+    } else if (presetId == QLatin1String("ig_post")) {
         targetW = 1080.0;
-        m_format->setCurrentIndex(1); // JPEG
+        m_format->setCurrentIndex(m_format->findData(QStringLiteral("jpeg")));
         m_quality->setValue(90);
-    } else if (preset == QLatin1String("story")) {
+    } else if (presetId == QLatin1String("story")) {
         targetW = 1080.0;
-        m_format->setCurrentIndex(0); // PNG
-    } else if (preset == QLatin1String("x_banner")) {
+        m_format->setCurrentIndex(m_format->findData(QStringLiteral("png")));
+    } else if (presetId == QLatin1String("x_banner")) {
         targetW = 1500.0;
-        m_format->setCurrentIndex(0); // PNG
+        m_format->setCurrentIndex(m_format->findData(QStringLiteral("png")));
     }
 
     const double computedScale = targetW / docW;
-    // Check if scale already exists in combo or add it
-    int foundIndex = -1;
-    for (int i = 0; i < m_scale->count(); ++i) {
-        if (qAbs(m_scale->itemData(i).toDouble() - computedScale) < 0.05) {
-            foundIndex = i;
-            break;
-        }
-    }
-    if (foundIndex != -1) {
-        m_scale->setCurrentIndex(foundIndex);
-    } else {
-        const QString label = QString::number(qRound(computedScale * 100)) + QStringLiteral("%");
+    const QString label = QString::number(qRound(computedScale * 100)) +
+                          QStringLiteral("%");
+
+    // Reuse a single dynamic slot so repeated preset switching does not
+    // accumulate duplicated scale entries.
+    if (m_dynamicScaleIndex < 0) {
+        m_dynamicScaleIndex = m_scale->count();
         m_scale->addItem(label, computedScale);
-        m_scale->setCurrentIndex(m_scale->count() - 1);
+    } else {
+        m_scale->setItemText(m_dynamicScaleIndex, label);
+        m_scale->setItemData(m_dynamicScaleIndex, computedScale);
     }
+    m_scale->setCurrentIndex(m_dynamicScaleIndex);
+
+    m_applyingPreset = false;
+    updateControlsEnabled();
+    m_previewDebounceTimer->start();
+}
+
+void ExportDialog::updatePresetChips()
+{
+    for (auto* chip : m_presetChips)
+        chip->setChecked(false);
+    if (auto* chip = m_presetChips.value(m_currentPreset, nullptr))
+        chip->setChecked(true);
 }
 
 void ExportDialog::updatePreview()
@@ -341,12 +524,18 @@ void ExportDialog::updatePreview()
 
     const int outWidth = qMax(1, static_cast<int>(m_doc->width() * scale));
     const int outHeight = qMax(1, static_cast<int>(m_doc->height() * scale));
-    m_dimensionLabel->setText(QStringLiteral("%1 x %2 px").arg(outWidth).arg(outHeight));
+    if (m_i18n) {
+        m_dimensionLabel->setText(
+            m_i18n->t("editor", QStringLiteral("export.dimension"))
+                .arg(outWidth).arg(outHeight));
+    } else {
+        m_dimensionLabel->setText(
+            QStringLiteral("%1 x %2 px").arg(outWidth).arg(outHeight));
+    }
 
-    // Render a 300x240 preview with checkerboard transparency
-    const int maxThumbSide = 280;
-    const double previewScale = qMin(static_cast<double>(maxThumbSide) / m_doc->width(),
-                                      static_cast<double>(maxThumbSide) / m_doc->height());
+    // Render a scaled-down preview with checkerboard transparency.
+    const double previewScale = qMin(static_cast<double>(kPreviewThumbSide) / m_doc->width(),
+                                     static_cast<double>(kPreviewThumbSide) / m_doc->height());
 
     const int thumbW = qMax(1, static_cast<int>(m_doc->width() * previewScale));
     const int thumbH = qMax(1, static_cast<int>(m_doc->height() * previewScale));
@@ -373,16 +562,50 @@ void ExportDialog::updatePreview()
         }
     }
 
+    // Show the same pixels the exporter will write: flatten onto white when
+    // the output is opaque (transparency off or JPEG).
+    if (!m_transparent->isChecked()) {
+        QImage flat(thumbImage.size(), QImage::Format_RGB32);
+        flat.fill(Qt::white);
+        QPainter fp(&flat);
+        fp.drawImage(0, 0, thumbImage);
+        fp.end();
+        thumbImage = flat;
+    }
+
     m_cachedBaseThumbnail = thumbImage;
     m_previewImageLabel->setPixmap(QPixmap::fromImage(thumbImage));
 
     estimateFileSize();
 }
 
+QString ExportDialog::tr_(const QString& key, const QString& fallback) const
+{
+    if (!m_i18n)
+        return fallback;
+    const QString t = m_i18n->t("editor", key);
+    // A total miss returns the dotted key; fall back to English then.
+    return (t == QStringLiteral("editor.") + key) ? fallback : t;
+}
+
+QString ExportDialog::presetTooltipKey(const QString& presetId)
+{
+    if (presetId == QLatin1String("ig_post"))
+        return QStringLiteral("export.preset.igPost");
+    if (presetId == QLatin1String("story"))
+        return QStringLiteral("export.preset.story");
+    if (presetId == QLatin1String("yt_thumb"))
+        return QStringLiteral("export.preset.ytThumb");
+    if (presetId == QLatin1String("x_banner"))
+        return QStringLiteral("export.preset.xBanner");
+    return QStringLiteral("export.preset.original");
+}
+
 void ExportDialog::estimateFileSize()
 {
     if (!m_doc || m_cachedBaseThumbnail.isNull()) {
-        m_fileSizeLabel->setText(QStringLiteral("~ -- KB"));
+        m_fileSizeLabel->setText(
+            tr_(QStringLiteral("export.fileSizeUnknown"), QStringLiteral("~ -- KB")));
         return;
     }
 
@@ -390,20 +613,28 @@ void ExportDialog::estimateFileSize()
     const int quality = m_quality->value();
     const double scale = m_scale->currentData().toDouble();
 
-    // PhotoCraft algorithm: Encode the small proxy thumbnail in memory,
-    // then scale the byte size by pixel ratio (full_pixels / proxy_pixels).
+    // Encode the small proxy thumbnail in memory, then scale the byte size
+    // by pixel ratio (full_pixels / proxy_pixels).
     QByteArray buffer;
     QBuffer qb(&buffer);
     qb.open(QIODevice::WriteOnly);
 
     QImage proxy = m_cachedBaseThumbnail;
-    if (fmt == QLatin1String("jpeg")) {
+    // Estimate with the pixels the exporter will actually write: opaque
+    // output (JPEG, or transparency disabled) is flattened onto white.
+    const bool opaqueOutput = (fmt == QLatin1String("jpeg")) ||
+                              !m_transparent->isChecked();
+    if (opaqueOutput && proxy.hasAlphaChannel()) {
         QImage flat(proxy.size(), QImage::Format_RGB32);
         flat.fill(Qt::white);
         QPainter p(&flat);
         p.drawImage(0, 0, proxy);
         p.end();
-        flat.save(&qb, "JPEG", quality);
+        proxy = flat;
+    }
+
+    if (fmt == QLatin1String("jpeg")) {
+        proxy.save(&qb, "JPEG", quality);
     } else if (fmt == QLatin1String("webp")) {
         proxy.save(&qb, "WEBP", quality);
     } else {
@@ -416,9 +647,13 @@ void ExportDialog::estimateFileSize()
     const double estimatedBytes = static_cast<double>(proxyBytes) * (fullPixels / proxyPixels);
 
     if (estimatedBytes < 1024 * 1024) {
-        m_fileSizeLabel->setText(QStringLiteral("Est: ~%1 KB").arg(qRound(estimatedBytes / 1024.0)));
+        m_fileSizeLabel->setText(
+            tr_(QStringLiteral("export.fileSizeKB"), QStringLiteral("Est: ~%1 KB"))
+                .arg(qRound(estimatedBytes / 1024.0)));
     } else {
-        m_fileSizeLabel->setText(QStringLiteral("Est: ~%1 MB").arg(estimatedBytes / (1024.0 * 1024.0), 0, 'f', 1));
+        m_fileSizeLabel->setText(
+            tr_(QStringLiteral("export.fileSizeMB"), QStringLiteral("Est: ~%1 MB"))
+                .arg(estimatedBytes / (1024.0 * 1024.0), 0, 'f', 1));
     }
 }
 
@@ -430,6 +665,7 @@ ExportSettings ExportDialog::settings() const
     s.scale = m_scale->currentData().toDouble();
     s.exportSelectedLayerOnly = m_scopeLayer->isChecked();
     s.selectedLayerId = m_selectedLayerId;
+    s.transparent = m_transparent->isChecked();
     return s;
 }
 
@@ -437,15 +673,51 @@ void ExportDialog::retranslateUi()
 {
     if (!m_i18n)
         return;
-    setWindowTitle(m_i18n->t("editor", "export.dialog.title"));
-    m_formatLabel->setText(m_i18n->t("editor", "export.format"));
-    m_qualityLabel->setText(m_i18n->t("editor", "export.quality"));
-    m_scaleLabel->setText(m_i18n->t("editor", "export.scale"));
-    m_presetLabel->setText(m_i18n->t("editor", "export.preset"));
-    m_scopeEntire->setText(m_i18n->t("editor", "export.scopeEntire"));
-    m_scopeLayer->setText(m_i18n->t("editor", "export.scopeLayer"));
 
-    // Traduz itens dos combos por dado de usuário (estável entre idiomas)
+    setWindowTitle(m_i18n->t("editor", QStringLiteral("export.dialog.title")));
+
+    if (m_scopeCaption)
+        m_scopeCaption->setText(m_i18n->t("editor", QStringLiteral("export.scope")));
+    if (m_presetsCaption)
+        m_presetsCaption->setText(m_i18n->t("editor", QStringLiteral("export.presets")));
+    if (m_outputCaption)
+        m_outputCaption->setText(m_i18n->t("editor", QStringLiteral("export.output")));
+    if (m_previewCaption)
+        m_previewCaption->setText(m_i18n->t("editor", QStringLiteral("export.preview")));
+
+    m_scopeEntire->setText(m_i18n->t("editor", QStringLiteral("export.scopeEntire")));
+    m_scopeLayer->setText(m_i18n->t("editor", QStringLiteral("export.scopeLayer")));
+
+    // Chips usam rótulos curtos; o tooltip carrega a descrição completa.
+    const auto setChip = [this](const QString& presetId, const QString& labelKey) {
+        if (auto* chip = m_presetChips.value(presetId, nullptr)) {
+            chip->setText(m_i18n->t("editor", labelKey));
+            chip->setToolTip(m_i18n->t("editor", presetTooltipKey(presetId)));
+        }
+    };
+    setChip(QStringLiteral("original"), QStringLiteral("export.presetChip.original"));
+    setChip(QStringLiteral("ig_post"), QStringLiteral("export.presetChip.igPost"));
+    setChip(QStringLiteral("story"), QStringLiteral("export.presetChip.story"));
+    setChip(QStringLiteral("yt_thumb"), QStringLiteral("export.presetChip.ytThumb"));
+    setChip(QStringLiteral("x_banner"), QStringLiteral("export.presetChip.xBanner"));
+
+    m_formatLabel->setText(m_i18n->t("editor", QStringLiteral("export.format")));
+    m_qualityLabel->setText(m_i18n->t("editor", QStringLiteral("export.quality")));
+    m_scaleLabel->setText(m_i18n->t("editor", QStringLiteral("export.scale")));
+    m_transparentLabel->setText(
+        m_i18n->t("editor", QStringLiteral("export.transparent")));
+
+    // Icons are static; keep them attached after retranslation.
+    if (auto* ig = m_presetChips.value(QStringLiteral("ig_post"), nullptr))
+        ig->setIcon(QIcon(ThemeIcons::brandInstagram(16)));
+    if (auto* st = m_presetChips.value(QStringLiteral("story"), nullptr))
+        st->setIcon(QIcon(ThemeIcons::brandTiktok(16)));
+    if (auto* yt = m_presetChips.value(QStringLiteral("yt_thumb"), nullptr))
+        yt->setIcon(QIcon(ThemeIcons::brandYoutube(16)));
+    if (auto* xb = m_presetChips.value(QStringLiteral("x_banner"), nullptr))
+        xb->setIcon(QIcon(ThemeIcons::brandBanner(16)));
+
+    // Formatos
     auto setComboItem = [this](QComboBox* combo, const QString& dataKey,
                                const QString& trKey) {
         if (!combo)
@@ -457,40 +729,15 @@ void ExportDialog::retranslateUi()
             }
         }
     };
-
-    // Presets
-    setComboItem(m_presetCombo, QStringLiteral("original"),
-                 QStringLiteral("export.preset.original"));
-    setComboItem(m_presetCombo, QStringLiteral("yt_thumb"),
-                 QStringLiteral("export.preset.ytThumb"));
-    setComboItem(m_presetCombo, QStringLiteral("ig_post"),
-                 QStringLiteral("export.preset.igPost"));
-    setComboItem(m_presetCombo, QStringLiteral("story"),
-                 QStringLiteral("export.preset.story"));
-    setComboItem(m_presetCombo, QStringLiteral("x_banner"),
-                 QStringLiteral("export.preset.xBanner"));
-
-    if (auto* origChip = m_presetChips.value(QStringLiteral("original"), nullptr)) {
-        origChip->setText(m_i18n->t("editor", "export.preset.original"));
-    }
-
-    // Formatos
-    setComboItem(m_format, QStringLiteral("png"),
-                 QStringLiteral("export.format.png"));
-    setComboItem(m_format, QStringLiteral("jpeg"),
-                 QStringLiteral("export.format.jpeg"));
-    setComboItem(m_format, QStringLiteral("webp"),
-                 QStringLiteral("export.format.webp"));
+    setComboItem(m_format, QStringLiteral("png"), QStringLiteral("export.format.png"));
+    setComboItem(m_format, QStringLiteral("jpeg"), QStringLiteral("export.format.jpeg"));
+    setComboItem(m_format, QStringLiteral("webp"), QStringLiteral("export.format.webp"));
 
     // Escalas fixas (item dinâmico de preset não tem chave fixa, mantém %)
-    setComboItem(m_scale, QStringLiteral("0.5"),
-                 QStringLiteral("export.scale.50"));
-    setComboItem(m_scale, QStringLiteral("1"),
-                 QStringLiteral("export.scale.100"));
-    setComboItem(m_scale, QStringLiteral("1.5"),
-                 QStringLiteral("export.scale.150"));
-    setComboItem(m_scale, QStringLiteral("2"),
-                 QStringLiteral("export.scale.200"));
+    setComboItem(m_scale, QStringLiteral("0.5"), QStringLiteral("export.scale.50"));
+    setComboItem(m_scale, QStringLiteral("1"), QStringLiteral("export.scale.100"));
+    setComboItem(m_scale, QStringLiteral("1.5"), QStringLiteral("export.scale.150"));
+    setComboItem(m_scale, QStringLiteral("2"), QStringLiteral("export.scale.200"));
 
     // Recalcula preview e estimativa para aplicar textos traduzidos
     // (dimensão "%1 x %2 px" e tamanho de arquivo).

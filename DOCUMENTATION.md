@@ -411,7 +411,9 @@ The manifest also carries the document color space, the pixel selection, and the
 - Calls `renderDocument()` off-screen without editor overlays
 - Exporting a clipped layer applies the same mask (`renderSiblingLayers`), so the file matches the screen
 
-`ExportDialog` (`src/ui/exportdialog.{h,cpp}`) is the `File ▸ Export As...` surface: scope control (full canvas vs selected layer), one row of platform preset chips (Original, Instagram, Story/TikTok, YouTube, Twitter/X — each applies format/quality/scale), the output card (format, quality, scale, transparency), a live checkerboard preview and the estimated file size (proxy render scaled by pixel ratio). Translating between languages re-renders the preview in place.
+`ExportDialog` (`src/ui/exportdialog.{h,cpp}`) is the `File ▸ Export As...` surface: scope control (full canvas vs selected layer), one row of platform preset chips (Original, Instagram, Story/TikTok, YouTube, Twitter/X — each applies format/quality/scale), the output card (format, quality, scale, transparency), a live checkerboard preview and the estimated file size (proxy render scaled by pixel ratio). Translating between languages re-renders the preview in place. JPEG has no alpha: the transparency toggle disables itself and the choice is remembered, restored when an alpha-capable format returns (covered by `test_export_dialog`).
+
+`MiniPaintBridge` (`src/services/minipaintbridge.cpp`) — `Image ▸ Edit in MiniPaint` — is covered by `test_minipaint_bridge`: a stub on `PATH` replays the documented launch contract (argument set, exit codes, output import) without the real editor.
 
 Batch runs over many files at once are driven by `BatchDialog` (UI layer), which reuses the same import/render/export pipeline.
 

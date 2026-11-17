@@ -116,6 +116,9 @@ cc_add_test(test_export_dialog unit/test_export_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/exportdialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/themeicons.cpp
 )
+cc_add_test(test_minipaint_bridge unit/test_minipaint_bridge.cpp
+    ${PROJECT_SOURCE_DIR}/src/services/minipaintbridge.cpp
+)
 cc_add_test(test_canvas_gesture_handler unit/test_canvas_gesture_handler.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasgesturehandler.cpp
 )
