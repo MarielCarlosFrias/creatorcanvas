@@ -1,0 +1,15 @@
+# Build outputs
+build/
+build-shared/
+build-release/
+build-sanitize/
+cmake-build-*/
+
+# Runtime output from the standalone example
+minipaint-output.png
+minipaint-input.png
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.swp

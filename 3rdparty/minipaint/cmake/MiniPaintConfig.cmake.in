@@ -1,0 +1,7 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(SFML 3.0 COMPONENTS Graphics Window System)
+
+include("${CMAKE_CURRENT_LIST_DIR}/MiniPaintTargets.cmake")
+check_required_components(MiniPaint)
