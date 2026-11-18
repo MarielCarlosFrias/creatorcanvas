@@ -176,6 +176,10 @@ add_executable(creatorcanvas
     ui/mainwindow.cpp
     ui/canvasview.h
     ui/canvasview.cpp
+    ui/canvastransform.h
+    ui/canvastransform.cpp
+    ui/canvastransform.h
+    ui/canvastransform.cpp
     ui/newdocumentdialog.h
     ui/newdocumentdialog.cpp
     ui/textinspector.h

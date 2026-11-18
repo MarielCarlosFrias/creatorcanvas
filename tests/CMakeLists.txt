@@ -52,6 +52,8 @@ cc_add_test(test_ai_quick unit/test_ai_quick.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasgesturehandler.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvascontextmenu.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasview.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasoverlayrenderer.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/aibackgrounddialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/maskeditcanvas.cpp
@@ -74,6 +76,8 @@ cc_add_test(test_hit_alpha unit/test_hit_alpha.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasgesturehandler.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvascontextmenu.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasview.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasoverlayrenderer.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/aibackgrounddialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/maskeditcanvas.cpp
@@ -83,6 +87,8 @@ cc_add_test(test_canvas_zoom unit/test_canvas_zoom.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasgesturehandler.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvascontextmenu.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasview.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasoverlayrenderer.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/aibackgrounddialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/maskeditcanvas.cpp
@@ -92,6 +98,8 @@ cc_add_test(test_undo_render unit/test_undo_render.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasgesturehandler.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvascontextmenu.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasview.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasoverlayrenderer.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/aibackgrounddialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/maskeditcanvas.cpp
@@ -105,6 +113,8 @@ cc_add_test(test_canvas_context_menu unit/test_canvas_context_menu.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasgesturehandler.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvascontextmenu.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasview.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasoverlayrenderer.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/aibackgrounddialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/maskeditcanvas.cpp
@@ -115,6 +125,9 @@ cc_add_test(test_inline_text_editor unit/test_inline_text_editor.cpp
 cc_add_test(test_export_dialog unit/test_export_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/exportdialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/themeicons.cpp
+)
+cc_add_test(test_canvas_transform unit/test_canvas_transform.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
 )
 cc_add_test(test_minipaint_bridge unit/test_minipaint_bridge.cpp
     ${PROJECT_SOURCE_DIR}/src/services/minipaintbridge.cpp
@@ -150,6 +163,8 @@ cc_add_test(test_mainwindow_tabs unit/test_mainwindow_tabs.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/puppetwarpdialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/darktheme.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasview.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasoverlayrenderer.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasgesturehandler.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvascontextmenu.cpp

@@ -518,7 +518,7 @@ Already on `main` (do not treat as future work): multi-select, group/align/distr
 
 Still ahead:
 
-1. **Split `CanvasView` / `MainWindow`** — mostly done: overlays live in `CanvasOverlayRenderer` (492 lines), handle/hit-testing in `CanvasGestureHandler` (213), the context menu in `CanvasContextMenu` (212), inline text in `InlineTextEditor` (122). `CanvasView` (1951 lines) is now viewport/transform management and event orchestration; the zoom/transform block would be the next extraction.
+1. **Split `CanvasView` / `MainWindow`** — mostly done: overlays live in `CanvasOverlayRenderer` (492 lines), handle/hit-testing in `CanvasGestureHandler` (213), the context menu in `CanvasContextMenu` (212), inline text in `InlineTextEditor` (122). The zoom/transform/fit block is now its own widget-free unit, `CanvasTransform` (`src/ui/canvastransform.{h,cpp}`, 128 lines), unit-tested in isolation by `test_canvas_transform`; `CanvasView` (1936 lines) keeps viewport/transform *use*, hit-testing and event orchestration.
 2. **GPU viewport** — blocked by the environment, not by the code: the `IRenderer` seam exists and both rendering paths are cached (fast path 3.1×, compositing path 4.3×), but a QRhi needs a native surface, which does not exist under `QT_QPA_PLATFORM=offscreen`. Any Vulkan/Direct3D/RHI backend must be written and verified on a machine with a real display before it can ship.
 3. **Richer blend modes** — only if compositing moves beyond the current twelve `QPainter` modes.
 4. **macOS** — real bundle, notarization, and CI; `MACOSX_BUNDLE` on the target is not a shipping product.

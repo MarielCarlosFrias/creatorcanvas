@@ -13,6 +13,7 @@
 #include "core/snap/SnapEngine.h"
 #include "canvasoverlayrenderer.h"
 #include "canvasgesturehandler.h"
+#include "canvastransform.h"
 #include "tools/CanvasTool.h"
 
 namespace cc {
@@ -53,6 +54,7 @@ public:
     /// crashar o delete/ações de camada no MainWindow.
     void pruneSelection();
     void setSelectedLayer(const LayerId& id);
+    LayerId selectedLayerId() const { return m_selectedId; }
     QList<LayerId> selectedLayers() const;
     void setMultiSelection(const QList<LayerId>& ids);
     void beginTextEdit(const LayerId& id);
@@ -127,8 +129,8 @@ public:
     void removeBackgroundAiQuick(const cc::LayerId& id);
     bool isQuickAiRunning() const;
 
-    double zoom() const { return m_zoom; }
-    QPointF panOffset() const { return m_panOffset; }
+    double zoom() const;
+    QPointF panOffset() const;
     void centerOn(const QPointF& documentPos);
 
     void setShowGrid(bool show);
@@ -207,8 +209,6 @@ public:
     QTransform deviceToDoc() const;
 
 private:
-    void zoomAt(const QPointF& widgetPos, double factor);
-    void emitZoomChanged();
     Layer* hitTestLayer(const QPointF& docPos, bool includeLocked = false) const;
     Layer* hitTestChildrenRecursive(const GroupLayer& group, const QPointF& docPos,
                                     bool includeLocked = false) const;
@@ -229,18 +229,14 @@ private:
 
     QPointer<Document> m_document;
     CommandStack* m_history = nullptr;
-    double m_zoom = 1.0;
-    QPointF m_panOffset{0, 0};
+    /// Zoom/pan/fit state and math (see canvastransform.h).
+    CanvasTransform* m_transform = nullptr;
 
     bool m_panning = false;
     bool m_spacePanning = false;
     SnapEngine m_snapEngine;
     QList<GuideLine> m_activeGuides;
     QPoint m_lastMousePos;
-    bool m_needsFit = true;
-    /// Modo "ajustar à janela": enquanto true, um resize re-ajusta o zoom.
-    /// Qualquer zoom/pan manual desliga e o resize preserva o zoom.
-    bool m_autoFit = true;
 
     LayerId m_selectedId;
     CanvasGestureHandler m_gestureHandler;

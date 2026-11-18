@@ -82,10 +82,6 @@ QImage alphaMaskFromImage(const QImage& image)
     return mask;
 }
 
-constexpr double kMinZoom = 0.05;
-constexpr double kMaxZoom = 32.0;
-constexpr double kZoomStep = 1.2;
-
 } // namespace
 
 CanvasView::CanvasView(QWidget* parent)
@@ -94,6 +90,11 @@ CanvasView::CanvasView(QWidget* parent)
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
     setAcceptDrops(true);
+
+    m_transform = new CanvasTransform(this);
+    m_transform->setViewportSize(size());
+    connect(m_transform, &CanvasTransform::zoomChanged,
+            this, &CanvasView::zoomChanged);
 
     m_selectTool = std::make_unique<SelectTool>();
     m_cropTool = std::make_unique<CropTool>();
@@ -128,8 +129,8 @@ ToolContext CanvasView::makeToolContext() const
     ctx.snapEngine = const_cast<SnapEngine*>(&m_snapEngine);
     ctx.i18n = m_i18n;
     ctx.view = const_cast<CanvasView*>(this);
-    ctx.zoom = m_zoom;
-    ctx.panOffset = m_panOffset;
+    ctx.zoom = m_transform->zoom();
+    ctx.panOffset = m_transform->panOffset();
     ctx.docToDevice = docToDevice();
     ctx.deviceToDoc = deviceToDoc();
     ctx.showGrid = m_showGrid;
@@ -174,7 +175,10 @@ void CanvasView::setDocument(Document* document)
     hideTextEdit();
     m_document = document;
     m_selectedId = LayerId();
-    m_needsFit = true;
+    m_transform->setViewportSize(size());
+    if (m_document)
+        m_transform->setDocumentSize(QSize(m_document->width(), m_document->height()));
+    m_transform->resetForDocument();
     update();
 }
 
@@ -237,7 +241,7 @@ void CanvasView::beginTextEdit(const LayerId& id)
                                   .united(QRectF(set.points[3], set.points[1])
                                               .normalized());
 
-    m_inlineTextEditor->startEdit(id, *static_cast<TextLayer*>(layer), screenRect, m_zoom);
+    m_inlineTextEditor->startEdit(id, *static_cast<TextLayer*>(layer), screenRect, m_transform->zoom());
 }
 
 void CanvasView::commitTextEdit()
@@ -254,8 +258,7 @@ void CanvasView::hideTextEdit()
 
 void CanvasView::centerOn(const QPointF& documentPos)
 {
-    m_panOffset = QPointF(width() / 2.0, height() / 2.0)
-                  - documentPos * m_zoom;
+    m_transform->centerOn(documentPos);
     update();
 }
 
@@ -358,76 +361,48 @@ void CanvasView::setSnapToGrid(bool snap) { m_snapToGrid = snap; }
 void CanvasView::setGridSpacing(int spacing) { m_gridSpacing = std::clamp(spacing, 10, 200); update(); }
 void CanvasView::setSafeZoneMode(int mode) { m_safeZoneMode = std::clamp(mode, 0, 3); update(); }
 
+double CanvasView::zoom() const
+{
+    return m_transform->zoom();
+}
+
+QPointF CanvasView::panOffset() const
+{
+    return m_transform->panOffset();
+}
+
 void CanvasView::zoomIn()
 {
-    zoomAt(QPointF(width() / 2.0, height() / 2.0), kZoomStep);
+    m_transform->zoomIn();
+    update();
 }
 
 void CanvasView::zoomOut()
 {
-    zoomAt(QPointF(width() / 2.0, height() / 2.0), 1.0 / kZoomStep);
+    m_transform->zoomOut();
+    update();
 }
 
 void CanvasView::zoomTo(double zoom)
 {
-    zoom = std::clamp(zoom, kMinZoom, kMaxZoom);
-    if (qFuzzyCompare(zoom, m_zoom))
-        return;
-    zoomAt(QPointF(width() / 2.0, height() / 2.0), zoom / m_zoom);
+    m_transform->zoomTo(zoom);
+    update();
 }
 
 void CanvasView::fitToViewport()
 {
-    if (!m_document || width() <= 0 || height() <= 0)
-        return;
-
-    constexpr double kMarginFactor = 0.92;
-    const double zoomX = width() * kMarginFactor / m_document->width();
-    const double zoomY = height() * kMarginFactor / m_document->height();
-    m_zoom = std::clamp(std::min(zoomX, zoomY), kMinZoom, kMaxZoom);
-    m_panOffset = QPointF(
-        (width() - m_document->width() * m_zoom) / 2.0,
-        (height() - m_document->height() * m_zoom) / 2.0);
-    m_needsFit = false;
-    m_autoFit = true;
-
+    m_transform->fit();
     update();
-    emitZoomChanged();
 }
 
 QTransform CanvasView::docToDevice() const
 {
-    QTransform transform;
-    transform.translate(m_panOffset.x(), m_panOffset.y());
-    transform.scale(m_zoom, m_zoom);
-    return transform;
+    return m_transform->docToDevice();
 }
 
 QTransform CanvasView::deviceToDoc() const
 {
-    return docToDevice().inverted();
-}
-
-void CanvasView::zoomAt(const QPointF& widgetPos, double factor)
-{
-    const double newZoom = std::clamp(m_zoom * factor, kMinZoom, kMaxZoom);
-    if (qFuzzyCompare(newZoom, m_zoom))
-        return;
-
-    // Zoom manual: o usuário assumiu o controle — resize não refaz o fit.
-    m_autoFit = false;
-
-    const double effective = newZoom / m_zoom;
-    m_panOffset = widgetPos - (widgetPos - m_panOffset) * effective;
-    m_zoom = newZoom;
-
-    update();
-    emitZoomChanged();
-}
-
-void CanvasView::emitZoomChanged()
-{
-    emit zoomChanged(m_zoom);
+    return m_transform->deviceToDoc();
 }
 
 // Amostra o alfa efetivo (imagem * mascara alfa) nas coordenadas naturais
@@ -581,8 +556,7 @@ void CanvasView::updateCursor(const QPointF& widgetPos)
 
 void CanvasView::paintEvent(QPaintEvent*)
 {
-    if (m_needsFit && m_document && width() > 0 && height() > 0)
-        fitToViewport();
+    m_transform->fitIfNeeded();
 
     QPainter painter(this);
     const bool dark = palette().color(QPalette::Window).value() < 128;
@@ -638,12 +612,15 @@ void CanvasView::paintEvent(QPaintEvent*)
     // de aplicar uma máscara.
     const QImage& pixelSelection = m_document->pixelSelection();
     if (!pixelSelection.isNull() && !m_selectedId.isNull()) {
-        // A imagem do contorno (mesh preto/branco) só muda quando a máscara
-        // ou o documento mudam: reutilizar evita o loop de CPU por pintura.
+        // A imagem do contorno (mesh preto/branco) é desenhada no espaço local da
+        // camada e só depende da máscara de seleção e dimensões, NÃO da posição
+        // ou revisão do documento (remover revision() evita reconstruir milhões
+        // de pixels a cada evento de mouse move durante arraste/transform).
         const qint64 selectionKey =
-            qint64(m_document->revision()) * 1000003 + qint64(pixelSelection.cacheKey());
+            qint64(pixelSelection.cacheKey()) ^ (qint64(pixelSelection.width()) << 32)
+            ^ (qint64(pixelSelection.height()) << 16) ^ qint64(qHash(m_selectedId));
         if (m_selectionOverlay.isNull() || m_selectionOverlayKey != selectionKey) {
-            m_selectionOverlay = QImage();   // obriga a reconstrução
+            m_selectionOverlay = QImage();   // obriga a reconstrução apenas se a seleção mudar
             m_selectionOverlayKey = selectionKey;
         }
         Layer* selectionLayer = m_document->findLayer(m_selectedId);
@@ -695,7 +672,7 @@ void CanvasView::paintEvent(QPaintEvent*)
 
     if (m_showGrid) {
         CanvasOverlayRenderer::drawGrid(&painter, m_document->width(), m_document->height(), m_gridSpacing, docToDevice());
-    } else if (m_zoom >= 8.0) {
+    } else if (m_transform->zoom() >= 8.0) {
         // Pixel Grid automático para precisão cirúrgica em zoom ultra-alto (estilo Figma / Photoshop)
         CanvasOverlayRenderer::drawPixelGrid(&painter, m_document->width(), m_document->height(), docToDevice(), dark);
     }
@@ -714,7 +691,7 @@ void CanvasView::paintEvent(QPaintEvent*)
         CanvasOverlayRenderer::drawMockupPlacement(&painter, m_mockupCorners, docToDevice(), m_mockupPlacementLogo, m_mockupPlacementFreeShape);
     }
 
-    CanvasOverlayRenderer::drawSnapGuides(&painter, m_document->width(), m_document->height(), m_activeGuides, m_zoom, docToDevice());
+    CanvasOverlayRenderer::drawSnapGuides(&painter, m_document->width(), m_document->height(), m_activeGuides, m_transform->zoom(), docToDevice());
 }
 
 void CanvasView::setImagePreview(const LayerId& id, const QImage& image)
@@ -738,7 +715,8 @@ void CanvasView::wheelEvent(QWheelEvent* event)
         event->ignore();
         return;
     }
-    zoomAt(event->position(), std::pow(kZoomStep, delta / 120.0));
+    m_transform->zoomAt(event->position(),
+                        std::pow(CanvasTransform::kZoomStep, delta / 120.0));
     event->accept();
 }
 
@@ -747,7 +725,7 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
     if (event->button() == Qt::MiddleButton
         || (event->button() == Qt::LeftButton && m_spacePanning)) {
         m_panning = true;
-        m_autoFit = false;
+        m_transform->setAutoFit(false);
         m_lastMousePos = event->pos();
         setCursor(Qt::ClosedHandCursor);
         event->accept();
@@ -795,7 +773,7 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
                         nearestIdx = i;
                     }
                 }
-                if (nearestIdx >= 0 && minDist < 20.0 * (1.0 / m_zoom)) {
+                if (nearestIdx >= 0 && minDist < 20.0 * (1.0 / m_transform->zoom())) {
                     m_mockupCorners[nearestIdx] = docPos;
                     update();
                     emit statusMessageRequested(QStringLiteral("Mockup: ponto %1 reposicionado. Marque novamente ou pressione Enter para confirmar.").arg(nearestIdx + 1));
@@ -951,7 +929,7 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event)
     if (m_panning) {
         const QPoint delta = event->pos() - m_lastMousePos;
         m_lastMousePos = event->pos();
-        m_panOffset += QPointF(delta);
+        m_transform->panBy(QPointF(delta));
         update();
         event->accept();
         return;
@@ -1007,7 +985,7 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event)
                     // Em zoom 50% -> limiar de 20px em coordenadas do documento.
                     // Isso evita que em zoom reduzido o usuário precise acertar uma faixa minúscula e perca o snap.
                     const double screenThresholdPx = 10.0;
-                    m_snapEngine.setThreshold(screenThresholdPx / std::max(0.01, m_zoom));
+                    m_snapEngine.setThreshold(screenThresholdPx / std::max(0.01, m_transform->zoom()));
 
                     // 2. Calcula a caixa delimitadora atual da camada em coordenadas do documento
                     const QRectF bounds = layer->contentBounds();
@@ -1328,21 +1306,24 @@ void CanvasView::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
 
+    const QSize oldSize = event->oldSize();
+    m_transform->setViewportSize(size());
+    if (m_document)
+        m_transform->setDocumentSize(QSize(m_document->width(), m_document->height()));
+
     if (!m_document)
         return;
 
     // Modo "ajustado à janela": continua ajustando ao redimensionar.
-    if (m_autoFit) {
-        fitToViewport();
+    if (m_transform->autoFit()) {
+        m_transform->fit();
+        update();
         return;
     }
 
     // Zoom manual: preserva o zoom e mantém o conteúdo centralizado.
     // Antes, todo resize refazia o fit e o usuário perdia o zoom.
-    if (event->oldSize().isValid()) {
-        const QSize delta = event->size() - event->oldSize();
-        m_panOffset += QPointF(delta.width() / 2.0, delta.height() / 2.0);
-    }
+    m_transform->keepCenteredOnResize(oldSize, event->size());
     update();
 }
 

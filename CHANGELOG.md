@@ -36,6 +36,9 @@ Everything accumulated on `main` since the `v0.2.1` tag (2026-11-04).
   installed under its component ID; the AppImage version is read from
   `project()` instead of `cmake_minimum_required`.
 - `LayerOperations` moved from `core/operations` to `services`.
+- `CanvasView`'s zoom/pan/fit block extracted into the widget-free
+  `CanvasTransform` unit (`src/ui/canvastransform.{h,cpp}`), covered by
+  `test_canvas_transform`.
 
 ### Fixed
 
