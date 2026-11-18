@@ -28,6 +28,15 @@ else
 fi
 ln -sf creatorcanvas "$APPDIR/usr/bin/CreatorCanvas"
 
+# The external editor (Image > Edit in MiniPaint) must ship too, or the
+# bundled package cannot launch it. linuxdeploy then picks up its SFML
+# dependencies automatically (exactly what the DEB does by hand).
+if [ -f "$STAGING/bin/minipaint-standalone" ]; then
+    install -m 0755 "$STAGING/bin/minipaint-standalone" "$APPDIR/usr/bin/minipaint-standalone"
+else
+    echo "==> MiniPaint standalone not staged (SFML missing?) - package ships without it"
+fi
+
 # 2. ONNX Runtime & dependencies
 if [ -d "$STAGING/lib/creatorcanvas" ]; then
     cp -d -r "$STAGING/lib/creatorcanvas/." "$APPDIR/usr/lib/creatorcanvas/"
@@ -51,8 +60,10 @@ fi
 # 4. Desktop entry & AppStream
 install -m 0644 "$PROJECT_DIR/packaging/linux/creatorcanvas.desktop" \
         "$APPDIR/usr/share/applications/creatorcanvas.desktop"
+# Metainfo must be named after the component ID or appstreamcli (invoked by
+# appimagetool) refuses the package with a cid-mismatch error.
 install -m 0644 "$PROJECT_DIR/packaging/linux/creatorcanvas.appdata.xml" \
-        "$APPDIR/usr/share/metainfo/creatorcanvas.appdata.xml"
+        "$APPDIR/usr/share/metainfo/com.creatorcanvas.CreatorCanvas.appdata.xml"
 cp "$PROJECT_DIR/packaging/linux/creatorcanvas.desktop" "$APPDIR/creatorcanvas.desktop"
 
 # 5. Icons
@@ -157,7 +168,11 @@ install -m 0755 "$PROJECT_DIR/packaging/linux/AppRun.sh" "$APPDIR/AppRun"
 echo "==> AppDir successfully staged at: $APPDIR"
 
 # 8. Package AppImage if tools are available
-VERSION=$(grep -m1 'VERSION' "$PROJECT_DIR/CMakeLists.txt" | tr -cd '0-9.')
+# Extract the project version from the project() block, NOT from
+# cmake_minimum_required(VERSION 3.24) (a naive grep picked 3.24 once).
+VERSION=$(awk '/project\(/{flag=1} flag{print} /\)/{if(flag) exit}' "$PROJECT_DIR/CMakeLists.txt" \
+    | grep -m1 -oP 'VERSION\s+\K[0-9.]+' || true)
+VERSION="${VERSION:-0.1.0}"
 OUTPUT_APPIMAGE="$BUILD_DIR/CreatorCanvas-${VERSION}-x86_64.AppImage"
 
 if command -v linuxdeploy >/dev/null 2>&1; then

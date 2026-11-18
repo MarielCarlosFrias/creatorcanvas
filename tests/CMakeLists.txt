@@ -119,6 +119,14 @@ cc_add_test(test_export_dialog unit/test_export_dialog.cpp
 cc_add_test(test_minipaint_bridge unit/test_minipaint_bridge.cpp
     ${PROJECT_SOURCE_DIR}/src/services/minipaintbridge.cpp
 )
+
+# The vendored MiniPaint module's own smoke/regression tests (built only when
+# CC_MINIPAINT_SOURCE_DIR resolved and SFML 3 is present). They need an OpenGL
+# context; without one they exit 125, which CTest reports as skipped.
+if(TARGET minipaint-tests)
+    add_test(NAME minipaint_smoke COMMAND minipaint-tests)
+    set_tests_properties(minipaint_smoke PROPERTIES SKIP_RETURN_CODE 125)
+endif()
 cc_add_test(test_canvas_gesture_handler unit/test_canvas_gesture_handler.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasgesturehandler.cpp
 )

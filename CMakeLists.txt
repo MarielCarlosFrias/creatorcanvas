@@ -7,6 +7,9 @@ project(CreatorCanvas
 
 option(CC_BUILD_TESTS         "Build unit tests"                    ON)
 option(CC_WARNINGS_AS_ERRORS  "Treat compiler warnings as errors"  OFF)
+# The vendored MiniPaint carries its own smoke/regression tests; they need an
+# OpenGL context (a display) and skip cleanly (exit 125) when there is none.
+option(CC_MINIPAINT_BUILD_TESTS "Build the MiniPaint module tests" ON)
 
 # Optional external editor (Image > Edit in MiniPaint): point this at a
 # MiniPaint source tree to build AND install minipaint-standalone beside
@@ -56,7 +59,7 @@ endfunction()
 # forced here regardless of how it was found.
 if(CC_MINIPAINT_SOURCE_DIR AND IS_DIRECTORY ${CC_MINIPAINT_SOURCE_DIR})
     set(MINIPAINT_BUILD_EXAMPLE  ON  CACHE BOOL "" FORCE)
-    set(MINIPAINT_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
+    set(MINIPAINT_BUILD_TESTS    ${CC_MINIPAINT_BUILD_TESTS} CACHE BOOL "" FORCE)
     set(MINIPAINT_INSTALL        OFF CACHE BOOL "" FORCE)
     # MiniPaint calls project(), which rebinds PROJECT_SOURCE_DIR — the
     # source lists in src/CMakeLists.txt are expressed with it, so it has to

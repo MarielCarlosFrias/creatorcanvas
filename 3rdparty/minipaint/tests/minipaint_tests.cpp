@@ -11,6 +11,7 @@
 #include <exception>
 #include <filesystem>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -168,10 +169,37 @@ void testCanvasMatchesLayersAfterStroke()
 
 int main()
 {
+#if !defined(_WIN32) && !defined(__APPLE__)
+    // SFML only fails (aborts) later when a window needs a context that does
+    // not exist, so the absence of a display is detected up front: CI runners
+    // without X/Wayland skip instead of crashing.
+    const char* display = std::getenv("DISPLAY");
+    const char* wayland = std::getenv("WAYLAND_DISPLAY");
+    const bool hasEnv = (display != nullptr && *display != '\0') ||
+                        (wayland != nullptr && *wayland != '\0');
+    if (!hasEnv)
+    {
+        std::cout << "SKIP: MiniPaint smoke tests need a display "
+                     "(DISPLAY/WAYLAND_DISPLAY unset)\n";
+        return 125; // CTest SKIP_RETURN_CODE
+    }
+#endif
+
+    // A hidden window supplies the OpenGL context required by sf::RenderTexture.
+    std::unique_ptr<sf::Window> context;
     try
     {
-        // A hidden window supplies the OpenGL context required by sf::RenderTexture.
-        sf::Window context(sf::VideoMode({64U, 64U}), "MiniPaint test context", sf::Style::None);
+        context = std::make_unique<sf::Window>(sf::VideoMode({64U, 64U}),
+                                               "MiniPaint test context", sf::Style::None);
+    }
+    catch (const std::exception&)
+    {
+        std::cout << "SKIP: MiniPaint smoke tests need an OpenGL context (window creation failed)\n";
+        return 125; // CTest SKIP_RETURN_CODE
+    }
+
+    try
+    {
 
         testRegionCompositingMatchesFull();
         testCanvasMatchesLayersAfterStroke();

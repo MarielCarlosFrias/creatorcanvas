@@ -306,7 +306,7 @@ install(FILES ${PROJECT_SOURCE_DIR}/packaging/linux/creatorcanvas.desktop
 
 install(FILES ${PROJECT_SOURCE_DIR}/packaging/linux/creatorcanvas.appdata.xml
         DESTINATION share/metainfo
-        RENAME creatorcanvas.appdata.xml
+        RENAME com.creatorcanvas.CreatorCanvas.appdata.xml
         OPTIONAL)
 
 install(DIRECTORY ${ONNX_DIR}/lib/

@@ -53,6 +53,19 @@ jobs:
           Expand-Archive -Path "$env:TEMP\ort.zip" -DestinationPath "$env:TEMP\ort"
           Move-Item "$env:TEMP\ort\onnxruntime-win-x64-1.19.0" "3rdparty\onnxruntime"
 
+      # SFML builds the bundled MiniPaint editor (Image > Edit in MiniPaint),
+      # so the Windows job compiles it too via the official prebuilt SDK.
+      - name: Install SFML 3 (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://www.sfml-dev.org/files/SFML-3.0.0-windows-vc17-64-bit.zip" -OutFile "$env:TEMP\sfml.zip"
+          Expand-Archive -Path "$env:TEMP\sfml.zip" -DestinationPath "C:\sfml"
+          $sfml = (Get-ChildItem "C:\sfml" -Directory | Select-Object -First 1).FullName
+          "SFML_ROOT=$sfml" >> $env:GITHUB_ENV
+          "CMAKE_PREFIX_PATH=$sfml\lib\cmake\SFML" >> $env:GITHUB_ENV
+          Write-Host "SFML installed at $sfml"
+
       - name: Configure
         run: cmake --preset ${{ matrix.preset }}
 
