@@ -8,10 +8,13 @@
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QDir>
+#include <QElapsedTimer>
+#include <QEventLoop>
 #include <QFileInfo>
 #include <QProcess>
 #include <QStandardPaths>
 #include <QTemporaryDir>
+#include <QTimer>
 #include <QDebug>
 
 namespace cc {
@@ -41,8 +44,8 @@ MiniPaintBridge::MiniPaintBridge(QObject* parent)
     }
     else
     {
-        qWarning() << "[MiniPaintBridge] MiniPaint standalone executable not found. "
-                      "Install it beside CreatorCanvas or add it to PATH.";
+        qInfo() << "[MiniPaintBridge] MiniPaint standalone executable not found. "
+                   "Install it beside CreatorCanvas or add it to PATH.";
     }
     emit availabilityChanged(m_available);
 }
@@ -116,6 +119,19 @@ QImage MiniPaintBridge::editLayer(ImageLayer* layer,
         return QImage();
     }
 
+    if (m_sessionRunning)
+    {
+        qWarning() << "[MiniPaintBridge] An editing session is already running";
+        return QImage();
+    }
+    m_sessionRunning = true;
+    // RAII: no matter which path leaves this function, the flag is cleared.
+    struct SessionGuard
+    {
+        bool& flag;
+        ~SessionGuard() { flag = false; }
+    } sessionGuard{m_sessionRunning};
+
     if (layer->type() != LayerType::Image)
     {
         qWarning() << "[MiniPaintBridge] Layer is not an image layer";
@@ -160,6 +176,8 @@ QImage MiniPaintBridge::editLayer(ImageLayer* layer,
     const QString outputPath = tempDir.filePath(QStringLiteral("output.png"));
 
     // Export the layer bitmap as PNG (preserves alpha)
+    QElapsedTimer timer;
+    timer.start();
     if (!source.save(inputPath, "PNG"))
     {
         qWarning() << "[MiniPaintBridge] Could not write input PNG to" << inputPath;
@@ -177,7 +195,11 @@ QImage MiniPaintBridge::editLayer(ImageLayer* layer,
     args << QStringLiteral("--title")
          << QStringLiteral("MiniPaint - Editing ") + layer->name;
 
+    qInfo() << "[MiniPaintBridge] Layer exported in" << timer.elapsed() << "ms"
+            << "(" << source.width() << "x" << source.height() << ")";
     qInfo() << "[MiniPaintBridge] Launching:" << m_executablePath << args;
+
+    timer.start();
 
     QProcess process;
     process.setProcessChannelMode(QProcess::SeparateChannels);
@@ -189,7 +211,21 @@ QImage MiniPaintBridge::editLayer(ImageLayer* layer,
         return QImage();
     }
 
-    if (!process.waitForFinished(300000))
+    // Wait for the editor WITHOUT freezing the interface: a local event loop
+    // keeps CreatorCanvas responsive (repaints, move, other menus) while the
+    // external editor owns the screen. A keep-alive timer pumps events.
+    QEventLoop waitLoop;
+    QTimer keepAlive;
+    keepAlive.setInterval(50);
+    connect(&keepAlive, &QTimer::timeout,
+            []() { if (qApp) qApp->processEvents(); });
+    connect(&process, &QProcess::finished, &waitLoop, &QEventLoop::quit);
+    connect(&process, &QProcess::errorOccurred, &waitLoop, &QEventLoop::quit);
+    keepAlive.start();
+    waitLoop.exec();
+    keepAlive.stop();
+
+    if (process.state() != QProcess::NotRunning)
     {
         qWarning() << "[MiniPaintBridge] MiniPaint process timed out";
         process.kill();
@@ -198,7 +234,8 @@ QImage MiniPaintBridge::editLayer(ImageLayer* layer,
     }
 
     const int exitCode = process.exitCode();
-    qInfo() << "[MiniPaintBridge] MiniPaint exited with code" << exitCode;
+    qInfo() << "[MiniPaintBridge] MiniPaint exited with code" << exitCode
+            << "after" << timer.elapsed() << "ms";
 
     // Exit code 2 = user cancelled
     if (exitCode == 2)

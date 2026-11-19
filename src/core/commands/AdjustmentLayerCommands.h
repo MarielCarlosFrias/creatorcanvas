@@ -19,12 +19,14 @@ public:
     CreateAdjustmentLayerCommand(Document& doc, AdjustmentType type,
                                  AdjustmentParams params,
                                  std::optional<LayerId> linkTo,
-                                 QString name = QStringLiteral("adjustment.create"))
+                                 QString name = QStringLiteral("adjustment.create"),
+                                 float opacity = 1.0f)
         : Command(std::move(name))
         , m_doc(&doc)
         , m_type(type)
         , m_params(std::move(params))
         , m_linkTo(std::move(linkTo))
+        , m_opacity(opacity)
     {
     }
 
@@ -37,6 +39,8 @@ public:
             return;
         if (!m_params.empty())
             m_doc->setAdjustmentParameters(m_createdId, m_params);
+        if (!qFuzzyCompare(m_opacity, 1.0f))
+            m_doc->setLayerOpacity(m_createdId, m_opacity);
         // O vínculo vive na CAMADA DE IMAGEM (ImageLayer::adjustmentLayerId),
         // não na camada de ajuste — sem isto o renderer nunca a aplicaria.
         if (m_linkTo)
@@ -62,6 +66,7 @@ private:
     AdjustmentType m_type = AdjustmentType::BrightnessContrast;
     AdjustmentParams m_params;
     std::optional<LayerId> m_linkTo;
+    float m_opacity = 1.0f;
     LayerId m_createdId;
     bool m_done = false;
 };

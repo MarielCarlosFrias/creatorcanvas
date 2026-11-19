@@ -6,9 +6,9 @@
 #include <QImage>
 #include "core/Document.h"
 #include "core/DocumentController.h"
+#include "previewstate.h"
 
 #include <QTimer>
-#include <atomic>
 #include <functional>
 
 class QDoubleSpinBox;
@@ -83,8 +83,12 @@ private:
     LayerId m_currentPreviewAssetId;
     QImage m_originalPreviewImage;
     QImage m_latestPreviewImage;
-    std::atomic_uint m_previewGeneration{0};
+    PreviewState m_previewState;
     QTimer m_previewTimer;
+    // Apenas um cálculo de prévia pode correr de cada vez. Sem esta guarda,
+    // cada valor intermédio de um arrasto criava uma thread e imagens grandes
+    // esgotavam CPU/RAM, deixando a interface aparentemente travada.
+    bool m_pixelFilterInFlight = false;
     bool m_loading = false;
 
     // Perspectiva 3D / Tilt

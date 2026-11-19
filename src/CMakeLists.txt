@@ -42,6 +42,8 @@ add_library(cc_core STATIC
     core/DocumentController.cpp
     core/document/NewDocumentSpec.h
     core/document/NewDocumentSpec.cpp
+    core/document/DocumentVersion.h
+    core/document/DocumentVersionStore.h
     core/templates/TemplateFactory.h
     core/templates/TemplateFactory.cpp
     core/history/Command.h
@@ -58,6 +60,7 @@ add_library(cc_core STATIC
     core/commands/SelectionCommands.h
     core/selection/SelectionOperations.h
     core/selection/SelectionOperations.cpp
+    core/selection/SelectionState.h
     core/selection/SelectionEngine.h
     core/selection/SelectionEngine.cpp
     core/snap/SnapEngine.h
@@ -117,25 +120,33 @@ add_library(cc_services STATIC
     services/recentfiles.cpp
     services/textstylestore.h
     services/textstylestore.cpp
+    ${PROJECT_SOURCE_DIR}/resources/presets.qrc
+)
+target_link_libraries(cc_services PUBLIC Qt6::Core Qt6::Gui cc_core)
+target_include_directories(cc_services PUBLIC ${PROJECT_SOURCE_DIR}/src)
+cc_enable_warnings(cc_services)
+
+# Adaptadores que dependem da camada visual do Qt. Eles ficam fora de
+# cc_services, que contém apenas serviços de domínio e pode ser reutilizado
+# por ferramentas sem QApplication.
+add_library(cc_ui_services STATIC
     services/autosaveservice.h
     services/autosaveservice.cpp
     services/minipaintbridge.h
     services/minipaintbridge.cpp
-    ${PROJECT_SOURCE_DIR}/resources/presets.qrc
 )
-# Qt6::Widgets: MiniPaintBridge precisa de QApplication para bombear eventos
-# enquanto o processo externo corre.
-target_link_libraries(cc_services PUBLIC Qt6::Core Qt6::Gui Qt6::Widgets cc_core)
-target_include_directories(cc_services PUBLIC ${PROJECT_SOURCE_DIR}/src)
-cc_enable_warnings(cc_services)
+target_link_libraries(cc_ui_services PUBLIC Qt6::Core Qt6::Gui Qt6::Widgets cc_core cc_services)
+target_include_directories(cc_ui_services PUBLIC ${PROJECT_SOURCE_DIR}/src)
+cc_enable_warnings(cc_ui_services)
 
 # ------------------------------------------------------------ localization --
 add_library(cc_localization STATIC
+    localization/languagepreferences.h
     localization/i18nservice.h
     localization/i18nservice.cpp
     ${PROJECT_SOURCE_DIR}/resources/locales.qrc
 )
-target_link_libraries(cc_localization PUBLIC Qt6::Core cc_services)
+target_link_libraries(cc_localization PUBLIC Qt6::Core)
 target_include_directories(cc_localization PUBLIC ${PROJECT_SOURCE_DIR}/src)
 cc_enable_warnings(cc_localization)
 
@@ -176,10 +187,11 @@ add_executable(creatorcanvas
     ui/darktheme.cpp
     ui/mainwindow.h
     ui/mainwindow.cpp
+    ui/dockvisibilitypolicy.h
+    ui/dockvisibilitypolicy.cpp
+    ui/responsivelayoutmetrics.h
     ui/canvasview.h
     ui/canvasview.cpp
-    ui/canvastransform.h
-    ui/canvastransform.cpp
     ui/canvastransform.h
     ui/canvastransform.cpp
     ui/newdocumentdialog.h
@@ -200,6 +212,8 @@ add_executable(creatorcanvas
     ui/shapeinspector.cpp
     ui/imageinspector.h
     ui/imageinspector.cpp
+    ui/asynctask.h
+    ui/previewstate.h
     ui/puppetwarpdialog.h
     ui/puppetwarpdialog.cpp
     ui/maskeditcanvas.h
@@ -259,7 +273,7 @@ add_executable(creatorcanvas
 )
 target_link_libraries(creatorcanvas
     PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets
-            cc_core cc_tools cc_rendering cc_services cc_localization)
+            cc_core cc_tools cc_rendering cc_services cc_ui_services cc_localization)
 target_include_directories(creatorcanvas PRIVATE ${PROJECT_SOURCE_DIR}/src)
 target_compile_definitions(creatorcanvas PRIVATE APP_VERSION="${PROJECT_VERSION}")
 if(NOT WIN32)

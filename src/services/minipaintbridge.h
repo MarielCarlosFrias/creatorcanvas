@@ -44,6 +44,9 @@ public:
     [[nodiscard]] QString executablePath() const;
 
     /// Launches MiniPaint to edit the bitmap of the given image layer.
+    /// The call is modal in spirit but does NOT freeze the interface: events
+    /// keep being pumped while the external editor is open. Returns a null
+    /// QImage immediately if a session is already running.
     /// The caller (MainWindow) is responsible for pushing an undo command
     /// with the returned image on success.
     ///
@@ -68,6 +71,9 @@ private:
 
     QString m_executablePath;
     bool m_available{false};
+    /// True while an editing session is running: the wait keeps pumping
+    /// events, so the menu action can be triggered a second time.
+    bool m_sessionRunning{false};
 };
 
 } // namespace cc

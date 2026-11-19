@@ -155,6 +155,7 @@ private slots:
         image->effects.dropShadow.blur = 4.0;
         image->effects.dropShadow.color = QColor(Qt::black);
         image->effects.dropShadow.opacity = 0.8;
+        const LayerId imageId = image->id();
         QVERIFY(doc.addLayer(std::move(image)));
 
         QImage target1(100, 100, QImage::Format_ARGB32_Premultiplied);
@@ -176,6 +177,15 @@ private slots:
         renderTo(target3, doc);
 
         QCOMPARE(target1, target3);
+
+        // Both invalidation scopes must be safe and preserve the rendered
+        // result when the cache is rebuilt on the next frame.
+        invalidateLayerCache(imageId);
+        invalidateAllLayerCaches();
+        QImage target4(100, 100, QImage::Format_ARGB32_Premultiplied);
+        target4.fill(Qt::transparent);
+        renderTo(target4, doc);
+        QCOMPARE(target1, target4);
     }
 
     void checkerboardCachingAndClippingComposition()
@@ -629,4 +639,3 @@ private slots:
 
 QTEST_MAIN(TestRenderer)
 #include "test_renderer.moc"
-

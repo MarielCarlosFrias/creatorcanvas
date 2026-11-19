@@ -49,6 +49,7 @@ class StartScreen;
 class ToolOptionsBar;
 class ActionManager;
 class MenuBuilder;
+class DockVisibilityPolicy;
 
 class MainWindow final : public QMainWindow
 {
@@ -351,7 +352,6 @@ private:
     // estado escolhido pelo usuário guardado para ser restaurado.
     bool m_suppressStartupInteractions = false;
     bool m_updatingResponsiveLayout = false;
-    bool m_docksAutoHidden = false;
 
     /// Modo avançado (View ▸ Modo Avançado, persistido). Esconde/exibe as
     /// ferramentas profissionais em toda a UI. Os diálogos leem-no ao serem
@@ -363,7 +363,7 @@ private:
 
 private:
     bool m_advancedMode = false;
-    QList<QPair<QDockWidget*, bool>> m_savedDockVisibility;
+    std::unique_ptr<DockVisibilityPolicy> m_dockVisibility;
 };
 
 } // namespace cc

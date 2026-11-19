@@ -13,6 +13,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <cmath>
 
 namespace cc {
 
@@ -40,9 +41,9 @@ AdjustmentsSection::AdjustmentsSection(I18nService* i18n, QWidget* parent)
     }
     layout->addWidget(m_typeCombo);
 
-    auto makeSlider = [this, layout](const QString& labelText, int lo, int hi, int value) {
+    auto makeSlider = [this, layout](QLabel*& label, int lo, int hi, int value) {
         auto* row = new QHBoxLayout;
-        auto* label = new QLabel(labelText, this);
+        label = new QLabel(this);
         label->setMinimumWidth(72);
         auto* slider = new QSlider(Qt::Horizontal, this);
         slider->setRange(lo, hi);
@@ -53,12 +54,9 @@ AdjustmentsSection::AdjustmentsSection(I18nService* i18n, QWidget* parent)
         return slider;
     };
 
-    m_labelA = new QLabel(this);
-    m_sliderA = makeSlider(QString(), -100, 100, 0);
-    m_labelB = new QLabel(this);
-    m_sliderB = makeSlider(QString(), -100, 100, 0);
-    m_labelC = new QLabel(this);
-    m_sliderC = makeSlider(QString(), 0, 200, 100);
+    m_sliderA = makeSlider(m_labelA, -100, 100, 0);
+    m_sliderB = makeSlider(m_labelB, -100, 100, 0);
+    m_sliderC = makeSlider(m_labelC, 0, 200, 100);
 
     auto* strengthRow = new QHBoxLayout;
     strengthRow->addWidget(new QLabel(tr("strength", QStringLiteral("Força")), this));
@@ -113,8 +111,16 @@ void AdjustmentsSection::loadFromLayer()
             return def;
         for (const auto& [k, v] : adj->parameters)
             if (k == key)
-                return v;
+                return std::isfinite(v) ? v : def;
         return def;
+    };
+
+    const auto sliderValue = [](double value, int minimum, int maximum, int fallback) {
+        if (!std::isfinite(value))
+            return fallback;
+        const double bounded = std::clamp(value, static_cast<double>(minimum),
+                                          static_cast<double>(maximum));
+        return static_cast<int>(bounded);
     };
 
     AdjustmentType type = AdjustmentType::BrightnessContrast;
@@ -127,19 +133,55 @@ void AdjustmentsSection::loadFromLayer()
         }
     }
 
-    // Rótulos e valores por tipo.
+    // Rótulos e valores por tipo. Os nomes têm de coincidir com currentParams;
+    // caso contrário, reabrir um ajuste e mover um slider podia trocar os
+    // parâmetros por brightness/contrast indevidamente.
+    QString keyA = QStringLiteral("brightness");
+    QString keyB = QStringLiteral("contrast");
+    QString labelA = tr("sliderA", "A");
+    QString labelB = tr("sliderB", "B");
+    switch (type) {
+    case AdjustmentType::HueSaturation:
+        keyA = QStringLiteral("hue");
+        keyB = QStringLiteral("saturation");
+        labelA = QStringLiteral("H");
+        labelB = QStringLiteral("S");
+        break;
+    case AdjustmentType::ShadowsHighlights:
+        keyA = QStringLiteral("shadows");
+        keyB = QStringLiteral("highlights");
+        labelA = QStringLiteral("Sh");
+        labelB = QStringLiteral("Hi");
+        break;
+    case AdjustmentType::Vignette:
+        keyA = QStringLiteral("vignette");
+        labelA = QStringLiteral("V");
+        break;
+    case AdjustmentType::ChannelMixer:
+        keyA = QStringLiteral("redGain");
+        keyB = QStringLiteral("greenGain");
+        labelA = QStringLiteral("R");
+        labelB = QStringLiteral("G");
+        break;
+    default:
+        break;
+    }
     const bool channel = type == AdjustmentType::ChannelMixer;
-    m_labelA->setText(channel ? QStringLiteral("R") : tr("sliderA", "A"));
-    m_labelB->setText(channel ? QStringLiteral("G") : tr("sliderB", "B"));
-    m_sliderA->setValue(static_cast<int>(param(channel ? "redGain" : "brightness",
-                                                channel ? 1.0 : 0.0) * (channel ? 100 : 1)));
-    m_sliderB->setValue(static_cast<int>(param(channel ? "greenGain" : "contrast",
-                                                channel ? 1.0 : 0.0) * (channel ? 100 : 1)));
+    m_labelA->setText(labelA);
+    m_labelB->setText(labelB);
+    m_sliderA->setValue(sliderValue(param(keyA, channel ? 1.0 : 0.0)
+                                          * (channel ? 100 : 1),
+                                    m_sliderA->minimum(), m_sliderA->maximum(), 0));
+    m_sliderB->setValue(sliderValue(param(keyB, channel ? 1.0 : 0.0)
+                                          * (channel ? 100 : 1),
+                                    m_sliderB->minimum(), m_sliderB->maximum(), 0));
     m_sliderC->setVisible(channel);
     m_labelC->setVisible(channel);
     if (channel)
-        m_sliderC->setValue(static_cast<int>(param("blueGain", 1.0) * 100));
-    m_strength->setValue(adj ? static_cast<int>(adj->opacity() * 100) : 100);
+        m_sliderC->setValue(sliderValue(param("blueGain", 1.0) * 100,
+                                        m_sliderC->minimum(), m_sliderC->maximum(), 100));
+    m_strength->setValue(sliderValue(adj ? adj->opacity() * 100 : 100.0,
+                                     m_strength->minimum(), m_strength->maximum(), 100));
 
     m_loading = false;
 }
@@ -204,6 +246,7 @@ void AdjustmentsSection::onSliderChanged()
             m_doc->setAdjustmentKind(adjId, type);
         }
         m_doc->setAdjustmentParameters(adjId, params);
+        m_doc->setLayerOpacity(adjId, strength);
         return;
     }
 
@@ -226,7 +269,7 @@ void AdjustmentsSection::onSliderChanged()
         }
     } else {
         auto cmd = std::make_unique<CreateAdjustmentLayerCommand>(
-            *m_doc, type, params, m_imageLayer, QStringLiteral("adjustment.create"));
+            *m_doc, type, params, m_imageLayer, QStringLiteral("adjustment.create"), strength);
         m_history->execute(std::move(cmd));
     }
 }

@@ -1,6 +1,5 @@
 #include "i18nservice.h"
-
-#include "services/settingsservice.h"
+#include "languagepreferences.h"
 
 #include <QDebug>
 #include <QDir>
@@ -74,7 +73,7 @@ bool readJsonObject(const QString &path, QJsonObject *out)
 
 } // namespace
 
-I18nService::I18nService(SettingsService *settings,
+I18nService::I18nService(LanguagePreferenceStore *settings,
                          const QStringList &searchPaths,
                          QObject *parent)
     : QObject(parent)
@@ -242,7 +241,7 @@ QString I18nService::t(const QString &ns,
             english->contains(full)) {
             text = english->value(full);
         } else {
-            qCWarning(lcI18n)
+            qCDebug(lcI18n)
                 << "Missing translation:" << full;
 
             text = full;
@@ -258,7 +257,7 @@ QString I18nService::t(const QString &ns,
 bool I18nService::setLanguage(const QString &code)
 {
     if (!m_languages.contains(code)) {
-        qCWarning(lcI18n)
+        qCDebug(lcI18n)
             << "Unknown language requested:" << code;
         return false;
     }

@@ -25,6 +25,7 @@ public:
 
     void setCurrentAction(QAction* action);
     QAction* currentAction() const { return defaultAction(); }
+    void cycleNextAction();
 
 protected:
     void mousePressEvent(QMouseEvent* event) override;

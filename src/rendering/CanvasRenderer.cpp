@@ -9,6 +9,7 @@
 
 #include <QBrush>
 #include <QFont>
+#include <QGuiApplication>
 #include <QHash>
 #include <QImage>
 #include <QPainter>
@@ -1101,6 +1102,8 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
 
         const bool hasTexture = text.effects.texture.enabled
                                 && !text.effects.texture.assetId.isNull();
+        const bool hasBadge = text.effects.badge.enabled
+                              && text.effects.badge.color.alpha() > 0;
 
         Qt::Alignment alignFlag = Qt::AlignLeft;
         if (text.align == TextAlignment::Center)
@@ -1156,7 +1159,7 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
             // Vínculo inválido (caminho removido): cai no desenho normal.
         }
 
-        if (!hasOutline && !hasShadow && !hasGradient && !hasTexture && !isHollow && !isKnockout && !customLineHeight) {
+        if (!hasBadge && !hasOutline && !hasShadow && !hasGradient && !hasTexture && !isHollow && !isKnockout && !customLineHeight) {
             painter->setFont(font);
             painter->setPen(text.color);
             painter->drawText(drawRect,
@@ -1213,6 +1216,20 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
 
             path.addText(QPointF(lineX, lineY), font, lineText);
             lineY += lineSpacing;
+        }
+
+        if (hasBadge) {
+            const auto& badge = text.effects.badge;
+            const QRectF pb = path.boundingRect();
+            const QRectF badgeRect = pb.adjusted(
+                -badge.paddingX, -badge.paddingY,
+                badge.paddingX, badge.paddingY);
+            painter->save();
+            painter->setRenderHint(QPainter::Antialiasing, true);
+            painter->setPen(Qt::NoPen);
+            painter->setBrush(badge.color);
+            painter->drawRoundedRect(badgeRect, badge.cornerRadius, badge.cornerRadius);
+            painter->restore();
         }
 
         if (hasShadow) {
@@ -1834,6 +1851,16 @@ void clearRendererCaches()
     defaultRenderer().clearCaches();
 }
 
+void invalidateLayerCache(const QUuid& layerId)
+{
+    defaultRenderer().invalidateLayer(layerId);
+}
+
+void invalidateAllLayerCaches()
+{
+    defaultRenderer().invalidateAllLayers();
+}
+
 bool SoftwareRenderer::drawCachedLayer(QPainter*, const Layer&, const Document&,
                                        const QRectF&, const QTransform&,
                                        const QRectF&, const RenderOptions&)
@@ -2043,9 +2070,18 @@ bool CachingRenderer::drawCachedLayer(QPainter* painter, const Layer& layer,
     local.end();
 
     Entry entry;
-    entry.pixmap = QPixmap::fromImage(img);
-    if (entry.pixmap.isNull())
+    const bool guiAvailable = QGuiApplication::instance() &&
+        !qgetenv("QT_QPA_PLATFORM").toLower().contains("offscreen") &&
+        QGuiApplication::platformName().toLower() != "offscreen" &&
+        !qEnvironmentVariableIsEmpty("DISPLAY");
+    if (guiAvailable) {
+        entry.pixmap = QPixmap::fromImage(img);
+        if (entry.pixmap.isNull())
+            return false;
+    } else {
+        // Headless / offscreen tests: cache is disabled to avoid QPixmap creation warning.
         return false;
+    }
     entry.bytes = static_cast<qint64>(img.sizeInBytes());
     // O ponto de blit é por ENTRADA (cada camada tem a sua área). O pixmap
     // cobre o canvas inteiro, por isso a colagem é na origem do canvas no

@@ -14,6 +14,7 @@
 #include <QPushButton>
 #include <QCheckBox>
 #include <QSlider>
+#include <QColorDialog>
 #include <QComboBox>
 #include <QProgressBar>
 #include <QThread>
@@ -23,6 +24,7 @@
 #include <QMessageBox>
 #include <QPointer>
 #include <QCoreApplication>
+#include <QTabWidget>
 
 namespace cc {
 
@@ -90,15 +92,20 @@ void AiBackgroundDialog::setupUi()
 
     const bool darkUi = palette().color(QPalette::Window).value() < 128;
 
-    // --- Barra Superior de Controle de IA ---
-    auto* topCard = new QWidget(this);
-    topCard->setStyleSheet(QStringLiteral(
-        "background-color: %1; border: 1px solid %2; border-radius: 8px;"
-    ).arg(darkUi ? "#202227" : "#ffffff", darkUi ? "#2b303c" : "#d9dee7"));
-    // Grade de 2 linhas: modelo/IA na primeira, fundo na segunda. Em 800px
-    // a linha única original (modelo + procurar + IA + progresso + fundo)
-    // estourava a largura e cortava controles.
-    auto* topLayout = new QGridLayout(topCard);
+    // --- Abas Superiores de Controle (IA ou Remoção por Cor) ---
+    auto* tabWidget = new QTabWidget(this);
+    tabWidget->setStyleSheet(QStringLiteral(
+        "QTabWidget::pane { border: 1px solid %1; border-radius: 8px; background-color: %2; }"
+        "QTabBar::tab { background: %3; color: %4; padding: 6px 14px; border-top-left-radius: 6px; border-top-right-radius: 6px; margin-right: 2px; font-weight: bold; }"
+        "QTabBar::tab:selected { background: %2; color: #3b82f6; border-bottom: 2px solid #3b82f6; }"
+    ).arg(darkUi ? "#2b303c" : "#d9dee7",
+          darkUi ? "#202227" : "#ffffff",
+          darkUi ? "#181a1f" : "#eef2f7",
+          darkUi ? "#9eabba" : "#64748b"));
+
+    // Aba 1: Inteligência Artificial (Rede Neural)
+    auto* aiTab = new QWidget(this);
+    auto* topLayout = new QGridLayout(aiTab);
     topLayout->setContentsMargins(12, 8, 12, 8);
     topLayout->setHorizontalSpacing(10);
     topLayout->setVerticalSpacing(6);
@@ -109,12 +116,23 @@ void AiBackgroundDialog::setupUi()
     topLayout->addWidget(modelLabel, 0, 0);
 
     m_modelCombo = new QComboBox(this);
-    m_modelCombo->addItem(m_i18n ? m_i18n->t("editor", "aiBackground.model.u2netp") : QStringLiteral("U²-Netp (Ultraleve e Rápido)"), QStringLiteral("u2netp.onnx"));
+
+    const QString isnetPath = BackgroundRemover::findModelPath(QStringLiteral("isnet-general-use.onnx"));
+    if (!isnetPath.isEmpty() && QFileInfo::exists(isnetPath)) {
+        m_modelCombo->addItem(QStringLiteral("ISNet General (1024px Ultra HD)"), QStringLiteral("isnet-general-use.onnx"));
+    }
 
     const QString u2netPath = BackgroundRemover::findModelPath(QStringLiteral("u2net.onnx"));
     if (!u2netPath.isEmpty() && QFileInfo::exists(u2netPath)) {
         m_modelCombo->addItem(m_i18n ? m_i18n->t("editor", "aiBackground.model.u2net") : QStringLiteral("U²-Net (Alta Precisão)"), QStringLiteral("u2net.onnx"));
     }
+
+    const QString isnetAnimePath = BackgroundRemover::findModelPath(QStringLiteral("isnet-anime.onnx"));
+    if (!isnetAnimePath.isEmpty() && QFileInfo::exists(isnetAnimePath)) {
+        m_modelCombo->addItem(QStringLiteral("ISNet Anime (Ilustrações)"), QStringLiteral("isnet-anime.onnx"));
+    }
+
+    m_modelCombo->addItem(m_i18n ? m_i18n->t("editor", "aiBackground.model.u2netp") : QStringLiteral("U²-Netp (Ultraleve)"), QStringLiteral("u2netp.onnx"));
     connect(m_modelCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, &AiBackgroundDialog::onModelChanged);
     topLayout->addWidget(m_modelCombo, 0, 1);
 
@@ -155,12 +173,90 @@ void AiBackgroundDialog::setupUi()
     m_bgColorCombo->addItem(m_i18n ? m_i18n->t("editor", "aiBackground.bg.black") : QStringLiteral("Preto"));
     connect(m_bgColorCombo, &QComboBox::currentIndexChanged, this, &AiBackgroundDialog::onBgColorChanged);
     topLayout->addWidget(m_bgColorCombo, 1, 1);
-    // No modo seleção a cor de fundo é irrelevante: o resultado é a
-    // máscara, não uma imagem composta.
     bgPreviewLabel->setVisible(!m_selectionMode);
     m_bgColorCombo->setVisible(!m_selectionMode);
 
-    mainLayout->addWidget(topCard);
+    tabWidget->addTab(aiTab, m_i18n ? m_i18n->t("editor", "aiBackground.tabAi") : QStringLiteral("✨ Inteligência Artificial (IA)"));
+
+    // Aba 2: Remoção por Cor (Solid Color / Pixel Art / Chroma)
+    auto* colorTab = new QWidget(this);
+    auto* colorLayout = new QVBoxLayout(colorTab);
+    colorLayout->setContentsMargins(12, 8, 12, 8);
+    colorLayout->setSpacing(6);
+
+    auto* cRow1 = new QHBoxLayout;
+    auto* targetColorLabel = new QLabel(m_i18n ? m_i18n->t("editor", "aiBackground.targetColor") : QStringLiteral("Cor Alvo:"), this);
+    targetColorLabel->setStyleSheet(QStringLiteral("font-weight: bold; color: %1;").arg(darkUi ? "#E0E0E0" : "#1f2937"));
+    cRow1->addWidget(targetColorLabel);
+
+    m_targetColor = BackgroundRemover::detectCornerColor(m_originalImage);
+
+    m_targetColorBtn = new QPushButton(this);
+    m_targetColorBtn->setFixedWidth(90);
+    auto updateTargetColorUi = [this]() {
+        const QString hex = m_targetColor.name().toUpper();
+        const int lum = (m_targetColor.red() * 299 + m_targetColor.green() * 587 + m_targetColor.blue() * 114) / 1000;
+        const QString textCol = lum > 128 ? QStringLiteral("#000000") : QStringLiteral("#ffffff");
+        m_targetColorBtn->setText(hex);
+        m_targetColorBtn->setStyleSheet(QStringLiteral(
+            "QPushButton { background-color: %1; color: %2; font-weight: bold; border-radius: 4px; padding: 4px 8px; border: 1px solid #555; }"
+        ).arg(hex, textCol));
+    };
+    updateTargetColorUi();
+    connect(m_targetColorBtn, &QPushButton::clicked, this, &AiBackgroundDialog::onPickTargetColor);
+    cRow1->addWidget(m_targetColorBtn);
+
+    m_detectCornerBtn = new QPushButton(m_i18n ? m_i18n->t("editor", "aiBackground.detectCorner") : QStringLiteral("🎯 Detectar Cantos"), this);
+    m_detectCornerBtn->setToolTip(QStringLiteral("Detecta automaticamente a cor predominante nos cantos da imagem"));
+    connect(m_detectCornerBtn, &QPushButton::clicked, this, &AiBackgroundDialog::onDetectCornerColor);
+    cRow1->addWidget(m_detectCornerBtn);
+
+    cRow1->addStretch();
+
+    m_runColorRemoveBtn = new QPushButton(m_i18n ? m_i18n->t("editor", "aiBackground.runColorRemoval") : QStringLiteral("🎨 Remover Cor de Fundo"), this);
+    m_runColorRemoveBtn->setStyleSheet(QStringLiteral(
+        "QPushButton { background-color: #2E7D32; color: white; font-weight: bold; padding: 6px 16px; border-radius: 4px; }"
+        "QPushButton:hover { background-color: #388E3C; }"
+    ));
+    connect(m_runColorRemoveBtn, &QPushButton::clicked, this, &AiBackgroundDialog::onRunColorRemoval);
+    cRow1->addWidget(m_runColorRemoveBtn);
+    colorLayout->addLayout(cRow1);
+
+    auto* cRow2 = new QHBoxLayout;
+    auto* tolLabel = new QLabel(m_i18n ? m_i18n->t("editor", "aiBackground.tolerance") : QStringLiteral("Tolerância:"), this);
+    cRow2->addWidget(tolLabel);
+
+    m_colorToleranceSlider = new QSlider(Qt::Horizontal, this);
+    m_colorToleranceSlider->setRange(0, 100);
+    m_colorToleranceSlider->setValue(10);
+    m_colorToleranceSlider->setFixedWidth(120);
+    cRow2->addWidget(m_colorToleranceSlider);
+
+    m_colorToleranceLabel = new QLabel(QStringLiteral("10%"), this);
+    m_colorToleranceLabel->setFixedWidth(36);
+    connect(m_colorToleranceSlider, &QSlider::valueChanged, this, [this](int val) {
+        m_colorToleranceLabel->setText(QString::number(val) + QStringLiteral("%"));
+    });
+    cRow2->addWidget(m_colorToleranceLabel);
+
+    cRow2->addSpacing(14);
+
+    m_colorContiguousCheck = new QCheckBox(m_i18n ? m_i18n->t("editor", "aiBackground.contiguous") : QStringLiteral("Contíguo às bordas"), this);
+    m_colorContiguousCheck->setChecked(true);
+    m_colorContiguousCheck->setToolTip(QStringLiteral("Marcado: remove apenas o fundo conectado às bordas exteriores.\nDesmarcado: remove a cor em toda a imagem."));
+    cRow2->addWidget(m_colorContiguousCheck);
+
+    m_colorPixelArtCheck = new QCheckBox(m_i18n ? m_i18n->t("editor", "aiBackground.pixelArt") : QStringLiteral("Preservar Pixel Art / Sprites"), this);
+    m_colorPixelArtCheck->setChecked(true);
+    m_colorPixelArtCheck->setToolTip(QStringLiteral("Mantém as bordas nítidas sem suavização (essencial para sprites e pixel art)"));
+    cRow2->addWidget(m_colorPixelArtCheck);
+
+    cRow2->addStretch();
+    colorLayout->addLayout(cRow2);
+
+    tabWidget->addTab(colorTab, m_i18n ? m_i18n->t("editor", "aiBackground.tabColor") : QStringLiteral("🎨 Remover por Cor (Pixel Art / Sólido)"));
+
+    mainLayout->addWidget(tabWidget);
 
     // --- Barra de Retoque de Máscara (Pincel) ---
     auto* toolsCard = new QWidget(this);
@@ -268,6 +364,48 @@ void AiBackgroundDialog::setupUi()
     m_specksCheck = new QCheckBox(m_i18n ? m_i18n->t("editor", "aiBackground.removeSpecks") : QStringLiteral("Limpar manchas"), this);
     m_specksCheck->setChecked(true);
     refineLayout->addWidget(m_specksCheck);
+
+    // Efeitos pós-recorte: Contorno Adesivo & Sombra Projetada
+    m_stickerCheck = new QCheckBox(m_i18n ? m_i18n->t("editor", "aiBackground.sticker") : QStringLiteral("Adesivo"), this);
+    m_stickerWidthSlider = new QSlider(Qt::Horizontal, this);
+    m_stickerWidthSlider->setRange(2, 40);
+    m_stickerWidthSlider->setValue(10);
+    m_stickerWidthSlider->setFixedWidth(60);
+    m_stickerWidthSlider->setEnabled(false);
+
+    m_stickerColorBtn = new QPushButton(this);
+    m_stickerColorBtn->setFixedSize(18, 18);
+    m_stickerColorBtn->setStyleSheet(QStringLiteral("background-color: white; border: 1px solid #666; border-radius: 3px;"));
+    m_stickerColorBtn->setEnabled(false);
+
+    connect(m_stickerCheck, &QCheckBox::toggled, this, [this](bool on) {
+        m_stickerWidthSlider->setEnabled(on);
+        m_stickerColorBtn->setEnabled(on);
+    });
+    connect(m_stickerColorBtn, &QPushButton::clicked, this, [this] {
+        const QColor c = QColorDialog::getColor(m_stickerColor, this);
+        if (c.isValid()) {
+            m_stickerColor = c;
+            m_stickerColorBtn->setStyleSheet(QStringLiteral("background-color: %1; border: 1px solid #666; border-radius: 3px;").arg(c.name()));
+        }
+    });
+
+    m_shadowCheck = new QCheckBox(m_i18n ? m_i18n->t("editor", "aiBackground.shadow") : QStringLiteral("Sombra"), this);
+    m_shadowBlurSlider = new QSlider(Qt::Horizontal, this);
+    m_shadowBlurSlider->setRange(2, 40);
+    m_shadowBlurSlider->setValue(10);
+    m_shadowBlurSlider->setFixedWidth(60);
+    m_shadowBlurSlider->setEnabled(false);
+    connect(m_shadowCheck, &QCheckBox::toggled, m_shadowBlurSlider, &QSlider::setEnabled);
+
+    if (!m_selectionMode) {
+        refineLayout->addWidget(m_stickerCheck);
+        refineLayout->addWidget(m_stickerWidthSlider);
+        refineLayout->addWidget(m_stickerColorBtn);
+        refineLayout->addWidget(m_shadowCheck);
+        refineLayout->addWidget(m_shadowBlurSlider);
+    }
+
     refineLayout->addStretch();
 
     m_cutSlider->setEnabled(false);
@@ -467,7 +605,19 @@ void AiBackgroundDialog::reapplyMatte()
 
 QImage AiBackgroundDialog::finalImage() const
 {
-    return m_editCanvas ? m_editCanvas->getEditedImage() : m_processedImage;
+    QImage img = m_editCanvas ? m_editCanvas->getEditedImage() : m_processedImage;
+    if (img.isNull())
+        return img;
+
+    if (m_stickerCheck && m_stickerCheck->isChecked()) {
+        const int w = m_stickerWidthSlider ? m_stickerWidthSlider->value() : 10;
+        img = BackgroundRemover::applyStickerOutline(img, w, m_stickerColor);
+    }
+    if (m_shadowCheck && m_shadowCheck->isChecked()) {
+        const int blur = m_shadowBlurSlider ? m_shadowBlurSlider->value() : 10;
+        img = BackgroundRemover::applyDropShadow(img, 6, 8, blur, 0.6f);
+    }
+    return img;
 }
 
 QImage AiBackgroundDialog::finalSelection() const
@@ -476,6 +626,67 @@ QImage AiBackgroundDialog::finalSelection() const
         return {};
     const QImage mask = m_editCanvas->getEditedMask();
     return mask.isNull() ? QImage() : mask.copy();
+}
+
+void AiBackgroundDialog::onPickTargetColor()
+{
+    const QColor col = QColorDialog::getColor(m_targetColor, this, QStringLiteral("Selecionar Cor Alvo"));
+    if (col.isValid()) {
+        m_targetColor = col;
+        if (m_targetColorBtn) {
+            const QString hex = m_targetColor.name().toUpper();
+            const int lum = (m_targetColor.red() * 299 + m_targetColor.green() * 587 + m_targetColor.blue() * 114) / 1000;
+            const QString textCol = lum > 128 ? QStringLiteral("#000000") : QStringLiteral("#ffffff");
+            m_targetColorBtn->setText(hex);
+            m_targetColorBtn->setStyleSheet(QStringLiteral(
+                "QPushButton { background-color: %1; color: %2; font-weight: bold; border-radius: 4px; padding: 4px 8px; border: 1px solid #555; }"
+            ).arg(hex, textCol));
+        }
+    }
+}
+
+void AiBackgroundDialog::onDetectCornerColor()
+{
+    m_targetColor = BackgroundRemover::detectCornerColor(m_originalImage);
+    if (m_targetColorBtn) {
+        const QString hex = m_targetColor.name().toUpper();
+        const int lum = (m_targetColor.red() * 299 + m_targetColor.green() * 587 + m_targetColor.blue() * 114) / 1000;
+        const QString textCol = lum > 128 ? QStringLiteral("#000000") : QStringLiteral("#ffffff");
+        m_targetColorBtn->setText(hex);
+        m_targetColorBtn->setStyleSheet(QStringLiteral(
+            "QPushButton { background-color: %1; color: %2; font-weight: bold; border-radius: 4px; padding: 4px 8px; border: 1px solid #555; }"
+        ).arg(hex, textCol));
+    }
+}
+
+void AiBackgroundDialog::onRunColorRemoval()
+{
+    if (m_originalImage.isNull() || !m_targetColor.isValid())
+        return;
+
+    const int tol = m_colorToleranceSlider ? m_colorToleranceSlider->value() : 10;
+    const bool contiguous = m_colorContiguousCheck ? m_colorContiguousCheck->isChecked() : true;
+    const bool pixelArt = m_colorPixelArtCheck ? m_colorPixelArtCheck->isChecked() : true;
+
+    m_processedImage = BackgroundRemover::removeByColor(m_originalImage, m_targetColor, tol, contiguous, pixelArt);
+
+    // Extrai o canal alpha resultante para m_rawAlpha de forma que ajustes e edições manuais funcionem
+    m_rawAlpha = QImage(m_processedImage.size(), QImage::Format_Alpha8);
+    for (int y = 0; y < m_processedImage.height(); ++y) {
+        const uchar* src = m_processedImage.constScanLine(y);
+        uchar* dst = m_rawAlpha.scanLine(y);
+        for (int x = 0; x < m_processedImage.width(); ++x) {
+            dst[x] = src[x * 4 + 3];
+        }
+    }
+
+    if (m_editCanvas) {
+        m_editCanvas->setImage(m_originalImage, m_processedImage);
+    }
+    if (m_statusLabel) {
+        m_statusLabel->setText(m_i18n ? m_i18n->t("editor", "aiBackground.colorRemovalDone")
+                                      : QStringLiteral("✓ Remoção por cor concluída!"));
+    }
 }
 
 } // namespace cc

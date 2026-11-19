@@ -57,6 +57,9 @@ private slots:
     void onBgColorChanged(int index);
     void onModeRestore();
     void onModeErase();
+    void onPickTargetColor();
+    void onDetectCornerColor();
+    void onRunColorRemoval();
 
 private:
     void setupUi();
@@ -80,6 +83,25 @@ private:
     QPushButton* m_undoBtn = nullptr;
     QPushButton* m_resetBtn = nullptr;
     QLabel* m_statusLabel = nullptr;
+
+    // Efeitos de Acabamento (Sticker & Sombra)
+    QCheckBox* m_stickerCheck = nullptr;
+    QSlider* m_stickerWidthSlider = nullptr;
+    QPushButton* m_stickerColorBtn = nullptr;
+    QColor m_stickerColor = Qt::white;
+    QCheckBox* m_shadowCheck = nullptr;
+    QSlider* m_shadowBlurSlider = nullptr;
+
+    // Remoção por Cor Alvo (Fundo Sólido / Pixel Art / Chroma)
+    QColor m_targetColor = Qt::magenta;
+    QPushButton* m_targetColorBtn = nullptr;
+    QPushButton* m_detectCornerBtn = nullptr;
+    QSlider* m_colorToleranceSlider = nullptr;
+    QLabel* m_colorToleranceLabel = nullptr;
+    QCheckBox* m_colorContiguousCheck = nullptr;
+    QCheckBox* m_colorPixelArtCheck = nullptr;
+    QPushButton* m_runColorRemoveBtn = nullptr;
+
     I18nService* m_i18n = nullptr;
     bool m_selectionMode = false;
     // QPointer: zera sozinho quando o thread se auto-deleta via deleteLater,

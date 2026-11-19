@@ -134,7 +134,8 @@
     "emptyRecentsHint": "Create a new design or open a project file to start creating!",
     "browseAll": "More Formats...",
     "screenAction": "Start Screen",
-    "templates": "Ready-Made Templates"
+    "templates": "Ready-Made Templates",
+    "practice": "Practice Scenarios & Tutorials"
   },
   "action": {
     "apply": "Apply",

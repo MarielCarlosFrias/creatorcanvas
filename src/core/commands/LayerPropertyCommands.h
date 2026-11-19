@@ -66,9 +66,11 @@ public:
     bool mergeWith(const Command& other) override
     {
         const auto* rhs = dynamic_cast<const LayerPropertyCommand<T>*>(&other);
-        const bool mergeableTextEdit = name().startsWith(QStringLiteral("text.")) ||
-                                       name() == QStringLiteral("layer.text");
-        if (!mergeableTextEdit || !rhs || rhs->m_doc != m_doc || rhs->m_layerId != m_layerId ||
+        const bool mergeableContinuousEdit = name().startsWith(QStringLiteral("text.")) ||
+                                             name() == QStringLiteral("layer.text") ||
+                                             name() == QStringLiteral("layer.opacity") ||
+                                             name() == QStringLiteral("adjustment.strength");
+        if (!mergeableContinuousEdit || !rhs || rhs->m_doc != m_doc || rhs->m_layerId != m_layerId ||
             rhs->m_apply != m_apply || rhs->name() != name())
             return false;
         m_newValue = rhs->m_newValue;

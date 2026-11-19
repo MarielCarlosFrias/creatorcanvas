@@ -84,8 +84,8 @@ private slots:
         const QImage after = view.grab().toImage();
         const double ratio = darkRatio(after);
         QVERIFY2(ratio < 0.95,
-                 qPrintable(QStringLiteral("canvas %.0f%% cinza-escuro apos undo "
-                                           "(esperado < 95%%)").arg(ratio * 100)));
+                 qPrintable(QStringLiteral("canvas %1% cinza-escuro apos undo "
+                                           "(esperado < 95%)").arg(int(ratio * 100))));
     }
 
     void undoOfVisibilityTogglesRepaints()

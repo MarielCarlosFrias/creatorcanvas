@@ -45,6 +45,8 @@
 #include "ui/workspacelayout.h"
 #include "ui/menubuilder.h"
 #include "ui/toolslotbutton.h"
+#include "ui/responsivelayoutmetrics.h"
+#include "ui/dockvisibilitypolicy.h"
 
 #include <QActionGroup>
 #include <QApplication>
@@ -165,6 +167,7 @@ MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
     , m_settings(settings)
     , m_i18n(i18n)
 {
+    m_dockVisibility = std::make_unique<DockVisibilityPolicy>();
     // Allow compact laptop windows while keeping enough room for the canvas
     // and the docked properties panels.
     setMinimumSize(800, 520);
@@ -348,53 +351,18 @@ void MainWindow::updateResponsiveLayout()
         return;
     }
 
-    // At laptop widths keep the inspector usable, but give the canvas more
-    // room than the desktop minimum dock width allows.
-    const bool compact = width() < Design::BreakSM;
     // The application minimum window width is 800 px, so the XS breakpoint
     // is not reachable in practice. Treat the 800 px layout as compact too.
     const bool ultraCompact = width() <= Design::UltraCompactWidth;
     const int dock = Design::dockWidth(width());
-    for (QDockWidget* panel : {m_layersDock, m_textDock, m_shapeDock,
-                               m_imageDock, m_historyDock}) {
-        if (panel)
-            panel->setMinimumWidth(ultraCompact ? 180 : (compact ? 200 : dock));
-    }
+    ResponsiveLayout::setDockMinimumWidths(
+        {m_layersDock, m_textDock, m_shapeDock, m_imageDock, m_historyDock},
+        dock, ultraCompact);
 
-    // In the narrowest layout a tabified stack of five inspectors consumes
-    // the canvas. Keep Layers as the single compact panel; the other panels
-    // remain available from Window > Panels when the window is enlarged.
-    if (ultraCompact) {
-        if (m_layersDock)
-            m_layersDock->setVisible(true);
-        if (!m_docksAutoHidden) {
-            // Guarda o estado escolhido pelo usuário para devolver ao
-            // alargar a janela (antes os docks sumiam de vez e o usuário
-            // tinha que reabrir tudo pelo menu Window > Panels).
-            m_savedDockVisibility.clear();
-            for (QDockWidget* panel : {m_textDock, m_shapeDock, m_imageDock,
-                                       m_historyDock}) {
-                // !isHidden() (e não isVisible()): durante a construção a
-                // janela ainda não foi mostrada e isVisible() é sempre
-                // false — guardar isso esconderia os docks para sempre.
-                if (panel)
-                    m_savedDockVisibility.append({panel, !panel->isHidden()});
-            }
-            m_docksAutoHidden = true;
-        }
-        for (QDockWidget* panel : {m_textDock, m_shapeDock, m_imageDock,
-                                   m_historyDock}) {
-            if (panel && panel->isVisible())
-                panel->hide();
-        }
-    } else if (m_docksAutoHidden) {
-        for (const auto& entry : m_savedDockVisibility) {
-            if (entry.first)
-                entry.first->setVisible(entry.second);
-        }
-        m_savedDockVisibility.clear();
-        m_docksAutoHidden = false;
-    }
+    // In the narrowest layout a tabified stack of inspectors consumes the
+    // canvas; the policy preserves each dock's visibility for restoration.
+    if (m_dockVisibility)
+        m_dockVisibility->apply(ultraCompact);
 
     // Em larguras de portátil, estes dois chips consomem espaço útil e
     // empurram as mensagens de estado. Zoom e posição continuam sempre.
@@ -896,6 +864,10 @@ void MainWindow::buildLayersDock()
                               | QDockWidget::DockWidgetFloatable);
     addDockWidget(Qt::RightDockWidgetArea, m_historyDock);
     m_historyDock->hide();
+
+    if (m_dockVisibility)
+        m_dockVisibility->setDocks(m_layersDock, m_textDock, m_shapeDock,
+                                   m_imageDock, m_historyDock);
 
     // Build one explicit tab group for all right-side panels.  Tabifying each
     // dock against the same anchor avoids Qt creating a second tab row when

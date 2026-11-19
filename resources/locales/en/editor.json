@@ -82,7 +82,8 @@
     "knockout": "Chroma Cut / Knockout",
     "perspective": "3D Tilt / Perspective",
     "perspective.tiltX": "Tilt X (Shear)",
-    "perspective.tiltY": "Tilt Y (Shear)"
+    "perspective.tiltY": "Tilt Y (Shear)",
+    "badge": "Text Background / Badge"
   },
   "shape": {
     "title": "Shape",
@@ -128,6 +129,16 @@
     "kind.explosion": "Explosion (Burst)"
   },
   "export": {
+    "scope": "Scope",
+    "presets": "Presets",
+    "output": "Output",
+    "preview": "Preview",
+    "transparent": "Transparent background",
+    "presetChip.original": "Original",
+    "presetChip.igPost": "Instagram",
+    "presetChip.story": "Story / TikTok",
+    "presetChip.ytThumb": "YouTube",
+    "presetChip.xBanner": "Twitter / X",
     "dialog.title": "Export As...",
     "format": "Format",
     "quality": "Quality",
@@ -238,7 +249,9 @@
     "manualAdjustments": "Color Adjustments & Filters",
     "chromaKey": "Chroma Key (Color to Alpha)",
     "fillStroke": "Fill & Stroke",
-    "geometry": "Geometry & Dimensions"
+    "geometry": "Geometry & Dimensions",
+    "quickPresets": "Quick Presets (Thumbnails)",
+    "badge": "Text Background / Badge"
   },
   "image": {
     "perspective": "3D Tilt / Perspective",
@@ -299,7 +312,19 @@
     "titleSelection": "Select Subject with AI - CreatorCanvas",
     "applySelection": "✓ Create Selection",
     "tipSelection": "Tip: brush to restore or erase the subject silhouette; the result becomes a pixel selection.",
-    "doneSelection": "✓ Subject ready! Adjust with the brush if needed and click Create Selection."
+    "doneSelection": "✓ Subject ready! Adjust with the brush if needed and click Create Selection.",
+    "quickBtn": "✂️ Remove BG with AI",
+    "sticker": "Sticker Outline",
+    "shadow": "Drop Shadow",
+    "tabAi": "✨ AI Neural Removal",
+    "tabColor": "🎨 Remove by Color (Pixel Art / Solid)",
+    "targetColor": "Target Color:",
+    "detectCorner": "🎯 Detect Corners",
+    "runColorRemoval": "🎨 Remove Background Color",
+    "tolerance": "Tolerance:",
+    "contiguous": "Contiguous to borders",
+    "pixelArt": "Preserve Pixel Art / Sprites",
+    "colorRemovalDone": "✓ Background color removal completed!"
   },
   "canvas": {
     "context.aiDialog": "✨ Remove Background with AI...",

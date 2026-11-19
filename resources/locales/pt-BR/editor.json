@@ -82,7 +82,8 @@
     "knockout": "Recorte Vazado (Chroma Cut)",
     "perspective": "Inclinação 3D / Perspectiva",
     "perspective.tiltX": "Inclinar X (Shear)",
-    "perspective.tiltY": "Inclinar Y (Shear)"
+    "perspective.tiltY": "Inclinar Y (Shear)",
+    "badge": "Fundo do Texto / Tarja"
   },
   "shape": {
     "title": "Forma",
@@ -128,6 +129,16 @@
     "kind.explosion": "Explosão (Burst)"
   },
   "export": {
+    "scope": "Escopo",
+    "presets": "Predefinições",
+    "output": "Saída",
+    "preview": "Pré-visualização",
+    "transparent": "Fundo transparente",
+    "presetChip.original": "Original",
+    "presetChip.igPost": "Instagram",
+    "presetChip.story": "Stories / TikTok",
+    "presetChip.ytThumb": "YouTube",
+    "presetChip.xBanner": "Twitter / X",
     "dialog.title": "Exportar Como...",
     "format": "Formato",
     "quality": "Qualidade",
@@ -238,7 +249,9 @@
     "manualAdjustments": "Ajustes de Cor e Filtros",
     "chromaKey": "Chroma Key (Remover Fundo por Cor)",
     "fillStroke": "Preenchimento e Contorno",
-    "geometry": "Geometria e Dimensões"
+    "geometry": "Geometria e Dimensões",
+    "quickPresets": "Presets Rápidos (Thumbnails)",
+    "badge": "Fundo / Tarja"
   },
   "image": {
     "perspective": "Inclinação 3D / Perspectiva",
@@ -299,7 +312,19 @@
     "titleSelection": "Selecionar Sujeito com IA - CreatorCanvas",
     "applySelection": "✓ Criar Seleção",
     "tipSelection": "Dica: use o pincel para restaurar ou apagar a silhueta do sujeito; o resultado vira uma seleção de píxeis.",
-    "doneSelection": "✓ Sujeito pronto! Ajuste com o pincel se precisar e clique em Criar Seleção."
+    "doneSelection": "✓ Sujeito pronto! Ajuste com o pincel se precisar e clique em Criar Seleção.",
+    "quickBtn": "✂️ Remover Fundo com IA",
+    "sticker": "Contorno Adesivo",
+    "shadow": "Sombra Projetada",
+    "tabAi": "✨ IA Neural",
+    "tabColor": "🎨 Remover por Cor (Pixel Art / Sólido)",
+    "targetColor": "Cor Alvo:",
+    "detectCorner": "🎯 Detectar Cantos",
+    "runColorRemoval": "🎨 Remover Cor de Fundo",
+    "tolerance": "Tolerância:",
+    "contiguous": "Contíguo às bordas",
+    "pixelArt": "Preservar Pixel Art / Sprites",
+    "colorRemovalDone": "✓ Remoção por cor concluída!"
   },
   "canvas": {
     "context.aiDialog": "✨ Remover Fundo com IA...",

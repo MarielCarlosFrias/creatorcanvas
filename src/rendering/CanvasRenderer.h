@@ -30,11 +30,12 @@ struct RenderOptions
 /// device). |docToDevice| maps document pixel coordinates to device
 /// coordinates.
 ///
-/// Phase-1 software rendering contract:
+/// Software rendering contract:
 ///   - bottom-up paint order, per-layer opacity (group opacity composes
 ///     multiplicatively down the tree), blend via composition mode
 ///   - ImageLayers without pixel data render as a neutral placeholder
-///   - no caching yet: full recomposition per call (M6 adds caching)
+///   - cacheable layers may reuse rasterized output; cache invalidation is
+///     explicit through the functions below.
 void renderDocument(const Document& doc,
                     QPainter* painter,
                     const QTransform& docToDevice,

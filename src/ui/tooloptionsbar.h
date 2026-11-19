@@ -47,6 +47,7 @@ private:
     QStackedWidget* m_stack = nullptr;
 
     QLabel* m_selectHintLabel = nullptr;
+    QPushButton* m_selectAiBgBtn = nullptr;
 
     QLabel* m_cropAspectLabel = nullptr;
     QComboBox* m_cropAspectCombo = nullptr;

@@ -83,6 +83,11 @@ private:
     QWidget* m_templatesHost = nullptr;
     QGridLayout* m_templatesGrid = nullptr;
 
+    // Practice Scenarios Section
+    QLabel* m_practiceLabel = nullptr;
+    QWidget* m_practiceHost = nullptr;
+    QGridLayout* m_practiceGrid = nullptr;
+
     // Recents Section
     QLabel* m_recentLabel = nullptr;
     QStackedWidget* m_recentStack = nullptr;

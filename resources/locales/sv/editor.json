@@ -82,7 +82,8 @@
     "knockout": "Färgutklipp / Knockout",
     "perspective": "3D Lutning / Perspektiv",
     "perspective.tiltX": "Lutning X (Skjuvning)",
-    "perspective.tiltY": "Lutning Y (Skjuvning)"
+    "perspective.tiltY": "Lutning Y (Skjuvning)",
+    "badge": "Textbakgrund / Märke"
   },
   "shape": {
     "title": "Figur",
@@ -128,6 +129,16 @@
     "kind.explosion": "Explosion (Brisering)"
   },
   "export": {
+    "scope": "Omfattning",
+    "presets": "Förval",
+    "output": "Utdata",
+    "preview": "Förhandsvisning",
+    "transparent": "Transparent bakgrund",
+    "presetChip.original": "Original",
+    "presetChip.igPost": "Instagram",
+    "presetChip.story": "Story / TikTok",
+    "presetChip.ytThumb": "YouTube",
+    "presetChip.xBanner": "Twitter / X",
     "dialog.title": "Exportera som...",
     "format": "Format",
     "quality": "Kvalitet",
@@ -238,7 +249,9 @@
     "manualAdjustments": "Färgjusteringar & Filter",
     "chromaKey": "Chroma Key (Färg till alfa)",
     "fillStroke": "Fyllning & Kontur",
-    "geometry": "Geometri & Dimensioner"
+    "geometry": "Geometri & Dimensioner",
+    "quickPresets": "Snabba förinställningar (Minityrer)",
+    "badge": "Textbakgrund / Märke"
   },
   "image": {
     "perspective": "3D Lutning / Perspektiv",
@@ -297,7 +310,19 @@
     "titleSelection": "Välj motiv med AI - CreatorCanvas",
     "applySelection": "✓ Skapa markering",
     "tipSelection": "Tips: måla för att återställa eller radera motivets silhuett; resultatet blir en pixelmarkering.",
-    "doneSelection": "✓ Motivet är klart! Justera med penseln vid behov och klicka på Skapa markering."
+    "doneSelection": "✓ Motivet är klart! Justera med penseln vid behov och klicka på Skapa markering.",
+    "quickBtn": "✂️ Ta bort bakgrund med AI",
+    "sticker": "Klistermärkeskontur",
+    "shadow": "Skugga",
+    "tabAi": "✨ Neural AI",
+    "tabColor": "🎨 Ta bort efter färg (Pixel Art / Solid)",
+    "targetColor": "Målfärg:",
+    "detectCorner": "🎯 Upptäck hörn",
+    "runColorRemoval": "🎨 Ta bort bakgrundsfärg",
+    "tolerance": "Tolerans:",
+    "contiguous": "Sammanhängande till kanter",
+    "pixelArt": "Bevara Pixel Art / Sprites",
+    "colorRemovalDone": "✓ Borttagning av bakgrundsfärg klar!"
   },
   "canvas": {
     "context.aiDialog": "✨ Ta bort bakgrund med AI...",

@@ -52,8 +52,25 @@ public:
                              const MatteOptions& options = {},
                              const std::atomic<bool>* cancelFlag = nullptr);
 
+    /// Gera contorno de adesivo (sticker outline) ao redor da silhueta recortada.
+    static QImage applyStickerOutline(const QImage& input, int width,
+                                      const QColor& color = Qt::white);
+
+    /// Gera sombra projetada suave (drop shadow) sob a silhueta recortada.
+    static QImage applyDropShadow(const QImage& input, int offsetX = 4,
+                                  int offsetY = 6, int blurRadius = 10,
+                                  float opacity = 0.5f);
+
+    /// Detecta a cor predominante nos cantos da imagem (fundo solido).
+    static QColor detectCornerColor(const QImage& img);
+
+    /// Remove o fundo por cor alvo com tolerancia, opcao de contiguo as bordas e preservacao de pixel art.
+    static QImage removeByColor(const QImage& input, const QColor& targetColor,
+                                int tolerance = 10, bool contiguous = false,
+                                bool preservePixelArt = true);
+
     /// Localiza o caminho absoluto para o arquivo de modelo .onnx nos caminhos padrao do sistema.
-    static QString findModelPath(const QString& preferredName = QStringLiteral("u2netp.onnx"));
+    static QString findModelPath(const QString& preferredName = QString());
 
     /// Verifica se ha modelos neurais disponiveis na instalacao.
     static bool isAvailable();

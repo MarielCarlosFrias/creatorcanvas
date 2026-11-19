@@ -8,6 +8,8 @@
 #include <QPainter>
 #include <QImage>
 #include <QActionGroup>
+#include <QScrollArea>
+#include <QScrollBar>
 
 #include "ui/themeicons.h"
 #include "ui/collapsiblesection.h"
@@ -537,6 +539,38 @@ private slots:
         // Redo properly restores final typed text
         history.redo();
         QCOMPARE(layer->content, QStringLiteral("Texto Atualizado"));
+    }
+
+    void testTextInspectorSizeHintPreventsClipping()
+    {
+        QTemporaryDir tmpDir;
+        SettingsService settings(tmpDir.path() + "/settings.json");
+        I18nService i18n(&settings, {":/locales"});
+        QVERIFY(i18n.loadAvailableLanguages());
+        QVERIFY(i18n.setLanguage(QStringLiteral("sv")));
+
+        const QFont originalFont = QApplication::font();
+        QFont largeFont = originalFont;
+        largeFont.setPointSize(originalFont.pointSize() + 4);
+        QApplication::setFont(largeFont);
+        struct FontRestorer {
+            QFont font;
+            ~FontRestorer() { QApplication::setFont(font); }
+        } fontRestorer{originalFont};
+
+        Document doc(800, 600, 96);
+        TextInspector inspector(&i18n, &doc, nullptr);
+        for (auto* section : inspector.findChildren<CollapsibleSection*>())
+            section->setExpanded(true);
+
+        auto* scroll = inspector.findChild<QScrollArea*>();
+        QVERIFY(scroll != nullptr);
+        inspector.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&inspector));
+        inspector.resize(inspector.minimumSizeHint().width(), 700);
+        QTest::qWait(20);
+
+        QCOMPARE(scroll->horizontalScrollBar()->maximum(), 0);
     }
 
     void testLayersPanelAdjustmentMenu()

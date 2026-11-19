@@ -14,7 +14,7 @@ constexpr int S24 = 24, S32 = 32, S48 = 48, S60 = 60;
 constexpr int R2 = 2, R4 = 4, R6 = 6;
 
 // ===== Layout =====
-constexpr int DockMin = 240, DockMax = 360, DockIdeal = 280;
+constexpr int DockMin = 285, DockMax = 440, DockIdeal = 320;
 constexpr int ToolbarH = 40, ToolOptionsH = 38, StatusH = 26;
 constexpr int CanvasPadding = 32;
 constexpr int BreakXS = 620, BreakSM = 980, BreakMD = 1440;
@@ -26,7 +26,7 @@ constexpr int HintBreakWidth = 1380;
 constexpr int UltraCompactWidth = 840;
 
 inline int responsiveMargin(int width) { return qBound(16, width / 20, 60); }
-inline int dockWidth(int width) { return qBound(DockMin, width / 5, DockMax); }
+inline int dockWidth(int width) { return qBound(DockMin, width / 4, DockMax); }
 inline int iconSize(int width) { return width < BreakXS ? 20 : width < BreakMD ? 24 : 28; }
 inline int fontSizeTitle(int width) { return width < BreakXS ? 18 : width < BreakSM ? 20 : 24; }
 inline int fontSizeBody(int width) { return width < BreakXS ? 10 : 11; }

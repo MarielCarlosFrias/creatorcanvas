@@ -48,6 +48,7 @@ public:
 
     void refresh();
     void commitPendingTextChange();
+    QSize minimumSizeHint() const override;
     /// Modo avançado: revela as secções profissionais (estilos, texto em
     /// caminho).
     void setAdvancedMode(bool advanced);
@@ -148,14 +149,28 @@ private:
     QDoubleSpinBox* m_textureOpacity = nullptr;
     QLabel* m_textureOpacityLabel = nullptr;
 
+    // Quick Case Buttons
+    QToolButton* m_caseUpperBtn = nullptr;
+    QToolButton* m_caseTitleBtn = nullptr;
+    QToolButton* m_caseLowerBtn = nullptr;
+
     // Perspectiva 3D / Inclinação (Tilt / Shear)
     QLabel* m_perspectiveLabel = nullptr;
     QDoubleSpinBox* m_tiltX = nullptr;
     QDoubleSpinBox* m_tiltY = nullptr;
 
+    // Tarja de Fundo (TextBadge)
+    QCheckBox* m_badgeOn = nullptr;
+    QPushButton* m_badgeColor = nullptr;
+    QDoubleSpinBox* m_badgePaddingX = nullptr;
+    QDoubleSpinBox* m_badgePaddingY = nullptr;
+    QDoubleSpinBox* m_badgeRadius = nullptr;
+
     // Seções recolhíveis
+    class CollapsibleSection* m_quickPresetsSection = nullptr;
     class CollapsibleSection* m_typographySection = nullptr;
     class CollapsibleSection* m_effectsSection = nullptr;
+    class CollapsibleSection* m_badgeSection = nullptr;
     class CollapsibleSection* m_gradientSection = nullptr;
     class CollapsibleSection* m_textureSection = nullptr;
     class CollapsibleSection* m_perspectiveSection = nullptr;

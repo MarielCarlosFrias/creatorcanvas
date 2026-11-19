@@ -12,8 +12,11 @@
 #include "assets/AssetStore.h"
 #include "document/LayerComps.h"
 #include "document/WebSlice.h"
+#include "document/DocumentVersion.h"
+#include "document/DocumentVersionStore.h"
 #include "layers/Layer.h"
 #include "color/ColorSpace.h"
+#include "selection/SelectionState.h"
 
 namespace cc {
 
@@ -151,7 +154,7 @@ public:
     bool invertLayerAlphaMask(const LayerId& id);
     bool removeLayerAlphaMask(const LayerId& id);
 
-    const QImage& pixelSelection() const { return m_pixelSelection; }
+    const QImage& pixelSelection() const { return m_selection.image(); }
     void setPixelSelection(QImage selection);
     void clearPixelSelection();
 
@@ -171,14 +174,7 @@ public:
 
     // ---------- Version History ----------
     /// Versão do documento (snapshot do estado em um momento).
-    struct DocumentVersion {
-        QUuid id;
-        QString name;
-        QString description;
-        QDateTime createdAt;
-        quint64 revision = 0;
-        QByteArray snapshot; // Serialized document state
-    };
+    using DocumentVersion = cc::DocumentVersion;
 
     /// Cria uma versão do estado atual do documento.
     /// Retorna o id da versão criada.
@@ -215,12 +211,12 @@ private:
     std::unique_ptr<GroupLayer> m_root;
     quint64 m_revision = 0;
     AssetStore m_assets;
-    QImage m_pixelSelection;
+    SelectionState m_selection;
     std::vector<LayerComp> m_layerComps;
     std::vector<WebSlice> m_webSlices;
 
     // Version History
-    std::vector<DocumentVersion> m_documentVersions;
+    DocumentVersionStore m_documentVersions;
 };
 
 } // namespace cc

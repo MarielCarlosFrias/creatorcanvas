@@ -8,10 +8,15 @@
 #include "core/layers/Layer.h"
 
 #include <QImage>
+#include <QSlider>
 #include "ui/adjustmentsection.h"
+#include "ui/asynctask.h"
+#include "ui/previewstate.h"
 
 #include <QTemporaryDir>
 #include <QTest>
+
+#include <limits>
 
 using namespace cc;
 
@@ -331,6 +336,160 @@ private slots:
         history.jumpToState(0);
         const auto* restored = dynamic_cast<const ImageLayer*>(doc.findLayer(id));
         QVERIFY(!restored->adjustmentLayerId.has_value());
+    }
+
+    void liveSectionSliderInteractionIsSafe()
+    {
+        Document doc(64, 48);
+        QImage img(64, 48, QImage::Format_ARGB32);
+        img.fill(qRgba(120, 140, 160, 255));
+        const LayerId asset = doc.assets().addImage(img, QStringLiteral("png"));
+        auto layer = std::make_unique<ImageLayer>();
+        layer->assetId = asset;
+        layer->naturalWidth = 64;
+        layer->naturalHeight = 48;
+        const LayerId id = layer->id();
+        QVERIFY(doc.addLayer(std::move(layer)));
+
+        CommandStack history;
+        AdjustmentsSection section(nullptr);
+        section.setContext(&doc, &history, id);
+
+        const auto sliders = section.findChildren<QSlider*>();
+        QCOMPARE(sliders.size(), 4);
+        sliders.at(0)->setValue(20);
+        QCoreApplication::processEvents();
+
+        const auto* image = dynamic_cast<const ImageLayer*>(doc.findLayer(id));
+        QVERIFY(image != nullptr);
+        QVERIFY(image->adjustmentLayerId.has_value());
+        const auto* adjustment = doc.findAdjustmentLayer(*image->adjustmentLayerId);
+        QVERIFY(adjustment != nullptr);
+        QCOMPARE(adjustmentParam(adjustment->parameters, QStringLiteral("brightness"), 0.0), 20.0);
+
+        const int depthAfterCreate = history.undoCount();
+        sliders.at(3)->setValue(80);
+        sliders.at(3)->setValue(60);
+        QCOMPARE(history.undoCount(), depthAfterCreate + 1);
+    }
+
+    void invalidStoredValuesAreClampedSafely()
+    {
+        Document doc(16, 16);
+        auto layer = std::make_unique<ImageLayer>();
+        const LayerId id = layer->id();
+        QVERIFY(doc.addLayer(std::move(layer)));
+
+        const LayerId adjustmentId = doc.createAdjustmentLayer(
+            AdjustmentType::BrightnessContrast, id);
+        QVERIFY(!adjustmentId.isNull());
+        QVERIFY(doc.setLayerAdjustmentLayerId(id, adjustmentId));
+        QVERIFY(doc.setAdjustmentParameters(
+            adjustmentId,
+            {{QStringLiteral("brightness"), std::numeric_limits<double>::quiet_NaN()},
+             {QStringLiteral("contrast"), 1000000.0}}));
+
+        AdjustmentsSection section(nullptr);
+        section.setContext(&doc, nullptr, id);
+        const auto sliders = section.findChildren<QSlider*>();
+        QCOMPARE(sliders.size(), 4);
+        QCOMPARE(sliders.at(0)->value(), 0);
+        QCOMPARE(sliders.at(1)->value(), 100);
+    }
+
+    void existingAdjustmentLoadsItsOwnParameters()
+    {
+        Document doc(16, 16);
+        auto layer = std::make_unique<ImageLayer>();
+        const LayerId id = layer->id();
+        QVERIFY(doc.addLayer(std::move(layer)));
+
+        const LayerId adjustmentId = doc.createAdjustmentLayer(
+            AdjustmentType::ShadowsHighlights, id);
+        QVERIFY(doc.setLayerAdjustmentLayerId(id, adjustmentId));
+        QVERIFY(doc.setAdjustmentParameters(
+            adjustmentId,
+            {{QStringLiteral("shadows"), 25.0},
+             {QStringLiteral("highlights"), -40.0}}));
+
+        AdjustmentsSection section(nullptr);
+        section.setContext(&doc, nullptr, id);
+        const auto sliders = section.findChildren<QSlider*>();
+        QCOMPARE(sliders.at(0)->value(), 25);
+        QCOMPARE(sliders.at(1)->value(), -40);
+    }
+
+    void firstAdjustmentPreservesStrength()
+    {
+        Document doc(16, 16);
+        auto layer = std::make_unique<ImageLayer>();
+        const LayerId id = layer->id();
+        QVERIFY(doc.addLayer(std::move(layer)));
+
+        CommandStack history;
+        AdjustmentsSection section(nullptr);
+        section.setContext(&doc, &history, id);
+        const auto sliders = section.findChildren<QSlider*>();
+        QCOMPARE(sliders.size(), 4);
+        sliders.at(3)->setValue(40);
+
+        const auto* image = dynamic_cast<const ImageLayer*>(doc.findLayer(id));
+        QVERIFY(image != nullptr && image->adjustmentLayerId.has_value());
+        const auto* adjustment = doc.findAdjustmentLayer(*image->adjustmentLayerId);
+        QVERIFY(adjustment != nullptr);
+        QVERIFY(qFuzzyCompare(adjustment->opacity(), 0.4f));
+    }
+
+    void firstAdjustmentPreservesStrengthWithoutHistory()
+    {
+        Document doc(16, 16);
+        auto layer = std::make_unique<ImageLayer>();
+        const LayerId id = layer->id();
+        QVERIFY(doc.addLayer(std::move(layer)));
+
+        AdjustmentsSection section(nullptr);
+        section.setContext(&doc, nullptr, id);
+        const auto sliders = section.findChildren<QSlider*>();
+        QCOMPARE(sliders.size(), 4);
+        sliders.at(3)->setValue(25);
+
+        const auto* image = dynamic_cast<const ImageLayer*>(doc.findLayer(id));
+        QVERIFY(image != nullptr && image->adjustmentLayerId.has_value());
+        const auto* adjustment = doc.findAdjustmentLayer(*image->adjustmentLayerId);
+        QVERIFY(adjustment != nullptr);
+        QVERIFY(qFuzzyCompare(adjustment->opacity(), 0.25f));
+    }
+
+    void previewStateInvalidatesQueuedWork()
+    {
+        PreviewState state;
+        const unsigned first = state.nextGeneration();
+        state.setInFlight(true);
+        state.setQueued(true);
+
+        const unsigned second = state.invalidate();
+        QVERIFY(second > first);
+        QCOMPARE(state.generation(), second);
+        QVERIFY(!state.queued());
+        QVERIFY(state.inFlight());
+    }
+
+    void asyncImageTaskReturnsOnQtEventLoop()
+    {
+        bool completed = false;
+        QImage result;
+        AsyncImageTask::start([] {
+            QImage image(4, 3, QImage::Format_ARGB32);
+            image.fill(Qt::red);
+            return image;
+        }, [&](QImage image) {
+            completed = true;
+            result = std::move(image);
+        });
+
+        QTRY_VERIFY_WITH_TIMEOUT(completed, 2000);
+        QCOMPARE(result.size(), QSize(4, 3));
+        QCOMPARE(result.pixelColor(0, 0), QColor(Qt::red));
     }
 
 };

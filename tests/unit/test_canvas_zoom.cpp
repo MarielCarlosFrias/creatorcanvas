@@ -1,4 +1,5 @@
 #include <QTest>
+#include <QWheelEvent>
 
 #include "core/Document.h"
 #include "ui/canvasview.h"
@@ -51,6 +52,25 @@ private slots:
         QApplication::processEvents();
         // Resize NÃO pode zerar o zoom do usuário.
         QCOMPARE(view.zoom(), manual);
+    }
+
+    void wheelZoomUpdatesImmediately()
+    {
+        CanvasView view;
+        auto doc = std::make_unique<Document>(200, 100);
+        view.setDocument(doc.get());
+        view.show();
+        view.resize(800, 600);
+        QApplication::processEvents();
+
+        const double before = view.zoom();
+        QWheelEvent wheel(QPointF(400, 300), QPointF(400, 300),
+                          QPoint(), QPoint(0, 120), Qt::NoButton,
+                          Qt::NoModifier, Qt::NoScrollPhase, false);
+        QApplication::sendEvent(&view, &wheel);
+
+        QVERIFY(wheel.isAccepted());
+        QVERIFY(view.zoom() > before);
     }
 };
 

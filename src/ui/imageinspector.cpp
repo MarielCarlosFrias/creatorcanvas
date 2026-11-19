@@ -10,6 +10,7 @@
 #include "core/image/ImagePresets.h"
 #include "core/selection/SelectionOperations.h"
 #include "localization/i18nservice.h"
+#include "asynctask.h"
 
 #include <QCheckBox>
 #include <QColorDialog>
@@ -38,8 +39,6 @@
 #include <QPainterPath>
 #include <QPolygonF>
 #include <algorithm>
-#include <future>
-#include <thread>
 #include <QMetaObject>
 
 namespace cc {
@@ -92,6 +91,7 @@ void ImageInspector::commitEffectChange(const std::function<void(ImageEffects&)>
 
 void ImageInspector::setDocument(Document* document)
 {
+    m_previewState.invalidate();
     m_document = document;
     m_id = LayerId();
     m_originalAssetId = LayerId();
@@ -123,6 +123,9 @@ void ImageInspector::setAdvancedMode(bool advanced)
 
 void ImageInspector::setSelectedLayer(const LayerId& id)
 {
+    // Invalida o trabalho da camada anterior imediatamente. O resultado pode
+    // chegar depois, mas já não pode substituir a prévia da nova seleção.
+    m_previewState.invalidate();
     // Se havia preview pendente não aplicada na camada anterior, restaura o asset original
     ImageLayer* prevLayer = nullptr;
     if (editingLayer(&prevLayer) && !m_currentPreviewAssetId.isNull() && !m_originalAssetId.isNull()) {
@@ -264,6 +267,7 @@ void ImageInspector::refresh()
 void ImageInspector::resetAdjustments()
 {
     m_previewTimer.stop();
+    m_previewState.invalidate();
     m_loading = true;
     m_brightnessSlider->setValue(0);
     m_exposureSlider->setValue(0);
@@ -1300,6 +1304,13 @@ void ImageInspector::schedulePreview()
 
 void ImageInspector::onPreviewTimeout()
 {
+    // Coalesce alterações durante um arrasto: deixa a prévia em curso
+    // terminar e calcula uma única prévia com o último estado dos sliders.
+    if (m_previewState.inFlight()) {
+        m_previewState.setQueued(true);
+        return;
+    }
+
     ImageLayer* layer = nullptr;
     if (!editingLayer(&layer) || !m_document || m_originalAssetId.isNull())
         return;
@@ -1352,11 +1363,12 @@ void ImageInspector::onPreviewTimeout()
     const QImage previewSource = reducedPreview
         ? original.scaled(QSize(1400, 1400), Qt::KeepAspectRatio, Qt::SmoothTransformation)
         : original;
-    const unsigned generation = ++m_previewGeneration;
+    const unsigned generation = m_previewState.nextGeneration();
     const LayerId layerId = m_id;
     const QImage source = previewSource;
-    auto future = std::async(std::launch::async, [source, b, exposure, c, s, t, h, blur, sharp, shadows, highlights, vignette,
-                                                   reducedPreview, originalSize = original.size()] {
+    m_previewState.setInFlight(true);
+    AsyncImageTask::start([source, b, exposure, c, s, t, h, blur, sharp, shadows, highlights, vignette,
+                           reducedPreview, originalSize = original.size()] {
         QImage adjusted = source;
         if (b != 0 || exposure != 0 || c != 0 || s != 0 || t != 0 || h != 0 || shadows != 0 || highlights != 0 || vignette != 0)
             adjusted = ImageProcessing::adjustColors(adjusted, b + exposure, c, s, t, h, shadows, highlights, vignette);
@@ -1365,34 +1377,34 @@ void ImageInspector::onPreviewTimeout()
         if (reducedPreview && adjusted.size() != originalSize)
             adjusted = adjusted.scaled(originalSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
         return adjusted;
+    }, [self = QPointer<ImageInspector>(this), generation, layerId](QImage adjusted) mutable {
+        // QPointer + generation token impedem aplicar uma prévia obsoleta ou
+        // acessar um inspetor destruído enquanto o cálculo estava em curso.
+        if (!self)
+            return;
+        self->m_previewState.setInFlight(false);
+        if (generation != self->m_previewState.generation() || layerId != self->m_id || !self->m_document)
+        {
+            if (self->m_previewState.queued()) {
+                self->m_previewState.setQueued(false);
+                self->schedulePreview();
+            }
+            return;
+        }
+        QImage masked = adjusted;
+        if (!self->m_document->pixelSelection().isNull())
+            masked = SelectionOperations::applySelectionMask(
+                self->m_originalPreviewImage.isNull()
+                    ? self->m_document->assets().decodedImage(self->m_originalAssetId)
+                    : self->m_originalPreviewImage,
+                masked, self->m_document->pixelSelection());
+        self->m_latestPreviewImage = std::move(masked);
+        emit self->imagePreviewReady(layerId, self->m_latestPreviewImage);
+        if (self->m_previewState.queued()) {
+            self->m_previewState.setQueued(false);
+            self->schedulePreview();
+        }
     });
-    // UAF fix: antes o thread desanexado capturava `this` cru — se o
-    // inspector fosse destruído durante o cálculo (ex.: sair do app logo
-    // após arrastar um slider), invokeMethod dereferenciava um QObject
-    // liberado. Agora: QPointer + post via qApp com guarda de shutdown.
-    QPointer<ImageInspector> self(this);
-    std::thread([self, generation, layerId, future = std::move(future)]() mutable {
-        QImage adjusted = future.get();
-        if (!QApplication::instance())
-            return; // app em teardown: não posta em fila de objeto morto
-        QMetaObject::invokeMethod(QApplication::instance(), [self, generation, layerId, adjusted = std::move(adjusted)]() mutable {
-            if (!self)
-                return;
-            if (generation != self->m_previewGeneration.load() || layerId != self->m_id || !self->m_document)
-                return;
-            // Aplica a seleção ativa como máscara na prévia: apenas a área
-            // selecionada mostra o filtro; o resto fica como o original.
-            QImage masked = adjusted;
-            if (!self->m_document->pixelSelection().isNull())
-                masked = SelectionOperations::applySelectionMask(
-                    self->m_originalPreviewImage.isNull()
-                        ? self->m_document->assets().decodedImage(self->m_originalAssetId)
-                        : self->m_originalPreviewImage,
-                    masked, self->m_document->pixelSelection());
-            self->m_latestPreviewImage = std::move(masked);
-            emit self->imagePreviewReady(layerId, self->m_latestPreviewImage);
-        }, Qt::QueuedConnection);
-    }).detach();
 }
 
 void ImageInspector::applyAdjustments()
@@ -1490,6 +1502,10 @@ void ImageInspector::applyPreset(int presetIndex)
             return;
         ImageLayer* layer = nullptr;
         if (editingLayer(&layer) && m_document) {
+            // Filtros de pixel podem percorrer dezenas de milhões de pixels.
+            // Nunca os execute no thread que desenha a interface.
+            if (m_pixelFilterInFlight)
+                return;
             // Photocraft: locks + seleção restringem filtros predefinidos.
             if (!SelectionOperations::canEditPixels(*m_document, m_id)) {
                 QMessageBox::warning(this, QStringLiteral("CreatorCanvas"),
@@ -1498,22 +1514,41 @@ void ImageInspector::applyPreset(int presetIndex)
             }
             const QImage base = m_document->assets().decodedImage(layer->assetId);
             if (!base.isNull()) {
-                QImage filtered = ImageProcessing::applyPresetFilter(base, *filterOpt);
-                if (!m_document->pixelSelection().isNull())
-                    filtered = SelectionOperations::applySelectionMask(
-                        base, filtered, m_document->pixelSelection());
-                const LayerId newAsset = m_document->assets().addImage(filtered, QStringLiteral("png"));
-                // A4: antes mutava sem comando — "Inverter cores" era
-                // impossível de desfazer. O asset antigo fica no store e o
-                // undo só restaura id + dimensões.
-                if (m_history) {
-                    m_history->execute(std::make_unique<SetLayerImageAssetCommand>(
-                        *m_document, m_id, layer->assetId,
-                        layer->naturalWidth, layer->naturalHeight,
-                        newAsset, filtered.width(), filtered.height()));
-                } else {
-                    m_document->setImageLayerAsset(m_id, newAsset, filtered.width(), filtered.height());
-                }
+                const LayerId layerId = m_id;
+                const LayerId originalAssetId = layer->assetId;
+                const int originalWidth = layer->naturalWidth;
+                const int originalHeight = layer->naturalHeight;
+                const QImage selection = m_document->pixelSelection();
+                m_pixelFilterInFlight = true;
+                AsyncImageTask::start([base, selection, filter = *filterOpt] {
+                    QImage filtered = ImageProcessing::applyPresetFilter(base, filter);
+                    if (!selection.isNull())
+                        filtered = SelectionOperations::applySelectionMask(base, filtered, selection);
+                    return filtered;
+                }, [self = QPointer<ImageInspector>(this), filteredLayerId = layerId,
+                    originalAssetId, originalWidth, originalHeight](QImage filtered) mutable {
+                    if (!self)
+                        return;
+                    self->m_pixelFilterInFlight = false;
+                    ImageLayer* current = nullptr;
+                    // Não sobrescreve uma edição que ocorreu enquanto
+                    // o filtro estava a ser calculado.
+                    if (!self->editingLayer(&current) || self->m_id != filteredLayerId
+                        || current->assetId != originalAssetId || !self->m_document
+                        || filtered.isNull())
+                        return;
+                    const LayerId newAsset = self->m_document->assets().addImage(
+                        filtered, QStringLiteral("png"));
+                    if (self->m_history) {
+                        self->m_history->execute(std::make_unique<SetLayerImageAssetCommand>(
+                            *self->m_document, filteredLayerId, originalAssetId,
+                            originalWidth, originalHeight, newAsset,
+                            filtered.width(), filtered.height()));
+                    } else {
+                        self->m_document->setImageLayerAsset(
+                            filteredLayerId, newAsset, filtered.width(), filtered.height());
+                    }
+                });
             }
         }
         return;
@@ -1606,11 +1641,14 @@ void ImageInspector::retranslateUi()
         m_presetNoirBtn->setText(m_i18n ? m_i18n->t("editor", "image.filter.noir") : QStringLiteral("Noir"));
 
     if (m_blendIfSection)
-        m_blendIfSection->setTitle(m_i18n->t("editor", "blendIf.title"));
+        m_blendIfSection->setTitle(m_i18n ? m_i18n->t("editor", "blendIf.title")
+                                          : QStringLiteral("Blend If"));
     if (m_blendIfResetBtn)
-        m_blendIfResetBtn->setText(m_i18n->t("editor", "blendIf.reset"));
+        m_blendIfResetBtn->setText(m_i18n ? m_i18n->t("editor", "blendIf.reset")
+                                         : QStringLiteral("Reset"));
     if (m_puppetWarpButton)
-        m_puppetWarpButton->setText(m_i18n->t("editor", "puppet.button"));
+        m_puppetWarpButton->setText(m_i18n ? m_i18n->t("editor", "puppet.button")
+                                           : QStringLiteral("Puppet Warp"));
 }
 
 } // namespace cc

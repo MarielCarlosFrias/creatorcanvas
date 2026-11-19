@@ -1092,18 +1092,16 @@ bool Document::removeLayerAlphaMask(const LayerId& id)
 
 void Document::setPixelSelection(QImage selection)
 {
-    if (!selection.isNull())
-        selection = selection.convertToFormat(QImage::Format_Alpha8);
-    m_pixelSelection = std::move(selection);
+    m_selection.setImage(std::move(selection));
     bumpRevision();
     emit structureChanged();
 }
 
 void Document::clearPixelSelection()
 {
-    if (m_pixelSelection.isNull())
+    if (m_selection.image().isNull())
         return;
-    m_pixelSelection = QImage();
+    m_selection.clear();
     bumpRevision();
     emit structureChanged();
 }
@@ -1209,38 +1207,37 @@ QUuid Document::createDocumentVersion(const QString& name, const QString& descri
     // Serialize layer tree recursively
 
     // Serialize pixel selection
-    stream << m_pixelSelection;
+    stream << m_selection.image();
 
     // Serialize layer comps
 
     // Serialize web slices
 
     version.snapshot = snapshotData;
-    m_documentVersions.push_back(std::move(version));
+    m_documentVersions.add(std::move(version));
     return m_documentVersions.back().id;
 }
 
 std::vector<Document::DocumentVersion> Document::documentVersions() const
 {
-    return m_documentVersions;
+    return m_documentVersions.all();
 }
 
 bool Document::restoreDocumentVersion(const QUuid& versionId)
 {
-    auto it = std::find_if(m_documentVersions.begin(), m_documentVersions.end(),
-                           [&](const DocumentVersion& v) { return v.id == versionId; });
-    if (it == m_documentVersions.end())
+    DocumentVersion* version = m_documentVersions.find(versionId);
+    if (!version)
         return false;
 
     // Restore document metadata from snapshot
-    QDataStream stream(&it->snapshot, QIODevice::ReadOnly);
+    QDataStream stream(&version->snapshot, QIODevice::ReadOnly);
     stream.setVersion(QDataStream::Qt_6_0);
 
     int w, h, dpi, csInt;
     stream >> w >> h >> dpi >> csInt;
 
-
     QImage pixelSelection;
+    stream >> pixelSelection;
 
     std::vector<LayerComp> layerComps;
     
@@ -1256,7 +1253,7 @@ bool Document::restoreDocumentVersion(const QUuid& versionId)
         emit structureChanged();
     }
 
-    m_pixelSelection = pixelSelection;
+    m_selection.setImage(std::move(pixelSelection));
     m_layerComps = layerComps;
     m_webSlices = webSlices;
 
@@ -1267,13 +1264,7 @@ bool Document::restoreDocumentVersion(const QUuid& versionId)
 
 bool Document::removeDocumentVersion(const QUuid& versionId)
 {
-    auto it = std::find_if(m_documentVersions.begin(), m_documentVersions.end(),
-                           [&](const DocumentVersion& v) { return v.id == versionId; });
-    if (it == m_documentVersions.end())
-        return false;
-
-    m_documentVersions.erase(it);
-    return true;
+    return m_documentVersions.remove(versionId);
 }
 
 void Document::clearDocumentVersions()

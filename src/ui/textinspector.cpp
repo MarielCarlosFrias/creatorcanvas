@@ -26,11 +26,29 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QFrame>
 #include <QTimer>
 #include <QEvent>
 
 namespace cc {
+
+static QString toTitleCase(const QString& str)
+{
+    QString result = str;
+    bool newWord = true;
+    for (int i = 0; i < result.size(); ++i) {
+        if (result[i].isSpace() || result[i].isPunct()) {
+            newWord = true;
+        } else if (newWord) {
+            result[i] = result[i].toUpper();
+            newWord = false;
+        } else {
+            result[i] = result[i].toLower();
+        }
+    }
+    return result;
+}
 
 TextInspector::TextInspector(I18nService* i18n, Document* document,
                              CommandStack* history, QWidget* parent)
@@ -113,6 +131,24 @@ void TextInspector::commitPendingTextChange()
     m_initialTextContent = newContent;
 }
 
+QSize TextInspector::minimumSizeHint() const
+{
+    const QSize fallback = QWidget::minimumSizeHint();
+    const auto* scroll = findChild<QScrollArea*>();
+    if (!scroll || !scroll->widget())
+        return fallback;
+
+    // QScrollArea otherwise reports only its small default hint, hiding the
+    // real width of translated forms and effect rows from the dock layout.
+    // Reserve the vertical bar as well: it is normally needed by this panel
+    // and must not cover the right-hand controls when it appears.
+    const int contentWidth = scroll->widget()->minimumSizeHint().width();
+    const int scrollBarWidth = scroll->verticalScrollBar()->sizeHint().width();
+    const int frameWidth = 2 * scroll->frameWidth();
+    return {qMax(fallback.width(), contentWidth + scrollBarWidth + frameWidth),
+            fallback.height()};
+}
+
 bool TextInspector::eventFilter(QObject* watched, QEvent* event)
 {
     if (watched == m_content && event->type() == QEvent::FocusOut) {
@@ -187,6 +223,15 @@ void TextInspector::refresh()
         m_textureNameLabel->setText(QStringLiteral("Nenhuma imagem"));
     }
 
+    const TextBadge& badge = fx.badge;
+    m_badgeOn->setChecked(badge.enabled);
+    const QString badgeHex = badge.color.name(QColor::HexRgb);
+    m_badgeColor->setText(badgeHex);
+    m_badgeColor->setStyleSheet(QStringLiteral("background: %1;").arg(badgeHex));
+    m_badgePaddingX->setValue(badge.paddingX);
+    m_badgePaddingY->setValue(badge.paddingY);
+    m_badgeRadius->setValue(badge.cornerRadius);
+
     m_tiltX->setValue(layer->transform.shearX);
     m_tiltY->setValue(layer->transform.shearY);
     m_loading = false;
@@ -207,10 +252,135 @@ void TextInspector::buildUi()
     layout->setContentsMargins(2, 2, 2, 2);
     layout->setSpacing(4);
 
+    // 0. Presets Rápidos de Thumbnail / Estilos em 1 Clique
+    m_quickPresetsSection = new CollapsibleSection(QStringLiteral("Presets Rápidos (Thumbnails)"), true, this);
+    auto* presetsLayout = new QGridLayout;
+    presetsLayout->setContentsMargins(4, 4, 4, 4);
+    presetsLayout->setSpacing(4);
+
+    auto makePresetBtn = [this](const QString& label, const QString& styleSheet, const QString& tooltip) {
+        auto* btn = new QPushButton(label, this);
+        btn->setToolTip(tooltip);
+        btn->setStyleSheet(styleSheet);
+        return btn;
+    };
+
+    auto* btnYt = makePresetBtn(QStringLiteral("🟡 Alert"),
+        QStringLiteral("background: #ffe600; color: #000; font-weight: bold; border-radius: 4px; padding: 4px;"),
+        QStringLiteral("YouTube Alert (Amarelo, contorno preto e sombra forte)"));
+    auto* btnRed = makePresetBtn(QStringLiteral("🔴 Viral"),
+        QStringLiteral("background: #e50914; color: #fff; font-weight: bold; border-radius: 4px; padding: 4px;"),
+        QStringLiteral("Viral Red (Texto branco sobre tarja vermelha estilo YouTube)"));
+    auto* btnNeon = makePresetBtn(QStringLiteral("🟣 Neon"),
+        QStringLiteral("background: #111; color: #00ffff; font-weight: bold; border: 1px solid #ff007f; border-radius: 4px; padding: 4px;"),
+        QStringLiteral("Cyberpunk Neon (Ciano elétrico com contorno e brilho rosa neon)"));
+    auto* btnClean = makePresetBtn(QStringLiteral("⚪ Clean"),
+        QStringLiteral("background: #222; color: #fff; border-radius: 10px; padding: 4px;"),
+        QStringLiteral("Clean Minimal (Pílula escura moderna)"));
+    auto* btnGold = makePresetBtn(QStringLiteral("🏆 Gold"),
+        QStringLiteral("background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #ffd700, stop:1 #d48800); color: #000; font-weight: bold; border-radius: 4px; padding: 4px;"),
+        QStringLiteral("Gold Luxury (Gradiente dourado premium e contorno)"));
+
+    presetsLayout->addWidget(btnYt, 0, 0);
+    presetsLayout->addWidget(btnRed, 0, 1);
+    presetsLayout->addWidget(btnNeon, 0, 2);
+    presetsLayout->addWidget(btnClean, 1, 0);
+    presetsLayout->addWidget(btnGold, 1, 1);
+
+    auto applyQuickPreset = [this](int type) {
+        TextLayer* layer = nullptr;
+        if (!editingLayer(&layer)) return;
+        TextStyle s;
+        s.fontFamily = layer->fontFamily;
+        s.sizePt = layer->sizePt;
+        s.letterSpacingPx = layer->letterSpacingPx;
+        s.lineHeightMult = layer->lineHeightMult;
+
+        if (type == 1) { // YouTube Alert
+            s.bold = true;
+            s.color = QColor(255, 230, 0);
+            s.effects.outline.enabled = true;
+            s.effects.outline.color = QColor(0, 0, 0);
+            s.effects.outline.width = 6.0;
+            s.effects.shadow.enabled = true;
+            s.effects.shadow.color = QColor(0, 0, 0);
+            s.effects.shadow.offsetX = 5.0;
+            s.effects.shadow.offsetY = 5.0;
+            s.effects.shadow.blur = 0.0;
+            s.effects.badge.enabled = false;
+        } else if (type == 2) { // Viral Red
+            s.bold = true;
+            s.color = QColor(255, 255, 255);
+            s.effects.outline.enabled = true;
+            s.effects.outline.color = QColor(183, 28, 28);
+            s.effects.outline.width = 3.0;
+            s.effects.shadow.enabled = true;
+            s.effects.shadow.color = QColor(0, 0, 0, 180);
+            s.effects.shadow.offsetX = 3.0;
+            s.effects.shadow.offsetY = 3.0;
+            s.effects.shadow.blur = 6.0;
+            s.effects.badge.enabled = true;
+            s.effects.badge.color = QColor(229, 9, 20);
+            s.effects.badge.paddingX = 16.0;
+            s.effects.badge.paddingY = 8.0;
+            s.effects.badge.cornerRadius = 6.0;
+        } else if (type == 3) { // Cyberpunk Neon
+            s.bold = true;
+            s.color = QColor(0, 255, 255);
+            s.effects.outline.enabled = true;
+            s.effects.outline.color = QColor(255, 0, 127);
+            s.effects.outline.width = 3.0;
+            s.effects.shadow.enabled = true;
+            s.effects.shadow.color = QColor(255, 0, 127);
+            s.effects.shadow.offsetX = 0.0;
+            s.effects.shadow.offsetY = 0.0;
+            s.effects.shadow.blur = 16.0;
+            s.effects.badge.enabled = false;
+        } else if (type == 4) { // Clean Minimal
+            s.bold = false;
+            s.color = QColor(255, 255, 255);
+            s.effects.outline.enabled = false;
+            s.effects.shadow.enabled = false;
+            s.effects.badge.enabled = true;
+            s.effects.badge.color = QColor(25, 25, 28, 220);
+            s.effects.badge.paddingX = 14.0;
+            s.effects.badge.paddingY = 6.0;
+            s.effects.badge.cornerRadius = 12.0;
+        } else if (type == 5) { // Gold Luxury
+            s.bold = true;
+            s.color = QColor(255, 215, 0);
+            s.effects.gradient.enabled = true;
+            s.effects.gradient.type = 0; // Linear
+            s.effects.gradient.startColor = QColor(255, 243, 161);
+            s.effects.gradient.endColor = QColor(212, 136, 0);
+            s.effects.gradient.angleDeg = 45.0;
+            s.effects.outline.enabled = true;
+            s.effects.outline.color = QColor(62, 39, 35);
+            s.effects.outline.width = 2.0;
+            s.effects.shadow.enabled = true;
+            s.effects.shadow.color = QColor(0, 0, 0, 200);
+            s.effects.shadow.offsetX = 3.0;
+            s.effects.shadow.offsetY = 4.0;
+            s.effects.shadow.blur = 8.0;
+            s.effects.badge.enabled = false;
+        }
+        applyTextStyle(s);
+    };
+
+    connect(btnYt, &QPushButton::clicked, this, [applyQuickPreset] { applyQuickPreset(1); });
+    connect(btnRed, &QPushButton::clicked, this, [applyQuickPreset] { applyQuickPreset(2); });
+    connect(btnNeon, &QPushButton::clicked, this, [applyQuickPreset] { applyQuickPreset(3); });
+    connect(btnClean, &QPushButton::clicked, this, [applyQuickPreset] { applyQuickPreset(4); });
+    connect(btnGold, &QPushButton::clicked, this, [applyQuickPreset] { applyQuickPreset(5); });
+
+    m_quickPresetsSection->setContentLayout(presetsLayout);
+    layout->addWidget(m_quickPresetsSection);
+
     // 1. Seção Tipografia (Aberta por padrão)
     m_typographySection = new CollapsibleSection(QStringLiteral("Typography"), true, this);
     auto* typoForm = new QFormLayout;
     typoForm->setContentsMargins(4, 4, 4, 4);
+    typoForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     typoForm->setRowWrapPolicy(QFormLayout::WrapLongRows);
 
     m_content = new QPlainTextEdit(this);
@@ -243,6 +413,17 @@ void TextInspector::buildUi()
     m_underline->setStyleSheet(QStringLiteral("text-decoration: underline;"));
 
     m_color = new QPushButton(this);
+    m_color->setFixedWidth(52);
+
+    m_caseUpperBtn = new QToolButton(this);
+    m_caseUpperBtn->setText(QStringLiteral("TT"));
+    m_caseUpperBtn->setToolTip(QStringLiteral("Converter para MAIÚSCULAS"));
+    m_caseTitleBtn = new QToolButton(this);
+    m_caseTitleBtn->setText(QStringLiteral("Tt"));
+    m_caseTitleBtn->setToolTip(QStringLiteral("Converter Para Formato Título"));
+    m_caseLowerBtn = new QToolButton(this);
+    m_caseLowerBtn->setText(QStringLiteral("tt"));
+    m_caseLowerBtn->setToolTip(QStringLiteral("Converter para minúsculas"));
 
     m_styleLabel = new QLabel(this);
     auto* styleRow = new QHBoxLayout;
@@ -250,6 +431,10 @@ void TextInspector::buildUi()
     styleRow->addWidget(m_italic);
     styleRow->addWidget(m_underline);
     styleRow->addWidget(m_color);
+    styleRow->addSpacing(4);
+    styleRow->addWidget(m_caseUpperBtn);
+    styleRow->addWidget(m_caseTitleBtn);
+    styleRow->addWidget(m_caseLowerBtn);
     styleRow->addStretch();
     typoForm->addRow(m_styleLabel, styleRow);
 
@@ -284,9 +469,11 @@ void TextInspector::buildUi()
 
     m_outlineOn = new QCheckBox(this);
     m_outlineColor = new QPushButton(this);
+    m_outlineColor->setFixedWidth(64);
     m_outlineWidth = new QDoubleSpinBox(this);
     m_outlineWidth->setRange(0.5, 40.0);
     m_outlineWidth->setSingleStep(0.5);
+    m_outlineWidth->setSuffix(QStringLiteral(" px"));
     auto* outlineRow = new QHBoxLayout;
     outlineRow->addWidget(m_outlineOn);
     outlineRow->addWidget(m_outlineColor);
@@ -296,32 +483,76 @@ void TextInspector::buildUi()
 
     m_shadowOn = new QCheckBox(this);
     m_shadowColor = new QPushButton(this);
+    m_shadowColor->setFixedWidth(64);
+    auto* shadowHeaderRow = new QHBoxLayout;
+    shadowHeaderRow->addWidget(m_shadowOn);
+    shadowHeaderRow->addWidget(m_shadowColor);
+    shadowHeaderRow->addStretch();
+    fxLayout->addLayout(shadowHeaderRow);
+
     m_shadowX = new QDoubleSpinBox(this);
     m_shadowX->setRange(-200.0, 200.0);
+    m_shadowX->setPrefix(QStringLiteral("X: "));
     m_shadowY = new QDoubleSpinBox(this);
     m_shadowY->setRange(-200.0, 200.0);
+    m_shadowY->setPrefix(QStringLiteral("Y: "));
     m_shadowBlur = new QDoubleSpinBox(this);
     m_shadowBlur->setRange(0.0, 60.0);
     m_shadowBlur->setSingleStep(1.0);
-    auto* shadowRow = new QHBoxLayout;
-    shadowRow->addWidget(m_shadowOn);
-    shadowRow->addWidget(m_shadowColor);
-    shadowRow->addWidget(m_shadowX);
-    shadowRow->addWidget(m_shadowY);
-    shadowRow->addWidget(m_shadowBlur);
-    shadowRow->addStretch();
-    fxLayout->addLayout(shadowRow);
+    m_shadowBlur->setPrefix(QStringLiteral("Blur: "));
+    auto* shadowValsRow = new QHBoxLayout;
+    shadowValsRow->addWidget(m_shadowX);
+    shadowValsRow->addWidget(m_shadowY);
+    shadowValsRow->addWidget(m_shadowBlur);
+    fxLayout->addLayout(shadowValsRow);
 
     m_hollowOn = new QCheckBox(this);
     m_knockoutOn = new QCheckBox(this);
-    auto* cutRow = new QHBoxLayout;
-    cutRow->addWidget(m_hollowOn);
-    cutRow->addWidget(m_knockoutOn);
-    cutRow->addStretch();
-    fxLayout->addLayout(cutRow);
+    fxLayout->addWidget(m_hollowOn);
+    fxLayout->addWidget(m_knockoutOn);
 
     m_effectsSection->setContentLayout(fxLayout);
     layout->addWidget(m_effectsSection);
+
+    // 2.1 Seção Fundo / Tarja (TextBadge)
+    m_badgeSection = new CollapsibleSection(QStringLiteral("Fundo / Tarja"), false, this);
+    auto* badgeLayout = new QVBoxLayout;
+    badgeLayout->setContentsMargins(4, 4, 4, 4);
+    badgeLayout->setSpacing(4);
+
+    m_badgeOn = new QCheckBox(this);
+    m_badgeColor = new QPushButton(this);
+    auto* badgeRow1 = new QHBoxLayout;
+    badgeRow1->addWidget(m_badgeOn);
+    badgeRow1->addWidget(m_badgeColor);
+    badgeRow1->addStretch();
+    badgeLayout->addLayout(badgeRow1);
+
+    auto* badgeForm = new QFormLayout;
+    badgeForm->setContentsMargins(0, 0, 0, 0);
+
+    m_badgePaddingX = new QDoubleSpinBox(this);
+    m_badgePaddingX->setRange(0.0, 200.0);
+    m_badgePaddingX->setSingleStep(2.0);
+    m_badgePaddingX->setSuffix(QStringLiteral(" px"));
+
+    m_badgePaddingY = new QDoubleSpinBox(this);
+    m_badgePaddingY->setRange(0.0, 200.0);
+    m_badgePaddingY->setSingleStep(2.0);
+    m_badgePaddingY->setSuffix(QStringLiteral(" px"));
+
+    m_badgeRadius = new QDoubleSpinBox(this);
+    m_badgeRadius->setRange(0.0, 100.0);
+    m_badgeRadius->setSingleStep(1.0);
+    m_badgeRadius->setSuffix(QStringLiteral(" px"));
+
+    badgeForm->addRow(new QLabel(QStringLiteral("Margem Horiz.:"), this), m_badgePaddingX);
+    badgeForm->addRow(new QLabel(QStringLiteral("Margem Vert.:"), this), m_badgePaddingY);
+    badgeForm->addRow(new QLabel(QStringLiteral("Arredondamento:"), this), m_badgeRadius);
+    badgeLayout->addLayout(badgeForm);
+
+    m_badgeSection->setContentLayout(badgeLayout);
+    layout->addWidget(m_badgeSection);
 
     // 3. Seção Gradiente de Texto (Recolhida por padrão)
     m_gradientSection = new CollapsibleSection(QStringLiteral("Gradient"), false, this);
@@ -509,6 +740,11 @@ void TextInspector::buildUi()
     scroll->setWidget(content);
     outerLayout->addWidget(scroll);
 
+    for (auto* section : findChildren<CollapsibleSection*>()) {
+        connect(section, &CollapsibleSection::toggled,
+                this, [this] { updateGeometry(); });
+    }
+
     // Helper lambda to apply text effects with undo/redo
     auto applyEffects = [this](auto mutator) {
         TextLayer* layer = nullptr;
@@ -613,6 +849,31 @@ void TextInspector::buildUi()
             m_document->setLayerTextUnderline(m_id, on);
         }
     });
+
+    auto convertCase = [this](int mode) {
+        TextLayer* layer = nullptr;
+        if (!editingLayer(&layer) || !m_document) return;
+        const QString oldText = layer->content;
+        QString newText;
+        if (mode == 0) newText = oldText.toUpper();
+        else if (mode == 1) newText = toTitleCase(oldText);
+        else if (mode == 2) newText = oldText.toLower();
+
+        if (newText == oldText) return;
+        m_content->setPlainText(newText);
+        if (m_history) {
+            m_history->execute(std::make_unique<LayerPropertyCommand<QString>>(
+                *m_document, m_id, QStringLiteral("layer.text"),
+                &Document::setLayerTextContent, oldText, newText));
+        } else {
+            m_document->setLayerTextContent(m_id, newText);
+        }
+        touch();
+    };
+    connect(m_caseUpperBtn, &QToolButton::clicked, this, [convertCase] { convertCase(0); });
+    connect(m_caseTitleBtn, &QToolButton::clicked, this, [convertCase] { convertCase(1); });
+    connect(m_caseLowerBtn, &QToolButton::clicked, this, [convertCase] { convertCase(2); });
+
     connect(m_align, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int idx) {
         TextLayer* layer = nullptr;
         if (m_loading || idx < 0 || !editingLayer(&layer)) return;
@@ -723,6 +984,33 @@ void TextInspector::buildUi()
     connect(m_knockoutOn, &QCheckBox::toggled, this, [applyEffects](bool on) {
         applyEffects([on](TextEffects& fx) { fx.knockout = on; });
     });
+
+    connect(m_badgeOn, &QCheckBox::toggled, this, [applyEffects](bool on) {
+        applyEffects([on](TextEffects& fx) { fx.badge.enabled = on; });
+    });
+    connect(m_badgeColor, &QPushButton::clicked, this, [this, applyEffects] {
+        TextLayer* layer = nullptr;
+        if (!editingLayer(&layer)) return;
+        const QColor chosen = QColorDialog::getColor(layer->effects.badge.color, this);
+        if (!chosen.isValid()) return;
+        const QString hex = chosen.name(QColor::HexRgb);
+        m_badgeColor->setText(hex);
+        m_badgeColor->setStyleSheet(QStringLiteral("background: %1;").arg(hex));
+        applyEffects([chosen](TextEffects& fx) { fx.badge.color = chosen; });
+    });
+    connect(m_badgePaddingX, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
+            [applyEffects](double value) {
+        applyEffects([value](TextEffects& fx) { fx.badge.paddingX = value; });
+    });
+    connect(m_badgePaddingY, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
+            [applyEffects](double value) {
+        applyEffects([value](TextEffects& fx) { fx.badge.paddingY = value; });
+    });
+    connect(m_badgeRadius, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
+            [applyEffects](double value) {
+        applyEffects([value](TextEffects& fx) { fx.badge.cornerRadius = value; });
+    });
+
     connect(m_gradientOn, &QCheckBox::toggled, this, [applyEffects](bool on) {
         applyEffects([on](TextEffects& fx) { fx.gradient.enabled = on; });
     });
@@ -825,10 +1113,14 @@ void TextInspector::retranslateUi()
     if (!m_i18n)
         return;
 
+    if (m_quickPresetsSection)
+        m_quickPresetsSection->setTitle(m_i18n ? m_i18n->t("editor", "section.quickPresets") : QStringLiteral("Presets Rápidos (Thumbnails)"));
     if (m_typographySection)
         m_typographySection->setTitle(m_i18n->t("editor", "section.typography"));
     if (m_effectsSection)
         m_effectsSection->setTitle(m_i18n->t("editor", "section.textEffects"));
+    if (m_badgeSection)
+        m_badgeSection->setTitle(m_i18n ? m_i18n->t("editor", "section.badge") : QStringLiteral("Fundo / Tarja"));
     if (m_gradientSection)
         m_gradientSection->setTitle(m_i18n->t("editor", "section.gradient"));
     if (m_pathSection)
@@ -849,6 +1141,8 @@ void TextInspector::retranslateUi()
     m_shadowOn->setText(m_i18n->t("editor", "effects.shadow"));
     m_hollowOn->setText(m_i18n ? m_i18n->t("editor", "effects.hollow") : QStringLiteral("Interior Vazado"));
     m_knockoutOn->setText(m_i18n ? m_i18n->t("editor", "effects.knockout") : QStringLiteral("Recorte / Chroma Cut"));
+    if (m_badgeOn)
+        m_badgeOn->setText(m_i18n ? m_i18n->t("editor", "effects.badge") : QStringLiteral("Tarja de Fundo"));
     m_gradientOn->setText(m_i18n ? m_i18n->t("editor", "effects.gradient") : QStringLiteral("Gradient"));
     m_textureOn->setText(m_i18n ? m_i18n->t("editor", "effects.texture") : QStringLiteral("Texture Fill"));
     m_textureChooseBtn->setText(m_i18n ? m_i18n->t("editor", "effects.textureChoose") : QStringLiteral("Choose..."));

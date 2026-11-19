@@ -121,10 +121,24 @@ void ToolOptionsBar::buildUi()
     // --- Página 0: Seleção (Select) ---
     QWidget* selectPage = new QWidget(this);
     QHBoxLayout* selectLayout = new QHBoxLayout(selectPage);
-    selectLayout->setContentsMargins(8, 2, 8, 2);
     m_selectHintLabel = new QLabel(this);
     m_selectHintLabel->setObjectName(QStringLiteral("HintLabel"));
     selectLayout->addWidget(m_selectHintLabel);
+
+    m_selectAiBgBtn = new QPushButton(m_i18n ? m_i18n->t("editor", "aiBackground.quickBtn") : QStringLiteral("✂️ Remover Fundo com IA"), this);
+    m_selectAiBgBtn->setStyleSheet(QStringLiteral(
+        "QPushButton { background-color: #0078D4; color: white; font-weight: bold; padding: 4px 12px; border-radius: 4px; border: none; }"
+        "QPushButton:hover { background-color: #1084E3; }"
+    ));
+    connect(m_selectAiBgBtn, &QPushButton::clicked, this, [this]() {
+        if (!m_canvas) return;
+        const auto sel = m_canvas->selectedLayers();
+        if (!sel.isEmpty()) {
+            m_canvas->openAiBackgroundRemoval(sel.first());
+        }
+    });
+    selectLayout->addWidget(m_selectAiBgBtn);
+
     selectLayout->addStretch();
     m_stack->addWidget(selectPage);
 
@@ -744,6 +758,8 @@ void ToolOptionsBar::retranslateUi()
 
     if (m_selectHintLabel)
         m_selectHintLabel->setText(m_i18n->t("editor", "tools.selectHint"));
+    if (m_selectAiBgBtn)
+        m_selectAiBgBtn->setText(m_i18n ? m_i18n->t("editor", "aiBackground.quickBtn") : QStringLiteral("✂️ Remover Fundo com IA"));
 
     if (m_cropAspectLabel)
         m_cropAspectLabel->setText(m_i18n->t("editor", "tools.crop.aspect") + QStringLiteral(":"));

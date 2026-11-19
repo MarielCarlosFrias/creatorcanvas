@@ -64,12 +64,30 @@ struct TextTextureFill
     }
 };
 
+struct TextBadge
+{
+    bool enabled = false;
+    QColor color{0, 0, 0, 180};
+    double paddingX = 14.0;
+    double paddingY = 8.0;
+    double cornerRadius = 8.0;
+
+    bool operator==(const TextBadge& other) const
+    {
+        return enabled == other.enabled && color == other.color
+               && qFuzzyCompare(paddingX, other.paddingX)
+               && qFuzzyCompare(paddingY, other.paddingY)
+               && qFuzzyCompare(cornerRadius, other.cornerRadius);
+    }
+};
+
 struct TextEffects
 {
     TextOutline outline;
     TextShadow shadow;
     TextGradient gradient;
     TextTextureFill texture;
+    TextBadge badge;
     bool hollow = false;   // Interior transparente (apenas contorno)
     bool knockout = false; // Efeito chroma cut / perfuração transparente
 
@@ -77,6 +95,7 @@ struct TextEffects
     {
         return outline == other.outline && shadow == other.shadow
                && gradient == other.gradient && texture == other.texture
+               && badge == other.badge
                && hollow == other.hollow && knockout == other.knockout;
     }
     bool operator!=(const TextEffects& other) const { return !(*this == other); }

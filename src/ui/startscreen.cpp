@@ -10,6 +10,7 @@
 #include "rendering/CanvasRenderer.h"
 
 #include <QFileInfo>
+#include <QDir>
 #include <QFont>
 #include <QIcon>
 #include <QPixmap>
@@ -290,6 +291,99 @@ void StartScreen::buildUi()
 
     mainLayout->addSpacing(8);
 
+    // --- 3.5 Practice Scenarios Section (Cenários Práticos / Tutoriais) ---
+    m_practiceLabel = new QLabel(this);
+    m_practiceLabel->setFont(sectionFont);
+    m_practiceLabel->setObjectName(QStringLiteral("SectionLabel"));
+    mainLayout->addWidget(m_practiceLabel);
+
+    m_practiceHost = new QWidget(this);
+    m_practiceGrid = new QGridLayout(m_practiceHost);
+    m_practiceGrid->setContentsMargins(0, 0, 0, 0);
+    m_practiceGrid->setSpacing(8);
+
+    struct PracticeScenario {
+        QString icon;
+        QString title;
+        QString desc;
+        QString file;
+    };
+
+    const PracticeScenario scenarios[] = {
+        { QStringLiteral("🎨"), QStringLiteral("Banner Social"), QStringLiteral("Composição YouTube / Twitch"), QStringLiteral("01_Cenario_Banner_Social.creatorcanvas") },
+        { QStringLiteral("📸"), QStringLiteral("Retoque Foto"), QStringLiteral("Remoção manchas & pele"), QStringLiteral("02_Cenario_Retoque_Foto.creatorcanvas") },
+        { QStringLiteral("✂️"), QStringLiteral("Recorte IA"), QStringLiteral("Silhuetas e stickers"), QStringLiteral("03_Cenario_Recorte_Objeto.creatorcanvas") },
+        { QStringLiteral("✒️"), QStringLiteral("Vetor & Logo"), QStringLiteral("Curvas Bézier e formas"), QStringLiteral("04_Cenario_Vetor_Logotipo.creatorcanvas") },
+        { QStringLiteral("🌐"), QStringLiteral("Web Slices"), QStringLiteral("Fatiamento e exportação"), QStringLiteral("05_Cenario_Web_Slices.creatorcanvas") },
+        { QStringLiteral("📐"), QStringLiteral("Enquadramento"), QStringLiteral("Regra dos terços & crop"), QStringLiteral("06_Cenario_Enquadramento_Crop.creatorcanvas") },
+        { QStringLiteral("✍️"), QStringLiteral("Tipografia"), QStringLiteral("Efeitos de texto e badges"), QStringLiteral("07_Cenario_Tipografia_Efeitos.creatorcanvas") },
+        { QStringLiteral("🌈"), QStringLiteral("Gradientes"), QStringLiteral("Composição e luz"), QStringLiteral("08_Cenario_Gradientes_Composicao.creatorcanvas") }
+    };
+
+    auto findScenarioPath = [](const QString& filename) -> QString {
+        const QString appDir = QCoreApplication::applicationDirPath();
+        const QStringList candidateDirs = {
+            appDir + QStringLiteral("/../../../exemplos_projetos"),
+            appDir + QStringLiteral("/../share/creatorcanvas/exemplos_projetos"),
+            QStringLiteral("/home/theking1x/creatorcanvas/exemplos_projetos"),
+            QDir::currentPath() + QStringLiteral("/exemplos_projetos")
+        };
+        for (const QString& dir : candidateDirs) {
+            const QString path = dir + QStringLiteral("/") + filename;
+            if (QFileInfo::exists(path))
+                return QFileInfo(path).canonicalFilePath();
+        }
+        return QString();
+    };
+
+    int sIdx = 0;
+    for (const auto& sc : scenarios) {
+        auto* card = new QPushButton(m_practiceHost);
+        card->setObjectName(QStringLiteral("PracticeCard"));
+        card->setCursor(Qt::PointingHandCursor);
+        card->setMinimumHeight(54);
+        card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+
+        auto* cLayout = new QHBoxLayout(card);
+        cLayout->setContentsMargins(10, 6, 10, 6);
+        cLayout->setSpacing(8);
+
+        auto* iconLbl = new QLabel(sc.icon, card);
+        iconLbl->setStyleSheet(QStringLiteral("font-size: 20px; background: transparent;"));
+        iconLbl->setAttribute(Qt::WA_TransparentForMouseEvents);
+        cLayout->addWidget(iconLbl);
+
+        auto* textLayout = new QVBoxLayout;
+        textLayout->setContentsMargins(0, 0, 0, 0);
+        textLayout->setSpacing(1);
+
+        auto* titleLbl = new QLabel(sc.title, card);
+        titleLbl->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 11px; background: transparent;"));
+        titleLbl->setAttribute(Qt::WA_TransparentForMouseEvents);
+        textLayout->addWidget(titleLbl);
+
+        auto* descLbl = new QLabel(sc.desc, card);
+        descLbl->setStyleSheet(QStringLiteral("color: #888; font-size: 9px; background: transparent;"));
+        descLbl->setAttribute(Qt::WA_TransparentForMouseEvents);
+        textLayout->addWidget(descLbl);
+
+        cLayout->addLayout(textLayout, 1);
+
+        const QString path = findScenarioPath(sc.file);
+        connect(card, &QPushButton::clicked, this, [this, path]() {
+            if (!path.isEmpty()) {
+                emit recentActivated(path);
+            }
+        });
+
+        m_practiceGrid->addWidget(card, sIdx / 4, sIdx % 4);
+        ++sIdx;
+    }
+
+    mainLayout->addWidget(m_practiceHost);
+
+    mainLayout->addSpacing(8);
+
     // --- 4. Recent Projects Section ---
     m_recentLabel = new QLabel(this);
     m_recentLabel->setFont(sectionFont);
@@ -516,6 +610,8 @@ void StartScreen::retranslateUi()
     m_popularLabel->setText(m_i18n->t("common", "start.popular"));
     if (m_templatesLabel)
         m_templatesLabel->setText(m_i18n->t("common", "start.templates"));
+    if (m_practiceLabel)
+        m_practiceLabel->setText(m_i18n ? m_i18n->t("common", "start.practice") : QStringLiteral("Cenários de Prática / Tutoriais Rápidos"));
     const auto templates = TemplateFactory::availableTemplates();
     for (int i = 0; i < templates.size() && i < m_templateTitleLabels.size(); ++i) {
         if (m_templateTitleLabels[i])

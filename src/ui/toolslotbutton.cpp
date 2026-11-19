@@ -95,6 +95,17 @@ void ToolSlotButton::setCurrentAction(QAction* action)
     setToolTip(action->toolTip().isEmpty() ? action->text() : action->toolTip());
 }
 
+void ToolSlotButton::cycleNextAction()
+{
+    if (m_actions.size() <= 1) return;
+    int currIdx = m_actions.indexOf(defaultAction());
+    int nextIdx = (currIdx + 1) % m_actions.size();
+    QAction* nextAct = m_actions.at(nextIdx);
+    if (nextAct) {
+        nextAct->trigger();
+    }
+}
+
 void ToolSlotButton::mousePressEvent(QMouseEvent* event)
 {
     if (event->button() == Qt::RightButton && m_actions.size() > 1 && m_menu) {

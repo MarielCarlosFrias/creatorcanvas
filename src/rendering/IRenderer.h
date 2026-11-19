@@ -38,6 +38,12 @@ public:
     /// de memória). Nunca altera o resultado — só a velocidade.
     virtual void clearCaches() = 0;
 
+    /// Invalida apenas a camada indicada. Backends sem cache podem ignorar.
+    virtual void invalidateLayer(const QUuid& layerId) = 0;
+
+    /// Invalida todas as camadas e compósitos cacheados.
+    virtual void invalidateAllLayers() = 0;
+
     /// Nome legível para logs e diagnósticos.
     virtual const char* name() const = 0;
 };

@@ -110,8 +110,11 @@ std::unique_ptr<Layer> TextLayer::deepCopy() const
     copy->color = color;
     copy->letterSpacingPx = letterSpacingPx;
     copy->lineHeightMult = lineHeightMult;
+    copy->box = box;
     copy->align = align;
     copy->effects = effects;
+    copy->pathLayerId = pathLayerId;
+    copy->pathOffsetPct = pathOffsetPct;
     return copy;
 }
 
@@ -141,6 +144,12 @@ QRectF TextLayer::contentBounds() const
         const double lineSpacing = metrics.lineSpacing() * (lineHeightMult > 0.0 ? lineHeightMult : 1.0);
         const double totalHeight = qMax(double(metrics.height()), double(lines.size()) * lineSpacing);
         base = QRectF(0, 0, maxWidth > 0 ? maxWidth : 20.0, totalHeight > 0 ? totalHeight : 20.0);
+    }
+
+    if (effects.badge.enabled && box.isEmpty()) {
+        base.adjust(-effects.badge.paddingX, -effects.badge.paddingY,
+                     effects.badge.paddingX,  effects.badge.paddingY);
+        base.moveTopLeft(QPointF(0, 0));
     }
 
     return base;

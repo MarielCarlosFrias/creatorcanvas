@@ -7,6 +7,9 @@
 #include <QSpinBox>
 #include <QSlider>
 #include <QTabBar>
+#include <QScrollArea>
+#include <QScrollBar>
+#include <QLayout>
 #include <QPainter>
 #include <QImage>
 #include <QTemporaryDir>
@@ -26,6 +29,8 @@
 #include "imageio/DocumentExporter.h"
 #include "core/layers/Layer.h"
 #include "ui/mainwindow.h"
+#include "ui/designtokens.h"
+#include "ui/collapsiblesection.h"
 #include "localization/i18nservice.h"
 #include "services/settingsservice.h"
 
@@ -124,6 +129,101 @@ private slots:
         QCOMPARE(inspectorTabs->tabText(inspectorTabs->currentIndex()),
                  textDock->windowTitle());
     }
+
+    void imageInspectorAdvancedAdjustmentsAreInteractive()
+    {
+        Document doc(64, 48);
+        QImage image(64, 48, QImage::Format_ARGB32);
+        image.fill(qRgba(120, 140, 160, 255));
+        const LayerId assetId = doc.assets().addImage(image, QStringLiteral("png"));
+        auto layer = std::make_unique<ImageLayer>();
+        layer->assetId = assetId;
+        layer->naturalWidth = 64;
+        layer->naturalHeight = 48;
+        const LayerId imageId = layer->id();
+        QVERIFY(doc.addLayer(std::move(layer)));
+
+        CommandStack history;
+        ImageInspector inspector(nullptr, &doc, &history);
+        inspector.setAdvancedMode(true);
+        inspector.setSelectedLayer(imageId);
+        QCoreApplication::processEvents();
+
+        auto* section = inspector.findChild<AdjustmentsSection*>();
+        QVERIFY(section != nullptr);
+        const auto sliders = section->findChildren<QSlider*>();
+        QCOMPARE(sliders.size(), 4);
+        sliders.at(0)->setValue(20);
+        QCoreApplication::processEvents();
+
+        const auto* selected = dynamic_cast<const ImageLayer*>(doc.findLayer(imageId));
+        QVERIFY(selected != nullptr);
+        QVERIFY(selected->adjustmentLayerId.has_value());
+        QVERIFY(doc.findAdjustmentLayer(*selected->adjustmentLayerId) != nullptr);
+    }
+
+    void inspectorDockAdaptsToTextMetrics()
+    {
+        QTemporaryDir tmpDir;
+        SettingsService settings(tmpDir.path() + "/settings.json");
+        I18nService i18n(&settings, {":/locales"});
+        QVERIFY(i18n.loadAvailableLanguages());
+        QVERIFY(i18n.setLanguage(QStringLiteral("sv")));
+
+        const QFont originalFont = QApplication::font();
+        QFont largeFont = originalFont;
+        largeFont.setPointSize(originalFont.pointSize() + 4);
+        QApplication::setFont(largeFont);
+        struct FontRestorer {
+            QFont font;
+            ~FontRestorer() { QApplication::setFont(font); }
+        } fontRestorer{originalFont};
+
+        MainWindow window(&settings, &i18n, nullptr,
+                          /*suppressStartupInteractions=*/true);
+        window.createDemoDocumentForSnapshot();
+        window.resize(900, 700);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+
+        auto* textDock = window.findChild<QDockWidget*>(QStringLiteral("TextDock"));
+        QVERIFY(textDock != nullptr);
+        textDock->show();
+        textDock->raise();
+        bool textTabActivated = false;
+        for (auto* tabs : window.findChildren<QTabBar*>()) {
+            if (!tabs->isVisibleTo(&window))
+                continue;
+            for (int i = 0; i < tabs->count(); ++i) {
+                if (tabs->tabText(i) == textDock->windowTitle()) {
+                    tabs->setCurrentIndex(i);
+                    textTabActivated = true;
+                }
+            }
+        }
+        QVERIFY(textTabActivated);
+        QTest::qWait(20);
+
+        auto* scroll = textDock->widget()->findChild<QScrollArea*>();
+        QVERIFY(scroll != nullptr);
+        for (auto* section : textDock->widget()->findChildren<CollapsibleSection*>())
+            section->setExpanded(true);
+        scroll->widget()->layout()->activate();
+        QCoreApplication::processEvents();
+
+        const int contentWidth = scroll->widget()->minimumSizeHint().width();
+        const int requiredWidth = textDock->widget()->minimumSizeHint().width();
+        QVERIFY(requiredWidth > Design::DockMin);
+        QVERIFY(requiredWidth >= contentWidth
+                                  + scroll->verticalScrollBar()->sizeHint().width());
+        QCOMPARE(textDock->minimumWidth(),
+                 qMax(Design::dockWidth(window.width()), requiredWidth));
+        QVERIFY(textDock->width() >= requiredWidth);
+
+        // The dock layout reserves the complete content and vertical bar width.
+        QVERIFY(textDock->minimumSizeHint().width() >= requiredWidth);
+    }
+
     void adjustmentsDialogProvidesRequest()
     {
         // Diálogo em modo headless: sem inferência nem interacção, o pedido
@@ -468,7 +568,4 @@ private slots:
 
 QTEST_MAIN(TestMainWindowTabs)
 #include "test_mainwindow_tabs.moc"
-
-
-
 

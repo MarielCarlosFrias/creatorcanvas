@@ -51,6 +51,24 @@ class TestDocument final : public QObject
     Q_OBJECT
 
 private slots:
+    void documentVersionRestoresPixelSelection()
+    {
+        Document document(32, 24);
+        QImage selection(32, 24, QImage::Format_Alpha8);
+        selection.fill(0);
+        selection.bits()[5 * selection.bytesPerLine() + 4] = 255;
+        document.setPixelSelection(selection);
+        QCOMPARE(document.pixelSelection().constScanLine(5)[4], uchar(255));
+
+        const QUuid version = document.createDocumentVersion(QStringLiteral("selection"));
+        document.clearPixelSelection();
+        QVERIFY(document.pixelSelection().isNull());
+
+        QVERIFY(document.restoreDocumentVersion(version));
+        QCOMPARE(document.pixelSelection().format(), QImage::Format_Alpha8);
+        QCOMPARE(document.pixelSelection().constScanLine(5)[4], uchar(255));
+    }
+
     void documentControllerRebindsAllObservers()
     {
         DocumentController controller;

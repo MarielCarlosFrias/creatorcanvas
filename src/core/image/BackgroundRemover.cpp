@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QImage>
+#include <QPainter>
 #include <QLoggingCategory>
 #include <QStandardPaths>
 #include <algorithm>
@@ -19,7 +20,6 @@ Q_LOGGING_CATEGORY(lcBgRemover, "cc.ai.bgremover")
 
 static constexpr float MEAN[3] = {0.485f, 0.456f, 0.406f};
 static constexpr float STD[3]  = {0.229f, 0.224f, 0.225f};
-static constexpr int INPUT_SIZE = 320;
 
 namespace {
 
@@ -109,7 +109,7 @@ public:
           m_session(nullptr)
     {
         Ort::SessionOptions sessOpts;
-        sessOpts.SetIntraOpNumThreads(2);
+        sessOpts.SetIntraOpNumThreads(std::max(1u, std::thread::hardware_concurrency()));
         sessOpts.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
 
 #ifdef _WIN32
@@ -124,6 +124,7 @@ public:
         Ort::AllocatedStringPtr outPtr = m_session.GetOutputNameAllocated(0, allocator);
         m_inputName  = std::string(inPtr.get());
         m_outputName = std::string(outPtr.get());
+        m_inputSize  = detectInputSize(modelPath);
     }
 
     QImage process(const QImage& input, const std::atomic<bool>* cancelFlag,
@@ -136,7 +137,7 @@ public:
         if (cancelFlag && cancelFlag->load())
             return QImage();
 
-        std::vector<int64_t> inputShape = {1, 3, INPUT_SIZE, INPUT_SIZE};
+        std::vector<int64_t> inputShape = {1, 3, m_inputSize, m_inputSize};
 
         Ort::MemoryInfo memInfo = Ort::MemoryInfo::CreateCpu(
             OrtArenaAllocator, OrtMemTypeDefault);
@@ -191,25 +192,46 @@ public:
     }
 
 private:
+    int detectInputSize(const std::string& modelPath) const
+    {
+        try {
+            const std::vector<int64_t> shape =
+                m_session.GetInputTypeInfo(0)
+                    .GetTensorTypeAndShapeInfo()
+                    .GetShape();
+            if (shape.size() == 4 && shape[2] > 0 && shape[3] > 0) {
+                if (shape[2] == shape[3]) {
+                    return static_cast<int>(shape[2]);
+                }
+            }
+        } catch (...) {
+        }
+        const QString name = QFileInfo(QString::fromStdString(modelPath)).fileName().toLower();
+        if (name.contains(QStringLiteral("isnet"))) {
+            return 1024;
+        }
+        return 320;
+    }
+
     std::vector<float> buildInputBlob(const QImage& img) const
     {
         QImage rgb = img.convertToFormat(QImage::Format_RGB32);
         QImage resized = rgb.scaled(
-            INPUT_SIZE, INPUT_SIZE,
+            m_inputSize, m_inputSize,
             Qt::IgnoreAspectRatio,
             Qt::SmoothTransformation);
 
-        int plane = INPUT_SIZE * INPUT_SIZE;
+        int plane = m_inputSize * m_inputSize;
         std::vector<float> blob(1UL * 3 * plane);
 
-        for (int y = 0; y < INPUT_SIZE; ++y) {
-            for (int x = 0; x < INPUT_SIZE; ++x) {
+        for (int y = 0; y < m_inputSize; ++y) {
+            for (int x = 0; x < m_inputSize; ++x) {
                 QRgb px = resized.pixel(x, y);
                 float r = qRed(px) / 255.0f;
                 float g = qGreen(px) / 255.0f;
                 float b = qBlue(px) / 255.0f;
 
-                int idx = y * INPUT_SIZE + x;
+                int idx = y * m_inputSize + x;
                 blob[0 * plane + idx] = (r - MEAN[0]) / STD[0];
                 blob[1 * plane + idx] = (g - MEAN[1]) / STD[1];
                 blob[2 * plane + idx] = (b - MEAN[2]) / STD[2];
@@ -222,18 +244,18 @@ private:
     {
         float minV = mask[0];
         float maxV = mask[0];
-        for (int i = 1; i < INPUT_SIZE * INPUT_SIZE; ++i) {
+        for (int i = 1; i < m_inputSize * m_inputSize; ++i) {
             if (mask[i] < minV) minV = mask[i];
             if (mask[i] > maxV) maxV = mask[i];
         }
         float range = maxV - minV;
         if (range < 1e-8f) range = 1.0f;
 
-        QImage maskImg(INPUT_SIZE, INPUT_SIZE, QImage::Format_Grayscale8);
-        for (int y = 0; y < INPUT_SIZE; ++y) {
+        QImage maskImg(m_inputSize, m_inputSize, QImage::Format_Grayscale8);
+        for (int y = 0; y < m_inputSize; ++y) {
             quint8* row = maskImg.scanLine(y);
-            for (int x = 0; x < INPUT_SIZE; ++x) {
-                float val = (mask[y * INPUT_SIZE + x] - minV) / range * 255.0f;
+            for (int x = 0; x < m_inputSize; ++x) {
+                float val = (mask[y * m_inputSize + x] - minV) / range * 255.0f;
                 row[x] = static_cast<quint8>(std::clamp(val, 0.0f, 255.0f));
             }
         }
@@ -247,6 +269,7 @@ private:
     Ort::Session m_session;
     std::string m_inputName;
     std::string m_outputName;
+    int m_inputSize = 320;
 };
 
 BackgroundRemover::BackgroundRemover(const QString& modelPath)
@@ -440,12 +463,352 @@ QImage BackgroundRemover::applyMatte(const QImage& input, const QImage& rawAlpha
     return composite(input, mat);
 }
 
+QImage BackgroundRemover::applyStickerOutline(const QImage& input, int width, const QColor& color)
+{
+    if (input.isNull() || width <= 0) return input.copy();
+    const int r = std::clamp(width, 1, 60);
+
+    const QImage rgba = input.format() == QImage::Format_RGBA8888
+        ? input
+        : input.convertToFormat(QImage::Format_RGBA8888);
+
+    const int w = rgba.width();
+    const int h = rgba.height();
+
+    std::vector<uint8_t> mask(static_cast<size_t>(w) * h, 0);
+    for (int y = 0; y < h; ++y) {
+        const uchar* row = rgba.constScanLine(y);
+        for (int x = 0; x < w; ++x) {
+            if (row[x * 4 + 3] > 15) {
+                mask[static_cast<size_t>(y) * w + x] = 255;
+            }
+        }
+    }
+
+    std::vector<uint8_t> dilated = mask;
+    std::vector<std::pair<int, int>> offsets;
+    const int r2 = r * r;
+    for (int dy = -r; dy <= r; ++dy) {
+        for (int dx = -r; dx <= r; ++dx) {
+            if (dx * dx + dy * dy <= r2) {
+                offsets.emplace_back(dx, dy);
+            }
+        }
+    }
+
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            if (mask[static_cast<size_t>(y) * w + x] == 255) {
+                for (const auto& [dx, dy] : offsets) {
+                    const int nx = x + dx;
+                    const int ny = y + dy;
+                    if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                        dilated[static_cast<size_t>(ny) * w + nx] = 255;
+                    }
+                }
+            }
+        }
+    }
+
+    QImage result(w, h, QImage::Format_RGBA8888);
+    result.fill(Qt::transparent);
+
+    const uchar red = static_cast<uchar>(color.red());
+    const uchar green = static_cast<uchar>(color.green());
+    const uchar blue = static_cast<uchar>(color.blue());
+    const uchar alpha = static_cast<uchar>(color.alpha());
+
+    for (int y = 0; y < h; ++y) {
+        uchar* row = result.scanLine(y);
+        for (int x = 0; x < w; ++x) {
+            if (dilated[static_cast<size_t>(y) * w + x] > 0) {
+                row[x * 4]     = red;
+                row[x * 4 + 1] = green;
+                row[x * 4 + 2] = blue;
+                row[x * 4 + 3] = alpha;
+            }
+        }
+    }
+
+    QPainter p(&result);
+    p.drawImage(0, 0, rgba);
+    p.end();
+
+    return result;
+}
+
+namespace {
+static QImage blurRgbaImage(const QImage& input, int radius)
+{
+    if (input.isNull() || radius <= 0) return input.copy();
+    const int r = std::clamp(radius, 1, 80);
+    QImage src = input.format() == QImage::Format_RGBA8888
+        ? input
+        : input.convertToFormat(QImage::Format_RGBA8888);
+
+    const int width = src.width();
+    const int height = src.height();
+    if (width == 0 || height == 0) return src;
+
+    QImage intermediate(width, height, QImage::Format_RGBA8888);
+    QImage dst(width, height, QImage::Format_RGBA8888);
+
+    const int div = 2 * r + 1;
+    for (int y = 0; y < height; ++y) {
+        const uchar* inRow = src.constScanLine(y);
+        uchar* outRow = intermediate.scanLine(y);
+
+        int sumR = 0, sumG = 0, sumB = 0, sumA = 0;
+        for (int i = -r; i <= r; ++i) {
+            const int px = std::clamp(i, 0, width - 1);
+            sumR += inRow[px * 4];
+            sumG += inRow[px * 4 + 1];
+            sumB += inRow[px * 4 + 2];
+            sumA += inRow[px * 4 + 3];
+        }
+
+        for (int x = 0; x < width; ++x) {
+            outRow[x * 4]     = static_cast<uchar>(sumR / div);
+            outRow[x * 4 + 1] = static_cast<uchar>(sumG / div);
+            outRow[x * 4 + 2] = static_cast<uchar>(sumB / div);
+            outRow[x * 4 + 3] = static_cast<uchar>(sumA / div);
+
+            const int nextX = std::clamp(x + r + 1, 0, width - 1);
+            const int prevX = std::clamp(x - r, 0, width - 1);
+
+            sumR += inRow[nextX * 4]     - inRow[prevX * 4];
+            sumG += inRow[nextX * 4 + 1] - inRow[prevX * 4 + 1];
+            sumB += inRow[nextX * 4 + 2] - inRow[prevX * 4 + 2];
+            sumA += inRow[nextX * 4 + 3] - inRow[prevX * 4 + 3];
+        }
+    }
+
+    for (int x = 0; x < width; ++x) {
+        int sumR = 0, sumG = 0, sumB = 0, sumA = 0;
+        for (int i = -r; i <= r; ++i) {
+            const int py = std::clamp(i, 0, height - 1);
+            const uchar* row = intermediate.constScanLine(py);
+            sumR += row[x * 4];
+            sumG += row[x * 4 + 1];
+            sumB += row[x * 4 + 2];
+            sumA += row[x * 4 + 3];
+        }
+
+        for (int y = 0; y < height; ++y) {
+            uchar* outRow = dst.scanLine(y);
+            outRow[x * 4]     = static_cast<uchar>(sumR / div);
+            outRow[x * 4 + 1] = static_cast<uchar>(sumG / div);
+            outRow[x * 4 + 2] = static_cast<uchar>(sumB / div);
+            outRow[x * 4 + 3] = static_cast<uchar>(sumA / div);
+
+            const int nextY = std::clamp(y + r + 1, 0, height - 1);
+            const int prevY = std::clamp(y - r, 0, height - 1);
+
+            const uchar* nextRow = intermediate.constScanLine(nextY);
+            const uchar* prevRow = intermediate.constScanLine(prevY);
+
+            sumR += nextRow[x * 4]     - prevRow[x * 4];
+            sumG += nextRow[x * 4 + 1] - prevRow[x * 4 + 1];
+            sumB += nextRow[x * 4 + 2] - prevRow[x * 4 + 2];
+            sumA += nextRow[x * 4 + 3] - prevRow[x * 4 + 3];
+        }
+    }
+
+    return dst;
+}
+} // namespace
+
+QImage BackgroundRemover::applyDropShadow(const QImage& input, int offsetX,
+                                          int offsetY, int blurRadius,
+                                          float opacity)
+{
+    if (input.isNull()) return input.copy();
+    const QImage rgba = input.format() == QImage::Format_RGBA8888
+        ? input
+        : input.convertToFormat(QImage::Format_RGBA8888);
+
+    const int w = rgba.width();
+    const int h = rgba.height();
+    const float op = std::clamp(opacity, 0.0f, 1.0f);
+
+    QImage shadow(w, h, QImage::Format_RGBA8888);
+    shadow.fill(Qt::transparent);
+
+    for (int y = 0; y < h; ++y) {
+        const uchar* srcRow = rgba.constScanLine(y);
+        uchar* shadowRow = shadow.scanLine(y);
+        for (int x = 0; x < w; ++x) {
+            const uchar srcA = srcRow[x * 4 + 3];
+            if (srcA > 0) {
+                shadowRow[x * 4]     = 0;
+                shadowRow[x * 4 + 1] = 0;
+                shadowRow[x * 4 + 2] = 0;
+                shadowRow[x * 4 + 3] = static_cast<uchar>(srcA * op);
+            }
+        }
+    }
+
+    if (blurRadius > 0) {
+        shadow = blurRgbaImage(shadow, blurRadius);
+    }
+
+    QImage result(w, h, QImage::Format_RGBA8888);
+    result.fill(Qt::transparent);
+
+    QPainter p(&result);
+    p.drawImage(offsetX, offsetY, shadow);
+    p.drawImage(0, 0, rgba);
+    p.end();
+
+    return result;
+}
+
+QColor BackgroundRemover::detectCornerColor(const QImage& img)
+{
+    if (img.isNull()) return Qt::magenta;
+    const QImage src = img.format() == QImage::Format_RGBA8888
+        ? img
+        : img.convertToFormat(QImage::Format_RGBA8888);
+    const int w = src.width();
+    const int h = src.height();
+
+    const QList<QPoint> samplePoints = {
+        QPoint(0, 0),
+        QPoint(w - 1, 0),
+        QPoint(0, h - 1),
+        QPoint(w - 1, h - 1),
+        QPoint(std::min(1, w - 1), std::min(1, h - 1)),
+        QPoint(std::max(0, w - 2), std::min(1, h - 1)),
+        QPoint(std::min(1, w - 1), std::max(0, h - 2)),
+        QPoint(std::max(0, w - 2), std::max(0, h - 2))
+    };
+
+    std::map<QRgb, int> freq;
+    for (const QPoint& pt : samplePoints) {
+        const QRgb c = src.pixel(pt);
+        freq[c]++;
+    }
+
+    QRgb bestRgb = src.pixel(0, 0);
+    int bestCount = 0;
+    for (const auto& [rgb, count] : freq) {
+        if (count > bestCount) {
+            bestCount = count;
+            bestRgb = rgb;
+        }
+    }
+    return QColor(bestRgb);
+}
+
+QImage BackgroundRemover::removeByColor(const QImage& input,
+                                       const QColor& targetColor,
+                                       int tolerance,
+                                       bool contiguous,
+                                       bool preservePixelArt)
+{
+    if (input.isNull() || !targetColor.isValid()) return input.copy();
+
+    QImage result = input.format() == QImage::Format_RGBA8888
+        ? input.copy()
+        : input.convertToFormat(QImage::Format_RGBA8888);
+    const int w = result.width();
+    const int h = result.height();
+
+    const int tr = targetColor.red();
+    const int tg = targetColor.green();
+    const int tb = targetColor.blue();
+
+    const float maxDist = (std::clamp(tolerance, 0, 100) / 100.0f) * 441.67295593f;
+    const float maxDistSq = maxDist * maxDist;
+
+    auto matchesColor = [&](int r, int g, int b) -> bool {
+        const float dr = static_cast<float>(r - tr);
+        const float dg = static_cast<float>(g - tg);
+        const float db = static_cast<float>(b - tb);
+        return (dr * dr + dg * dg + db * db) <= maxDistSq;
+    };
+
+    auto calcAlpha = [&](int r, int g, int b, int currentAlpha) -> int {
+        if (preservePixelArt) {
+            return matchesColor(r, g, b) ? 0 : currentAlpha;
+        }
+        const float dr = static_cast<float>(r - tr);
+        const float dg = static_cast<float>(g - tg);
+        const float db = static_cast<float>(b - tb);
+        const float dist = std::sqrt(dr * dr + dg * dg + db * db);
+        if (dist <= maxDist * 0.7f) return 0;
+        if (dist >= maxDist) return currentAlpha;
+        const float t = (dist - maxDist * 0.7f) / (maxDist * 0.3f);
+        return static_cast<int>(currentAlpha * t);
+    };
+
+    if (!contiguous) {
+        for (int y = 0; y < h; ++y) {
+            uchar* row = result.scanLine(y);
+            for (int x = 0; x < w; ++x) {
+                const int r = row[x * 4 + 0];
+                const int g = row[x * 4 + 1];
+                const int b = row[x * 4 + 2];
+                const int a = row[x * 4 + 3];
+                row[x * 4 + 3] = static_cast<uchar>(calcAlpha(r, g, b, a));
+            }
+        }
+    } else {
+        std::vector<uint8_t> visited(static_cast<size_t>(w * h), 0);
+        std::vector<uint32_t> stack;
+        stack.reserve(static_cast<size_t>(w) * 4);
+
+        auto tryPush = [&](int x, int y) {
+            if (x < 0 || x >= w || y < 0 || y >= h) return;
+            const size_t idx = static_cast<size_t>(y) * static_cast<size_t>(w)
+                               + static_cast<size_t>(x);
+            if (visited[idx]) return;
+            const uchar* pixel = result.constScanLine(y) + x * 4;
+            if (matchesColor(pixel[0], pixel[1], pixel[2])) {
+                visited[idx] = 1;
+                stack.push_back(static_cast<uint32_t>(idx));
+            }
+        };
+
+        for (int x = 0; x < w; ++x) {
+            tryPush(x, 0);
+            tryPush(x, h - 1);
+        }
+        for (int y = 0; y < h; ++y) {
+            tryPush(0, y);
+            tryPush(w - 1, y);
+        }
+
+        while (!stack.empty()) {
+            const uint32_t idx = stack.back();
+            stack.pop_back();
+
+            const int curX = static_cast<int>(idx % static_cast<uint32_t>(w));
+            const int curY = static_cast<int>(idx / static_cast<uint32_t>(w));
+
+            uchar* p = result.scanLine(curY) + curX * 4;
+            p[3] = static_cast<uchar>(calcAlpha(p[0], p[1], p[2], p[3]));
+
+            tryPush(curX + 1, curY);
+            tryPush(curX - 1, curY);
+            tryPush(curX, curY + 1);
+            tryPush(curX, curY - 1);
+        }
+    }
+
+    return result;
+}
+
 QString BackgroundRemover::findModelPath(const QString& preferredName)
 {
     const QString appDir = QCoreApplication::applicationDirPath();
     const QString appDataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    const QString homeDir = QDir::homePath();
 
     const QStringList candidateDirs = {
+        homeDir + QStringLiteral("/.local/share/bg-remover/models"),
+        homeDir + QStringLiteral("/.local/share/aletheia/models"),
+        QStringLiteral("/home/theking1x/projetos/bg-remover"),
         appDir + QStringLiteral("/../share/creatorcanvas/models"),
         appDir + QStringLiteral("/share/creatorcanvas/models"),
         appDir + QStringLiteral("/models"),
@@ -456,10 +819,27 @@ QString BackgroundRemover::findModelPath(const QString& preferredName)
         appDataDir
     };
 
-    for (const QString& dir : candidateDirs) {
-        const QString full = dir + QStringLiteral("/") + preferredName;
-        if (QFileInfo::exists(full))
-            return full;
+    if (!preferredName.isEmpty()) {
+        for (const QString& dir : candidateDirs) {
+            const QString full = dir + QStringLiteral("/") + preferredName;
+            if (QFileInfo::exists(full))
+                return full;
+        }
+    }
+
+    const QStringList defaultNames = {
+        QStringLiteral("isnet-general-use.onnx"),
+        QStringLiteral("u2net.onnx"),
+        QStringLiteral("u2netp.onnx"),
+        QStringLiteral("isnet-anime.onnx")
+    };
+
+    for (const QString& name : defaultNames) {
+        for (const QString& dir : candidateDirs) {
+            const QString full = dir + QStringLiteral("/") + name;
+            if (QFileInfo::exists(full))
+                return full;
+        }
     }
 
     // Fallback: search for any *.onnx in candidate directories

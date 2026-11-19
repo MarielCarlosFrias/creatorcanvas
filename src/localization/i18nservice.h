@@ -8,7 +8,7 @@
 
 namespace cc {
 
-class SettingsService;
+class LanguagePreferenceStore;
 
 /// Loads JSON translation catalogs and resolves user-facing strings with a
 /// guaranteed fallback chain: current language -> English -> logged miss.
@@ -21,7 +21,7 @@ class I18nService final : public QObject
 {
     Q_OBJECT
 public:
-    explicit I18nService(SettingsService *settings,
+    explicit I18nService(LanguagePreferenceStore *settings,
                          const QStringList &searchPaths = {QStringLiteral(":/locales")},
                          QObject *parent = nullptr);
 
@@ -52,7 +52,7 @@ private:
     QMap<QString, QString> loadCatalog(const QString &root,
                                        const QString &code) const;
 
-    SettingsService *m_settings = nullptr;
+    LanguagePreferenceStore *m_settings = nullptr;
     QStringList m_searchPaths;
     QStringList m_languages;                          // sorted, "en" first
     QString m_current = QStringLiteral("en");

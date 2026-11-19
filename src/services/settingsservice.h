@@ -5,6 +5,8 @@
 #include <QString>
 #include <QVariant>
 
+#include "localization/languagepreferences.h"
+
 class QSettings;
 
 namespace cc {
@@ -14,7 +16,7 @@ namespace cc {
 /// When constructed without |filePath|, QSettings resolves the platform
 /// location from the organisation/application names that main() sets BEFORE
 /// constructing this service. Tests inject an explicit file path.
-class SettingsService final : public QObject
+class SettingsService final : public QObject, public LanguagePreferenceStore
 {
     Q_OBJECT
 public:
@@ -22,8 +24,8 @@ public:
                              QObject *parent = nullptr);
 
     // General -------------------------------------------------------------
-    QString language() const;              // BCP-47-ish code: "en", "pt-BR"
-    void setLanguage(const QString &code); // English is the default/fallback
+    QString language() const override;              // BCP-47-ish code: "en", "pt-BR"
+    void setLanguage(const QString &code) override; // English is the default/fallback
 
     int autosaveIntervalMinutes() const;   // 0 = autosave disabled; default 5
     void setAutosaveIntervalMinutes(int minutes);

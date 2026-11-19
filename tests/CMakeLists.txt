@@ -36,6 +36,7 @@ cc_add_test(test_effects unit/test_effects.cpp)
 cc_add_test(test_export unit/test_export.cpp)
 cc_add_test(test_icc unit/test_icc.cpp)
 cc_add_test(test_autosave      unit/test_autosave.cpp)
+target_link_libraries(test_autosave PRIVATE cc_ui_services)
 cc_add_test(test_snap unit/test_snap.cpp)
 cc_add_test(test_image_processing unit/test_image_processing.cpp)
 cc_add_test(test_tools unit/test_tools.cpp)
@@ -53,7 +54,6 @@ cc_add_test(test_ai_quick unit/test_ai_quick.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasgesturehandler.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvascontextmenu.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasview.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasoverlayrenderer.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/aibackgrounddialog.cpp
@@ -78,7 +78,6 @@ cc_add_test(test_hit_alpha unit/test_hit_alpha.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvascontextmenu.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasview.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasoverlayrenderer.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/aibackgrounddialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/maskeditcanvas.cpp
@@ -89,7 +88,6 @@ cc_add_test(test_canvas_zoom unit/test_canvas_zoom.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvascontextmenu.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasview.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasoverlayrenderer.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/aibackgrounddialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/maskeditcanvas.cpp
@@ -99,7 +97,6 @@ cc_add_test(test_undo_render unit/test_undo_render.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasgesturehandler.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvascontextmenu.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasview.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasoverlayrenderer.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/aibackgrounddialog.cpp
@@ -114,7 +111,6 @@ cc_add_test(test_canvas_context_menu unit/test_canvas_context_menu.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasgesturehandler.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvascontextmenu.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasview.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasoverlayrenderer.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/aibackgrounddialog.cpp
@@ -131,8 +127,8 @@ cc_add_test(test_canvas_transform unit/test_canvas_transform.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
 )
 cc_add_test(test_minipaint_bridge unit/test_minipaint_bridge.cpp
-    ${PROJECT_SOURCE_DIR}/src/services/minipaintbridge.cpp
 )
+target_link_libraries(test_minipaint_bridge PRIVATE cc_ui_services)
 
 # The vendored MiniPaint module's own smoke/regression tests (built only when
 # CC_MINIPAINT_SOURCE_DIR resolved and SFML 3 is present). They need an OpenGL
@@ -140,6 +136,25 @@ cc_add_test(test_minipaint_bridge unit/test_minipaint_bridge.cpp
 if(TARGET minipaint-tests)
     add_test(NAME minipaint_smoke COMMAND minipaint-tests)
     set_tests_properties(minipaint_smoke PROPERTIES SKIP_RETURN_CODE 125)
+    # SFML aborta antes de retornar um código tratável quando não existe
+    # servidor X11. Em CI/headless o teste fica explicitamente desabilitado;
+    # em uma sessão gráfica ele continua sendo executado normalmente.
+    set(_minipaint_display_available FALSE)
+    if(DEFINED ENV{DISPLAY} AND NOT "$ENV{DISPLAY}" STREQUAL "")
+        find_program(XDPYINFO_EXECUTABLE xdpyinfo)
+        if(XDPYINFO_EXECUTABLE)
+            execute_process(
+                COMMAND ${XDPYINFO_EXECUTABLE} -display "$ENV{DISPLAY}"
+                RESULT_VARIABLE _xdpyinfo_result
+                OUTPUT_QUIET ERROR_QUIET)
+            if(_xdpyinfo_result EQUAL 0)
+                set(_minipaint_display_available TRUE)
+            endif()
+        endif()
+    endif()
+    if(NOT _minipaint_display_available)
+        set_tests_properties(minipaint_smoke PROPERTIES DISABLED TRUE)
+    endif()
 endif()
 cc_add_test(test_canvas_gesture_handler unit/test_canvas_gesture_handler.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasgesturehandler.cpp
@@ -149,6 +164,7 @@ cc_add_test(test_mockup_dialog unit/test_mockup_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/mockupdialog.cpp
 )
 cc_add_test(test_mainwindow_tabs unit/test_mainwindow_tabs.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/dockvisibilitypolicy.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/mainwindow.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/newdocumentdialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/exportdialog.cpp
@@ -164,7 +180,6 @@ cc_add_test(test_mainwindow_tabs unit/test_mainwindow_tabs.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/puppetwarpdialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/darktheme.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasview.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasoverlayrenderer.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/canvasgesturehandler.cpp
@@ -197,3 +212,4 @@ add_executable(generate_sample_projects ${PROJECT_SOURCE_DIR}/tools/generate_sam
 target_link_libraries(generate_sample_projects PRIVATE Qt6::Widgets cc_core cc_rendering miniz)
 target_include_directories(generate_sample_projects PRIVATE ${PROJECT_SOURCE_DIR}/src)
 
+target_link_libraries(test_mainwindow_tabs PRIVATE cc_ui_services)

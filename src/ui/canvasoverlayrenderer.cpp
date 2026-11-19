@@ -496,20 +496,25 @@ void CanvasOverlayRenderer::drawPixelSelectionOutline(QPainter* painter,
     QImage selectionOverlay(pixelSelection.size(), QImage::Format_ARGB32);
     selectionOverlay.fill(Qt::transparent);
 
+    const int h = pixelSelection.height();
+    const int w = pixelSelection.width();
     const QRgb tint = qRgba(0x43, 0x78, 0xff, 26);   // accent a ~10%
     constexpr int kSelectedThreshold = 8;
 
-    for (int y = 0; y < pixelSelection.height(); ++y) {
+    for (int y = 0; y < h; ++y) {
         QRgb* dst = reinterpret_cast<QRgb*>(selectionOverlay.scanLine(y));
         const uchar* src = pixelSelection.constScanLine(y);
-        for (int x = 0; x < pixelSelection.width(); ++x) {
+        const uchar* upRow = (y > 0) ? pixelSelection.constScanLine(y - 1) : src;
+        const uchar* downRow = (y + 1 < h) ? pixelSelection.constScanLine(y + 1) : src;
+
+        for (int x = 0; x < w; ++x) {
             const uchar here = src[x];
             if (here >= kSelectedThreshold)
                 dst[x] = tint;
             const uchar left = x > 0 ? src[x - 1] : here;
-            const uchar right = x + 1 < pixelSelection.width() ? src[x + 1] : here;
-            const uchar up = y > 0 ? pixelSelection.constScanLine(y - 1)[x] : here;
-            const uchar down = y + 1 < pixelSelection.height() ? pixelSelection.constScanLine(y + 1)[x] : here;
+            const uchar right = (x + 1 < w) ? src[x + 1] : here;
+            const uchar up = upRow[x];
+            const uchar down = downRow[x];
             const bool edge = qAbs(int(here) - int(left)) > 20
                            || qAbs(int(here) - int(right)) > 20
                            || qAbs(int(here) - int(up)) > 20

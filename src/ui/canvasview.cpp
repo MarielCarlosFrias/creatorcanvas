@@ -717,6 +717,10 @@ void CanvasView::wheelEvent(QWheelEvent* event)
     }
     m_transform->zoomAt(event->position(),
                         std::pow(CanvasTransform::kZoomStep, delta / 120.0));
+    // O zoom pelo wheel não passa por zoomIn/zoomOut; sem invalidar a
+    // viewport aqui, o valor mudava mas a imagem só era redesenhada no
+    // próximo movimento do rato (por exemplo, ao fazer pan).
+    update();
     event->accept();
 }
 
