@@ -408,7 +408,9 @@ The manifest also carries the document color space, the pixel selection, and the
 - PNG (lossless), JPEG (flattened onto background), WebP
 - Scale multiplier and JPEG/WebP quality
 - `transparentBackground` flag on `exportDocumentToImage()`/`exportLayerToImage()`: keeps the alpha channel (PNG/WebP) or flattens onto white when off — JPEG is always opaque
-- `core/color/IccProfiles.{h,cpp}` resolves installed ICC profiles (`CC_ICC_DIR` overrides the search paths) and tags exported PNG (`iCCP`, before IDAT) and JPEG (`ICC_PROFILE` APP2 markers) files, including web slices. Tagging is atomic and a missing profile is a no-op; this is export metadata, not a colour transform engine
+- `core/color/IccProfiles.{h,cpp}` resolves installed ICC profiles (`CC_ICC_DIR` overrides the search paths) and tags exported PNG (`iCCP`, before IDAT), JPEG (`ICC_PROFILE` APP2 markers) and WebP (RIFF `ICCP`) files, including web slices. Tagging is atomic and a missing profile is a no-op
+- `ImageImporter` preserves the original embedded ICC bytes; a newly created document recognises the initial working space when possible and the native project persists both `colorSpace` and the profile. Export prefers that original profile, including custom profiles unknown to the host
+- Metadata preservation is not pixel conversion: imported pixels are not transformed between colour spaces
 - Calls `renderDocument()` off-screen without editor overlays
 - Exporting a clipped layer applies the same mask (`renderSiblingLayers`), so the file matches the screen
 
@@ -524,7 +526,7 @@ Still ahead:
 3. **Richer blend modes** — only if compositing moves beyond the current twelve `QPainter` modes.
 4. **macOS** — real bundle, notarization, and CI; `MACOSX_BUNDLE` on the target is not a shipping product.
 
-Delivered after `v0.2.1` (do not treat as future work): per-layer render cache with the `IRenderer` seam, the adjustments panel with a non-destructive path, live adjustments in the image inspector (advanced mode), layer comps, web slices with preview and export, pen/node editing, numeric transform, Select Subject (AI), Photoshop-style flyout tool slots, and the export dialog restructure (preset chips, transparency option, live checkerboard preview).
+Delivered after `v0.2.1` (do not treat as future work): per-layer render cache with the `IRenderer` seam, the adjustments panel with a non-destructive path, live adjustments in the image inspector (advanced mode), layer comps, web slices with preview and export, pen/node editing, numeric transform, Select Subject (AI), Photoshop-style flyout tool slots, the export dialog restructure (preset chips, transparency option, live checkerboard preview), ICC import/project/export preservation, in-place Healing/Retouch strokes and affine-correct marquee selection.
 
 ## 15. Conventions
 
@@ -538,17 +540,15 @@ Logs live under the OS application data directory used by `LogService` / `Settin
 
 ## 16. Known limitations
 
-- **ICC is export metadata, not a full colour pipeline** — exported PNG/JPEG files (and web slices) embed the matching installed ICC profile, with `test_icc` covering round trips, large profiles and fallback. There is still no ICC-based pixel conversion, profile import into the document, soft proofing or display/monitor colour management.
-- **Still images only** — no timeline or video export.
-- **Software compositor, no general cache** — every paint of a dirty document walks the full tree (masked image layers have transient caches); large documents will hitch.
+- **ICC metadata preservation, not a full colour transform pipeline** — PNG/JPEG/WebP import, native-project persistence and export preserve the source profile; installed-profile fallback covers all three export formats and slices. There is still no ICC-based pixel conversion, soft proofing or display/monitor colour management.
+- **Still images only** — no timeline or video export; that is a separate product milestone requiring a specification.
+- **Software compositor** — the renderer has per-layer caches and an `IRenderer` seam, but very large layer trees can still hitch. A real GPU/QRhi path requires validation on a native display.
 - **Adjustment commits are non-destructive by default** — the *Adjustments* dialog exposes a "Não-destrutivo (camada de ajuste)" checkbox, checked by default, and `executeApplyAdjustment()` creates/updates an `AdjustmentLayer` that renders at render time (undo/redo as a single command); unchecking it bakes a new raster asset as before. Image layers linked to an adjustment layer can be re-edited live from the image inspector (advanced mode) via `setAdjustmentParameters()`.
-- **Public `Layer` fields** — UI or tests can mutate `visible` / `transform` / etc. without a `Command`. That bypasses undo.
-- **MiniPaint needs SFML 3 at build time** — *Image ▸ Edit in MiniPaint* is built in-tree from `3rdparty/minipaint` and the packaging bundles/ declares its SFML runtime, but a machine without SFML 3 dev packages cannot compile that module (it is skipped, not fatal). CI installs `libsfml-dev`; the Windows job builds without it, so the editor is not covered there yet.
-- **UI concentration** — most interaction lives in `canvasview.cpp` and `mainwindow.cpp`.
-- **Marquee + transformed layers** — the marquee is mapped through the layer inverse transform and collapsed to a bounding rectangle, so a rotated layer gets an axis-aligned selection in its own bitmap space.
-- **Retouch/Healing run on the UI thread** — the brush patch is small, but each stroke event still converts/duplicates the full layer bitmap; multi-megapixel layers can feel heavy.
+- **`Layer` encapsulation** — production mutations are command-driven, including Layer Comp undo notifications, but public fields still make future accidental bypasses possible. Encapsulation is a maintenance follow-up, not a known current UI undo defect.
+- **MiniPaint needs SFML 3 at build time** — *Image ▸ Edit in MiniPaint* is built in-tree and packages bundle its SFML runtime. CI installs it on Linux and downloads the SDK on Windows; the Windows portable path still needs validation on a Windows runner, which cannot be reproduced on this Linux host.
+- **UI concentration** — `CanvasView`'s overlays, gestures, context menu, inline text and transform are extracted, but `mainwindow.cpp` (about 3k lines) remains the main composition root and should be split incrementally with tests, not in a risky bulk rewrite.
 - **Spot Healing source is picked per stroke, not per click** — right-click (or `Shift`+click) sets the healing source point, then clicking heals; locked pixels are still respected. There is no patch-match synthesis (the patch is cloned from the source point).
-- **Gradients** — three kinds (linear, radial, conical) and multi-stop ramps; the conical type is serialized as `"conical"` (older readers fall back to linear) and the editor is advanced-mode only.
-- **No `platform/` isolation** — Windows vs Unix still appears in CMake and isolated `#ifdef`s (e.g. ONNX).
+- **Gradients** — linear, radial, conical and multi-stop ramps are available in the normal inspector; conical is serialized as `"conical"` and older readers fall back to linear.
+- **Platform isolation is intentionally small** — production C++ currently has only two `Q_OS_*` branches (MiniPaint executable suffix and ICC search paths); larger platform differences remain in build/packaging scripts. A `platform/` module should be introduced only when those branches actually grow.
 - **`Q_OBJECT` + `unique_ptr`** — incomplete type in the header still breaks the generated destructor; include the full type.
-- **macOS** — not a supported distribution target yet.
+- **macOS** — not a supported distribution target yet; bundle, notarization and CI require macOS hardware/runners.

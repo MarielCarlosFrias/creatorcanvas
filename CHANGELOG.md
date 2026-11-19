@@ -21,9 +21,11 @@ Everything accumulated on `main` since the `v0.2.1` tag (2026-11-04).
   live checkerboard preview, translated dimension/size labels.
 - **Export transparency** (`transparentBackground`) honoured by
   `exportDocumentToImage()` / `exportLayerToImage()`; JPEG stays opaque.
-- **ICC export tagging** — exported PNG/JPEG files and web slices embed the
-  document's matching installed ICC profile (PNG `iCCP` before IDAT, JPEG
-  APP2 sequence), atomically and with graceful fallback when unavailable.
+- **ICC preservation and export tagging** — PNG/JPEG/WebP imports preserve
+  their original profile through the native project and back into exported
+  documents, layers and web slices. System-profile fallback supports common
+  ICC/ICM names; tagging is atomic, strict on malformed payloads and a
+  graceful no-op when no profile is available.
 - **Tests**: MiniPaint launch contract (`test_minipaint_bridge`), export
   transparency behaviour (`test_export_dialog`), the MiniPaint module's
   own smoke/regression suite (`minipaint_smoke`, skips without a display),
@@ -44,6 +46,12 @@ Everything accumulated on `main` since the `v0.2.1` tag (2026-11-04).
 - `CanvasView`'s zoom/pan/fit block extracted into the widget-free
   `CanvasTransform` unit (`src/ui/canvastransform.{h,cpp}`), covered by
   `test_canvas_transform`.
+- **Healing/Retouch performance** — one stable snapshot/detach per stroke,
+  in-place premultiplied processing and patch-only preview restoration
+  replace full-layer copies on every pointer event. Tests prove output
+  remains pixel-identical for all six retouch modes and healing.
+- **Multi-stop and conical gradients** are now available in the normal
+  shape inspector, not only in advanced mode.
 
 ### Fixed
 
@@ -54,6 +62,10 @@ Everything accumulated on `main` since the `v0.2.1` tag (2026-11-04).
 - Duplicated scale entries accumulating in the export dialog's scale combo.
 - MacOS-safe handling of a disabled transparency toggle (state preserved
   across JPEG round-trips).
+- Marquee selection on rotated/sheared image layers now follows the actual
+  document-space shape instead of collapsing to an axis-aligned bbox.
+- Layer Comp undo restores properties through `Document` setters and emits
+  the required change notifications instead of assigning fields silently.
 
 ## [0.2.1] - 2026-11-04
 
