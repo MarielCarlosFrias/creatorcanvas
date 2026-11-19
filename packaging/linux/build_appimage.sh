@@ -175,6 +175,12 @@ VERSION=$(awk '/project\(/{flag=1} flag{print} /\)/{if(flag) exit}' "$PROJECT_DI
 VERSION="${VERSION:-0.1.0}"
 OUTPUT_APPIMAGE="$BUILD_DIR/CreatorCanvas-${VERSION}-x86_64.AppImage"
 
+# AppImage tools may themselves be AppImages. Extract-and-run avoids a hard
+# FUSE dependency in containers/CI. Never leave an older artifact in place:
+# a failed deploy must not be mistaken for a successful new package.
+export APPIMAGE_EXTRACT_AND_RUN="${APPIMAGE_EXTRACT_AND_RUN:-1}"
+rm -f "$OUTPUT_APPIMAGE"
+
 if command -v linuxdeploy >/dev/null 2>&1; then
     echo "==> Running linuxdeploy..."
     LINUXDEPLOY_ARGS=(--appdir "$APPDIR" -d "$APPDIR/creatorcanvas.desktop" -i "$APPDIR/creatorcanvas.svg")
@@ -184,7 +190,8 @@ if command -v linuxdeploy >/dev/null 2>&1; then
     if command -v appimagetool >/dev/null 2>&1; then
         LINUXDEPLOY_ARGS+=(--output appimage)
     fi
-    linuxdeploy "${LINUXDEPLOY_ARGS[@]}" || true
+    linuxdeploy "${LINUXDEPLOY_ARGS[@]}" || \
+        echo ">> linuxdeploy failed; trying appimagetool directly" >&2
     if [ -f "$PROJECT_DIR/CreatorCanvas-${VERSION}-x86_64.AppImage" ]; then
         mv "$PROJECT_DIR/CreatorCanvas-${VERSION}-x86_64.AppImage" "$OUTPUT_APPIMAGE"
         echo ">> AppImage created: $OUTPUT_APPIMAGE"
@@ -197,7 +204,10 @@ if [ ! -f "$OUTPUT_APPIMAGE" ] && command -v appimagetool >/dev/null 2>&1; then
 elif [ ! -f "$OUTPUT_APPIMAGE" ] && command -v linuxdeployqt >/dev/null 2>&1; then
     linuxdeployqt "$APPDIR/creatorcanvas.desktop" -appimage
     echo ">> AppImage created with linuxdeployqt."
-elif [ ! -f "$OUTPUT_APPIMAGE" ]; then
-    echo ">> Informação: AppDir pronto em '$APPDIR' com todas as bibliotecas e plugins Qt."
-    echo "   Para gerar o arquivo final único .AppImage, utilize 'appimagetool $APPDIR'."
+fi
+
+if [ ! -f "$OUTPUT_APPIMAGE" ]; then
+    echo ">> Erro: AppImage não foi criado; nenhum artefacto antigo foi mantido." >&2
+    echo "   AppDir permanece em '$APPDIR' para diagnóstico." >&2
+    exit 1
 fi
