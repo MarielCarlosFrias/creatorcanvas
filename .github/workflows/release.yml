@@ -28,9 +28,22 @@ jobs:
 
       - name: Download ONNX Runtime (Linux)
         run: |
-          curl -fL --retry 3 https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-linux-x64-1.20.1.tgz -o /tmp/ort.tgz
+          set -euo pipefail
+          version=1.32.0
+          archive="onnxruntime-linux-x64-${version}.tgz"
+          urls=(
+            "https://sourceforge.net/projects/onnx-runtime.mirror/files/v${version}/${archive}/download"
+            "https://github.com/microsoft/onnxruntime/releases/download/v${version}/${archive}"
+          )
+          downloaded=false
+          for url in "${urls[@]}"; do
+            echo "Downloading ONNX Runtime from ${url}"
+            if curl -fL --retry 3 --retry-all-errors --connect-timeout 20 "$url" -o /tmp/ort.tgz && tar tzf /tmp/ort.tgz >/dev/null 2>&1; then downloaded=true; break; fi
+          done
+          if [ "$downloaded" != true ]; then exit 1; fi
           tar xzf /tmp/ort.tgz -C /tmp
-          mv /tmp/onnxruntime-linux-x64-1.20.1 3rdparty/onnxruntime
+          rm -rf 3rdparty/onnxruntime
+          mv "/tmp/onnxruntime-linux-x64-${version}" 3rdparty/onnxruntime
 
       - name: Download AI Model (u2netp.onnx)
         run: |
@@ -118,9 +131,25 @@ jobs:
       - name: Download ONNX Runtime (Windows)
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-win-x64-1.20.1.zip" -OutFile "$env:TEMP\ort.zip"
-          Expand-Archive -Path "$env:TEMP\ort.zip" -DestinationPath "$env:TEMP\ort"
-          Move-Item "$env:TEMP\ort\onnxruntime-win-x64-1.20.1" "3rdparty\onnxruntime"
+          $version = "1.32.0"
+          $archive = "onnxruntime-win-x64-$version.zip"
+          $urls = @("https://sourceforge.net/projects/onnx-runtime.mirror/files/v$version/$archive/download", "https://github.com/microsoft/onnxruntime/releases/download/v$version/$archive")
+          $downloaded = $false
+          foreach ($url in $urls) {
+            try {
+              Write-Host "Downloading ONNX Runtime from $url"
+              Invoke-WebRequest -Uri $url -OutFile "$env:TEMP\ort.zip" -UseBasicParsing -ErrorAction Stop
+              Remove-Item "$env:TEMP\ort" -Recurse -Force -ErrorAction SilentlyContinue
+              Expand-Archive -Path "$env:TEMP\ort.zip" -DestinationPath "$env:TEMP\ort" -Force -ErrorAction Stop
+              if (-not (Test-Path "$env:TEMP\ort\onnxruntime-win-x64-$version\lib\onnxruntime.dll")) { throw "invalid ONNX Runtime archive" }
+              $downloaded = $true
+              break
+            }
+            catch { Write-Warning "Download failed: $($_.Exception.Message)" }
+          }
+          if (-not $downloaded) { throw "Unable to download ONNX Runtime from all mirrors" }
+          Remove-Item "3rdparty\onnxruntime" -Recurse -Force -ErrorAction SilentlyContinue
+          Move-Item "$env:TEMP\ort\onnxruntime-win-x64-$version" "3rdparty\onnxruntime"
 
       - name: Download AI Model (u2netp.onnx)
         shell: pwsh
