@@ -39,17 +39,17 @@ jobs:
       - name: Download ONNX Runtime (Linux)
         if: runner.os == 'Linux'
         run: |
-          curl -fL --retry 3 https://github.com/microsoft/onnxruntime/releases/download/v1.30.0/onnxruntime-linux-x64-1.30.0.tgz -o /tmp/ort.tgz
+          curl -fL --retry 3 https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-linux-x64-1.20.1.tgz -o /tmp/ort.tgz
           tar xzf /tmp/ort.tgz -C /tmp
-          mv /tmp/onnxruntime-linux-x64-1.30.0 3rdparty/onnxruntime
+          mv /tmp/onnxruntime-linux-x64-1.20.1 3rdparty/onnxruntime
 
       - name: Download ONNX Runtime (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri "https://github.com/microsoft/onnxruntime/releases/download/v1.30.0/onnxruntime-win-x64-1.30.0.zip" -OutFile "$env:TEMP\ort.zip"
+          Invoke-WebRequest -Uri "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-win-x64-1.20.1.zip" -OutFile "$env:TEMP\ort.zip"
           Expand-Archive -Path "$env:TEMP\ort.zip" -DestinationPath "$env:TEMP\ort"
-          Move-Item "$env:TEMP\ort\onnxruntime-win-x64-1.30.0" "3rdparty\onnxruntime"
+          Move-Item "$env:TEMP\ort\onnxruntime-win-x64-1.20.1" "3rdparty\onnxruntime"
 
       # SFML builds the bundled MiniPaint editor (Image > Edit in MiniPaint),
       # so the Windows job compiles it too via the official prebuilt SDK.

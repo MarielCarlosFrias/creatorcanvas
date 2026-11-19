@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Script to set up ONNX Runtime 1.30.0 and default AI models for CreatorCanvas
+# Script to set up ONNX Runtime 1.20.1 and default AI models for CreatorCanvas
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ONNX_DIR="${PROJECT_ROOT}/3rdparty/onnxruntime"
 MODELS_DIR="${PROJECT_ROOT}/resources/models"
 
-echo "==> Setting up ONNX Runtime 1.30.0..."
+echo "==> Setting up ONNX Runtime 1.20.1..."
 if [ -f "${ONNX_DIR}/lib/libonnxruntime.so" ]; then
     echo "    ONNX Runtime already installed at: ${ONNX_DIR}"
 else
@@ -15,13 +15,13 @@ else
     TEMP_DIR="$(mktemp -d)"
     trap 'rm -rf "${TEMP_DIR}"' EXIT
 
-    echo "    Downloading ONNX Runtime 1.30.0 for Linux x64..."
-    curl -fSL --retry 3 "https://github.com/microsoft/onnxruntime/releases/download/v1.30.0/onnxruntime-linux-x64-1.30.0.tgz" -o "${TEMP_DIR}/ort.tgz"
+    echo "    Downloading ONNX Runtime 1.20.1 for Linux x64..."
+    curl -fSL --retry 3 "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-linux-x64-1.20.1.tgz" -o "${TEMP_DIR}/ort.tgz"
     
     echo "    Extracting to 3rdparty/onnxruntime..."
     tar xzf "${TEMP_DIR}/ort.tgz" -C "${TEMP_DIR}"
     rm -rf "${ONNX_DIR}"
-    mv "${TEMP_DIR}/onnxruntime-linux-x64-1.30.0" "${ONNX_DIR}"
+    mv "${TEMP_DIR}/onnxruntime-linux-x64-1.20.1" "${ONNX_DIR}"
     echo "    ONNX Runtime installed successfully."
 fi
 
