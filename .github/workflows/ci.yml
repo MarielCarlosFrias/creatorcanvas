@@ -31,7 +31,10 @@ jobs:
 
       - name: Install build tools (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y ninja-build libsfml-dev
+        # icc-profiles-free supplies sRGB.icc and
+        # compatibleWithAdobeRGB1998.icc used by test_icc. Without an explicit
+        # dependency, ICC tests depend on whatever the hosted image contains.
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libsfml-dev icc-profiles-free
 
       - name: Download ONNX Runtime (Linux)
         if: runner.os == 'Linux'

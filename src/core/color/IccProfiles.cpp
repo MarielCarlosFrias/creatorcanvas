@@ -134,9 +134,9 @@ struct Candidate
     QLatin1StringView fileName;
 };
 
-const std::array<Candidate, 21>& profileCandidates()
+const std::array<Candidate, 22>& profileCandidates()
 {
-    static const std::array<Candidate, 21> candidates{{
+    static const std::array<Candidate, 22> candidates{{
         {ColorSpace::sRGB, QLatin1StringView("srgb.icc")},
         {ColorSpace::sRGB, QLatin1StringView("sRGB.icc")},
         {ColorSpace::sRGB, QLatin1StringView("esrgb.icc")},
@@ -144,6 +144,7 @@ const std::array<Candidate, 21>& profileCandidates()
         {ColorSpace::sRGB, QLatin1StringView("sRGB IEC61966-2.1.icm")},
         {ColorSpace::AdobeRGB, QLatin1StringView("a98.icc")},
         {ColorSpace::AdobeRGB, QLatin1StringView("AdobeRGB1998.icc")},
+        {ColorSpace::AdobeRGB, QLatin1StringView("compatibleWithAdobeRGB1998.icc")},
         {ColorSpace::AdobeRGB, QLatin1StringView("compat-a98.icc")},
         {ColorSpace::AdobeRGB, QLatin1StringView("AdobeRGB1998.icm")},
         {ColorSpace::DisplayP3, QLatin1StringView("P3.icc")},
