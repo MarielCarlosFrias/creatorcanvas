@@ -41,6 +41,11 @@ public:
     ColorSpace colorSpace() const { return m_colorSpace; }
     void setColorSpace(ColorSpace space);
 
+    /// Original ICC profile imported from the document's source image.
+    /// Preserved across project save/load and preferred when exporting.
+    QByteArray iccProfile() const { return m_iccProfile; }
+    void setIccProfile(const QByteArray& profile);
+
     AssetStore& assets() { return m_assets; }
     const AssetStore& assets() const { return m_assets; }
 
@@ -206,6 +211,7 @@ private:
     int m_height;
     int m_dpi;
     ColorSpace m_colorSpace = ColorSpace::sRGB;
+    QByteArray m_iccProfile;
     std::unique_ptr<GroupLayer> m_root;
     quint64 m_revision = 0;
     AssetStore m_assets;

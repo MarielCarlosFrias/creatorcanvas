@@ -12,7 +12,7 @@
 #include "core/serialization/ProjectFile.h"
 #include "imageio/ImageImporter.h"
 #include "imageio/DocumentExporter.h"
-#include "core/operations/LayerOperations.h"
+#include "services/LayerOperations.h"
 #include "rendering/CanvasRenderer.h"
 #include "localization/i18nservice.h"
 #include "ui/adjustmentsdialog.h"
@@ -68,6 +68,7 @@
 #include <QPushButton>
 #include <QScreen>
 #include <QSlider>
+#include <QShortcut>
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QStackedWidget>
@@ -1503,7 +1504,7 @@ void MainWindow::buildToolBars()
         addSlot({m_toolSelectAction});
 
         // Slot 2: Seleção de Pixels (M, X, W)
-        addSlot({m_toolMarqueeAction, m_toolScissorsAction, m_toolWandAction});
+        auto* slot2 = addSlot({m_toolMarqueeAction, m_toolScissorsAction, m_toolWandAction});
 
         // Slot 3: Corte / Crop (C)
         addSlot({m_toolCropAction});
@@ -1511,15 +1512,15 @@ void MainWindow::buildToolBars()
         bar->addSeparator();
 
         // Slot 4: Pintura & Preenchimento (B, Shift+G, G)
-        addSlot({m_toolPaintAction, m_toolFloodAction, m_toolGradientAction});
+        auto* slot4 = addSlot({m_toolPaintAction, m_toolFloodAction, m_toolGradientAction});
 
         // Slot 5: Retoque & Restauração (J, S, U)
-        addSlot({m_toolHealingAction, m_toolCloneAction, m_toolRetouchAction});
+        auto* slot5 = addSlot({m_toolHealingAction, m_toolCloneAction, m_toolRetouchAction});
 
         bar->addSeparator();
 
         // Slot 6: Vetores & Curvas Bézier (P, A)
-        addSlot({m_toolPenAction, m_toolVectorNodesAction});
+        auto* slot6 = addSlot({m_toolPenAction, m_toolVectorNodesAction});
 
         // Slot 7: Texto & Tipografia (Ctrl+T)
         addSlot({m_addTextAction});
@@ -1533,6 +1534,12 @@ void MainWindow::buildToolBars()
 
         // Slot 9: Conta-gotas & Amostrador (I)
         addSlot({m_toolEyedropperAction});
+
+        // Atalhos de ciclo de ferramentas (Photoshop style: Shift+M, Shift+B, Shift+J, Shift+P)
+        new QShortcut(QKeySequence(QStringLiteral("Shift+M")), this, [slot2] { slot2->cycleNextAction(); });
+        new QShortcut(QKeySequence(QStringLiteral("Shift+B")), this, [slot4] { slot4->cycleNextAction(); });
+        new QShortcut(QKeySequence(QStringLiteral("Shift+J")), this, [slot5] { slot5->cycleNextAction(); });
+        new QShortcut(QKeySequence(QStringLiteral("Shift+P")), this, [slot6] { slot6->cycleNextAction(); });
     };
 
     populateTools(m_toolsBar);
@@ -1859,6 +1866,9 @@ void MainWindow::importImage(const QString& filePath)
         if (m_autosave)
             m_autosave->discardRecovery();
         auto doc = std::make_unique<Document>(result.image.width(), result.image.height());
+        if (result.colorSpace)
+            doc->setColorSpace(*result.colorSpace);
+        doc->setIccProfile(result.iccProfile);
         attachDocument(std::move(doc));
         updateWindowTitle();
         enterEditor();
@@ -2326,10 +2336,12 @@ void MainWindow::exportImage()
         if (settings.exportSelectedLayerOnly && !settings.selectedLayerId.isNull()) {
             success = exportLayerToImage(*m_document, settings.selectedLayerId, path,
                                          settings.format, settings.quality,
-                                         settings.scale, &error);
+                                         settings.scale, &error,
+                                         settings.transparent);
         } else {
             success = exportDocumentToImage(*m_document, path, settings.format,
-                                            settings.quality, settings.scale, &error);
+                                            settings.quality, settings.scale, &error,
+                                            settings.transparent);
         }
         QGuiApplication::restoreOverrideCursor();
     }
@@ -2366,10 +2378,11 @@ void MainWindow::editSelectedLayerInMiniPaint()
     if (imageLayer->locked)
         return;
 
-    QGuiApplication::setOverrideCursor(Qt::WaitCursor);
-    QImage result = m_miniPaintBridge->editLayer(imageLayer, m_document,
-                                                  QStringLiteral("pencil"), 3.0F);
-    QGuiApplication::restoreOverrideCursor();
+    // No wait cursor: the external MiniPaint window owns the session, and the
+    // bridge keeps pumping events, so CreatorCanvas must look alive and idle
+    // (a spinner here would lie for the whole editing session).
+    const QImage result = m_miniPaintBridge->editLayer(imageLayer, m_document,
+                                                       QStringLiteral("pencil"), 3.0F);
 
     if (result.isNull())
         return;

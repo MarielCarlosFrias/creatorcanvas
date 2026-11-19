@@ -3,6 +3,8 @@
 #include <QByteArray>
 #include <QString>
 
+#include <optional>
+
 #include "ColorSpace.h"
 
 namespace cc {
@@ -14,6 +16,10 @@ namespace cc {
 
 /// Path that provided iccProfileFor() (empty when unresolved) — for logs.
 [[nodiscard]] QString iccProfilePathFor(ColorSpace space);
+
+/// Identifies a profile by comparing it with the installed profiles.
+/// Unknown/custom profiles return nullopt but remain preservable byte-for-byte.
+[[nodiscard]] std::optional<ColorSpace> colorSpaceForProfile(const QByteArray& profile);
 
 /// Extracts the embedded iCCP profile from PNG bytes (empty when absent).
 /// Exposed so tests and the importer side can read back what we wrote.
@@ -30,6 +36,18 @@ namespace cc {
 /// Embeds |profile| into a JPEG payload as APP2 "ICC_PROFILE" markers right
 /// after SOI (replacing any existing ICC markers).
 [[nodiscard]] bool embedIccProfileInJpeg(QByteArray& jpeg, const QByteArray& profile);
+
+/// WebP RIFF ICCP metadata (empty when absent).
+[[nodiscard]] QByteArray extractIccProfileFromWebp(const QByteArray& webp);
+[[nodiscard]] bool embedIccProfileInWebp(QByteArray& webp, const QByteArray& profile);
+
+/// Embeds explicit source |profile| bytes when available, otherwise resolves
+/// the installed profile matching |space|. Used by the exporters to preserve
+/// an imported document's original profile instead of silently replacing it.
+[[nodiscard]] bool tagImageFileWithProfile(const QString& path,
+                                           const QString& format,
+                                           const QByteArray& profile,
+                                           ColorSpace space);
 
 /// File-level helper: reads |path|, embeds the profile matching |space| when
 /// the payload is a PNG or JPEG and a profile is available, and writes the

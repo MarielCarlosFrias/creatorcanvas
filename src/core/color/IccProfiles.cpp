@@ -85,6 +85,38 @@ bool looksLikeJpeg(const QByteArray& bytes)
            static_cast<std::uint8_t>(bytes[1]) == 0xD8;
 }
 
+bool looksLikeWebp(const QByteArray& bytes)
+{
+    return bytes.size() >= 12 && bytes.left(4) == QByteArray("RIFF") &&
+           bytes.mid(8, 4) == QByteArray("WEBP");
+}
+
+std::uint32_t readLE32(const std::uint8_t* p)
+{
+    return static_cast<std::uint32_t>(p[0]) |
+           (static_cast<std::uint32_t>(p[1]) << 8) |
+           (static_cast<std::uint32_t>(p[2]) << 16) |
+           (static_cast<std::uint32_t>(p[3]) << 24);
+}
+
+void appendLE32(QByteArray& out, std::uint32_t value)
+{
+    out.append(static_cast<char>(value & 0xFF));
+    out.append(static_cast<char>((value >> 8) & 0xFF));
+    out.append(static_cast<char>((value >> 16) & 0xFF));
+    out.append(static_cast<char>((value >> 24) & 0xFF));
+}
+
+QByteArray webpChunk(const char type[4], const QByteArray& data)
+{
+    QByteArray chunk(type, 4);
+    appendLE32(chunk, static_cast<std::uint32_t>(data.size()));
+    chunk.append(data);
+    if ((data.size() & 1) != 0)
+        chunk.append('\0'); // RIFF chunks are padded to an even byte count
+    return chunk;
+}
+
 bool looksLikeIccProfile(const QByteArray& profile)
 {
     if (profile.size() < 128)
@@ -191,6 +223,20 @@ QByteArray iccProfileFor(ColorSpace space)
 QString iccProfilePathFor(ColorSpace space)
 {
     return resolveProfile(space).path;
+}
+
+std::optional<ColorSpace> colorSpaceForProfile(const QByteArray& profile)
+{
+    if (profile.isEmpty())
+        return std::nullopt;
+    constexpr ColorSpace spaces[] = {
+        ColorSpace::sRGB, ColorSpace::AdobeRGB, ColorSpace::DisplayP3,
+        ColorSpace::CMYK, ColorSpace::Grayscale, ColorSpace::Lab};
+    for (const ColorSpace space : spaces) {
+        if (iccProfileFor(space) == profile)
+            return space;
+    }
+    return std::nullopt;
 }
 
 QByteArray extractIccProfileFromPng(const QByteArray& png)
@@ -364,18 +410,21 @@ bool embedIccProfileInJpeg(QByteArray& jpeg, const QByteArray& profile)
 
     const auto* raw = reinterpret_cast<const std::uint8_t*>(jpeg.constData());
     std::size_t offset = 2;
+    bool sawImageData = false;
     while (offset + 4 <= static_cast<std::size_t>(jpeg.size()))
     {
         if (raw[offset] != 0xFF)
-            break;
+            return false;
         const std::uint8_t marker = raw[offset + 1];
-        if (marker == 0xDA || marker == 0xD9)
+        if (marker == 0xDA || marker == 0xD9) {
+            sawImageData = true;
             break;
+        }
         const std::uint32_t length = (static_cast<std::uint32_t>(raw[offset + 2]) << 8) |
                                      static_cast<std::uint32_t>(raw[offset + 3]);
         const std::size_t segmentEnd = offset + 2 + length;
         if (length < 2 || segmentEnd > static_cast<std::size_t>(jpeg.size()))
-            break;
+            return false;
         const char* data = jpeg.constData() + offset + 4;
         const bool isIcc = marker == 0xE2 && length >= 16 &&
                            std::strncmp(data, "ICC_PROFILE", 12) == 0;
@@ -383,17 +432,88 @@ bool embedIccProfileInJpeg(QByteArray& jpeg, const QByteArray& profile)
             body.append(jpeg.constData() + offset, static_cast<int>(segmentEnd - offset));
         offset = segmentEnd;
     }
+    if (!sawImageData)
+        return false;
     body.append(jpeg.constData() + offset, static_cast<int>(jpeg.size() - offset));
 
     jpeg = body;
     return true;
 }
 
-bool tagImageFileWithColorSpace(const QString& path, const QString& format,
-                                ColorSpace space)
+QByteArray extractIccProfileFromWebp(const QByteArray& webp)
 {
-    const QByteArray profile = iccProfileFor(space);
-    if (profile.isEmpty())
+    if (!looksLikeWebp(webp))
+        return {};
+    const auto* raw = reinterpret_cast<const std::uint8_t*>(webp.constData());
+    std::size_t offset = 12;
+    while (offset + 8 <= static_cast<std::size_t>(webp.size()))
+    {
+        const char* type = webp.constData() + offset;
+        const std::uint32_t length = readLE32(raw + offset + 4);
+        const std::size_t dataStart = offset + 8;
+        if (dataStart + length > static_cast<std::size_t>(webp.size()))
+            return {};
+        if (std::strncmp(type, "ICCP", 4) == 0)
+            return webp.mid(static_cast<int>(dataStart), static_cast<int>(length));
+        offset = dataStart + length + (length & 1U);
+    }
+    return {};
+}
+
+bool embedIccProfileInWebp(QByteArray& webp, const QByteArray& profile)
+{
+    if (!looksLikeWebp(webp) || !looksLikeIccProfile(profile))
+        return false;
+
+    const auto* raw = reinterpret_cast<const std::uint8_t*>(webp.constData());
+    if (readLE32(raw + 4) + 8 != static_cast<std::uint32_t>(webp.size()))
+        return false; // truncated or inconsistent RIFF payload
+
+    QByteArray rebuilt = webp.left(12); // RIFF + size + WEBP
+    std::size_t offset = 12;
+    bool inserted = false;
+    while (offset + 8 <= static_cast<std::size_t>(webp.size()))
+    {
+        const char* type = webp.constData() + offset;
+        const std::uint32_t length = readLE32(raw + offset + 4);
+        const std::size_t dataStart = offset + 8;
+        if (dataStart + length > static_cast<std::size_t>(webp.size()))
+            return false;
+        const std::size_t chunkEnd = dataStart + length + (length & 1U);
+        const bool isIcc = std::strncmp(type, "ICCP", 4) == 0;
+        const bool insertBefore = std::strncmp(type, "VP8 ", 4) == 0 ||
+                                  std::strncmp(type, "VP8L", 4) == 0 ||
+                                  std::strncmp(type, "ANIM", 4) == 0;
+        if (!inserted && insertBefore)
+        {
+            rebuilt.append(webpChunk("ICCP", profile));
+            inserted = true;
+        }
+        if (!isIcc)
+        {
+            const std::size_t begin = rebuilt.size();
+            rebuilt.append(webp.constData() + offset,
+                           static_cast<int>(chunkEnd - offset));
+            if (std::strncmp(type, "VP8X", 4) == 0 && length >= 1)
+                rebuilt[static_cast<int>(begin + 8)] |= 0x20; // ICC present flag
+        }
+        offset = chunkEnd;
+    }
+    if (!inserted)
+        rebuilt.append(webpChunk("ICCP", profile));
+
+    const std::uint32_t riffSize = static_cast<std::uint32_t>(rebuilt.size() - 8);
+    for (int i = 0; i < 4; ++i)
+        rebuilt[4 + i] = static_cast<char>((riffSize >> (8 * i)) & 0xFF);
+    webp = rebuilt;
+    return true;
+}
+
+bool tagImageFileWithProfile(const QString& path, const QString& format,
+                             const QByteArray& profile, ColorSpace space)
+{
+    const QByteArray resolved = profile.isEmpty() ? iccProfileFor(space) : profile;
+    if (resolved.isEmpty())
         return false;
 
     QFile file(path);
@@ -404,9 +524,11 @@ bool tagImageFileWithColorSpace(const QString& path, const QString& format,
 
     bool embedded = false;
     if (format == QLatin1String("png") && looksLikePng(bytes))
-        embedded = embedIccProfileInPng(bytes, profile);
+        embedded = embedIccProfileInPng(bytes, resolved);
     else if (format == QLatin1String("jpeg") && looksLikeJpeg(bytes))
-        embedded = embedIccProfileInJpeg(bytes, profile);
+        embedded = embedIccProfileInJpeg(bytes, resolved);
+    else if (format == QLatin1String("webp") && looksLikeWebp(bytes))
+        embedded = embedIccProfileInWebp(bytes, resolved);
     else
         return false;
 
@@ -421,6 +543,12 @@ bool tagImageFileWithColorSpace(const QString& path, const QString& format,
     if (output.write(bytes) != bytes.size())
         return false;
     return output.commit();
+}
+
+bool tagImageFileWithColorSpace(const QString& path, const QString& format,
+                                ColorSpace space)
+{
+    return tagImageFileWithProfile(path, format, {}, space);
 }
 
 } // namespace cc

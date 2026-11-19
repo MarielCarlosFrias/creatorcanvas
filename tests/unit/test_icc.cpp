@@ -1,11 +1,14 @@
 #include <QtTest>
 #include <QFile>
 #include <QImage>
+#include <QImageWriter>
 #include <QTemporaryDir>
 
 #include "core/color/IccProfiles.h"
 #include "core/Document.h"
+#include "core/serialization/ProjectFile.h"
 #include "imageio/DocumentExporter.h"
+#include "imageio/ImageImporter.h"
 
 using namespace cc;
 
@@ -23,6 +26,10 @@ private slots:
     void testExportEmbedsProfile();
     void testProfileFallback();
     void testSliceEmbedsProfile();
+    void testWebpRoundTrip();
+    void testImportAndProjectRoundTrip();
+    void testExportPrefersImportedProfile();
+    void testMalformedMetadataIsRejected();
 };
 
 void TestIcc::testProfileResolution()
@@ -191,6 +198,112 @@ void TestIcc::testSliceEmbedsProfile()
     QVERIFY(file.open(QIODevice::ReadOnly));
     QCOMPARE(extractIccProfileFromPng(file.readAll()), profile);
     file.close();
+}
+
+void TestIcc::testWebpRoundTrip()
+{
+    const QByteArray profile = iccProfileFor(ColorSpace::sRGB);
+    if (profile.isEmpty())
+        QSKIP("no sRGB profile installed");
+    if (!QImageWriter::supportedImageFormats().contains("webp"))
+        QSKIP("WebP writer unavailable in this Qt build");
+
+    QImage image(8, 8, QImage::Format_ARGB32);
+    image.fill(QColor(10, 120, 240, 200));
+    QByteArray webp;
+    QBuffer buffer(&webp);
+    buffer.open(QIODevice::WriteOnly);
+    QVERIFY2(image.save(&buffer, "WEBP", 90), "WebP writer unavailable");
+
+    QVERIFY(extractIccProfileFromWebp(webp).isEmpty());
+    QVERIFY2(embedIccProfileInWebp(webp, profile), "WebP embed must succeed");
+    QCOMPARE(extractIccProfileFromWebp(webp), profile);
+    QImage reloaded;
+    QVERIFY(reloaded.loadFromData(webp, "WEBP"));
+    QCOMPARE(reloaded.size(), QSize(8, 8));
+}
+
+void TestIcc::testImportAndProjectRoundTrip()
+{
+    const QByteArray profile = iccProfileFor(ColorSpace::AdobeRGB);
+    if (profile.isEmpty())
+        QSKIP("no AdobeRGB profile installed");
+
+    QTemporaryDir dir;
+    QImage image(8, 8, QImage::Format_RGB32);
+    image.fill(Qt::green);
+    QByteArray png;
+    QBuffer buffer(&png);
+    buffer.open(QIODevice::WriteOnly);
+    QVERIFY(image.save(&buffer, "PNG"));
+    QVERIFY(embedIccProfileInPng(png, profile));
+    const QString path = dir.filePath(QStringLiteral("source.png"));
+    {
+        QFile out(path);
+        QVERIFY(out.open(QIODevice::WriteOnly));
+        QCOMPARE(out.write(png), static_cast<qint64>(png.size()));
+        out.close();
+    }
+
+    const ImportResult imported = importImageFromFile(path);
+    QCOMPARE(imported.status, ImportStatus::Ok);
+    QCOMPARE(imported.iccProfile, profile);
+    QVERIFY(imported.colorSpace.has_value());
+    QCOMPARE(*imported.colorSpace, ColorSpace::AdobeRGB);
+
+    Document doc(8, 8);
+    doc.setColorSpace(*imported.colorSpace);
+    doc.setIccProfile(imported.iccProfile);
+    const QString projectPath = dir.filePath(QStringLiteral("source.ccproj"));
+    QString error;
+    QVERIFY2(saveDocument(doc, projectPath, &error), qPrintable(error));
+    auto loaded = loadDocument(projectPath, &error);
+    QVERIFY2(loaded != nullptr, qPrintable(error));
+    QCOMPARE(loaded->colorSpace(), ColorSpace::AdobeRGB);
+    QCOMPARE(loaded->iccProfile(), profile);
+}
+
+void TestIcc::testExportPrefersImportedProfile()
+{
+    const QByteArray sourceProfile = iccProfileFor(ColorSpace::AdobeRGB);
+    if (sourceProfile.isEmpty())
+        QSKIP("no AdobeRGB profile installed");
+
+    QTemporaryDir dir;
+    Document doc(64, 64);
+    // A custom source profile is authoritative even if the document's
+    // working-space enum cannot describe it exactly.
+    doc.setColorSpace(ColorSpace::sRGB);
+    doc.setIccProfile(sourceProfile);
+
+    const QString path = dir.filePath(QStringLiteral("out.png"));
+    QString error;
+    QVERIFY(exportDocumentToImage(doc, path, QStringLiteral("png"), 100, 1.0, &error));
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::ReadOnly));
+    QCOMPARE(extractIccProfileFromPng(file.readAll()), sourceProfile);
+    file.close();
+}
+
+void TestIcc::testMalformedMetadataIsRejected()
+{
+    QByteArray png(32, '\0');
+    png[0] = static_cast<char>(0x89);
+    png[1] = 'P'; png[2] = 'N'; png[3] = 'G';
+    QVERIFY(extractIccProfileFromPng(png).isEmpty());
+
+    QByteArray jpeg = QByteArray::fromHex("ffd8ffe20020");
+    QVERIFY(extractIccProfileFromJpeg(jpeg).isEmpty());
+
+    QByteArray webp = QByteArrayLiteral("RIFF\x10\0\0\0WEBP");
+    QVERIFY(extractIccProfileFromWebp(webp).isEmpty());
+
+    const QByteArray profile = iccProfileFor(ColorSpace::sRGB);
+    if (profile.isEmpty())
+        QSKIP("no sRGB profile installed");
+    QVERIFY(!embedIccProfileInPng(png, profile));
+    QVERIFY(!embedIccProfileInJpeg(jpeg, profile));
+    QVERIFY(!embedIccProfileInWebp(webp, profile));
 }
 
 QTEST_MAIN(TestIcc)

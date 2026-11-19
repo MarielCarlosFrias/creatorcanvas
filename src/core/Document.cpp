@@ -29,9 +29,21 @@ void Document::setColorSpace(ColorSpace space)
 {
     if (m_colorSpace != space) {
         m_colorSpace = space;
+        // A newly selected working space invalidates the profile imported
+        // from the previous source; the exporter resolves the new one.
+        m_iccProfile.clear();
         bumpRevision();
         emit structureChanged();
     }
+}
+
+void Document::setIccProfile(const QByteArray& profile)
+{
+    if (m_iccProfile == profile)
+        return;
+    m_iccProfile = profile;
+    bumpRevision();
+    emit structureChanged();
 }
 
 Layer* Document::findLayer(const LayerId& id) const

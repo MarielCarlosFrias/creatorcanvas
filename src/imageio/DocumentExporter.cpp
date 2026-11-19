@@ -75,7 +75,7 @@ bool exportDocumentToImage(const Document& doc, const QString& filePath,
     // Colour management: embed the ICC profile of the document's colour space
     // (PNG iCCP / JPEG ICC_PROFILE) when the platform provides one. A missing
     // profile is a no-op, never a failure.
-    (void)tagImageFileWithColorSpace(filePath, format, doc.colorSpace());
+    (void)tagImageFileWithProfile(filePath, format, doc.iccProfile(), doc.colorSpace());
     return true;
 }
 
@@ -131,7 +131,7 @@ bool exportLayerToImage(const Document& doc, const QUuid& layerId,
     // Colour management: embed the ICC profile of the document's colour space
     // (PNG iCCP / JPEG ICC_PROFILE) when the platform provides one. A missing
     // profile is a no-op, never a failure.
-    (void)tagImageFileWithColorSpace(filePath, format, doc.colorSpace());
+    (void)tagImageFileWithProfile(filePath, format, doc.iccProfile(), doc.colorSpace());
     return true;
 }
 
@@ -185,7 +185,7 @@ bool exportSliceToImage(const Document& doc, const QRectF& sliceRect,
         return false;
     }
 
-    (void)tagImageFileWithColorSpace(filePath, format, doc.colorSpace());
+    (void)tagImageFileWithProfile(filePath, format, doc.iccProfile(), doc.colorSpace());
     return true;
 }
 

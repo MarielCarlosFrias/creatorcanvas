@@ -4,6 +4,10 @@
 #include <QImage>
 #include <QString>
 
+#include <optional>
+
+#include "core/color/ColorSpace.h"
+
 namespace cc {
 
 enum class ImportStatus
@@ -23,6 +27,9 @@ struct ImportResult
     QByteArray encoded;
     QString format;
     QImage image;
+    /// Embedded source profile and its recognised working space, if any.
+    QByteArray iccProfile;
+    std::optional<ColorSpace> colorSpace;
 };
 
 ImportResult importImageFromFile(const QString& filePath,

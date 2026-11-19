@@ -419,6 +419,14 @@ QJsonObject writeLayer(const Layer& layer)
         texture.insert(QStringLiteral("opacity"), text.effects.texture.opacity);
         effects.insert(QStringLiteral("texture"), texture);
 
+        QJsonObject badge;
+        badge.insert(QStringLiteral("enabled"), text.effects.badge.enabled);
+        badge.insert(QStringLiteral("color"), colorToString(text.effects.badge.color));
+        badge.insert(QStringLiteral("paddingX"), text.effects.badge.paddingX);
+        badge.insert(QStringLiteral("paddingY"), text.effects.badge.paddingY);
+        badge.insert(QStringLiteral("cornerRadius"), text.effects.badge.cornerRadius);
+        effects.insert(QStringLiteral("badge"), badge);
+
         effects.insert(QStringLiteral("hollow"), text.effects.hollow);
         effects.insert(QStringLiteral("knockout"), text.effects.knockout);
 
@@ -594,6 +602,10 @@ QJsonObject buildProjectJson(const Document& doc)
     document.insert(QStringLiteral("width"), doc.width());
     document.insert(QStringLiteral("height"), doc.height());
     document.insert(QStringLiteral("dpi"), doc.dpi());
+    document.insert(QStringLiteral("colorSpace"), static_cast<int>(doc.colorSpace()));
+    if (!doc.iccProfile().isEmpty())
+        document.insert(QStringLiteral("iccProfile"),
+                        QString::fromLatin1(doc.iccProfile().toBase64()));
     root.insert(QLatin1String(kDocumentKey), document);
 
     QJsonArray assets;
@@ -931,6 +943,14 @@ public:
         }
 
         auto doc = std::make_unique<Document>(width, height, dpi);
+        const int colorSpace = document.value(QStringLiteral("colorSpace"))
+                                   .toInt(static_cast<int>(ColorSpace::sRGB));
+        if (colorSpace >= static_cast<int>(ColorSpace::sRGB) &&
+            colorSpace <= static_cast<int>(ColorSpace::Lab))
+            doc->setColorSpace(static_cast<ColorSpace>(colorSpace));
+        if (document.contains(QStringLiteral("iccProfile")))
+            doc->setIccProfile(QByteArray::fromBase64(
+                document.value(QStringLiteral("iccProfile")).toString().toLatin1()));
 
         const QJsonArray assets = m_root.value(QLatin1String(kAssetsKey)).toArray();
         for (const QJsonValue& value : assets) {
@@ -1270,6 +1290,13 @@ private:
         text->effects.texture.enabled = texture.value(QStringLiteral("enabled")).toBool(false);
         text->effects.texture.assetId = QUuid::fromString(texture.value(QStringLiteral("assetId")).toString());
         text->effects.texture.opacity = texture.value(QStringLiteral("opacity")).toDouble(1.0);
+
+        const QJsonObject badge = effects.value(QStringLiteral("badge")).toObject();
+        text->effects.badge.enabled = badge.value(QStringLiteral("enabled")).toBool(false);
+        text->effects.badge.color = colorFromString(badge.value(QStringLiteral("color")).toString(QStringLiteral("#b4000000")));
+        text->effects.badge.paddingX = badge.value(QStringLiteral("paddingX")).toDouble(14.0);
+        text->effects.badge.paddingY = badge.value(QStringLiteral("paddingY")).toDouble(8.0);
+        text->effects.badge.cornerRadius = badge.value(QStringLiteral("cornerRadius")).toDouble(8.0);
 
         text->effects.hollow = effects.value(QStringLiteral("hollow")).toBool(false);
         text->effects.knockout = effects.value(QStringLiteral("knockout")).toBool(false);

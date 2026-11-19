@@ -1,5 +1,7 @@
 #include "ImageImporter.h"
 
+#include "core/color/IccProfiles.h"
+
 #include <QFile>
 
 namespace cc {
@@ -77,6 +79,16 @@ ImportResult importImageFromFile(const QString& filePath,
                 .arg(pixels / (1024.0 * 1024.0), 0, 'f', 1);
         return result;
     }
+
+    // Preserve the source profile verbatim. Recognition only chooses the
+    // initial working space; an unknown custom profile still round-trips.
+    if (result.format == QLatin1String("png"))
+        result.iccProfile = extractIccProfileFromPng(result.encoded);
+    else if (result.format == QLatin1String("jpeg"))
+        result.iccProfile = extractIccProfileFromJpeg(result.encoded);
+    else if (result.format == QLatin1String("webp"))
+        result.iccProfile = extractIccProfileFromWebp(result.encoded);
+    result.colorSpace = colorSpaceForProfile(result.iccProfile);
 
     result.status = ImportStatus::Ok;
     return result;
