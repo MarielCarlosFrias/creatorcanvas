@@ -1,6 +1,7 @@
 #include <QtTest>
 #include <QFile>
 #include <QImage>
+#include <QColorSpace>
 #include <QImageWriter>
 #include <QTemporaryDir>
 
@@ -30,6 +31,7 @@ private slots:
     void testImportAndProjectRoundTrip();
     void testExportPrefersImportedProfile();
     void testMalformedMetadataIsRejected();
+    void testPixelConversionForExistingDocument();
 };
 
 void TestIcc::testProfileResolution()
@@ -304,6 +306,54 @@ void TestIcc::testMalformedMetadataIsRejected()
     QVERIFY(!embedIccProfileInPng(png, profile));
     QVERIFY(!embedIccProfileInJpeg(jpeg, profile));
     QVERIFY(!embedIccProfileInWebp(webp, profile));
+}
+
+void TestIcc::testPixelConversionForExistingDocument()
+{
+    const QByteArray sourceProfile = iccProfileFor(ColorSpace::AdobeRGB);
+    const QByteArray targetProfile = iccProfileFor(ColorSpace::sRGB);
+    if (sourceProfile.isEmpty() || targetProfile.isEmpty())
+        QSKIP("AdobeRGB and sRGB profiles are required");
+
+    QImage image(8, 8, QImage::Format_RGB32);
+    image.fill(QColor(160, 100, 50));
+    QByteArray encoded;
+    QBuffer buffer(&encoded);
+    buffer.open(QIODevice::WriteOnly);
+    QVERIFY(image.save(&buffer, "PNG"));
+    buffer.close();
+    QVERIFY(embedIccProfileInPng(encoded, sourceProfile));
+
+    ImportResult result;
+    result.status = ImportStatus::Ok;
+    result.format = QStringLiteral("png");
+    result.image = image;
+    result.encoded = encoded;
+    result.iccProfile = sourceProfile;
+    result.colorSpace = ColorSpace::AdobeRGB;
+
+    QVERIFY2(convertImportToColorSpace(result, targetProfile),
+             "Qt must support conversion between these installed RGB profiles");
+    QCOMPARE(result.format, QStringLiteral("png"));
+    QCOMPARE(result.iccProfile, targetProfile);
+    QVERIFY(result.image.colorSpace().isValid());
+    QCOMPARE(result.image.size(), image.size());
+    QVERIFY(result.image.pixelColor(0, 0) != image.pixelColor(0, 0));
+
+    // The encoded asset, not only the preview QImage, carries converted
+    // pixels and the target profile for subsequent AssetStore decodes.
+    QTemporaryDir dir;
+    const QString path = dir.filePath(QStringLiteral("converted.png"));
+    {
+        QFile out(path);
+        QVERIFY(out.open(QIODevice::WriteOnly));
+        QCOMPARE(out.write(result.encoded), static_cast<qint64>(result.encoded.size()));
+        out.close();
+    }
+    const ImportResult decoded = importImageFromFile(path);
+    QCOMPARE(decoded.status, ImportStatus::Ok);
+    QCOMPARE(decoded.iccProfile, targetProfile);
+    QCOMPARE(decoded.image.pixelColor(0, 0), result.image.pixelColor(0, 0));
 }
 
 QTEST_MAIN(TestIcc)

@@ -410,7 +410,7 @@ The manifest also carries the document color space, the pixel selection, and the
 - `transparentBackground` flag on `exportDocumentToImage()`/`exportLayerToImage()`: keeps the alpha channel (PNG/WebP) or flattens onto white when off — JPEG is always opaque
 - `core/color/IccProfiles.{h,cpp}` resolves installed ICC profiles (`CC_ICC_DIR` overrides the search paths) and tags exported PNG (`iCCP`, before IDAT), JPEG (`ICC_PROFILE` APP2 markers) and WebP (RIFF `ICCP`) files, including web slices. Tagging is atomic and a missing profile is a no-op
 - `ImageImporter` preserves the original embedded ICC bytes; a newly created document recognises the initial working space when possible and the native project persists both `colorSpace` and the profile. Export prefers that original profile, including custom profiles unknown to the host
-- Metadata preservation is not pixel conversion: imported pixels are not transformed between colour spaces
+- When importing into an existing document, supported profiles are converted to the document's working space with `QColorSpace`; the asset is re-encoded as PNG so subsequent decoding sees converted pixels. Unsupported profiles are preserved unchanged, never partially rewritten
 - Calls `renderDocument()` off-screen without editor overlays
 - Exporting a clipped layer applies the same mask (`renderSiblingLayers`), so the file matches the screen
 
@@ -540,7 +540,7 @@ Logs live under the OS application data directory used by `LogService` / `Settin
 
 ## 16. Known limitations
 
-- **ICC metadata preservation, not a full colour transform pipeline** — PNG/JPEG/WebP import, native-project persistence and export preserve the source profile; installed-profile fallback covers all three export formats and slices. There is still no ICC-based pixel conversion, soft proofing or display/monitor colour management.
+- **ICC conversion is import-scoped** — PNG/JPEG/WebP import, native-project persistence and export preserve the source profile; importing into an existing document also converts supported RGB profiles to its working space and re-encodes the asset. There is still no soft-proofing UI, per-layer colour-space editor or display/monitor colour management.
 - **Still images only** — no timeline or video export; that is a separate product milestone requiring a specification.
 - **Software compositor** — the renderer has per-layer caches and an `IRenderer` seam, but very large layer trees can still hitch. A real GPU/QRhi path requires validation on a native display.
 - **Adjustment commits are non-destructive by default** — the *Adjustments* dialog exposes a "Não-destrutivo (camada de ajuste)" checkbox, checked by default, and `executeApplyAdjustment()` creates/updates an `AdjustmentLayer` that renders at render time (undo/redo as a single command); unchecking it bakes a new raster asset as before. Image layers linked to an adjustment layer can be re-edited live from the image inspector (advanced mode) via `setAdjustmentParameters()`.

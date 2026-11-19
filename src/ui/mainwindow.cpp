@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 
 #include "core/document/NewDocumentSpec.h"
+#include "core/color/IccProfiles.h"
 #include "core/DocumentController.h"
 #include "core/selection/SelectionEngine.h"
 #include "core/templates/TemplateFactory.h"
@@ -1837,7 +1838,7 @@ void MainWindow::importImageViaDialog()
 void MainWindow::importImage(const QString& filePath)
 {
     QGuiApplication::setOverrideCursor(Qt::WaitCursor);
-    const auto result = importImageFromFile(filePath);
+    auto result = importImageFromFile(filePath);
     QGuiApplication::restoreOverrideCursor();
     if (result.status != ImportStatus::Ok) {
         if (!m_i18n)
@@ -1862,6 +1863,7 @@ void MainWindow::importImage(const QString& filePath)
         return;
     }
 
+    const bool importingIntoExistingDocument = m_document != nullptr;
     if (!m_document) {
         if (m_autosave)
             m_autosave->discardRecovery();
@@ -1872,6 +1874,14 @@ void MainWindow::importImage(const QString& filePath)
         attachDocument(std::move(doc));
         updateWindowTitle();
         enterEditor();
+    }
+
+    if (importingIntoExistingDocument) {
+        const QByteArray targetProfile = !m_document->iccProfile().isEmpty()
+            ? m_document->iccProfile() : iccProfileFor(m_document->colorSpace());
+        // Unsupported profiles are preserved unconverted; conversion failure
+        // must never discard or partially rewrite the imported asset.
+        (void)convertImportToColorSpace(result, targetProfile);
     }
 
     const LayerId assetId = m_document->assets().add(result.encoded, result.format);

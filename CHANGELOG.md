@@ -25,7 +25,9 @@ Everything accumulated on `main` since the `v0.2.1` tag (2026-11-04).
   their original profile through the native project and back into exported
   documents, layers and web slices. System-profile fallback supports common
   ICC/ICM names; tagging is atomic, strict on malformed payloads and a
-  graceful no-op when no profile is available.
+  graceful no-op when no profile is available. Imports into an existing
+  document convert supported RGB profiles to its working space with
+  `QColorSpace` and losslessly re-encode the converted asset.
 - **Tests**: MiniPaint launch contract (`test_minipaint_bridge`), export
   transparency behaviour (`test_export_dialog`), the MiniPaint module's
   own smoke/regression suite (`minipaint_smoke`, skips without a display),

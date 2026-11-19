@@ -36,4 +36,10 @@ ImportResult importImageFromFile(const QString& filePath,
                                  qint64 maxFileBytes = 64LL * 1024 * 1024,
                                  qint64 maxPixels = 64LL * 1024 * 1024);
 
+/// Converts an imported image into an existing document's working profile,
+/// then re-encodes the asset as PNG so later decoding sees converted pixels.
+/// Returns false without changing |result| if either profile is unsupported.
+[[nodiscard]] bool convertImportToColorSpace(ImportResult& result,
+                                              const QByteArray& targetProfile);
+
 } // namespace cc

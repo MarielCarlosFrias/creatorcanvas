@@ -2,6 +2,8 @@
 
 #include "core/color/IccProfiles.h"
 
+#include <QBuffer>
+#include <QColorSpace>
 #include <QFile>
 
 namespace cc {
@@ -92,6 +94,46 @@ ImportResult importImageFromFile(const QString& filePath,
 
     result.status = ImportStatus::Ok;
     return result;
+}
+
+bool convertImportToColorSpace(ImportResult& result, const QByteArray& targetProfile)
+{
+    if (result.status != ImportStatus::Ok || result.image.isNull() || targetProfile.isEmpty())
+        return false;
+    if (result.iccProfile == targetProfile)
+        return true;
+
+    QColorSpace source = QColorSpace::fromIccProfile(result.iccProfile);
+    if (!source.isValid())
+        source = result.image.colorSpace();
+    const QColorSpace target = QColorSpace::fromIccProfile(targetProfile);
+    if (!source.isValid() || !target.isValid())
+        return false;
+    if (source == target)
+        return true;
+
+    QImage converted = result.image;
+    converted.setColorSpace(source);
+    converted = converted.convertedToColorSpace(target);
+    if (converted.isNull())
+        return false;
+
+    // The AssetStore keeps encoded bytes, not result.image. Re-encode the
+    // converted pixels losslessly and tag them with the target profile.
+    QByteArray encoded;
+    QBuffer buffer(&encoded);
+    if (!buffer.open(QIODevice::WriteOnly) || !converted.save(&buffer, "PNG"))
+        return false;
+    buffer.close();
+    if (!embedIccProfileInPng(encoded, targetProfile))
+        return false;
+
+    result.image = std::move(converted);
+    result.encoded = std::move(encoded);
+    result.format = QStringLiteral("png");
+    result.iccProfile = targetProfile;
+    result.colorSpace = colorSpaceForProfile(targetProfile);
+    return true;
 }
 
 } // namespace cc
