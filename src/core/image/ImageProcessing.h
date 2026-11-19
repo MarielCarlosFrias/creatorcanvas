@@ -76,6 +76,12 @@ public:
                                      RetouchMode mode, int size, qreal strength);
     static QImage makeShapeSelection(const QSize& size, const QRectF& rect,
                                      bool ellipse, int feather = 0);
+    /// Rasterizes a document-space shape into a transformed layer's bitmap
+    /// space (rotation/shear included), rather than collapsing mapRect to a bbox.
+    static QImage makeTransformedShapeSelection(const QSize& size,
+                                                const QTransform& layerToDocument,
+                                                const QRectF& documentRect,
+                                                bool ellipse, int feather = 0);
     static QImage combineSelections(const QImage& base, const QImage& overlay,
                                     bool subtract);
     static QImage paintGradient(const QImage& target, const QPointF& start,

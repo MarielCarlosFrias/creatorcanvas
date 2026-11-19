@@ -98,11 +98,9 @@ void MarqueeTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const 
         const QImage bitmap = ctx.document->assets().decodedImage(img->assetId);
         if (bitmap.isNull() || bounds.isEmpty())
             return;
-        const QTransform inverse =
-            img->transform.matrix(bounds).inverted();
-        const QRectF local = inverse.mapRect(rect);
-        selection = ImageProcessing::makeShapeSelection(
-            bitmap.size(), local, m_ellipse, m_feather);
+        selection = ImageProcessing::makeTransformedShapeSelection(
+            bitmap.size(), img->transform.matrix(bounds), rect,
+            m_ellipse, m_feather);
     } else {
         selection = ImageProcessing::makeShapeSelection(
             QSize(ctx.document->width(), ctx.document->height()), rect,

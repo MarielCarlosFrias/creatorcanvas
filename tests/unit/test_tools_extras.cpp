@@ -209,6 +209,58 @@ private slots:
         QVERIFY(sel.constScanLine(15)[35] > 200); // 2ª soma
     }
 
+    void marqueeRespectsRotatedLayerGeometry()
+    {
+        Document doc(160, 140);
+        QImage bitmap(80, 60, QImage::Format_ARGB32);
+        bitmap.fill(Qt::white);
+        auto layer = makeImageLayer(doc, 80, 60, bitmap);
+        layer->transform.position = QPointF(80, 70);
+        layer->transform.rotationDeg = 37.0;
+        layer->transform.shearX = 0.15;
+        const LayerId layerId = layer->id();
+        const AffineTransform transform = layer->transform;
+        QVERIFY(doc.addLayer(std::move(layer)));
+
+        MarqueeTool tool;
+        CommandStack history;
+        ToolContext ctx;
+        ctx.document = &doc;
+        ctx.history = &history;
+        ctx.selectedLayerId = layerId;
+
+        const QRectF wanted(55, 55, 50, 30);
+        auto press = makeMouse(QEvent::MouseButtonPress, wanted.topLeft());
+        auto release = makeMouse(QEvent::MouseButtonRelease, wanted.bottomRight());
+        tool.mousePress(&press, wanted.topLeft(), ctx);
+        tool.mouseRelease(&release, wanted.bottomRight(), ctx);
+
+        const QImage sel = doc.pixelSelection();
+        QVERIFY(!sel.isNull());
+        QCOMPARE(sel.size(), bitmap.size());
+        const QTransform forward = transform.matrix(QRectF(0, 0, 80, 60));
+        int selected = 0;
+        QPointF firstOutside;
+        bool hasOutside = false;
+        for (int y = 0; y < sel.height() && !hasOutside; ++y) {
+            for (int x = 0; x < sel.width(); ++x) {
+                if (sel.constScanLine(y)[x] <= 128)
+                    continue;
+                ++selected;
+                const QPointF docPoint = forward.map(QPointF(x + 0.5, y + 0.5));
+                if (!wanted.adjusted(-0.75, -0.75, 0.75, 0.75).contains(docPoint)) {
+                    firstOutside = docPoint;
+                    hasOutside = true;
+                    break;
+                }
+            }
+        }
+        QVERIFY(selected > 0);
+        QVERIFY2(!hasOutside,
+                 qPrintable(QStringLiteral("selected pixel outside marquee: %1,%2")
+                                .arg(firstOutside.x()).arg(firstOutside.y())));
+    }
+
     void gradientToolAppliesAndUndoes()
     {
         Document doc(32, 32);

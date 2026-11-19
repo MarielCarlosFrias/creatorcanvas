@@ -401,7 +401,8 @@ void ShapeInspector::buildUi()
     // Editor multi-stop (modo avançado; escondido por omissão).
     m_stopEditor = new GradientStopEditor(m_gradientBox);
     m_gradientForm->addRow(m_stopEditorLabel, m_stopEditor);
-    m_stopEditor->setVisible(false);
+    // Multi-stop and conical gradients are useful without advanced mode.
+    m_stopEditor->setVisible(true);
     connect(m_stopEditor, &GradientStopEditor::gradientChanged, this, [this, readGradientFromUi]() {
         if (m_loading)
             return;
@@ -617,10 +618,13 @@ void ShapeInspector::buildUi()
 
 void ShapeInspector::setAdvancedMode(bool advanced)
 {
+    Q_UNUSED(advanced);
+    // Gradient stops (including conical ramps) are part of the normal
+    // inspector, not an advanced-only feature.
     if (m_stopEditor)
-        m_stopEditor->setVisible(advanced);
+        m_stopEditor->setVisible(true);
     if (m_stopEditorLabel)
-        m_stopEditorLabel->setVisible(advanced);
+        m_stopEditorLabel->setVisible(true);
 }
 
 void ShapeInspector::commitGradient(Gradient next)

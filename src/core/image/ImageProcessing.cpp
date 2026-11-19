@@ -1261,6 +1261,56 @@ QImage ImageProcessing::makeShapeSelection(const QSize& size, const QRectF& rect
     return selection;
 }
 
+QImage ImageProcessing::makeTransformedShapeSelection(const QSize& size,
+                                                       const QTransform& layerToDocument,
+                                                       const QRectF& documentRect,
+                                                       bool ellipse, int feather)
+{
+    if (size.isEmpty())
+        return {};
+    QImage selection(size, QImage::Format_Alpha8);
+    selection.fill(0);
+    const QRectF area = documentRect.normalized();
+    if (area.isEmpty() || area.width() < 0.5 || area.height() < 0.5)
+        return selection;
+
+    const QRectF localBounds = layerToDocument.inverted().mapRect(area);
+    const QRect pixelBounds = localBounds.toAlignedRect().intersected(
+        QRect(QPoint(0, 0), size));
+    const QPointF center = area.center();
+    const qreal rx = area.width() / 2.0;
+    const qreal ry = area.height() / 2.0;
+
+    // Sample four points per local pixel through the forward matrix. This
+    // avoids QPainter's Alpha8 clipping quirks and works for every affine
+    // transform, including rotation and shear.
+    for (int y = pixelBounds.top(); y <= pixelBounds.bottom(); ++y) {
+        uchar* row = selection.scanLine(y);
+        for (int x = pixelBounds.left(); x <= pixelBounds.right(); ++x) {
+            int covered = 0;
+            for (int sy = 0; sy < 2; ++sy) {
+                for (int sx = 0; sx < 2; ++sx) {
+                    const QPointF local(x + (sx == 0 ? 0.25 : 0.75),
+                                        y + (sy == 0 ? 0.25 : 0.75));
+                    const QPointF docPoint = layerToDocument.map(local);
+                    if (ellipse) {
+                        const qreal dx = (docPoint.x() - center.x()) / rx;
+                        const qreal dy = (docPoint.y() - center.y()) / ry;
+                        if (dx * dx + dy * dy <= 1.0)
+                            ++covered;
+                    } else if (area.contains(docPoint)) {
+                        ++covered;
+                    }
+                }
+            }
+            row[x] = static_cast<uchar>(covered * 255 / 4);
+        }
+    }
+    if (feather > 0)
+        boxBlurAlpha8(selection, feather);
+    return selection;
+}
+
 QImage ImageProcessing::combineSelections(const QImage& base, const QImage& overlay,
                                           bool subtract)
 {
