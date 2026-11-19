@@ -355,6 +355,10 @@ void RetouchTool::mousePress(QMouseEvent* event, const QPointF& docPos, const To
     m_origHeight = img->naturalHeight;
     m_origTransform = img->transform;
     m_workingImage = bitmap;
+    m_strokeFormat = m_workingImage.format();
+    if (m_workingImage.format() != QImage::Format_ARGB32_Premultiplied)
+        m_workingImage = m_workingImage.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    m_strokeSnapshot = m_workingImage;
     m_active = true;
     m_currentDoc = docPos;
 
@@ -368,8 +372,8 @@ void RetouchTool::applyAt(const QPointF& fromLocal, const QPointF& toLocal, cons
 {
     if (!m_active || m_workingImage.isNull())
         return;
-    m_workingImage = ImageProcessing::retouchStroke(
-        m_workingImage, fromLocal, toLocal, m_mode, m_size, m_strength);
+    ImageProcessing::retouchStrokeInPlace(
+        m_workingImage, m_strokeSnapshot, fromLocal, toLocal, m_mode, m_size, m_strength);
     if (ctx.setLayerPreview)
         ctx.setLayerPreview(m_layerId, m_workingImage);
     if (ctx.requestUpdate)
@@ -400,10 +404,15 @@ void RetouchTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const 
         return;
     }
     m_active = false;
+    if (m_strokeFormat != QImage::Format_Invalid &&
+        m_workingImage.format() != m_strokeFormat)
+        m_workingImage = m_workingImage.convertToFormat(m_strokeFormat);
     commitImageBitmap(ctx, m_layerId, m_origAssetId, m_origWidth, m_origHeight,
                       m_origTransform, m_workingImage,
                       trOr(ctx, "canvas.command.retouch", QStringLiteral("Retouch")));
     m_workingImage = QImage();
+    m_strokeSnapshot = QImage();
+    m_strokeFormat = QImage::Format_Invalid;
     if (ctx.requestUpdate)
         ctx.requestUpdate();
 }
@@ -430,6 +439,8 @@ void RetouchTool::cancel(const ToolContext& ctx)
         ctx.clearLayerPreview();
     m_active = false;
     m_workingImage = QImage();
+    m_strokeSnapshot = QImage();
+    m_strokeFormat = QImage::Format_Invalid;
     if (ctx.requestUpdate)
         ctx.requestUpdate();
 }

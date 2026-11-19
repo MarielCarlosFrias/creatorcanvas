@@ -278,6 +278,47 @@ private slots:
         QVERIFY2(after < before, qPrintable(QStringLiteral("antes %1, depois %2").arg(before).arg(after)));
     }
 
+    void inPlaceToolsMatchReturningImplementations()
+    {
+        QImage base(48, 24, QImage::Format_ARGB32_Premultiplied);
+        for (int y = 0; y < base.height(); ++y) {
+            for (int x = 0; x < base.width(); ++x) {
+                base.setPixelColor(x, y, x < 24 ? QColor(200, 40, 40, 220)
+                                                : QColor(40, 40, 200, 180));
+            }
+        }
+
+        for (int mode = 0; mode <= 5; ++mode) {
+            const auto kind = static_cast<ImageProcessing::RetouchMode>(mode);
+            const QImage expected = ImageProcessing::retouchStroke(
+                base, QPointF(20, 12), QPointF(26, 12), kind, 12, 0.8);
+            QImage actual = base;
+            const QImage snapshot = actual;
+            ImageProcessing::retouchStrokeInPlace(
+                actual, snapshot, QPointF(20, 12), QPointF(26, 12), kind, 12, 0.8);
+            QCOMPARE(diffPixels(expected, actual), 0);
+        }
+
+        for (int y = 12; y <= 20; ++y)
+            for (int x = 12; x <= 20; ++x)
+                base.setPixelColor(x, y, QColor(220, 20, 20));
+        const QImage expected = ImageProcessing::spotHeal(
+            base, QPoint(16, 16), QPoint(48, 16), 10, 0.95);
+        QImage actual = base;
+        const QImage snapshot = actual;
+        const QRect patch = ImageProcessing::spotHealInPlace(
+            actual, snapshot, QPoint(16, 16), QPoint(48, 16), 10, 0.95);
+        QCOMPARE(diffPixels(expected, actual), 0);
+
+        // Healing preview restoration touches only the previous patch.
+        QVERIFY(patch.isValid());
+        QPainter restore(&actual);
+        restore.setCompositionMode(QPainter::CompositionMode_Source);
+        restore.drawImage(patch, snapshot, patch);
+        restore.end();
+        QCOMPARE(diffPixels(base, actual), 0);
+    }
+
     void retouchToolCommitsOneUndoStep()
     {
         Document doc(48, 24);

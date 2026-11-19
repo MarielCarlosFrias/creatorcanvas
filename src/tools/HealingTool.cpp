@@ -160,14 +160,22 @@ void HealingTool::mousePress(QMouseEvent* event, const QPointF& docPos, const To
             m_origTransform = layer->transform;
 
             m_workingImage = ctx.document->assets().decodedImage(img->assetId);
-            if (!m_workingImage.isNull())
-                m_workingImage = m_workingImage.copy(); // detached: não corrompe o cache
+            if (!m_workingImage.isNull()) {
+                m_workingImage = m_workingImage.copy(); // detached once per stroke
+                m_strokeFormat = m_workingImage.format();
+                if (m_workingImage.format() != QImage::Format_ARGB32_Premultiplied)
+                    m_workingImage = m_workingImage.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+                m_strokeSnapshot = m_workingImage;
+                m_lastHealRect = QRect();
+            }
             if (!m_workingImage.isNull()) {
                 m_isHealing = true;
                 const QTransform matrix = layer->transform.matrix(layer->contentBounds());
                 const QPoint dstLocal = matrix.inverted().map(docPos).toPoint();
 
-                m_workingImage = ImageProcessing::spotHeal(m_workingImage, dstLocal, m_srcPointLocal, m_radius, m_strength);
+                m_lastHealRect = ImageProcessing::spotHealInPlace(
+                    m_workingImage, m_strokeSnapshot, dstLocal, m_srcPointLocal,
+                    m_radius, m_strength);
 
                 if (ctx.setLayerPreview)
                     ctx.setLayerPreview(img->id(), m_workingImage);
@@ -204,9 +212,15 @@ void HealingTool::mouseMove(QMouseEvent* event, const QPointF& docPos, const Too
                 // RedEye: um clique, uma correção — o arrasto não repete.
                 m_isHealing = false;
             } else {
-                // Re-trabalha a partir da cópia original para evitar acúmulo de artefatos
-                m_workingImage = ctx.document->assets().decodedImage(img->assetId);
-                m_workingImage = ImageProcessing::spotHeal(m_workingImage, dstLocal, m_srcPointLocal, m_radius, m_strength);
+                // Restore only the previous patch, not the entire bitmap.
+                if (m_lastHealRect.isValid() && !m_strokeSnapshot.isNull()) {
+                    QPainter restore(&m_workingImage);
+                    restore.setCompositionMode(QPainter::CompositionMode_Source);
+                    restore.drawImage(m_lastHealRect, m_strokeSnapshot, m_lastHealRect);
+                }
+                m_lastHealRect = ImageProcessing::spotHealInPlace(
+                    m_workingImage, m_strokeSnapshot, dstLocal, m_srcPointLocal,
+                    m_radius, m_strength);
             }
 
             if (ctx.setLayerPreview)
@@ -235,6 +249,9 @@ void HealingTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const 
 
         if (layer && layer->type() == LayerType::Image) {
             auto* img = static_cast<ImageLayer*>(layer);
+            if (m_strokeFormat != QImage::Format_Invalid &&
+                m_workingImage.format() != m_strokeFormat)
+                m_workingImage = m_workingImage.convertToFormat(m_strokeFormat);
             const LayerId finalAssetId = ctx.document->assets().addImage(m_workingImage);
 
             if (ctx.clearLayerPreview)
@@ -262,6 +279,9 @@ void HealingTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const 
 
     m_isHealing = false;
     m_workingImage = QImage();
+    m_strokeSnapshot = QImage();
+    m_strokeFormat = QImage::Format_Invalid;
+    m_lastHealRect = QRect();
     if (ctx.requestUpdate)
         ctx.requestUpdate();
 }
@@ -315,6 +335,9 @@ void HealingTool::cancel(const ToolContext& ctx)
         ctx.clearLayerPreview();
     m_isHealing = false;
     m_workingImage = QImage();
+    m_strokeSnapshot = QImage();
+    m_strokeFormat = QImage::Format_Invalid;
+    m_lastHealRect = QRect();
     if (ctx.requestUpdate)
         ctx.requestUpdate();
 }

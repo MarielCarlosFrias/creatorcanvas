@@ -59,6 +59,10 @@ private:
     QPointF m_hoverDocPos;
     bool m_hoverValid = false;
     QImage m_workingImage;
+    /// Stable source captured once per stroke; avoids full detach per move.
+    QImage m_strokeSnapshot;
+    QImage::Format m_strokeFormat = QImage::Format_Invalid;
+    QRect m_lastHealRect;
 
     LayerId m_origAssetId;
     int m_origWidth = 0;

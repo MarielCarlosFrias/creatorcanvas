@@ -69,6 +69,11 @@ public:
     static QImage retouchStroke(const QImage& target, const QPointF& prevPoint,
                                 const QPointF& curPoint, RetouchMode mode,
                                 int size, qreal strength = 0.4);
+    /// In-place hot path: |target| is already premultiplied, |snapshot| is
+    /// the stable original for reads. No full-image detach occurs per event.
+    static void retouchStrokeInPlace(QImage& target, const QImage& snapshot,
+                                     const QPointF& prevPoint, const QPointF& curPoint,
+                                     RetouchMode mode, int size, qreal strength);
     static QImage makeShapeSelection(const QSize& size, const QRectF& rect,
                                      bool ellipse, int feather = 0);
     static QImage combineSelections(const QImage& base, const QImage& overlay,
@@ -113,6 +118,11 @@ public:
     static QImage spotHeal(const QImage& target, const QPoint& targetPoint,
                            const QPoint& sourcePoint, int radius,
                            qreal strength = 0.85);
+    /// In-place variant returning the affected rectangle for cheap preview
+    /// restoration. |target| and |snapshot| are premultiplied.
+    static QRect spotHealInPlace(QImage& target, const QImage& snapshot,
+                                 const QPoint& targetPoint, const QPoint& sourcePoint,
+                                 int radius, qreal strength = 0.85);
     static MockupWarpResult mockupWarp(const QImage& source, const QPolygonF& destinationPoints,
                                        bool freeShape = false);
 };

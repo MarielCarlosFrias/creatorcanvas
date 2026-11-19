@@ -54,7 +54,9 @@ QImage ImageProcessing::removeBackground(const QImage& source, const QPoint& see
         return source;
 
     // Converte para Format_ARGB32 para acesso direto aos canais sem premultiplicacao
-    QImage result = source.convertToFormat(QImage::Format_ARGB32);
+    QImage result = source;
+    if (result.format() != QImage::Format_ARGB32 && result.format() != QImage::Format_ARGB32_Premultiplied)
+        result = source.convertToFormat(QImage::Format_ARGB32);
     const int w = result.width();
     const int h = result.height();
 
@@ -279,8 +281,12 @@ QImage ImageProcessing::cloneStamp(const QImage& target, const QImage& source,
     if (target.isNull() || source.isNull() || radius <= 0)
         return target;
 
-    QImage result = target.convertToFormat(QImage::Format_ARGB32);
-    QImage srcConv = source.convertToFormat(QImage::Format_ARGB32);
+    QImage result = target;
+    if (result.format() != QImage::Format_ARGB32)
+        result = target.convertToFormat(QImage::Format_ARGB32);
+    QImage srcConv = source;
+    if (srcConv.format() != QImage::Format_ARGB32)
+        srcConv = source.convertToFormat(QImage::Format_ARGB32);
 
     const int clampedRadius = std::max(1, radius);
     const qreal clampedOpacity = std::clamp(opacity, 0.0, 1.0);
@@ -511,7 +517,9 @@ QImage ImageProcessing::floodFill(const QImage& source, const QPoint& seedPoint,
     if (source.isNull() || !source.rect().contains(seedPoint))
         return source;
 
-    QImage result = source.convertToFormat(QImage::Format_ARGB32);
+    QImage result = source;
+    if (result.format() != QImage::Format_ARGB32 && result.format() != QImage::Format_ARGB32_Premultiplied)
+        result = source.convertToFormat(QImage::Format_ARGB32);
     const int w = result.width();
     const int h = result.height();
 
@@ -732,7 +740,9 @@ QImage ImageProcessing::applySharpen(const QImage& source, double amount)
     if (source.isNull() || amount <= 0.0)
         return source;
 
-    QImage result = source.convertToFormat(QImage::Format_ARGB32);
+    QImage result = source;
+    if (result.format() != QImage::Format_ARGB32 && result.format() != QImage::Format_ARGB32_Premultiplied)
+        result = source.convertToFormat(QImage::Format_ARGB32);
     const QImage orig = result;
     const int w = result.width();
     const int h = result.height();
@@ -1192,7 +1202,9 @@ QImage ImageProcessing::removeRedEye(const QImage& target, const QPoint& center,
     if (target.isNull() || radius <= 0)
         return target;
 
-    QImage result = target.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    QImage result = target;
+    if (result.format() != QImage::Format_ARGB32_Premultiplied)
+        result = target.convertToFormat(QImage::Format_ARGB32_Premultiplied);
     const int w = result.width(), h = result.height();
     const int x0 = std::max(0, center.x() - radius);
     const int y0 = std::max(0, center.y() - radius);
@@ -1360,12 +1372,13 @@ QImage ImageProcessing::paintGradient(const QImage& target, const QPointF& start
     return result;
 }
 
-QImage ImageProcessing::retouchStroke(const QImage& target, const QPointF& prevPoint,
-                                      const QPointF& curPoint, RetouchMode mode,
-                                      int size, qreal strength)
+void ImageProcessing::retouchStrokeInPlace(QImage& target, const QImage& snapshot,
+                                            const QPointF& prevPoint,
+                                            const QPointF& curPoint, RetouchMode mode,
+                                            int size, qreal strength)
 {
     if (target.isNull() || size <= 0)
-        return target;
+        return;
 
     // O custo é limitado pela ÁREA DO PINCEL por passo (não pelo tamanho
     // da imagem): raio <= 200 → janela <= 400x400 por passo de traço.
@@ -1373,16 +1386,14 @@ QImage ImageProcessing::retouchStroke(const QImage& target, const QPointF& prevP
     const qreal radius = std::max<qreal>(0.5, size / 2.0);
     const qreal blend = std::clamp(strength, 0.01, 1.0);
 
-    QImage result = target.convertToFormat(QImage::Format_ARGB32_Premultiplied);
-    const QImage snapshot = result; // estabiliza leituras do próprio traço
 
     const QPointF delta = curPoint - prevPoint;
     const qreal distance = std::hypot(delta.x(), delta.y());
     const qreal stepPx = std::max<qreal>(1.0, radius * 0.35);
     const int steps = std::max(1, static_cast<int>(std::ceil(distance / stepPx)));
 
-    const int w = result.width();
-    const int h = result.height();
+    const int w = target.width();
+    const int h = target.height();
     const int iradius = static_cast<int>(std::ceil(radius));
     // Para Smudge, a origem é o ponto anterior deslocado.
     const QPointF smudgeOffset = prevPoint - curPoint;
@@ -1399,10 +1410,15 @@ QImage ImageProcessing::retouchStroke(const QImage& target, const QPointF& prevP
             continue;
 
         for (int y = y0; y <= y1; ++y) {
-            QRgb* row = reinterpret_cast<QRgb*>(result.scanLine(y));
+            QRgb* row = reinterpret_cast<QRgb*>(target.scanLine(y));
             for (int x = x0; x <= x1; ++x) {
-                const qreal d = std::hypot(qreal(x) + 0.5 - center.x(),
-                                           qreal(y) + 0.5 - center.y());
+                const qreal dx = qreal(x) + 0.5 - center.x();
+                const qreal dy = qreal(y) + 0.5 - center.y();
+                const qreal dist2 = dx * dx + dy * dy;
+                const qreal rad2 = radius * radius;
+                if (dist2 >= rad2)
+                    continue;
+                const qreal d = std::sqrt(dist2);
                 const qreal wgt = falloff(d, radius);
                 if (wgt <= 0.001)
                     continue;
@@ -1489,15 +1505,29 @@ QImage ImageProcessing::retouchStroke(const QImage& target, const QPointF& prevP
             }
         }
     }
+    
+}
+
+QImage ImageProcessing::retouchStroke(const QImage& target, const QPointF& prevPoint,
+                                       const QPointF& curPoint, RetouchMode mode,
+                                       int size, qreal strength)
+{
+    if (target.isNull() || size <= 0)
+        return target;
+    QImage result = target.format() == QImage::Format_ARGB32_Premultiplied
+        ? target : target.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    const QImage snapshot = result;
+    retouchStrokeInPlace(result, snapshot, prevPoint, curPoint, mode, size, strength);
     return result.convertToFormat(target.format());
 }
 
-QImage ImageProcessing::spotHeal(const QImage& target, const QPoint& targetPoint,
-                                 const QPoint& sourcePoint, int radius,
-                                 qreal strength)
+QRect ImageProcessing::spotHealInPlace(QImage& target, const QImage& snapshot,
+                                          const QPoint& targetPoint,
+                                          const QPoint& sourcePoint, int radius,
+                                          qreal strength)
 {
     if (target.isNull() || radius <= 0)
-        return target;
+        return {};
 
     // Custo limitado ao raio do pincel (janela (2r)²), não ao bitmap todo.
 
@@ -1505,15 +1535,13 @@ QImage ImageProcessing::spotHeal(const QImage& target, const QPoint& targetPoint
     const int iradius = std::max(1, radius);
     const qreal blend = std::clamp(strength, 0.05, 1.0);
 
-    QImage result = target.convertToFormat(QImage::Format_ARGB32_Premultiplied);
-    const QImage snapshot = result;
 
     const int x0 = std::max(0, targetPoint.x() - iradius);
     const int y0 = std::max(0, targetPoint.y() - iradius);
     const int x1 = std::min(w - 1, targetPoint.x() + iradius);
     const int y1 = std::min(h - 1, targetPoint.y() + iradius);
     if (x0 > x1 || y0 > y1)
-        return target;
+        return {};
 
     // Transferência de cor: compara médias da origem e do destino na região
     // para o patch não destoar do entorno (look de "healing").
@@ -1535,10 +1563,15 @@ QImage ImageProcessing::spotHeal(const QImage& target, const QPoint& targetPoint
     const qreal offB = count ? (dB - sB) / count : 0.0;
 
     for (int y = y0; y <= y1; ++y) {
-        QRgb* row = reinterpret_cast<QRgb*>(result.scanLine(y));
+        QRgb* row = reinterpret_cast<QRgb*>(target.scanLine(y));
         for (int x = x0; x <= x1; ++x) {
-            const qreal d = std::hypot(qreal(x - targetPoint.x()),
-                                       qreal(y - targetPoint.y()));
+            const qreal dx = qreal(x - targetPoint.x());
+            const qreal dy = qreal(y - targetPoint.y());
+            const qreal dist2 = dx * dx + dy * dy;
+            const qreal rad2 = qreal(iradius) * qreal(iradius);
+            if (dist2 >= rad2)
+                continue;
+            const qreal d = std::sqrt(dist2);
             const qreal wgt = falloff(d, iradius) * blend;
             if (wgt <= 0.001)
                 continue;
@@ -1556,6 +1589,19 @@ QImage ImageProcessing::spotHeal(const QImage& target, const QPoint& targetPoint
                 qAlpha(dst)));
         }
     }
+    return QRect(QPoint(x0, y0), QPoint(x1, y1));
+}
+
+QImage ImageProcessing::spotHeal(const QImage& target, const QPoint& targetPoint,
+                                  const QPoint& sourcePoint, int radius,
+                                  qreal strength)
+{
+    if (target.isNull() || radius <= 0)
+        return target;
+    QImage result = target.format() == QImage::Format_ARGB32_Premultiplied
+        ? target : target.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    const QImage snapshot = result;
+    spotHealInPlace(result, snapshot, targetPoint, sourcePoint, radius, strength);
     return result.convertToFormat(target.format());
 }
 

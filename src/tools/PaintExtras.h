@@ -97,6 +97,8 @@ private:
     QPointF m_prevLocal;
     QPointF m_currentDoc;
     QImage m_workingImage;
+    QImage m_strokeSnapshot;
+    QImage::Format m_strokeFormat = QImage::Format_Invalid;
     LayerId m_layerId;
     LayerId m_origAssetId;
     int m_origWidth = 0;
