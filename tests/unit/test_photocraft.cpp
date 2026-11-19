@@ -145,8 +145,11 @@ QTEST_MAIN(TestPhotocraft)
         QVERIFY(restored->visible);
         QCOMPARE(restored->transform.position, QPointF(8, 6));
 
-        // Undo volta ao estado mexido; redo reaplica a comp.
+        // Undo volta ao estado mexido; redo reaplica a comp. A reversão deve
+        // notificar os observadores, não apenas atribuir campos diretamente.
+        QSignalSpy propertySpy(&doc, &Document::layerPropertyChanged);
         history.undo();
+        QVERIFY(propertySpy.count() > 0);
         QVERIFY(!doc.findLayer(shapeId)->visible);
         history.redo();
         QVERIFY(doc.findLayer(shapeId)->visible);

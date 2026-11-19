@@ -96,11 +96,12 @@ public:
             Layer* layer = m_doc->findLayer(layerId);
             if (!layer)
                 continue;
-            layer->visible = undo.visible;
-            layer->transform.position = undo.position;
-            layer->setOpacity(undo.opacity);
-            layer->blendMode = undo.blendMode;
-            m_doc->touchLayer(layerId);
+            m_doc->setLayerVisible(layerId, undo.visible);
+            AffineTransform transform = layer->transform;
+            transform.position = undo.position;
+            m_doc->setLayerTransform(layerId, transform);
+            m_doc->setLayerOpacity(layerId, undo.opacity);
+            m_doc->setLayerBlendMode(layerId, undo.blendMode);
         }
     }
 
