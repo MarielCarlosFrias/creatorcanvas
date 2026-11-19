@@ -21,9 +21,14 @@ Everything accumulated on `main` since the `v0.2.1` tag (2026-11-04).
   live checkerboard preview, translated dimension/size labels.
 - **Export transparency** (`transparentBackground`) honoured by
   `exportDocumentToImage()` / `exportLayerToImage()`; JPEG stays opaque.
+- **ICC export tagging** — exported PNG/JPEG files and web slices embed the
+  document's matching installed ICC profile (PNG `iCCP` before IDAT, JPEG
+  APP2 sequence), atomically and with graceful fallback when unavailable.
 - **Tests**: MiniPaint launch contract (`test_minipaint_bridge`), export
-  transparency behaviour (`test_export_dialog`), and the MiniPaint module's
-  own smoke/regression suite (`minipaint_smoke`, skips without a display).
+  transparency behaviour (`test_export_dialog`), the MiniPaint module's
+  own smoke/regression suite (`minipaint_smoke`, skips without a display),
+  the widget-free viewport (`test_canvas_transform`) and ICC round trips
+  (`test_icc`).
 - **Photoshop-style flyout tool slots** — 9 consolidated slots in the toolbar.
 - Pixel grid at ultra-high zoom; auto-save deferred while the mouse is busy.
 

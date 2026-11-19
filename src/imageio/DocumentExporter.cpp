@@ -1,6 +1,7 @@
 #include "DocumentExporter.h"
 
 #include "core/Document.h"
+#include "core/color/IccProfiles.h"
 #include "rendering/CanvasRenderer.h"
 
 #include <QImage>
@@ -8,9 +9,29 @@
 
 namespace cc {
 
+namespace {
+
+/// Composites |image| onto an opaque white background.
+bool flattenOntoWhite(const QImage& image, QImage& out, QString* errorMessage)
+{
+    out = QImage(image.size(), QImage::Format_RGB32);
+    if (out.isNull()) {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Failed to allocate memory for flattening.");
+        return false;
+    }
+    out.fill(Qt::white);
+    QPainter painter(&out);
+    painter.drawImage(0, 0, image);
+    painter.end();
+    return true;
+}
+
+} // namespace
+
 bool exportDocumentToImage(const Document& doc, const QString& filePath,
                            const QString& format, int quality, double scale,
-                           QString* errorMessage)
+                           QString* errorMessage, bool transparentBackground)
 {
     const int width = qMax(1, static_cast<int>(doc.width() * scale));
     const int height = qMax(1, static_cast<int>(doc.height() * scale));
@@ -36,18 +57,12 @@ bool exportDocumentToImage(const Document& doc, const QString& filePath,
     }
 
     QImage toSave = image;
-    if (format == QLatin1String("jpeg")) {
-        // JPEG has no alpha: flatten onto white.
-        QImage flat(toSave.size(), QImage::Format_RGB32);
-        if (flat.isNull()) {
-            if (errorMessage)
-                *errorMessage = QStringLiteral("Failed to allocate memory for JPEG flattening.");
+    if (format == QLatin1String("jpeg") || !transparentBackground) {
+        // JPEG has no alpha: flatten onto white. A disabled transparency
+        // option flattens the same way so the file matches the preview.
+        QImage flat;
+        if (!flattenOntoWhite(toSave, flat, errorMessage))
             return false;
-        }
-        flat.fill(Qt::white);
-        QPainter p(&flat);
-        p.drawImage(0, 0, toSave);
-        p.end();
         toSave = flat;
     }
 
@@ -56,13 +71,18 @@ bool exportDocumentToImage(const Document& doc, const QString& filePath,
             *errorMessage = QStringLiteral("Could not write the image file.");
         return false;
     }
+
+    // Colour management: embed the ICC profile of the document's colour space
+    // (PNG iCCP / JPEG ICC_PROFILE) when the platform provides one. A missing
+    // profile is a no-op, never a failure.
+    (void)tagImageFileWithColorSpace(filePath, format, doc.colorSpace());
     return true;
 }
 
 bool exportLayerToImage(const Document& doc, const QUuid& layerId,
                         const QString& filePath, const QString& format,
                         int quality, double scale,
-                        QString* errorMessage)
+                        QString* errorMessage, bool transparentBackground)
 {
     const Layer* layer = doc.findLayer(layerId);
     if (!layer) {
@@ -95,17 +115,10 @@ bool exportLayerToImage(const Document& doc, const QUuid& layerId,
     }
 
     QImage toSave = image;
-    if (format == QLatin1String("jpeg")) {
-        QImage flat(toSave.size(), QImage::Format_RGB32);
-        if (flat.isNull()) {
-            if (errorMessage)
-                *errorMessage = QStringLiteral("Failed to allocate memory for JPEG flattening.");
+    if (format == QLatin1String("jpeg") || !transparentBackground) {
+        QImage flat;
+        if (!flattenOntoWhite(toSave, flat, errorMessage))
             return false;
-        }
-        flat.fill(Qt::white);
-        QPainter p(&flat);
-        p.drawImage(0, 0, toSave);
-        p.end();
         toSave = flat;
     }
 
@@ -114,6 +127,11 @@ bool exportLayerToImage(const Document& doc, const QUuid& layerId,
             *errorMessage = QStringLiteral("Could not write the image file.");
         return false;
     }
+
+    // Colour management: embed the ICC profile of the document's colour space
+    // (PNG iCCP / JPEG ICC_PROFILE) when the platform provides one. A missing
+    // profile is a no-op, never a failure.
+    (void)tagImageFileWithColorSpace(filePath, format, doc.colorSpace());
     return true;
 }
 
@@ -166,6 +184,8 @@ bool exportSliceToImage(const Document& doc, const QRectF& sliceRect,
             *errorMessage = QStringLiteral("Could not write the slice image file.");
         return false;
     }
+
+    (void)tagImageFileWithColorSpace(filePath, format, doc.colorSpace());
     return true;
 }
 

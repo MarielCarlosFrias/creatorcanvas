@@ -34,6 +34,7 @@ cc_add_test(test_transform unit/test_transform.cpp
 cc_add_test(test_textbox unit/test_textbox.cpp)
 cc_add_test(test_effects unit/test_effects.cpp)
 cc_add_test(test_export unit/test_export.cpp)
+cc_add_test(test_icc unit/test_icc.cpp)
 cc_add_test(test_autosave      unit/test_autosave.cpp)
 cc_add_test(test_snap unit/test_snap.cpp)
 cc_add_test(test_image_processing unit/test_image_processing.cpp)

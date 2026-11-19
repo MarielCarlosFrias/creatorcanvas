@@ -408,6 +408,7 @@ The manifest also carries the document color space, the pixel selection, and the
 - PNG (lossless), JPEG (flattened onto background), WebP
 - Scale multiplier and JPEG/WebP quality
 - `transparentBackground` flag on `exportDocumentToImage()`/`exportLayerToImage()`: keeps the alpha channel (PNG/WebP) or flattens onto white when off — JPEG is always opaque
+- `core/color/IccProfiles.{h,cpp}` resolves installed ICC profiles (`CC_ICC_DIR` overrides the search paths) and tags exported PNG (`iCCP`, before IDAT) and JPEG (`ICC_PROFILE` APP2 markers) files, including web slices. Tagging is atomic and a missing profile is a no-op; this is export metadata, not a colour transform engine
 - Calls `renderDocument()` off-screen without editor overlays
 - Exporting a clipped layer applies the same mask (`renderSiblingLayers`), so the file matches the screen
 
@@ -430,7 +431,7 @@ Batch runs over many files at once are driven by `BatchDialog` (UI layer), which
 
 ## 12. Testing & Verification
 
-**40** QTest executables in `tests/CMakeLists.txt` (all run with `QT_QPA_PLATFORM=offscreen`), in registration order:
+**45** test executables/targets in `tests/CMakeLists.txt` (all run with `QT_QPA_PLATFORM=offscreen`), in registration order:
 
 1. `test_settings` — preferences persistence
 2. `test_i18n` — catalogs, key symmetry, fallback, and a **source scan** that fails if any `t("section", "key")` used in `src/` is missing from either catalog (regression: the status bar showed the raw key `editor.canvas.status.paintHelp`)
@@ -537,7 +538,7 @@ Logs live under the OS application data directory used by `LogService` / `Settin
 
 ## 16. Known limitations
 
-- **No ICC profile pipeline** — the document and layers *model* a color space (`sRGB`, Adobe RGB, Display P3, CMYK, Grayscale, Lab) and the renderer converts when `isColorConversionSupported()` allows it, but there is no ICC profile loading or colour management engine.
+- **ICC is export metadata, not a full colour pipeline** — exported PNG/JPEG files (and web slices) embed the matching installed ICC profile, with `test_icc` covering round trips, large profiles and fallback. There is still no ICC-based pixel conversion, profile import into the document, soft proofing or display/monitor colour management.
 - **Still images only** — no timeline or video export.
 - **Software compositor, no general cache** — every paint of a dirty document walks the full tree (masked image layers have transient caches); large documents will hitch.
 - **Adjustment commits are non-destructive by default** — the *Adjustments* dialog exposes a "Não-destrutivo (camada de ajuste)" checkbox, checked by default, and `executeApplyAdjustment()` creates/updates an `AdjustmentLayer` that renders at render time (undo/redo as a single command); unchecking it bakes a new raster asset as before. Image layers linked to an adjustment layer can be re-edited live from the image inspector (advanced mode) via `setAdjustmentParameters()`.

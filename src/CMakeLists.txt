@@ -81,6 +81,8 @@ add_library(cc_core STATIC
     core/image/ImageHistogram.cpp
     core/color/ColorSpace.h
     core/color/ColorSpace.cpp
+    core/color/IccProfiles.h
+    core/color/IccProfiles.cpp
     imageio/ImageImporter.h
     imageio/ImageImporter.cpp
     imageio/DocumentExporter.h
