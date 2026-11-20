@@ -104,7 +104,7 @@ QString MiniPaintBridge::resolveExecutable() const
         for (const QString& entry : pathEntries)
         {
             const QString candidate = QDir(entry).filePath(name);
-            if (QFileInfo::isFile(candidate))
+            if (QFileInfo(candidate).isFile())
                 return candidate;
         }
 #endif
