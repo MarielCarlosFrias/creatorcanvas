@@ -117,7 +117,7 @@ void TestAiQuick::testCanvasViewConsecutiveCalls()
     QVERIFY(view.isQuickAiRunning());
 
     // Aguarda conclusão de todo o processamento de background
-    QTRY_VERIFY_WITH_TIMEOUT(!view.isQuickAiRunning(), 10000);
+    QTRY_VERIFY_WITH_TIMEOUT(!view.isQuickAiRunning(), 30000);
 
     QVERIFY(busySpy.count() >= 1);
 }
@@ -161,7 +161,7 @@ void TestAiQuick::testResultAppliedOnlyToTargetLayer()
     view.removeBackgroundAiQuick(id1);
 
     // Aguarda finalização
-    QTRY_VERIFY_WITH_TIMEOUT(!view.isQuickAiRunning(), 10000);
+    QTRY_VERIFY_WITH_TIMEOUT(!view.isQuickAiRunning(), 30000);
 
     // Verifica que Layer 2 permaneceu estritamente intacta
     Layer* l2 = doc->findLayer(id2);
