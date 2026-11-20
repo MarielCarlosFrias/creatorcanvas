@@ -103,7 +103,7 @@ jobs:
         shell: bash
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
-            cmake --build --preset ${{ matrix.preset }} --config Debug --parallel 2
+            cmake --build --preset ${{ matrix.preset }} --config Debug --parallel 1 --verbose
           else
             cmake --build --preset ${{ matrix.preset }}
           fi
