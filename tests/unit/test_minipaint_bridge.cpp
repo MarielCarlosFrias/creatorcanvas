@@ -101,6 +101,9 @@ bool TestMiniPaintBridge::makeStub()
 
 void TestMiniPaintBridge::initTestCase()
 {
+#if defined(Q_OS_WIN)
+    QSKIP("The bridge contract stub is covered on POSIX; Windows uses the real executable");
+#endif
     QVERIFY(m_dir.isValid());
     m_argsFile = QDir(m_dir.path()).filePath(QStringLiteral("args.txt"));
     m_sourcePng = QDir(m_dir.path()).filePath(QStringLiteral("edited.png"));
