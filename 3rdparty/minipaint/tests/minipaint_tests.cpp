@@ -70,7 +70,9 @@ void testRegionCompositingMatchesFull()
     for (int trial = 0; trial < 50; ++trial)
     {
         std::vector<minipaint::Layer> layers;
-        const sf::Vector2u canvasSize{40 + (nextByte() % 60), 40 + (nextByte() % 60)};
+        const sf::Vector2u canvasSize{
+            40U + static_cast<unsigned int>(nextByte() % 60U),
+            40U + static_cast<unsigned int>(nextByte() % 60U)};
         const int layerCount = 1 + (nextByte() % 4);
 
         for (int i = 0; i < layerCount; ++i)
