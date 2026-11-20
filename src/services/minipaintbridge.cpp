@@ -95,6 +95,19 @@ QString MiniPaintBridge::resolveExecutable() const
         {
             return found;
         }
+#if defined(Q_OS_WIN)
+        // QStandardPaths may only consider PATHEXT executables. Tests and
+        // developer setups can expose a command script, so inspect PATH
+        // explicitly as a fallback for .cmd/.bat launchers.
+        const QStringList pathEntries =
+            qEnvironmentVariable("PATH").split(u';', Qt::SkipEmptyParts);
+        for (const QString& entry : pathEntries)
+        {
+            const QString candidate = QDir(entry).filePath(name);
+            if (QFileInfo::isFile(candidate))
+                return candidate;
+        }
+#endif
     }
 
     return QString();
