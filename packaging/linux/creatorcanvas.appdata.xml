@@ -21,6 +21,11 @@
   <url type="homepage">https://github.com/MarielCarlosFrias/creatorcanvas</url>
   <content_rating type="oars-1.0"/>
   <releases>
+    <release version="0.2.2" date="2026-11-20">
+      <description><p>Stabilization release: reliable image adjustments and
+      canvas zoom, resilient ONNX Runtime packaging, MiniPaint integration
+      fixes, and cross-platform CI hardening.</p></description>
+    </release>
     <release version="0.2.1" date="2026-11-04">
       <description><p>M21–M23 feature work and hardening: clipping masks
       (also inside groups), perspective mockups with free-form mode, pen

@@ -6,7 +6,13 @@ All notable changes to CreatorCanvas are documented here. The format follows
 
 ## [Unreleased]
 
-Everything accumulated on `main` since the `v0.2.1` tag (2026-11-04).
+Changes after `v0.2.2`.
+
+## [0.2.2] - 2026-11-20
+
+Stabilization release: reliable image adjustments and canvas zoom, resilient
+ONNX Runtime packaging, MiniPaint integration fixes, and cross-platform CI
+hardening.
 
 ### Added
 
@@ -88,7 +94,8 @@ perspective, and color adjustments.
 Initial release: layers, image import, text, shapes, presets, undo/redo,
 export.
 
-[Unreleased]: https://github.com/MarielCarlosFrias/creatorcanvas/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/MarielCarlosFrias/creatorcanvas/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/MarielCarlosFrias/creatorcanvas/releases/tag/v0.2.2
 [0.2.1]: https://github.com/MarielCarlosFrias/creatorcanvas/releases/tag/v0.2.1
 [0.2.0]: https://github.com/MarielCarlosFrias/creatorcanvas/releases/tag/v0.2.0
 [0.1.0]: https://github.com/MarielCarlosFrias/creatorcanvas/releases/tag/v0.1.0
