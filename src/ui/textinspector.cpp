@@ -1321,10 +1321,10 @@ void TextInspector::onPathLinkChanged(int index)
     if (index < 0 || !editingLayer(&layer) || !m_history || !m_pathCombo)
         return;
 
-    const QString data = m_pathCombo->itemData(index).toString();
+    const QString pathData = m_pathCombo->itemData(index).toString();
     std::optional<LayerId> newPath;
-    if (!data.isEmpty()) {
-        const QUuid parsed(data);
+    if (!pathData.isEmpty()) {
+        const QUuid parsed(pathData);
         if (!parsed.isNull())
             newPath = parsed;
     }

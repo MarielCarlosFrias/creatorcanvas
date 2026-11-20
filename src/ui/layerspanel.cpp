@@ -188,8 +188,8 @@ protected:
     void dropEvent(QDropEvent* event) override
     {
         if (event->mimeData()->hasFormat(QStringLiteral("application/x-creatorcanvas-layer-id"))) {
-            const QByteArray data = event->mimeData()->data(QStringLiteral("application/x-creatorcanvas-layer-id"));
-            const LayerId draggedId = QUuid::fromString(QString::fromUtf8(data));
+            const QByteArray mimeData = event->mimeData()->data(QStringLiteral("application/x-creatorcanvas-layer-id"));
+            const LayerId draggedId = QUuid::fromString(QString::fromUtf8(mimeData));
 
             const QPoint pos = event->position().toPoint();
             QListWidgetItem* targetItem = itemAt(pos);
@@ -1320,8 +1320,8 @@ void LayersPanel::setSelectedLayer(const LayerId& id)
     // o movimento parecia arrastar objetos que já não deviam estar no grupo.
     m_list->clearSelection();
     for (int row = 0; row < m_list->count(); ++row) {
-        const QVariant data = m_list->item(row)->data(Qt::UserRole);
-        if (data.value<LayerId>() == id) {
+        const QVariant itemData = m_list->item(row)->data(Qt::UserRole);
+        if (itemData.value<LayerId>() == id) {
             m_list->setCurrentRow(row);
             return;
         }
