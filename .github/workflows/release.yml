@@ -132,24 +132,18 @@ jobs:
         shell: pwsh
         run: |
           $version = "1.32.0"
-          $archive = "onnxruntime-win-x64-$version.zip"
-          $urls = @("https://sourceforge.net/projects/onnx-runtime.mirror/files/v$version/$archive/download", "https://github.com/microsoft/onnxruntime/releases/download/v$version/$archive")
-          $downloaded = $false
-          foreach ($url in $urls) {
-            try {
-              Write-Host "Downloading ONNX Runtime from $url"
-              Invoke-WebRequest -Uri $url -OutFile "$env:TEMP\ort.zip" -UseBasicParsing -ErrorAction Stop
-              Remove-Item "$env:TEMP\ort" -Recurse -Force -ErrorAction SilentlyContinue
-              Expand-Archive -Path "$env:TEMP\ort.zip" -DestinationPath "$env:TEMP\ort" -Force -ErrorAction Stop
-              if (-not (Test-Path "$env:TEMP\ort\onnxruntime-win-x64-$version\lib\onnxruntime.dll")) { throw "invalid ONNX Runtime archive" }
-              $downloaded = $true
-              break
-            }
-            catch { Write-Warning "Download failed: $($_.Exception.Message)" }
-          }
-          if (-not $downloaded) { throw "Unable to download ONNX Runtime from all mirrors" }
+          $pkg = "$env:TEMP\onnxruntime.nupkg"
+          $root = "$env:TEMP\onnxruntime-nuget"
+          Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime/$version" -OutFile $pkg -UseBasicParsing
+          Remove-Item $root -Recurse -Force -ErrorAction SilentlyContinue
+          Expand-Archive -Path $pkg -DestinationPath $root -Force
+          $native = Join-Path $root "runtimes\win-x64\native"
+          $include = Join-Path $root "build\native\include"
+          if (-not (Test-Path "$native\onnxruntime.dll") -or -not (Test-Path "$native\onnxruntime.lib") -or -not (Test-Path "$include\onnxruntime_cxx_api.h")) { throw "NuGet package lacks the required ONNX Runtime files" }
           Remove-Item "3rdparty\onnxruntime" -Recurse -Force -ErrorAction SilentlyContinue
-          Move-Item "$env:TEMP\ort\onnxruntime-win-x64-$version" "3rdparty\onnxruntime"
+          New-Item -ItemType Directory -Force -Path "3rdparty\onnxruntime\lib", "3rdparty\onnxruntime\include" | Out-Null
+          Copy-Item "$native\*" "3rdparty\onnxruntime\lib" -Force
+          Copy-Item "$include\*" "3rdparty\onnxruntime\include" -Recurse -Force
 
       - name: Download AI Model (u2netp.onnx)
         shell: pwsh
