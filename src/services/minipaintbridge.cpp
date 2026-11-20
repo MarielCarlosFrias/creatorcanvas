@@ -58,6 +58,7 @@ QString MiniPaintBridge::resolveExecutable() const
 #if defined(Q_OS_WIN)
     const QStringList names = {
         QStringLiteral("minipaint-standalone.exe"),
+        QStringLiteral("minipaint-standalone.cmd"),
         QStringLiteral("minipaint-standalone")
     };
 #else
@@ -203,7 +204,20 @@ QImage MiniPaintBridge::editLayer(ImageLayer* layer,
 
     QProcess process;
     process.setProcessChannelMode(QProcess::SeparateChannels);
-    process.start(m_executablePath, args);
+    QString program = m_executablePath;
+    QStringList processArgs = args;
+#if defined(Q_OS_WIN)
+    // The Windows bridge test uses a .cmd stub. Batch files must be launched
+    // through cmd.exe; real .exe installations keep the direct fast path.
+    if (m_executablePath.endsWith(QStringLiteral(".cmd"), Qt::CaseInsensitive) ||
+        m_executablePath.endsWith(QStringLiteral(".bat"), Qt::CaseInsensitive))
+    {
+        program = QStringLiteral("cmd.exe");
+        processArgs = {QStringLiteral("/C"), m_executablePath};
+        processArgs += args;
+    }
+#endif
+    process.start(program, processArgs);
 
     if (!process.waitForStarted(5000))
     {

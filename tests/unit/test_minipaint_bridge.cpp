@@ -50,11 +50,33 @@ void TestMiniPaintBridge::unsetEnv(const QByteArray& name)
 
 bool TestMiniPaintBridge::makeStub()
 {
-    const QString stubPath = QDir(m_dir.path()).filePath(QStringLiteral("minipaint-standalone"));
+    const QString stubName =
+#if defined(Q_OS_WIN)
+        QStringLiteral("minipaint-standalone.cmd");
+#else
+        QStringLiteral("minipaint-standalone");
+#endif
+    const QString stubPath = QDir(m_dir.path()).filePath(stubName);
     QFile stub(stubPath);
     if (!stub.open(QIODevice::WriteOnly | QIODevice::Text))
         return false;
 
+#if defined(Q_OS_WIN)
+    const QString script = QStringLiteral(
+        "@echo off\r\n"
+        "setlocal EnableDelayedExpansion\r\n"
+        "set \"out=\"\r\n"
+        ":args\r\n"
+        "if \"%~1\"==\"\" goto run\r\n"
+        "if \"!prev!\"==\"--output\" set \"out=%~1\"\r\n"
+        ">>\"%MINIPAINT_STUB_ARGS%\" echo %~1\r\n"
+        "set \"prev=%~1\"\r\n"
+        "shift\r\n"
+        "goto args\r\n"
+        ":run\r\n"
+        "if not \"!out!\"==\"\" if exist \"%MINIPAINT_STUB_PNG%\" copy /Y \"%MINIPAINT_STUB_PNG%\" \"!out!\" >nul\r\n"
+        "exit /b %MINIPAINT_STUB_EXIT%\r\n");
+#else
     const QString script = QStringLiteral(
         "#!/bin/sh\n"
         "out=''\n"
@@ -68,6 +90,7 @@ bool TestMiniPaintBridge::makeStub()
         "  cp \"$MINIPAINT_STUB_PNG\" \"$out\"\n"
         "fi\n"
         "exit ${MINIPAINT_STUB_EXIT:-0}\n");
+#endif
     stub.write(script.toUtf8());
     stub.close();
     return stub.setPermissions(QFile::ReadUser | QFile::WriteUser | QFile::ExeUser |
@@ -90,7 +113,13 @@ void TestMiniPaintBridge::initTestCase()
     QVERIFY(makeStub());
 
     m_oldPath = qgetenv("PATH");
-    setEnv("PATH", m_dir.path().toUtf8() + ":" + m_oldPath);
+    const QByteArray separator =
+#if defined(Q_OS_WIN)
+        QByteArrayLiteral(";");
+#else
+        QByteArrayLiteral(":");
+#endif
+    setEnv("PATH", m_dir.path().toUtf8() + separator + m_oldPath);
     setEnv("MINIPAINT_STUB_ARGS", m_argsFile.toUtf8());
     setEnv("MINIPAINT_STUB_PNG", m_sourcePng.toUtf8());
     setEnv("MINIPAINT_STUB_EXIT", QByteArrayLiteral("0"));
@@ -121,7 +150,7 @@ void TestMiniPaintBridge::testRoundTrip()
 
     MiniPaintBridge bridge;
     QVERIFY2(bridge.isAvailable(), "the stub must be found on PATH");
-    QCOMPARE(bridge.executablePath(), QDir(m_dir.path()).filePath(QStringLiteral("minipaint-standalone")));
+    QVERIFY(bridge.executablePath().startsWith(m_dir.path()));
 
     QFile::remove(m_argsFile);
     auto* imageLayer = static_cast<ImageLayer*>(doc.findLayer(layerId));
