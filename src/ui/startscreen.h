@@ -45,6 +45,11 @@ signals:
     void openRequested();
     void recentActivated(const QString& filePath);
     void templateRequested(int templateKind);
+    /// Estado vazio: atalhos para quem está a começar.
+    void shortcutsRequested();
+    void sampleProjectsRequested();
+    /// Abrir o navegador de fundos/texturas do pacote incluído.
+    void backgroundsRequested();
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -96,6 +101,9 @@ private:
     QLabel* m_emptyStateTitle = nullptr;
     QLabel* m_emptyStateSubtitle = nullptr;
     QLabel* m_emptyStateIcon = nullptr;
+    QPushButton* m_emptyShortcutsBtn = nullptr;
+    QPushButton* m_emptySamplesBtn = nullptr;
+    QPushButton* m_backgroundsBtn = nullptr;
     QScrollArea* m_scrollArea = nullptr;
     QHash<int, QPixmap> m_templatePreviewCache;
     QVector<QLabel*> m_templateTitleLabels;

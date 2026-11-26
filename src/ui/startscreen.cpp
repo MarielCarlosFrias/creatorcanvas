@@ -125,8 +125,19 @@ void StartScreen::buildUi()
     connect(m_customSizeBtn, &QPushButton::clicked,
             this, &StartScreen::customCreateRequested);
 
+    // Fundos e texturas do pacote incluído: o atalho mais directo para
+    // quem não sabe por onde começar.
+    m_backgroundsBtn = new QPushButton(this);
+    m_backgroundsBtn->setIcon(ThemeIcons::actionNewDocument());
+    m_backgroundsBtn->setIconSize(QSize(20, 20));
+    m_backgroundsBtn->setMinimumHeight(44);
+    m_backgroundsBtn->setObjectName(QStringLiteral("SecondaryButton"));
+    connect(m_backgroundsBtn, &QPushButton::clicked,
+            this, &StartScreen::backgroundsRequested);
+
     m_actionRow->addWidget(m_createDesignBtn);
     m_actionRow->addWidget(m_openProjectBtn);
+    m_actionRow->addWidget(m_backgroundsBtn);
     m_actionRow->addWidget(m_customSizeBtn);
     mainLayout->addLayout(m_actionRow);
 
@@ -307,17 +318,30 @@ void StartScreen::buildUi()
         QString title;
         QString desc;
         QString file;
+        // Chave i18n opcional: quando preenchida, o título/descrição vêm dos
+        // catálogos (obrigatório para entradas novas — nada de texto fixo).
+        QString titleKey;
+        QString descKey;
     };
 
     const PracticeScenario scenarios[] = {
-        { QStringLiteral("🎨"), QStringLiteral("Banner Social"), QStringLiteral("Composição YouTube / Twitch"), QStringLiteral("01_Cenario_Banner_Social.creatorcanvas") },
-        { QStringLiteral("📸"), QStringLiteral("Retoque Foto"), QStringLiteral("Remoção manchas & pele"), QStringLiteral("02_Cenario_Retoque_Foto.creatorcanvas") },
-        { QStringLiteral("✂️"), QStringLiteral("Recorte IA"), QStringLiteral("Silhuetas e stickers"), QStringLiteral("03_Cenario_Recorte_Objeto.creatorcanvas") },
-        { QStringLiteral("✒️"), QStringLiteral("Vetor & Logo"), QStringLiteral("Curvas Bézier e formas"), QStringLiteral("04_Cenario_Vetor_Logotipo.creatorcanvas") },
-        { QStringLiteral("🌐"), QStringLiteral("Web Slices"), QStringLiteral("Fatiamento e exportação"), QStringLiteral("05_Cenario_Web_Slices.creatorcanvas") },
-        { QStringLiteral("📐"), QStringLiteral("Enquadramento"), QStringLiteral("Regra dos terços & crop"), QStringLiteral("06_Cenario_Enquadramento_Crop.creatorcanvas") },
-        { QStringLiteral("✍️"), QStringLiteral("Tipografia"), QStringLiteral("Efeitos de texto e badges"), QStringLiteral("07_Cenario_Tipografia_Efeitos.creatorcanvas") },
-        { QStringLiteral("🌈"), QStringLiteral("Gradientes"), QStringLiteral("Composição e luz"), QStringLiteral("08_Cenario_Gradientes_Composicao.creatorcanvas") }
+        { QStringLiteral("🎨"), QStringLiteral("Banner Social"), QStringLiteral("Composição YouTube / Twitch"), QStringLiteral("01_Cenario_Banner_Social.creatorcanvas"), {}, {} },
+        { QStringLiteral("📸"), QStringLiteral("Retoque Foto"), QStringLiteral("Remoção manchas & pele"), QStringLiteral("02_Cenario_Retoque_Foto.creatorcanvas"), {}, {} },
+        { QStringLiteral("✂️"), QStringLiteral("Recorte IA"), QStringLiteral("Silhuetas e stickers"), QStringLiteral("03_Cenario_Recorte_Objeto.creatorcanvas"), {}, {} },
+        { QStringLiteral("✒️"), QStringLiteral("Vetor & Logo"), QStringLiteral("Curvas Bézier e formas"), QStringLiteral("04_Cenario_Vetor_Logotipo.creatorcanvas"), {}, {} },
+        { QStringLiteral("🌐"), QStringLiteral("Web Slices"), QStringLiteral("Fatiamento e exportação"), QStringLiteral("05_Cenario_Web_Slices.creatorcanvas"), {}, {} },
+        { QStringLiteral("📐"), QStringLiteral("Enquadramento"), QStringLiteral("Regra dos terços & crop"), QStringLiteral("06_Cenario_Enquadramento_Crop.creatorcanvas"), {}, {} },
+        { QStringLiteral("✍️"), QStringLiteral("Tipografia"), QStringLiteral("Efeitos de texto e badges"), QStringLiteral("07_Cenario_Tipografia_Efeitos.creatorcanvas"), {}, {} },
+        { QStringLiteral("🌈"), QStringLiteral("Gradientes"), QStringLiteral("Composição e luz"), QStringLiteral("08_Cenario_Gradientes_Composicao.creatorcanvas"), {}, {} },
+        // Modelos do pacote incluído (recursos do Starter Pack).
+        { QStringLiteral("▶️"), {}, {}, QStringLiteral("09_Cenario_Miniatura_Fundo.creatorcanvas"),
+          QStringLiteral("start.practice.packThumbnail"), QStringLiteral("start.practice.packThumbnail.desc") },
+        { QStringLiteral("🔔"), {}, {}, QStringLiteral("10_Cenario_Ecra_Final.creatorcanvas"),
+          QStringLiteral("start.practice.packEndscreen"), QStringLiteral("start.practice.packEndscreen.desc") },
+        { QStringLiteral("📱"), {}, {}, QStringLiteral("11_Cenario_Post_Textura.creatorcanvas"),
+          QStringLiteral("start.practice.packPost"), QStringLiteral("start.practice.packPost.desc") },
+        { QStringLiteral("🔥"), {}, {}, QStringLiteral("12_Cenario_Banner_Brasas.creatorcanvas"),
+          QStringLiteral("start.practice.packBanner"), QStringLiteral("start.practice.packBanner.desc") }
     };
 
     auto findScenarioPath = [](const QString& filename) -> QString {
@@ -357,12 +381,19 @@ void StartScreen::buildUi()
         textLayout->setContentsMargins(0, 0, 0, 0);
         textLayout->setSpacing(1);
 
-        auto* titleLbl = new QLabel(sc.title, card);
+        const QString title = sc.titleKey.isEmpty()
+            ? sc.title
+            : (m_i18n ? m_i18n->t("common", sc.titleKey) : sc.title);
+        const QString desc = sc.descKey.isEmpty()
+            ? sc.desc
+            : (m_i18n ? m_i18n->t("common", sc.descKey) : sc.desc);
+
+        auto* titleLbl = new QLabel(title, card);
         titleLbl->setStyleSheet(QStringLiteral("font-weight: bold; font-size: 11px; background: transparent;"));
         titleLbl->setAttribute(Qt::WA_TransparentForMouseEvents);
         textLayout->addWidget(titleLbl);
 
-        auto* descLbl = new QLabel(sc.desc, card);
+        auto* descLbl = new QLabel(desc, card);
         descLbl->setStyleSheet(QStringLiteral("color: #888; font-size: 9px; background: transparent;"));
         descLbl->setAttribute(Qt::WA_TransparentForMouseEvents);
         textLayout->addWidget(descLbl);
@@ -434,6 +465,27 @@ void StartScreen::buildUi()
     emptyLayout->addWidget(m_emptyStateIcon);
     emptyLayout->addWidget(m_emptyStateTitle);
     emptyLayout->addWidget(m_emptyStateSubtitle);
+
+    // No estado vazio (sem projetos recentes) um iniciante não tem nada a
+    // clicar: dois atalhos directos para a ajuda e para os exemplos.
+    auto* emptyLinks = new QHBoxLayout();
+    emptyLinks->setSpacing(8);
+    emptyLinks->addStretch();
+    m_emptyShortcutsBtn = new QPushButton(m_emptyStateWidget);
+    m_emptyShortcutsBtn->setObjectName(QStringLiteral("LinkButton"));
+    m_emptyShortcutsBtn->setCursor(Qt::PointingHandCursor);
+    emptyLinks->addWidget(m_emptyShortcutsBtn);
+    m_emptySamplesBtn = new QPushButton(m_emptyStateWidget);
+    m_emptySamplesBtn->setObjectName(QStringLiteral("LinkButton"));
+    m_emptySamplesBtn->setCursor(Qt::PointingHandCursor);
+    emptyLinks->addWidget(m_emptySamplesBtn);
+    emptyLinks->addStretch();
+    emptyLayout->addLayout(emptyLinks);
+
+    connect(m_emptyShortcutsBtn, &QPushButton::clicked,
+            this, &StartScreen::shortcutsRequested);
+    connect(m_emptySamplesBtn, &QPushButton::clicked,
+            this, &StartScreen::sampleProjectsRequested);
 
     m_recentStack->addWidget(m_emptyStateWidget);
     mainLayout->addWidget(m_recentStack);
@@ -605,6 +657,8 @@ void StartScreen::retranslateUi()
 
     m_createDesignBtn->setText(m_i18n->t("common", "start.createDesign"));
     m_openProjectBtn->setText(m_i18n->t("common", "start.openProject"));
+    if (m_backgroundsBtn)
+        m_backgroundsBtn->setText(m_i18n->t("editor", "pack.action.browse"));
     m_customSizeBtn->setText(m_i18n->t("common", "start.custom"));
 
     m_popularLabel->setText(m_i18n->t("common", "start.popular"));
@@ -623,6 +677,10 @@ void StartScreen::retranslateUi()
 
     m_emptyStateTitle->setText(m_i18n->t("common", "start.emptyRecents"));
     m_emptyStateSubtitle->setText(m_i18n->t("common", "start.emptyRecentsHint"));
+    if (m_emptyShortcutsBtn)
+        m_emptyShortcutsBtn->setText(m_i18n->t("common", "start.emptyShortcuts"));
+    if (m_emptySamplesBtn)
+        m_emptySamplesBtn->setText(m_i18n->t("common", "start.emptySamples"));
 }
 
 QPixmap StartScreen::templatePreview(TemplateKind kind)
