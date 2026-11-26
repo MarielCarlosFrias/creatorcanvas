@@ -6,82 +6,98 @@
     {
       "file": "poeira-1.png",
       "key": "pack.sobreposicoes.poeira-1",
-      "category": "overlay"
+      "category": "overlay",
+      "blend": "screen"
     },
     {
       "file": "poeira-2.png",
       "key": "pack.sobreposicoes.poeira-2",
-      "category": "overlay"
+      "category": "overlay",
+      "blend": "screen"
     },
     {
       "file": "poeira-3.png",
       "key": "pack.sobreposicoes.poeira-3",
-      "category": "overlay"
+      "category": "overlay",
+      "blend": "screen"
     },
     {
       "file": "poeira-4.png",
       "key": "pack.sobreposicoes.poeira-4",
-      "category": "overlay"
+      "category": "overlay",
+      "blend": "screen"
     },
     {
       "file": "poeira-5.png",
       "key": "pack.sobreposicoes.poeira-5",
-      "category": "overlay"
+      "category": "overlay",
+      "blend": "screen"
     },
     {
       "file": "poeira-6.png",
       "key": "pack.sobreposicoes.poeira-6",
-      "category": "overlay"
+      "category": "overlay",
+      "blend": "screen"
     },
     {
       "file": "grunge-1.png",
       "key": "pack.sobreposicoes.grunge-1",
-      "category": "overlay"
+      "category": "overlay",
+      "blend": "screen"
     },
     {
       "file": "grunge-2.png",
       "key": "pack.sobreposicoes.grunge-2",
-      "category": "overlay"
+      "category": "overlay",
+      "blend": "screen"
     },
     {
       "file": "grunge-3.png",
       "key": "pack.sobreposicoes.grunge-3",
-      "category": "overlay"
+      "category": "overlay",
+      "blend": "screen"
     },
     {
       "file": "grunge-4.png",
       "key": "pack.sobreposicoes.grunge-4",
-      "category": "overlay"
+      "category": "overlay",
+      "blend": "screen"
     },
     {
       "file": "grunge-5.png",
       "key": "pack.sobreposicoes.grunge-5",
-      "category": "overlay"
+      "category": "overlay",
+      "blend": "screen"
     },
     {
       "file": "grunge-6.png",
       "key": "pack.sobreposicoes.grunge-6",
-      "category": "overlay"
+      "category": "overlay",
+      "blend": "screen"
     },
     {
       "file": "grunge-7.png",
       "key": "pack.sobreposicoes.grunge-7",
-      "category": "overlay"
+      "category": "overlay",
+      "blend": "screen"
     },
     {
       "file": "grunge-8.png",
       "key": "pack.sobreposicoes.grunge-8",
-      "category": "overlay"
+      "category": "overlay",
+      "blend": "screen"
     },
     {
       "file": "grunge-9.png",
       "key": "pack.sobreposicoes.grunge-9",
-      "category": "overlay"
+      "category": "overlay",
+      "blend": "screen"
     },
     {
       "file": "grunge-10.png",
       "key": "pack.sobreposicoes.grunge-10",
-      "category": "overlay"
+      "category": "overlay",
+      "blend": "screen"
     }
   ]
 }

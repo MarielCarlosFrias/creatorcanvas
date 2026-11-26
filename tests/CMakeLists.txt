@@ -93,6 +93,8 @@ cc_add_test(test_command_palette unit/test_command_palette.cpp
             ../src/ui/actionmanager.cpp
             ../src/ui/themeicons.cpp)
 
+cc_add_test(test_pack_blend unit/test_pack_blend.cpp)
+
 cc_add_test(test_pack_store unit/test_pack_store.cpp
             ../src/ui/packbrowser.cpp)
 

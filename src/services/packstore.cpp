@@ -79,6 +79,7 @@ const QVector<PackInfo>& PackStore::packs()
             entry.file = item.value(QStringLiteral("file")).toString();
             entry.labelKey = item.value(QStringLiteral("key")).toString();
             entry.category = item.value(QStringLiteral("category")).toString();
+            entry.blend = item.value(QStringLiteral("blend")).toString();
             if (entry.file.isEmpty())
                 continue;
             entry.resource = QStringLiteral(":/packs/%1/%2").arg(info.id, entry.file);
@@ -96,6 +97,17 @@ QVector<PackItem> PackStore::allItems()
     for (const PackInfo& pack : packs())
         all.append(pack.items);
     return all;
+}
+
+PackItem PackStore::itemForResource(const QString& resource)
+{
+    for (const PackInfo& pack : packs()) {
+        for (const PackItem& item : pack.items) {
+            if (item.resource == resource)
+                return item;
+        }
+    }
+    return {};
 }
 
 QStringList PackStore::categories()

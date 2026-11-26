@@ -13,6 +13,13 @@ memory guards (undo budget, adaptive render cache).
 
 ### Added
 
+- **Pack items can declare their blend mode** — `pack.json` now accepts
+  `items[].blend` (e.g. `"screen"`), so a pack can ask for a specific
+  compositing mode without touching code. The 16 overlays declare `screen`;
+  `MainWindow::applyPackItem` reads it via
+  `PackStore::itemForResource()` instead of sniffing the file path. Covered by
+  `test_pack_blend`.
+
 - **Search in the pack browser** — with 71 resources a search field was due;
   it filters by the translated label or the manifest key and composes with the
   category filter. Covered by `test_pack_browser_search`.

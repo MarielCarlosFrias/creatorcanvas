@@ -3068,9 +3068,11 @@ void MainWindow::applyPackItem(const QString& resource, const QSize& naturalSize
     if (!imported.isNull())
         m_canvas->setSelectedLayer(imported);
 
-    // Sobreposicoes (poeira, grunge) fazem sentido por cima do conteudo com
-    // modo de mesclagem Screen: o preto da-nos transparencia visual.
-    if (hadDocument && m_document && resource.contains(QStringLiteral("/sobreposicoes/"))
+    // Itens que declaram um modo de mesclagem no manifesto (ex.:
+    // sobreposicoes com Screen) entram a cobrir a tela: o preto comporta-se
+    // como transparente. O blend vem do pack.json, nao do caminho.
+    const cc::PackItem packItem = cc::PackStore::itemForResource(resource);
+    if (hadDocument && m_document && packItem.blend == QLatin1String("screen")
         && !imported.isNull()) {
         if (Layer* layer = m_document->findLayer(imported)) {
             layer->transform.scaleX = static_cast<double>(m_document->width())

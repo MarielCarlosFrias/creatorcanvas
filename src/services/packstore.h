@@ -13,7 +13,8 @@ struct PackItem {
     QString file;      ///< nome do ficheiro dentro da pasta do pacote
     QString resource;  ///< caminho Qt do recurso (:/packs/<id>/<file>)
     QString labelKey;  ///< chave i18n (namespace "editor")
-    QString category;  ///< "background", "texture" ou "template"
+    QString category;  ///< "background", "texture", "overlay" ou "template"
+    QString blend;     ///< modo de mesclagem sugerido (vazio = Normal)
 
     QString label(const I18nService* i18n) const;
     QSize naturalSize() const;
@@ -41,6 +42,9 @@ public:
 
     /// Categorias conhecidas, para filtros de UI.
     static QStringList categories();
+
+    /// Item dono de um caminho de recurso (para reaver o blend sugerido).
+    static PackItem itemForResource(const QString& resource);
 };
 
 } // namespace cc
