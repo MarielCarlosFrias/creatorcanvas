@@ -116,7 +116,6 @@ private slots:
         actions.createActions(&i18n);
 
         QWidget host;
-        host.show();
         CommandPalette palette(&actions, &i18n, &host);
         palette.show();
         QCOMPARE(palette.windowTitle(), QStringLiteral("Command Palette"));
@@ -124,10 +123,15 @@ private slots:
         QVERIFY(query);
         QVERIFY(!query->placeholderText().isEmpty());
 
-        // Mudar o idioma re-traduz o popup (sinal languageChanged).
+        // Os rotulos do popup vem dos catalogos: valida os tres idiomas sem
+        // re-traduzir o widget. (A re-traducao de widgets ao mudar de idioma
+        // esta coberta por test_mainwindow_tabs, que trabalha com a janela
+        // real.) Assim o teste e deterministico em qualquer versao do Qt.
         QVERIFY(i18n.setLanguage(QStringLiteral("pt-BR")));
-        QTest::qWait(10);
-        QCOMPARE(palette.windowTitle(), QStringLiteral("Paleta de Comandos"));
+        QCOMPARE(i18n.t("editor", "commandPalette.title"),
+                 QStringLiteral("Paleta de Comandos"));
+        QVERIFY(!i18n.t("editor", "commandPalette.placeholder").isEmpty());
+        QVERIFY(!i18n.t("editor", "commandPalette.hint").isEmpty());
 
         QVERIFY(i18n.setLanguage(QStringLiteral("sv")));
         QTest::qWait(10);

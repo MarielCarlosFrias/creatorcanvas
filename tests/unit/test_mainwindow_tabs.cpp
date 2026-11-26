@@ -18,9 +18,12 @@
 #include <QTemporaryDir>
 #include <QLabel>
 #include <QFrame>
+#include <QKeySequence>
 #include <QPushButton>
 #include <QStatusBar>
 #include <QToolButton>
+#include <QComboBox>
+#include <QListWidget>
 
 #include "core/Document.h"
 #include "core/document/NewDocumentSpec.h"
