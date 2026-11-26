@@ -25,6 +25,8 @@ packaging/debroot/
 packaging/appimage-build/
 packaging/AppDir/
 *.AppImage
+# Pacotes gerados (build/packages/, copiados para a raiz para upload)
+*.deb
 
 # Editor / IDE
 .vscode/
