@@ -1,0 +1,87 @@
+{
+  "id": "sobreposicoes",
+  "version": 1,
+  "source": "Pack de edicao (Documentos) - ver resources/packs/README.md",
+  "items": [
+    {
+      "file": "poeira-1.png",
+      "key": "pack.sobreposicoes.poeira-1",
+      "category": "overlay"
+    },
+    {
+      "file": "poeira-2.png",
+      "key": "pack.sobreposicoes.poeira-2",
+      "category": "overlay"
+    },
+    {
+      "file": "poeira-3.png",
+      "key": "pack.sobreposicoes.poeira-3",
+      "category": "overlay"
+    },
+    {
+      "file": "poeira-4.png",
+      "key": "pack.sobreposicoes.poeira-4",
+      "category": "overlay"
+    },
+    {
+      "file": "poeira-5.png",
+      "key": "pack.sobreposicoes.poeira-5",
+      "category": "overlay"
+    },
+    {
+      "file": "poeira-6.png",
+      "key": "pack.sobreposicoes.poeira-6",
+      "category": "overlay"
+    },
+    {
+      "file": "grunge-1.png",
+      "key": "pack.sobreposicoes.grunge-1",
+      "category": "overlay"
+    },
+    {
+      "file": "grunge-2.png",
+      "key": "pack.sobreposicoes.grunge-2",
+      "category": "overlay"
+    },
+    {
+      "file": "grunge-3.png",
+      "key": "pack.sobreposicoes.grunge-3",
+      "category": "overlay"
+    },
+    {
+      "file": "grunge-4.png",
+      "key": "pack.sobreposicoes.grunge-4",
+      "category": "overlay"
+    },
+    {
+      "file": "grunge-5.png",
+      "key": "pack.sobreposicoes.grunge-5",
+      "category": "overlay"
+    },
+    {
+      "file": "grunge-6.png",
+      "key": "pack.sobreposicoes.grunge-6",
+      "category": "overlay"
+    },
+    {
+      "file": "grunge-7.png",
+      "key": "pack.sobreposicoes.grunge-7",
+      "category": "overlay"
+    },
+    {
+      "file": "grunge-8.png",
+      "key": "pack.sobreposicoes.grunge-8",
+      "category": "overlay"
+    },
+    {
+      "file": "grunge-9.png",
+      "key": "pack.sobreposicoes.grunge-9",
+      "category": "overlay"
+    },
+    {
+      "file": "grunge-10.png",
+      "key": "pack.sobreposicoes.grunge-10",
+      "category": "overlay"
+    }
+  ]
+}

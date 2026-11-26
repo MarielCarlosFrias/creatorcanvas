@@ -1,0 +1,167 @@
+{
+  "id": "texturas",
+  "version": 1,
+  "source": "Pack de edicao (Documentos) - ver resources/packs/README.md",
+  "items": [
+    {
+      "file": "grunge-paper.jpg",
+      "key": "pack.texturas.grunge-paper",
+      "category": "texture"
+    },
+    {
+      "file": "papel-pardo.jpg",
+      "key": "pack.texturas.papel-pardo",
+      "category": "texture"
+    },
+    {
+      "file": "papel-branco.jpg",
+      "key": "pack.texturas.papel-branco",
+      "category": "texture"
+    },
+    {
+      "file": "papel-liso.jpg",
+      "key": "pack.texturas.papel-liso",
+      "category": "texture"
+    },
+    {
+      "file": "papel-amassado-1.jpg",
+      "key": "pack.texturas.papel-amassado-1",
+      "category": "texture"
+    },
+    {
+      "file": "papel-amassado-2.jpg",
+      "key": "pack.texturas.papel-amassado-2",
+      "category": "texture"
+    },
+    {
+      "file": "papel-80180.jpg",
+      "key": "pack.texturas.papel-80180",
+      "category": "texture"
+    },
+    {
+      "file": "papel-manchado.jpg",
+      "key": "pack.texturas.papel-manchado",
+      "category": "texture"
+    },
+    {
+      "file": "parede-rachada.jpg",
+      "key": "pack.texturas.parede-rachada",
+      "category": "texture"
+    },
+    {
+      "file": "tapete.jpg",
+      "key": "pack.texturas.tapete",
+      "category": "texture"
+    },
+    {
+      "file": "linhas-onduladas.jpg",
+      "key": "pack.texturas.linhas-onduladas",
+      "category": "texture"
+    },
+    {
+      "file": "plastico-1.jpg",
+      "key": "pack.texturas.plastico-1",
+      "category": "texture"
+    },
+    {
+      "file": "plastico-2.jpg",
+      "key": "pack.texturas.plastico-2",
+      "category": "texture"
+    },
+    {
+      "file": "plastico-3.jpg",
+      "key": "pack.texturas.plastico-3",
+      "category": "texture"
+    },
+    {
+      "file": "textura-1932.jpg",
+      "key": "pack.texturas.textura-1932",
+      "category": "texture"
+    },
+    {
+      "file": "textura-escura.jpg",
+      "key": "pack.texturas.textura-escura",
+      "category": "texture"
+    },
+    {
+      "file": "topo-2.jpg",
+      "key": "pack.texturas.topo-2",
+      "category": "texture"
+    },
+    {
+      "file": "topo-5.jpg",
+      "key": "pack.texturas.topo-5",
+      "category": "texture"
+    },
+    {
+      "file": "topo-7.jpg",
+      "key": "pack.texturas.topo-7",
+      "category": "texture"
+    },
+    {
+      "file": "topo-9.jpg",
+      "key": "pack.texturas.topo-9",
+      "category": "texture"
+    },
+    {
+      "file": "topo-10.jpg",
+      "key": "pack.texturas.topo-10",
+      "category": "texture"
+    },
+    {
+      "file": "abstrato-vermelho.jpg",
+      "key": "pack.texturas.abstrato-vermelho",
+      "category": "texture"
+    },
+    {
+      "file": "abstrato-azul.jpg",
+      "key": "pack.texturas.abstrato-azul",
+      "category": "texture"
+    },
+    {
+      "file": "abstrato-claro.jpg",
+      "key": "pack.texturas.abstrato-claro",
+      "category": "texture"
+    },
+    {
+      "file": "textura-ondas.jpg",
+      "key": "pack.texturas.textura-ondas",
+      "category": "texture"
+    },
+    {
+      "file": "textura-25.jpg",
+      "key": "pack.texturas.textura-25",
+      "category": "texture"
+    },
+    {
+      "file": "riscos-1.jpg",
+      "key": "pack.texturas.riscos-1",
+      "category": "texture"
+    },
+    {
+      "file": "riscos-2.jpg",
+      "key": "pack.texturas.riscos-2",
+      "category": "texture"
+    },
+    {
+      "file": "riscos-3.jpg",
+      "key": "pack.texturas.riscos-3",
+      "category": "texture"
+    },
+    {
+      "file": "rasgado-1.jpg",
+      "key": "pack.texturas.rasgado-1",
+      "category": "texture"
+    },
+    {
+      "file": "rasgado-2.jpg",
+      "key": "pack.texturas.rasgado-2",
+      "category": "texture"
+    },
+    {
+      "file": "rasgado-3.jpg",
+      "key": "pack.texturas.rasgado-3",
+      "category": "texture"
+    }
+  ]
+}

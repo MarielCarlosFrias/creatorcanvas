@@ -1,6 +1,6 @@
 # Projetos de Exemplo e Prática — CreatorCanvas
 
-Esta pasta contém **8 projetos prontos no formato oficial (`.creatorcanvas`)**, criados especificamente para você praticar cada uma das ferramentas do programa de forma direta, sem precisar começar do zero.
+Esta pasta contém **12 projetos prontos no formato oficial (`.creatorcanvas`)**, criados especificamente para você praticar cada uma das ferramentas do programa de forma direta, sem precisar começar do zero.
 
 ---
 
@@ -76,3 +76,42 @@ Esta pasta contém **8 projetos prontos no formato oficial (`.creatorcanvas`)**,
   * **Painel de Camadas:** Selecione `Luz_Magenta (Screen)` ou `Luz_Ciano (Screen)`.
   * **Modos de Mesclagem:** Alterne entre **Normal**, **Screen**, **Multiply**, **Overlay** e **Color Dodge** para ver a fusão das luzes e do fundo instantaneamente.
   * **Opacidade da Camada:** Experimente dosar a intensidade de cada camada com o controle deslizante de opacidade.
+
+---
+
+## Projetos do Pacote Inicial (09 a 12)
+
+Estes quatro projetos são construídos sobre os recursos do **Pacote Inicial**
+incluído no programa (`resources/packs/starter/`) e aparecem como cartões na
+secção *Cenários de Prática* do ecrã inicial. Todos têm textos de exemplo para
+editares — basta selecionar a camada e escrever.
+
+### 9. `09_Cenario_Miniatura_Fundo.creatorcanvas` (1280×720 px)
+* **Objetivo:** miniatura de YouTube sobre um fundo do pacote.
+* **Ferramentas para Treinar:**
+  * **Texto (`T`):** edita o título e a chamada; o contorno está configurado.
+  * **Fundos & Texturas (`Ctrl+B`):** troca o fundo por outro do pacote sem recomeçar.
+  * **Exportação rápida:** `Ctrl+Shift+E` guarda o PNG num passo.
+
+### 10. `10_Cenario_Ecra_Final.creatorcanvas` (1920×1080 px)
+* **Objetivo:** ecrã final de vídeo com duas zonas para vídeos e uma para sugestão.
+* **Ferramentas para Treinar:**
+  * **Texto (`T`):** substitui o nome do canal e a mensagem.
+  * **Importar imagem:** arrasta as tuas miniaturas para cima das duas caixas pretas.
+
+### 11. `11_Cenario_Post_Textura.creatorcanvas` (1080×1350 px)
+* **Objetivo:** publicação vertical do Instagram sobre textura de hexágonos.
+* **Ferramentas para Treinar:**
+  * **Formas:** ajusta o cartão central (cor, opacidade) no Inspetor de Forma.
+  * **Fundos & Texturas (`Ctrl+B`):** experimenta outra textura do pacote.
+
+### 12. `12_Cenario_Banner_Brasas.creatorcanvas` (1500×500 px)
+* **Objetivo:** banner de canal ou site sobre fundo de brasas.
+* **Ferramentas para Treinar:**
+  * **Alinhar (`A`):** centraliza o bloco de texto no banner.
+  * **Exportação:** experimenta os preset de plataforma no diálogo de exportação.
+
+> Os projectos 09 a 12 são gerados por `tools/generate_pack_samples.cpp`
+> (`ninja generate_pack_samples && ./tests/generate_pack_samples`). O teste
+> `test_sample_projects` garante que todos os doze abrem, têm camadas e
+> miniatura embutida.

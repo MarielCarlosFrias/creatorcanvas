@@ -1,0 +1,122 @@
+{
+  "id": "starter",
+  "version": 1,
+  "source": "Pack de edição (Documentos) — ver resources/packs/README.md",
+  "items": [
+    {
+      "file": "blue-dots.jpg",
+      "key": "pack.starter.blueDots",
+      "category": "background"
+    },
+    {
+      "file": "night-sky.jpg",
+      "key": "pack.starter.nightSky",
+      "category": "background"
+    },
+    {
+      "file": "embers.jpg",
+      "key": "pack.starter.embers",
+      "category": "background"
+    },
+    {
+      "file": "dark-embers.jpg",
+      "key": "pack.starter.darkEmbers",
+      "category": "background"
+    },
+    {
+      "file": "retro-grid.png",
+      "key": "pack.starter.retroGrid",
+      "category": "background"
+    },
+    {
+      "file": "clean-grid.png",
+      "key": "pack.starter.cleanGrid",
+      "category": "background"
+    },
+    {
+      "file": "vintage-paper.jpg",
+      "key": "pack.starter.vintagePaper",
+      "category": "texture"
+    },
+    {
+      "file": "dust.jpg",
+      "key": "pack.starter.dust",
+      "category": "texture"
+    },
+    {
+      "file": "dark-noise.jpg",
+      "key": "pack.starter.darkNoise",
+      "category": "texture"
+    },
+    {
+      "file": "cinematic.jpg",
+      "key": "pack.starter.cinematic",
+      "category": "texture"
+    },
+    {
+      "file": "hexagon-1.jpg",
+      "key": "pack.starter.hexagon1",
+      "category": "texture"
+    },
+    {
+      "file": "hexagon-2.jpg",
+      "key": "pack.starter.hexagon2",
+      "category": "texture"
+    },
+    {
+      "file": "hexagon-3.jpg",
+      "key": "pack.starter.hexagon3",
+      "category": "texture"
+    },
+    {
+      "file": "hexagon-4.jpg",
+      "key": "pack.starter.hexagon4",
+      "category": "texture"
+    },
+    {
+      "file": "hexagon-5.jpg",
+      "key": "pack.starter.hexagon5",
+      "category": "texture"
+    },
+    {
+      "file": "hexagon-6.jpg",
+      "key": "pack.starter.hexagon6",
+      "category": "texture"
+    },
+    {
+      "file": "hexagon-7.jpg",
+      "key": "pack.starter.hexagon7",
+      "category": "texture"
+    },
+    {
+      "file": "hexagon-8.jpg",
+      "key": "pack.starter.hexagon8",
+      "category": "texture"
+    },
+    {
+      "file": "hexagon-9.jpg",
+      "key": "pack.starter.hexagon9",
+      "category": "texture"
+    },
+    {
+      "file": "hexagon-10.jpg",
+      "key": "pack.starter.hexagon10",
+      "category": "texture"
+    },
+    {
+      "file": "endscreen-yellow.jpg",
+      "key": "pack.starter.endscreenYellow",
+      "category": "template"
+    },
+    {
+      "file": "endscreen-cyan.jpg",
+      "key": "pack.starter.endscreenCyan",
+      "category": "template"
+    },
+    {
+      "file": "endscreen-red.jpg",
+      "key": "pack.starter.endscreenRed",
+      "category": "template"
+    }
+  ]
+}
