@@ -28,6 +28,9 @@ packaging/AppDir/
 # Pacotes gerados (build/packages/, copiados para a raiz para upload)
 *.deb
 
+# Ferramentas descarregadas por tools/publish_release.sh (appimagetool/gh)
+.tmp_tools/
+
 # Editor / IDE
 .vscode/
 .idea/
