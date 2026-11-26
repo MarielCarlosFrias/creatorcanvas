@@ -1,4 +1,5 @@
 #include <QtTest>
+#include <QDir>
 #include <QFileInfo>
 #include <QImage>
 
@@ -8,6 +9,25 @@
 
 using namespace cc;
 
+namespace {
+// O directório dos exemplos vive na raiz do projecto: CC_PROJECT_ROOT e
+// definido pelo helper cc_add_test (o cwd dos testes e a arvore de build).
+QString samplesDir()
+{
+    const QStringList candidates = {
+        QStringLiteral(CC_PROJECT_ROOT) + QStringLiteral("/exemplos_projetos"),
+        QStringLiteral("exemplos_projetos"),
+        QStringLiteral("../exemplos_projetos"),
+        QStringLiteral("../../exemplos_projetos"),
+    };
+    for (const QString& dir : candidates) {
+        if (QDir(dir).exists())
+            return dir;
+    }
+    return {};
+}
+} // namespace
+
 /// Garante que todos os projectos de exemplo (os 8 originais e os 4 do
 /// Pacote Inicial) abrem, têm camadas e uma miniatura embedada.
 class TestSampleProjects final : public QObject
@@ -15,23 +35,10 @@ class TestSampleProjects final : public QObject
     Q_OBJECT
 
 private slots:
-    static QString samplesDir()
-    {
-        const QStringList candidates = {
-            QStringLiteral("/home/theking1x/creatorcanvas/exemplos_projetos"),
-            QStringLiteral("exemplos_projetos")
-        };
-        for (const QString& dir : candidates) {
-            if (QDir(dir).exists())
-                return dir;
-        }
-        return {};
-    }
-
     void everyProjectLoads()
     {
         const QString dir = samplesDir();
-        QVERIFY(!dir.isEmpty());
+        QVERIFY2(!dir.isEmpty(), "pasta exemplos_projetos nao encontrada");
 
         const QStringList expected = {
             QStringLiteral("01_Cenario_Banner_Social.creatorcanvas"),

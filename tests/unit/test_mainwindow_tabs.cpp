@@ -991,8 +991,8 @@ private slots:
         // Entrar no editor (criar um documento) e deixar assentar: o painel
         // so aparece no editor, nunca no ecra inicial.
         window.createDemoDocumentForSnapshot();
-        QCoreApplication::processEvents();
-        QTest::qWait(50);
+        for (int i = 0; i < 40 && !dock->isVisible(); ++i)
+            QTest::qWait(25);
         QVERIFY(dock->isVisible());
         QVERIFY(!dock->windowTitle().isEmpty());
 
@@ -1033,8 +1033,17 @@ private slots:
         const int before = static_cast<int>(doc->rootGroup()->children.size());
         QVERIFY(before > 0);
 
-        // Abre o navegador pelo atalho (caminho real do utilizador).
-        QTest::keyClick(&window, Qt::Key_B, Qt::ControlModifier | Qt::ShiftModifier);
+        // Dispara a accao pelo objecto (deterministico entre plataformas:
+        // atalhos via keyClick dependem do foco e do layout do sistema).
+        QAction* backgrounds = nullptr;
+        for (QAction* action : window.findChildren<QAction*>()) {
+            if (action->shortcut() == QKeySequence(QStringLiteral("Ctrl+Shift+B"))) {
+                backgrounds = action;
+                break;
+            }
+        }
+        QVERIFY(backgrounds);
+        backgrounds->trigger();
         QCoreApplication::processEvents();
         auto* browser = window.findChild<cc::PackBrowser*>();
         QVERIFY(browser);

@@ -1,7 +1,7 @@
 #include <QtTest>
 #include <QLineEdit>
 #include <QListWidget>
-#include <QListWidgetItem>
+#include <QWidget>
 
 #include "localization/i18nservice.h"
 #include "services/settingsservice.h"
@@ -32,16 +32,13 @@ private slots:
         ActionManager actions;
         actions.createActions(&i18n);
 
-        // O registo cobre menus, ferramentas, formas, filtros e ajustes:
-        // nada de "órfão" que a paleta não consiga identificar.
         QVERIFY(actions.allActions().size() >= 120);
-        QCOMPARE(actions.actionId(actions.newAction),
-                 QStringLiteral("file.new"));
+        QCOMPARE(actions.actionId(actions.newAction), QStringLiteral("file.new"));
         QCOMPARE(actions.actionId(actions.commandPaletteAction),
                  QStringLiteral("help.commandPalette"));
         QVERIFY(actions.actionId(actions.safeYouTubeAction) ==
                 QStringLiteral("view.safeYouTube"));
-        QVERIFY(!actions.actionId(nullptr).isEmpty() == false);
+        QVERIFY(actions.actionId(nullptr).isEmpty());
     }
 
     void paletteListsCommandsAndFilters()
@@ -53,7 +50,11 @@ private slots:
         ActionManager actions;
         actions.createActions(&i18n);
 
-        CommandPalette palette(&actions, &i18n);
+        // Como na Produção (MainWindow passa a janela como pai): um popup
+        // sem pai é um caso artificial que se comporta diferente entre
+        // versões/plataformas do Qt.
+        QWidget host;
+        CommandPalette palette(&actions, &i18n, &host);
         palette.show();
         QVERIFY(palette.isVisible());
 
@@ -64,17 +65,14 @@ private slots:
         const int total = list->count();
         QVERIFY(total > 20);
 
-        //Consulta sem resultados esvazia a lista.
         query->setText(QStringLiteral("zzzznadaaqui"));
         QCOMPARE(list->count(), 0);
 
-        //Consulta por subsequência encontra o comando.
         query->setText(QStringLiteral("duplicate"));
         QVERIFY(list->count() >= 1);
         QVERIFY(firstRowText(palette).contains(QStringLiteral("Duplicate"),
                                                 Qt::CaseInsensitive));
 
-        //Consulta pelo id estavel tambem funciona.
         query->setText(QStringLiteral("layer.flatten"));
         QVERIFY(list->count() >= 1);
     }
@@ -92,7 +90,8 @@ private slots:
         connect(actions.zoomFitAction, &QAction::triggered, this,
                 [&triggers] { ++triggers; });
 
-        CommandPalette palette(&actions, &i18n);
+        QWidget host;
+        CommandPalette palette(&actions, &i18n, &host);
         palette.show();
         auto* query = palette.findChild<QLineEdit*>();
         auto* list = palette.findChild<QListWidget*>();
@@ -104,7 +103,7 @@ private slots:
 
         QTest::keyClick(query, Qt::Key_Return);
         QCOMPARE(triggers, 1);
-        QVERIFY(!palette.isVisible()); // fecha apos executar
+        QVERIFY(!palette.isVisible());
     }
 
     void paletteIsTranslated()
@@ -116,14 +115,23 @@ private slots:
         ActionManager actions;
         actions.createActions(&i18n);
 
-        CommandPalette palette(&actions, &i18n);
+        QWidget host;
+        host.show();
+        CommandPalette palette(&actions, &i18n, &host);
+        palette.show();
         QCOMPARE(palette.windowTitle(), QStringLiteral("Command Palette"));
         auto* query = palette.findChild<QLineEdit*>();
         QVERIFY(query);
         QVERIFY(!query->placeholderText().isEmpty());
 
+        // Mudar o idioma re-traduz o popup (sinal languageChanged).
         QVERIFY(i18n.setLanguage(QStringLiteral("pt-BR")));
+        QTest::qWait(10);
         QCOMPARE(palette.windowTitle(), QStringLiteral("Paleta de Comandos"));
+
+        QVERIFY(i18n.setLanguage(QStringLiteral("sv")));
+        QTest::qWait(10);
+        QCOMPARE(palette.windowTitle(), QStringLiteral("Kommandopalett"));
     }
 };
 
