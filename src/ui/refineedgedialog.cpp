@@ -5,10 +5,13 @@
 
 #include <QLabel>
 #include <QSlider>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QPainter>
 #include <QPushButton>
+
+#include <algorithm>
 
 namespace cc {
 
@@ -38,6 +41,13 @@ RefineEdgeDialog::RefineEdgeDialog(const QImage& currentSelection,
         connect(slider, &QSlider::valueChanged, this, &RefineEdgeDialog::onParamChanged);
     };
 
+    // Debounce: o refine percorre a máscara inteira várias vezes; durante o
+    // arrasto do slider recalculamos só após uma pausa curta.
+    m_previewTimer = new QTimer(this);
+    m_previewTimer->setSingleShot(true);
+    m_previewTimer->setInterval(80);
+    connect(m_previewTimer, &QTimer::timeout, this, &RefineEdgeDialog::updatePreview);
+
     makeRow(tr("smooth", QStringLiteral("Suavizar")), 0, 40, 0, m_smooth);
     makeRow(tr("expand", QStringLiteral("Expandir/Contrair")), -40, 40, 0, m_expand);
     makeRow(tr("feather", QStringLiteral("Esbater")), 0, 40, 0, m_feather);
@@ -51,8 +61,8 @@ RefineEdgeDialog::RefineEdgeDialog(const QImage& currentSelection,
 
     auto* buttons = new QHBoxLayout;
     buttons->addStretch(1);
-    auto* cancelBtn = new QPushButton(QStringLiteral("Cancelar"), this);
-    auto* applyBtn = new QPushButton(QStringLiteral("✓ Aplicar"), this);
+    auto* cancelBtn = new QPushButton(tr("cancel", QStringLiteral("Cancel")), this);
+    auto* applyBtn = new QPushButton(tr("apply", QStringLiteral("✓ Apply")), this);
     applyBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background-color: #22c55e; color: white; font-weight: bold; padding: 6px 18px; border-radius: 4px; }"));
     connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
@@ -80,7 +90,8 @@ QImage RefineEdgeDialog::refinedSelection() const
 
 void RefineEdgeDialog::onParamChanged()
 {
-    updatePreview();
+    if (m_previewTimer)
+        m_previewTimer->start();
 }
 
 void RefineEdgeDialog::updatePreview()
@@ -88,26 +99,34 @@ void RefineEdgeDialog::updatePreview()
     if (!m_preview || m_original.isNull())
         return;
 
-    // Prévia em escala reduzida (a máscara pode ter os pixels do documento).
-    const QImage mask = refinedSelection();
-    const int maxSide = 240;
-    QImage small = mask;
-    if (std::max(small.width(), small.height()) > maxSide) {
-        const double s = static_cast<double>(maxSide)
-                         / std::max(small.width(), small.height());
-        small = small.scaled(std::max(1, qRound(small.width() * s)),
-                             std::max(1, qRound(small.height() * s)),
+    // Prévia em escala reduzida: o refine é O(N·raio) sobre a máscara inteira,
+    // por isso refinamos uma versão pequena (raios proporcionais) e só o
+    // resultado final (aceite) usa a máscara à resolução original.
+    const int maxSide = 320;
+    const int ow = m_original.width();
+    const int oh = m_original.height();
+    const double scale = std::min(1.0, static_cast<double>(maxSide)
+                                      / std::max(ow, oh));
+    QImage small = m_original;
+    if (scale < 1.0) {
+        small = small.scaled(std::max(1, qRound(ow * scale)),
+                             std::max(1, qRound(oh * scale)),
                              Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
     }
+    const QImage mask = SelectionEngine::refine(
+        small,
+        static_cast<float>((m_smooth ? m_smooth->value() : 0) * scale),
+        static_cast<float>((m_expand ? m_expand->value() : 0) * scale),
+        static_cast<float>((m_feather ? m_feather->value() : 0) * scale));
 
     // Desenha a máscara como véu azul sobre fundo escuro: seleccionado =
     // azul claro, fora = escuro; valores intermédios vêem-se como borda suave.
-    QImage img(small.size(), QImage::Format_ARGB32);
+    QImage img(mask.size(), QImage::Format_ARGB32);
     img.fill(QColor(0x16, 0x18, 0x1d));
-    for (int y = 0; y < small.height(); ++y) {
-        const uchar* maskRow = small.constScanLine(y);
+    for (int y = 0; y < mask.height(); ++y) {
+        const uchar* maskRow = mask.constScanLine(y);
         QRgb* out = reinterpret_cast<QRgb*>(img.scanLine(y));
-        for (int x = 0; x < small.width(); ++x) {
+        for (int x = 0; x < mask.width(); ++x) {
             const int v = maskRow[x];
             if (v == 0)
                 continue;

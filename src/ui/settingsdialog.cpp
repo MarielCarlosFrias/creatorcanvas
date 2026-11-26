@@ -69,9 +69,28 @@ SettingsDialog::SettingsDialog(I18nService* i18n, SettingsService* settings,
     m_historyLimitLabel = new QLabel(this);
     form->addRow(m_historyLimitLabel, m_historyLimit);
 
+    m_historyMemory = new QComboBox(this);
+    m_historyMemory->addItem(QStringLiteral("256"), 256);
+    m_historyMemory->addItem(QStringLiteral("512"), 512);
+    m_historyMemory->addItem(QStringLiteral("1024"), 1024);
+    m_historyMemory->addItem(QStringLiteral("2048"), 2048);
+    const int memoryMb = m_settings ? m_settings->historyMemoryBudgetMb() : 512;
+    const int memoryIndex = m_historyMemory->findData(memoryMb);
+    if (memoryIndex >= 0)
+        m_historyMemory->setCurrentIndex(memoryIndex);
+    m_historyMemoryLabel = new QLabel(this);
+    form->addRow(m_historyMemoryLabel, m_historyMemory);
+
     m_gpuAcceleration = new QCheckBox(this);
-    m_gpuAcceleration->setChecked(m_settings && m_settings->gpuAccelerationEnabled());
+    // Ainda não existe backend GPU: a opção fica explicitamente indisponível
+    // em vez de prometer aceleração ao reiniciar.
+    m_gpuAcceleration->setEnabled(false);
+    m_gpuAcceleration->setChecked(false);
     m_gpuAccelerationLabel = new QLabel(this);
+    if (m_i18n) {
+        m_gpuAcceleration->setToolTip(m_i18n->t("settings", "dialog.gpuUnavailableHint"));
+        m_gpuAccelerationLabel->setToolTip(m_i18n->t("settings", "dialog.gpuUnavailableHint"));
+    }
     form->addRow(m_gpuAccelerationLabel, m_gpuAcceleration);
 
     m_restartHintLabel = new QLabel(this);
@@ -96,6 +115,15 @@ SettingsDialog::SettingsDialog(I18nService* i18n, SettingsService* settings,
     m_snapToGrid = new QCheckBox(this);
     m_snapToGrid->setChecked(m_settings && m_settings->snapToGridByDefault());
     form->addRow(QString(), m_snapToGrid);
+
+    // Modo avançado: antes só existia em Janela ▸ Modo Avançado, o que era
+    // invisível para quem começa. Fica ao lado das outras opções gerais.
+    m_advancedMode = new QCheckBox(this);
+    m_advancedMode->setChecked(m_settings && m_settings->advancedModeEnabled());
+    if (m_i18n)
+        m_advancedMode->setToolTip(m_i18n->t("settings", "dialog.advancedModeHint"));
+    m_advancedLabel = new QLabel(this);
+    form->addRow(m_advancedLabel, m_advancedMode);
 
     auto* formScroll = new QScrollArea(this);
     formScroll->setWidgetResizable(true);
@@ -126,10 +154,12 @@ void SettingsDialog::retranslateUi()
     m_autosaveLabel->setText(m_i18n->t("settings", "dialog.autosave"));
     if (m_historyLimitLabel)
         m_historyLimitLabel->setText(m_i18n->t("settings", "dialog.historyLimit"));
+    if (m_historyMemoryLabel)
+        m_historyMemoryLabel->setText(m_i18n->t("settings", "dialog.historyMemory"));
     if (m_gpuAccelerationLabel)
         m_gpuAccelerationLabel->setText(m_i18n->t("settings", "dialog.gpuAcceleration"));
     if (m_restartHintLabel)
-        m_restartHintLabel->setText(m_i18n->t("settings", "dialog.gpuAccelerationHint"));
+        m_restartHintLabel->setText(m_i18n->t("settings", "dialog.gpuUnavailableHint"));
     if (m_appearanceLabel)
         m_appearanceLabel->setText(m_i18n->t("settings", "dialog.appearance"));
     if (m_darkMode)
@@ -142,6 +172,10 @@ void SettingsDialog::retranslateUi()
         m_showGrid->setText(m_i18n->t("settings", "dialog.showGrid"));
     if (m_snapToGrid)
         m_snapToGrid->setText(m_i18n->t("settings", "dialog.snapToGrid"));
+    if (m_advancedLabel)
+        m_advancedLabel->setText(m_i18n->t("settings", "dialog.advancedMode"));
+    if (m_advancedMode)
+        m_advancedMode->setText(m_i18n->t("settings", "dialog.advancedMode"));
 }
 
 void SettingsDialog::accept()
@@ -161,11 +195,18 @@ void SettingsDialog::accept()
             if (ok)
                 m_settings->setHistoryLimit(limit);
         }
+        if (m_historyMemory) {
+            const int mb = m_historyMemory->currentData().toInt(&ok);
+            if (ok)
+                m_settings->setHistoryMemoryBudgetMb(mb);
+        }
         m_settings->setGpuAccelerationEnabled(m_gpuAcceleration->isChecked());
         m_settings->setDarkModeEnabled(m_darkMode->isChecked());
         m_settings->setConfirmBeforeExit(m_confirmExit->isChecked());
         m_settings->setShowGridByDefault(m_showGrid->isChecked());
         m_settings->setSnapToGridByDefault(m_snapToGrid->isChecked());
+        if (m_advancedMode)
+            m_settings->setAdvancedModeEnabled(m_advancedMode->isChecked());
     }
     if (qApp)
         applyTheme(*qApp, m_darkMode->isChecked());

@@ -49,12 +49,11 @@ ImageLayer* imageLayerById(const ToolContext& ctx, const LayerId& id)
     return static_cast<ImageLayer*>(layer);
 }
 
-QPointF toLocal(const ImageLayer* img, const QPointF& docPos)
+QPointF toLocal(const ToolContext& ctx, const ImageLayer* img, const QPointF& docPos)
 {
-    const QRectF bounds = img->contentBounds();
-    if (bounds.isEmpty())
+    if (!ctx.document || img->contentBounds().isEmpty())
         return docPos;
-    return img->transform.matrix(bounds).inverted().map(docPos);
+    return documentToLayerPoint(*ctx.document, *img, docPos);
 }
 
 } // namespace
@@ -175,8 +174,8 @@ void GradientTool::mouseMove(QMouseEvent* event, const QPointF& docPos, const To
         if (!mask.isNull() && mask.size() == m_origBitmap.size())
             previewMask = mask.convertToFormat(QImage::Format_Alpha8);
 
-        const QPointF localStart = toLocal(img, m_startDoc);
-        const QPointF localEnd = toLocal(img, m_endDoc);
+        const QPointF localStart = toLocal(ctx, img, m_startDoc);
+        const QPointF localEnd = toLocal(ctx, img, m_endDoc);
 
         const QImage result = ImageProcessing::paintGradient(
             m_origBitmap, localStart, localEnd, m_startColor, m_endColor, m_radial,
@@ -227,8 +226,8 @@ void GradientTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const
     if (!mask.isNull())
         mask = mask.convertToFormat(QImage::Format_Alpha8);
 
-    const QPointF localStart = toLocal(img, m_startDoc);
-    const QPointF localEnd = toLocal(img, m_endDoc);
+    const QPointF localStart = toLocal(ctx, img, m_startDoc);
+    const QPointF localEnd = toLocal(ctx, img, m_endDoc);
 
     const QImage result = ImageProcessing::paintGradient(
         bitmap, localStart, localEnd, m_startColor, m_endColor, m_radial,
@@ -362,7 +361,7 @@ void RetouchTool::mousePress(QMouseEvent* event, const QPointF& docPos, const To
     m_active = true;
     m_currentDoc = docPos;
 
-    const QPointF local = toLocal(img, docPos);
+    const QPointF local = toLocal(ctx, img, docPos);
     m_prevLocal = local;
     applyAt(local, local, ctx);
     event->accept();
@@ -390,7 +389,7 @@ void RetouchTool::mouseMove(QMouseEvent* event, const QPointF& docPos, const Too
     Layer* layer = ctx.document->findLayer(m_layerId);
     if (!layer || layer->type() != LayerType::Image)
         return;
-    const QPointF local = toLocal(static_cast<ImageLayer*>(layer), docPos);
+    const QPointF local = toLocal(ctx, static_cast<ImageLayer*>(layer), docPos);
     applyAt(m_prevLocal, local, ctx);
     m_prevLocal = local;
 }
@@ -404,6 +403,7 @@ void RetouchTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const 
         return;
     }
     m_active = false;
+    m_workingImage = constrainToPixelSelection(ctx, m_strokeSnapshot, m_workingImage);
     if (m_strokeFormat != QImage::Format_Invalid &&
         m_workingImage.format() != m_strokeFormat)
         m_workingImage = m_workingImage.convertToFormat(m_strokeFormat);

@@ -77,6 +77,16 @@ public:
         return true;
     }
 
+    qint64 estimatedBytes() const override
+    {
+        // Só comandos de máscara (QImage) carregam bitmaps; os restantes
+        // guardam escalares/structs pequenas.
+        if constexpr (std::is_same_v<ValueType, QImage>)
+            return m_oldValue.sizeInBytes() + m_newValue.sizeInBytes();
+        else
+            return 0;
+    }
+
 private:
     ApplyFn m_apply;
     ValueType m_oldValue;

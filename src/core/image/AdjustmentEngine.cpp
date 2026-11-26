@@ -20,6 +20,21 @@ double adjustmentParam(const AdjustmentParams& params, const QString& key, doubl
     return def;
 }
 
+bool isSmartFilterType(AdjustmentType kind)
+{
+    switch (kind) {
+    case AdjustmentType::Blur:
+    case AdjustmentType::MotionBlur:
+    case AdjustmentType::Noise:
+    case AdjustmentType::DistortTwirl:
+    case AdjustmentType::Pinch:
+    case AdjustmentType::Ripple:
+        return true;
+    default:
+        return false;
+    }
+}
+
 LevelsChannel levelsFromParams(const AdjustmentParams& params, const QString& prefix)
 {
     LevelsChannel ch;
@@ -177,6 +192,37 @@ QImage applyAdjustmentParameters(const QImage& source, AdjustmentType kind,
                              adjustmentParam(params, QStringLiteral("color2.b"), 1.0)),
             adjustmentParam(params, QStringLiteral("reverse"), 0.0) > 0.5);
         break;
+
+    case AdjustmentType::Blur:
+        adjusted = ImageProcessing::applyBlur(
+            source, adjustmentParam(params, QStringLiteral("radius"), 5.0));
+        break;
+
+    case AdjustmentType::MotionBlur:
+        adjusted = ImageProcessing::applyMotionBlur(
+            source, adjustmentParam(params, QStringLiteral("angle"), 0.0),
+            adjustmentParam(params, QStringLiteral("length"), 15.0));
+        break;
+
+    case AdjustmentType::Noise:
+        adjusted = ImageProcessing::applyNoise(
+            source, adjustmentParam(params, QStringLiteral("amount"), 10.0),
+            adjustmentParam(params, QStringLiteral("monochrome"), 0.0) > 0.5);
+        break;
+
+    case AdjustmentType::DistortTwirl:
+    case AdjustmentType::Pinch:
+    case AdjustmentType::Ripple:
+    {
+        using DM = ImageProcessing::DistortMode;
+        const DM mode = kind == AdjustmentType::DistortTwirl ? DM::Twirl
+                        : kind == AdjustmentType::Pinch       ? DM::Pinch
+                                                              : DM::Ripple;
+        adjusted = ImageProcessing::applyDistort(
+            source, mode, adjustmentParam(params, QStringLiteral("amount"), 0.5),
+            adjustmentParam(params, QStringLiteral("wavelength"), 0.0));
+        break;
+    }
     }
 
     // Identidade detectada pelos próprios motores (curva vazia, níveis

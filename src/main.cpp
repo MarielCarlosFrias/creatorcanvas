@@ -9,6 +9,9 @@
 #include "ui/aibackgrounddialog.h"
 #include "ui/darktheme.h"
 #include "ui/mainwindow.h"
+#include "ui/welcomedialog.h"
+#include "ui/packbrowser.h"
+#include "services/packstore.h"
 #include "ui/themeicons.h"
 
 #include <QApplication>
@@ -25,6 +28,28 @@
 
 #ifndef APP_VERSION
 #define APP_VERSION "0.0.0-dev"
+#endif
+
+// Builds com AddressSanitizer (preset linux-asan) correm LeakSanitizer no exit.
+// Várias bibliotecas de sistema (fontconfig/pango/GTK3 via plugin libqgtk3 do
+// Qt, e o onnxruntime) fazem alocações one-time no arranque que não libertam —
+// falsos positivos ruidosos. Suprimimos esses vazamentos AQUI, embutidos no
+// binário, para não precisarem de LSAN_OPTIONS; o LSan continua ativo para
+// TODO o código do CreatorCanvas. Só compila com -fsanitize=address.
+#if defined(__SANITIZE_ADDRESS__) || (defined(__has_feature) && __has_feature(address_sanitizer))
+extern "C" const char* __lsan_default_suppressions()
+{
+    return "leak:libonnxruntime\n"
+           "leak:FcValueSave\n"
+           "leak:FcConfigSetDefaultSubstitute\n"
+           "leak:libfontconfig\n"
+           "leak:libpango\n"
+           "leak:libpangocairo\n"
+           "leak:libpangoft2\n"
+           "leak:libharfbuzz\n"
+           "leak:libgtk-3\n"
+           "leak:libqgtk3\n";
+}
 #endif
 
 int main(int argc, char *argv[])
@@ -240,6 +265,25 @@ int main(int argc, char *argv[])
             }
         }
 
+        // Navegador de pacotes (fundos/texturas): a grelha tem de caber
+        // no mínimo real do app.
+        {
+            cc::PackBrowser browser(&i18n);
+            for (const QSize& size : {QSize(760, 560), QSize(620, 460)}) {
+                browser.resize(size);
+                QApplication::processEvents();
+                QApplication::processEvents();
+                const QString path = QDir(outDir).filePath(
+                    QStringLiteral("pack_browser_%1x%2.png")
+                        .arg(size.width()).arg(size.height()));
+                const QPixmap shot = browser.grab();
+                if (!shot.save(path))
+                    qWarning() << "[UISnapshot] failed to save" << path;
+                qInfo() << "[UISnapshot]" << path << shot.size();
+            }
+            browser.close();
+        }
+
         // Diálogo de IA: precisa caber em 800x520 (mínimo real do app).
         {
             QImage demo(640, 360, QImage::Format_ARGB32_Premultiplied);
@@ -265,6 +309,13 @@ int main(int argc, char *argv[])
 
         cc::LogService::shutdown();
         return 0;
+    }
+
+    // Primeira utilização: escolha de idioma antes de construir a UI.
+    // Só no arranque normal — --smoke-test e --ui-snapshot passam sem ele.
+    if (!settings.welcomeShown()) {
+        cc::WelcomeDialog welcome(&i18n, &settings);
+        welcome.exec();
     }
 
     cc::MainWindow window(&settings, &i18n);

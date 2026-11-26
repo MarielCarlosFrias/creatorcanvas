@@ -101,36 +101,111 @@ public:
                         GroupLayer* newParent, int newIndex)
         : LayerCommand(QStringLiteral("layer.reorder"), doc, id, LockRequirement::All)
     {
+        Layer* layer = doc.findLayer(id);
         GroupLayer* oldParent = doc.parentOf(id);
-        m_valid = (oldParent != nullptr);
-        if (m_valid) {
-            m_oldParentId = oldParent->id();
-            m_oldIndex = doc.indexOf(id);
-            m_newParentId = newParent ? newParent->id() : doc.rootGroup()->id();
-            m_newIndex = newIndex;
+        GroupLayer* destination = newParent ? newParent : doc.rootGroup();
+        m_valid = layer && layer != doc.rootGroup() && oldParent && destination
+                  && doc.findLayer(destination->id()) == destination;
+        if (!m_valid)
+            return;
+
+        // Mover um grupo para dentro de si próprio é inválido e, sobretudo,
+        // não pode alterar o transform antes de Document::reorderLayer falhar.
+        for (GroupLayer* p = destination; p; p = doc.parentOf(p->id())) {
+            if (p == layer) {
+                m_valid = false;
+                return;
+            }
+        }
+
+        m_oldParentId = oldParent->id();
+        m_oldIndex = doc.indexOf(id);
+        m_newParentId = destination->id();
+        m_newIndex = newIndex;
+        m_movedOldTransform = layer->transform;
+        m_changesParent = oldParent != destination;
+
+        if (m_changesParent) {
+            const QTransform oldToDocument =
+                detail::parentToDocumentMatrix(&doc, oldParent);
+            const QTransform newToDocument =
+                detail::parentToDocumentMatrix(&doc, destination);
+            bool invertible = false;
+            const QTransform documentToNew = newToDocument.inverted(&invertible);
+            m_valid = invertible;
+            if (!m_valid)
+                return;
+            m_parentSpaceChange = oldToDocument * documentToNew;
+            detail::captureGroupAndAncestors(&doc, oldParent, m_parentStates);
+            detail::captureGroupAndAncestors(&doc, destination, m_parentStates);
         }
     }
 
     void redo() override
     {
-        if (m_valid && canExecute())
-            m_doc->reorderLayer(m_layerId, detail::resolveGroup(m_doc, m_newParentId),
-                                m_newIndex);
+        if (!canMove(m_oldParentId, m_newParentId))
+            return;
+
+        Layer* layer = m_doc->findLayer(m_layerId);
+        const AffineTransform newTransform = m_changesParent
+            ? detail::rebaseTransform(m_parentSpaceChange, *layer)
+            : layer->transform;
+
+        // Toda a validação e todo o cálculo falível acontecem antes da primeira
+        // mutação. Se reorderLayer recusar, nem o filho nem os grupos mudam.
+        if (!m_doc->reorderLayer(m_layerId,
+                                 detail::resolveGroup(m_doc, m_newParentId),
+                                 m_newIndex))
+            return;
+        if (m_changesParent) {
+            layer->transform = newTransform;
+            detail::preserveGroupMatrices(m_doc, m_parentStates);
+        }
     }
 
     void undo() override
     {
-        if (m_valid && canExecute())
-            m_doc->reorderLayer(m_layerId, detail::resolveGroup(m_doc, m_oldParentId),
-                                m_oldIndex);
+        if (!canMove(m_newParentId, m_oldParentId))
+            return;
+        if (!m_doc->reorderLayer(m_layerId,
+                                 detail::resolveGroup(m_doc, m_oldParentId),
+                                 m_oldIndex))
+            return;
+        if (m_changesParent) {
+            if (Layer* layer = m_doc->findLayer(m_layerId))
+                layer->transform = m_movedOldTransform;
+            detail::restoreGroupTransforms(m_doc, m_parentStates);
+        }
     }
 
 private:
+    bool canMove(const LayerId& expectedParentId,
+                 const LayerId& destinationId) const
+    {
+        if (!m_valid || !canExecute())
+            return false;
+        Layer* layer = m_doc->findLayer(m_layerId);
+        GroupLayer* currentParent = m_doc->parentOf(m_layerId);
+        GroupLayer* destination = detail::resolveGroup(m_doc, destinationId);
+        if (!layer || layer == m_doc->rootGroup() || !currentParent
+            || currentParent->id() != expectedParentId || !destination
+            || m_doc->effectiveLocks(destination->id()).all)
+            return false;
+        for (GroupLayer* p = destination; p; p = m_doc->parentOf(p->id()))
+            if (p == layer)
+                return false;
+        return true;
+    }
+
     LayerId m_oldParentId;
     int m_oldIndex = -1;
     LayerId m_newParentId;
     int m_newIndex = -1;
     bool m_valid = false;
+    bool m_changesParent = false;
+    AffineTransform m_movedOldTransform;
+    QTransform m_parentSpaceChange;
+    std::vector<detail::GroupGeometryState> m_parentStates;
 };
 
 class DuplicateLayerCommand final : public Command
@@ -209,6 +284,8 @@ public:
         for (const auto& id : m_layerIds) {
             LayerInfo info;
             info.id = id;
+            if (const Layer* layer = m_doc->findLayer(id))
+                info.oldTransform = layer->transform;
             if (GroupLayer* parent = m_doc->parentOf(id)) {
                 info.parentId = parent->id();
                 info.index = m_doc->indexOf(id);
@@ -237,6 +314,31 @@ public:
             m_groupParentId = m_doc->rootGroup()->id();
             m_groupIndex = -1;
         }
+
+        GroupLayer* destination = detail::resolveGroup(m_doc, m_groupParentId);
+        const QTransform destinationToDocument =
+            detail::parentToDocumentMatrix(m_doc, destination);
+        bool invertible = false;
+        const QTransform documentToDestination =
+            destinationToDocument.inverted(&invertible);
+        m_valid = destination && invertible;
+        if (!m_valid)
+            return;
+
+        // O novo grupo nasce com matriz identidade no pai de destino. Cada
+        // filho é convertido do seu pai original para esse mesmo espaço; isto
+        // é indispensável quando a seleção vem de G1, G2 e/ou da raiz.
+        for (auto& info : m_layerInfos) {
+            GroupLayer* source = detail::resolveGroup(m_doc, info.parentId);
+            if (!source) {
+                m_valid = false;
+                return;
+            }
+            info.parentSpaceChange = detail::parentToDocumentMatrix(m_doc, source)
+                * documentToDestination;
+            detail::captureGroupAndAncestors(m_doc, source, m_parentStates);
+        }
+        detail::captureGroupAndAncestors(m_doc, destination, m_parentStates);
     }
 
     const LayerId& groupId() const { return m_groupId; }
@@ -248,42 +350,89 @@ public:
 
     void redo() override
     {
-        // Se qualquer membro estiver bloqueado (pixels ou all), aborta a operação de agrupamento
-        for (const auto& id : m_layerIds) {
-            const auto locks = m_doc->effectiveLocks(id);
+        auto* group = static_cast<GroupLayer*>(m_groupHolder.get());
+        GroupLayer* destination = detail::resolveGroup(m_doc, m_groupParentId);
+        if (!m_valid || !group || !destination)
+            return;
+
+        QSet<LayerId> selected;
+        for (const auto& info : m_layerInfos)
+            selected.insert(info.id);
+        if (selected.size() != m_layerIds.size())
+            return;
+
+        QHash<LayerId, AffineTransform> rebasedTransforms;
+        for (const auto& info : m_layerInfos) {
+            Layer* layer = m_doc->findLayer(info.id);
+            GroupLayer* parent = m_doc->parentOf(info.id);
+            if (!layer || layer == m_doc->rootGroup() || !parent
+                || parent->id() != info.parentId)
+                return;
+            const auto locks = m_doc->effectiveLocks(info.id);
             if (locks.pixels || locks.all)
                 return;
+
+            // O comando direto também recusa seleções ancestral+descendente;
+            // o serviço normalmente já as filtra, mas não deve haver remoções
+            // parciais se for chamado fora desse caminho.
+            for (GroupLayer* p = parent; p; p = m_doc->parentOf(p->id()))
+                if (selected.contains(p->id()))
+                    return;
+            for (GroupLayer* p = destination; p; p = m_doc->parentOf(p->id()))
+                if (p == layer)
+                    return;
+            rebasedTransforms.insert(
+                info.id, detail::rebaseTransform(info.parentSpaceChange, *layer));
         }
 
-        auto* group = static_cast<GroupLayer*>(m_groupHolder.get());
-        Q_ASSERT(group);
         for (const auto& info : m_layerInfos) {
-            if (auto taken = m_doc->takeLayer(info.id))
-                group->children.push_back(std::move(taken));
+            auto taken = m_doc->takeLayer(info.id);
+            if (!taken)
+                return;
+            taken->transform = rebasedTransforms.value(info.id);
+            group->children.push_back(std::move(taken));
         }
-        m_doc->addLayer(std::move(m_groupHolder),
-                        detail::resolveGroup(m_doc, m_groupParentId),
-                        m_groupIndex);
+        group->transform = AffineTransform{};
+        detail::recenterGroupTransform(group);
+        if (!m_doc->addLayer(std::move(m_groupHolder), destination, m_groupIndex))
+            return;
+        detail::preserveGroupMatrices(m_doc, m_parentStates);
     }
 
     void undo() override
     {
+        if (!m_valid || m_groupHolder)
+            return;
+        Layer* layer = m_doc->findLayer(m_groupId);
+        if (!layer || layer->type() != LayerType::Group
+            || !m_doc->parentOf(m_groupId)
+            || m_doc->parentOf(m_groupId)->id() != m_groupParentId)
+            return;
+        auto* group = static_cast<GroupLayer*>(layer);
+        for (const auto& info : m_layerInfos) {
+            const auto it = std::find_if(
+                group->children.begin(), group->children.end(),
+                [&](const auto& child) { return child->id() == info.id; });
+            if (it == group->children.end()
+                || !detail::resolveGroup(m_doc, info.parentId))
+                return;
+        }
+
         m_groupHolder = m_doc->takeLayer(m_groupId);
         if (!m_groupHolder)
             return;
-        auto* group = static_cast<GroupLayer*>(m_groupHolder.get());
-
+        group = static_cast<GroupLayer*>(m_groupHolder.get());
         for (const auto& info : m_layerInfos) {
             auto& children = group->children;
             auto it = std::find_if(children.begin(), children.end(),
-                                   [&](const auto& c) { return c->id() == info.id; });
-            if (it != children.end()) {
-                auto child = std::move(*it);
-                children.erase(it);
-                GroupLayer* targetParent = detail::resolveGroup(m_doc, info.parentId);
-                m_doc->addLayer(std::move(child), targetParent, info.index);
-            }
+                                   [&](const auto& child) { return child->id() == info.id; });
+            auto child = std::move(*it);
+            children.erase(it);
+            child->transform = info.oldTransform;
+            m_doc->addLayer(std::move(child),
+                            detail::resolveGroup(m_doc, info.parentId), info.index);
         }
+        detail::restoreGroupTransforms(m_doc, m_parentStates);
     }
 
 private:
@@ -291,6 +440,8 @@ private:
         LayerId id;
         LayerId parentId;
         int index = -1;
+        AffineTransform oldTransform;
+        QTransform parentSpaceChange;
     };
 
     Document* m_doc;
@@ -299,7 +450,9 @@ private:
     LayerId m_groupId;
     LayerId m_groupParentId;
     int m_groupIndex = -1;
+    bool m_valid = false;
     std::vector<LayerInfo> m_layerInfos;
+    std::vector<detail::GroupGeometryState> m_parentStates;
     std::unique_ptr<Layer> m_groupHolder;
 };
 
@@ -319,40 +472,71 @@ public:
         GroupLayer* parent = doc.parentOf(groupId);
         m_parentId = parent ? parent->id() : doc.rootGroup()->id();
         m_groupIndex = doc.indexOf(groupId);
-        const auto* group = static_cast<const GroupLayer*>(layer);
-        for (const auto& child : group->children)
+        auto* group = static_cast<GroupLayer*>(layer);
+        m_groupOldTransform = group->transform;
+        m_groupMatrixBefore = group->transform.matrix(group->contentBounds());
+        detail::captureGroupAndAncestors(&doc, parent, m_parentStates);
+        for (const auto& child : group->children) {
             m_childIds.append(child->id());
+            m_childOldTransforms.insert(child->id(), child->transform);
+        }
     }
 
     void redo() override
     {
-        if (!m_valid)
+        if (!m_valid || m_groupHolder)
             return;
-        if (m_doc->effectiveLocks(m_groupId).all)
+        GroupLayer* parent = detail::resolveGroup(m_doc, m_parentId);
+        Layer* current = m_doc->findLayer(m_groupId);
+        if (!parent || !current || current->type() != LayerType::Group
+            || m_doc->parentOf(m_groupId) != parent
+            || m_doc->effectiveLocks(m_groupId).all)
             return;
+
         m_groupHolder = m_doc->takeLayer(m_groupId);
         if (!m_groupHolder)
             return;
         auto* group = static_cast<GroupLayer*>(m_groupHolder.get());
-        GroupLayer* parent = detail::resolveGroup(m_doc, m_parentId);
+        // Ao sair do grupo, o transform de cada filho passa do espaço local do
+        // grupo para o espaço do pai: filho_pai = filho_local · G (ordem do
+        // QPainter). A decomposição exata conserva flip/shear e rotação.
+        const QTransform g = m_groupMatrixBefore;
         int insertion = m_groupIndex;
         while (!group->children.empty()) {
             auto child = std::move(group->children.front());
             group->children.erase(group->children.begin());
+            if (child)
+                child->transform = detail::rebaseTransform(g, *child);
             m_doc->addLayer(std::move(child), parent, insertion++);
         }
+        detail::preserveGroupMatrices(m_doc, m_parentStates);
     }
 
     void undo() override
     {
         if (!m_valid || !m_groupHolder)
             return;
+        GroupLayer* parent = detail::resolveGroup(m_doc, m_parentId);
+        if (!parent)
+            return;
+        for (const LayerId& childId : m_childIds)
+            if (m_doc->parentOf(childId) != parent)
+                return;
+
         auto* group = static_cast<GroupLayer*>(m_groupHolder.get());
+        group->transform = m_groupOldTransform;
         for (const LayerId& childId : m_childIds) {
-            if (auto child = m_doc->takeLayer(childId))
-                group->children.push_back(std::move(child));
+            auto child = m_doc->takeLayer(childId);
+            if (!child)
+                return;
+            auto it = m_childOldTransforms.constFind(childId);
+            if (it != m_childOldTransforms.constEnd())
+                child->transform = it.value();
+            group->children.push_back(std::move(child));
         }
-        m_doc->addLayer(std::move(m_groupHolder), detail::resolveGroup(m_doc, m_parentId), m_groupIndex);
+        if (!m_doc->addLayer(std::move(m_groupHolder), parent, m_groupIndex))
+            return;
+        detail::restoreGroupTransforms(m_doc, m_parentStates);
     }
 
     void collectAssetIds(QSet<LayerId>& out) const override
@@ -366,6 +550,10 @@ private:
     LayerId m_parentId;
     int m_groupIndex = -1;
     QList<LayerId> m_childIds;
+    QHash<LayerId, AffineTransform> m_childOldTransforms;
+    AffineTransform m_groupOldTransform;
+    QTransform m_groupMatrixBefore;
+    std::vector<detail::GroupGeometryState> m_parentStates;
     std::unique_ptr<Layer> m_groupHolder;
     bool m_valid = false;
 };

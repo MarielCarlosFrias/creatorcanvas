@@ -21,6 +21,7 @@
 
 #include <cstring>
 #include <algorithm>
+#include <cmath>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -45,6 +46,43 @@ inline GradientKind gradientKindFromName(const QString& name)
     if (name == QLatin1String("radial"))   return GradientKind::Radial;
     if (name == QLatin1String("conical"))  return GradientKind::Conical;
     return GradientKind::Linear;
+}
+
+/// Codifica uma máscara Alpha8 como PNG RGBA (branco + alfa) — alguns plugins
+/// PNG tratam Alpha8 como imagem indexada e perdem os valores.
+inline bool encodeAlphaMaskPng(const QImage& alpha8, QByteArray* outBytes)
+{
+    if (alpha8.isNull() || !outBytes)
+        return false;
+    const QImage source = alpha8.convertToFormat(QImage::Format_Alpha8);
+    QImage encoded(source.size(), QImage::Format_ARGB32);
+    for (int y = 0; y < source.height(); ++y) {
+        const uchar* src = source.constScanLine(y);
+        QRgb* dst = reinterpret_cast<QRgb*>(encoded.scanLine(y));
+        for (int x = 0; x < source.width(); ++x)
+            dst[x] = qRgba(255, 255, 255, src[x]);
+    }
+    QBuffer buffer(outBytes);
+    buffer.open(QIODevice::WriteOnly);
+    const bool ok = encoded.save(&buffer, "PNG");
+    buffer.close();
+    return ok && !outBytes->isEmpty();
+}
+
+/// Decodifica um PNG de máscara (branco+alfa) de volta para Alpha8.
+/// Devolve QImage nula em dados inválidos.
+inline QImage decodeAlphaMaskPng(const QByteArray& bytes)
+{
+    QImage img;
+    if (bytes.isEmpty() || !img.loadFromData(bytes, "PNG"))
+        return {};
+    QImage restored(img.size(), QImage::Format_Alpha8);
+    for (int y = 0; y < img.height(); ++y) {
+        uchar* dst = restored.scanLine(y);
+        for (int x = 0; x < img.width(); ++x)
+            dst[x] = qAlpha(img.pixel(x, y));
+    }
+    return restored;
 }
 
 
@@ -328,6 +366,9 @@ QJsonObject writeLayer(const Layer& layer)
                  image.assetId.toString(QUuid::WithoutBraces));
         o.insert(QStringLiteral("naturalWidth"), image.naturalWidth);
         o.insert(QStringLiteral("naturalHeight"), image.naturalHeight);
+        if (image.adjustmentLayerId)
+            o.insert(QStringLiteral("adjustmentLayerId"),
+                     image.adjustmentLayerId->toString(QUuid::WithoutBraces));
         if (!image.alphaMask.isNull()) {
             o.insert(QStringLiteral("alphaMask"),
                      QStringLiteral("masks/%1.png")
@@ -473,6 +514,9 @@ QJsonObject writeLayer(const Layer& layer)
         o.insert(QStringLiteral("type"), QStringLiteral("adjustment"));
         const auto& adj = static_cast<const AdjustmentLayer&>(layer);
         o.insert(QStringLiteral("kind"), static_cast<int>(adj.kind));
+        if (adj.sourceLayerId)
+            o.insert(QStringLiteral("sourceLayerId"),
+                     adj.sourceLayerId->toString(QUuid::WithoutBraces));
         QJsonArray params;
         for (const auto& [key, value] : adj.parameters) {
             QJsonObject p;
@@ -586,6 +630,30 @@ bool writeLayerMasks(mz_zip_archive* zip, const Layer& layer)
     return true;
 }
 
+QString selectionSpaceName(SelectionSpace space)
+{
+    return space == SelectionSpace::Layer ? QStringLiteral("layer")
+                                          : QStringLiteral("document");
+}
+
+std::optional<SelectionSpace> selectionSpaceFromName(const QString& name)
+{
+    if (name == QLatin1String("document"))
+        return SelectionSpace::Document;
+    if (name == QLatin1String("layer"))
+        return SelectionSpace::Layer;
+    return std::nullopt;
+}
+
+SelectionSpace inferSelectionSpace(const QImage& mask, const QSize& documentSize)
+{
+    // Projetos legacy não tinham metadados: este é o mesmo critério usado
+    // pelas ferramentas/UI para distinguir uma máscara local do canvas.
+    return !mask.isNull() && mask.size() != documentSize
+        ? SelectionSpace::Layer
+        : SelectionSpace::Document;
+}
+
 QJsonObject buildProjectJson(const Document& doc)
 {
     QJsonObject root;
@@ -651,8 +719,42 @@ QJsonObject buildProjectJson(const Document& doc)
     // Keep the active pixel selection in the native project as well. This is
     // intentionally separate from layer alpha masks: a selection is editor
     // state and must be restored without changing the image pixels.
-    if (!doc.pixelSelection().isNull())
+    if (!doc.pixelSelection().isNull()) {
         root.insert(QStringLiteral("pixelSelection"), QStringLiteral("selection.png"));
+        root.insert(QStringLiteral("pixelSelectionSpace"),
+                    selectionSpaceName(doc.pixelSelectionSpace()));
+    }
+
+    // Seleções guardadas (canais) — chave opcional: leitores antigos ignoram.
+    if (!doc.savedSelections().empty()) {
+        QJsonArray savedArr;
+        for (const auto& s : doc.savedSelections()) {
+            if (s.mask.isNull())
+                continue;
+            QJsonObject o;
+            o.insert(QStringLiteral("id"), s.id.toString(QUuid::WithoutBraces));
+            o.insert(QStringLiteral("name"), s.name);
+            o.insert(QStringLiteral("space"), selectionSpaceName(s.space));
+            o.insert(QStringLiteral("file"),
+                     QStringLiteral("selections/%1.png")
+                         .arg(s.id.toString(QUuid::WithoutBraces)));
+            savedArr.append(o);
+        }
+        if (!savedArr.isEmpty())
+            root.insert(QStringLiteral("savedSelections"), savedArr);
+    }
+
+    // Guias do canvas — chave opcional, números simples.
+    if (!doc.guides().empty()) {
+        QJsonArray guidesArr;
+        for (const auto& g : doc.guides()) {
+            QJsonObject o;
+            o.insert(QStringLiteral("horizontal"), g.horizontal);
+            o.insert(QStringLiteral("position"), g.position);
+            guidesArr.append(o);
+        }
+        root.insert(QStringLiteral("guides"), guidesArr);
+    }
 
     if (!doc.layerComps().empty()) {
         QJsonArray compsArr;
@@ -776,26 +878,31 @@ bool writeArchive(const QString& filePath, const QByteArray& jsonBytes,
 
     if (assetsOk && !doc.pixelSelection().isNull()) {
         QByteArray selectionBytes;
-        QBuffer buffer(&selectionBytes);
-        buffer.open(QIODevice::WriteOnly);
-        // Encode the alpha values in a regular RGBA PNG. Some PNG plugins
-        // treat Qt's Alpha8 format as an indexed image and lose its values.
-        const QImage source = doc.pixelSelection().convertToFormat(QImage::Format_Alpha8);
-        QImage encodedSelection(source.size(), QImage::Format_ARGB32);
-        for (int y = 0; y < source.height(); ++y) {
-            const uchar* src = source.constScanLine(y);
-            QRgb* dst = reinterpret_cast<QRgb*>(encodedSelection.scanLine(y));
-            for (int x = 0; x < source.width(); ++x)
-                dst[x] = qRgba(255, 255, 255, src[x]);
-        }
-        const bool encoded = encodedSelection.save(&buffer, "PNG");
-        buffer.close();
-        if (!encoded || selectionBytes.isEmpty()
+        if (!encodeAlphaMaskPng(doc.pixelSelection(), &selectionBytes)
             || !mz_zip_writer_add_mem(&zip, "selection.png",
                                       selectionBytes.constData(),
                                       static_cast<size_t>(selectionBytes.size()),
                                       MZ_DEFAULT_LEVEL)) {
             assetsOk = false;
+        }
+    }
+
+    // Seleções guardadas: uma entrada PNG por canal em selections/<id>.png.
+    if (assetsOk) {
+        for (const auto& s : doc.savedSelections()) {
+            if (s.mask.isNull())
+                continue;
+            const QString entry = QStringLiteral("selections/%1.png")
+                                      .arg(s.id.toString(QUuid::WithoutBraces));
+            QByteArray maskBytes;
+            if (!encodeAlphaMaskPng(s.mask, &maskBytes)
+                || !mz_zip_writer_add_mem(&zip, entry.toUtf8().constData(),
+                                          maskBytes.constData(),
+                                          static_cast<size_t>(maskBytes.size()),
+                                          MZ_DEFAULT_LEVEL)) {
+                assetsOk = false;
+                break;
+            }
         }
     }
 
@@ -1023,25 +1130,117 @@ public:
             doc->addLayer(std::move(layer));
         }
 
+        // Migração: projetos gravados antes da correção de grupos tenían
+        // group.transform.position = (0,0) com rotação/escala/shear default, o
+        // que fazia a matriz do grupo (T(pos)·T(-centro)) deslocar o conteúdo
+        // para o canto superior esquerdo. Com a convenção atual, esses grupos
+        // devem ter position = centro do contentBounds. Só tocamos em grupos
+        // com a assinatura exata do bug (pos 0,0 e sem rotação/escala/shear) —
+        // grupos movidos pelo utilizador têm position != (0,0) e não são
+        // alterados.
+        {
+            std::function<void(GroupLayer*)> fixLegacyGroups = [&](GroupLayer* g) {
+                for (auto& child : g->children) {
+                    if (child->type() != LayerType::Group)
+                        continue;
+                    auto* sub = static_cast<GroupLayer*>(child.get());
+                    fixLegacyGroups(sub);
+                    const AffineTransform& t = sub->transform;
+                    if (t.rotationDeg == 0.0 && t.scaleX == 1.0 && t.scaleY == 1.0
+                        && t.shearX == 0.0 && t.shearY == 0.0
+                        && t.position == QPointF(0, 0)) {
+                        const QRectF b = sub->contentBounds();
+                        if (!b.isEmpty())
+                            sub->transform.position = b.center();
+                    }
+                }
+            };
+            fixLegacyGroups(doc->rootGroup());
+        }
+
         const QString selectionFile = m_root.value(QStringLiteral("pixelSelection")).toString();
         if (!selectionFile.isEmpty()) {
-            QImage selection;
             const QByteArray selectionBytes = m_media.value(selectionFile);
-            if (selectionBytes.isEmpty() || !selection.loadFromData(selectionBytes, "PNG")) {
+            const QImage restored = decodeAlphaMaskPng(selectionBytes);
+            if (restored.isNull()) {
                 *error = QStringLiteral("The project contains an unreadable pixel selection.");
                 return nullptr;
             }
-            if (selection.size() != QSize(width, height)) {
-                *error = QStringLiteral("The project contains a pixel selection with invalid dimensions.");
+            const QString spaceName =
+                m_root.value(QStringLiteral("pixelSelectionSpace")).toString();
+            SelectionSpace space = inferSelectionSpace(restored, QSize(width, height));
+            if (!spaceName.isEmpty()) {
+                const auto declaredSpace = selectionSpaceFromName(spaceName);
+                if (declaredSpace) {
+                    space = *declaredSpace;
+                } else {
+                    qCWarning(lcSerialization)
+                        << "Unknown pixel selection space; inferring from dimensions"
+                        << spaceName;
+                }
+            }
+            if (space == SelectionSpace::Document
+                && restored.size() != QSize(width, height)) {
+                *error = QStringLiteral("The project contains a document-space pixel selection with invalid dimensions.");
                 return nullptr;
             }
-            QImage restored(selection.size(), QImage::Format_Alpha8);
-            for (int y = 0; y < selection.height(); ++y) {
-                uchar* dst = restored.scanLine(y);
-                for (int x = 0; x < selection.width(); ++x)
-                    dst[x] = qAlpha(selection.pixel(x, y));
+            doc->setPixelSelection(std::move(restored), space);
+        }
+
+        // Seleções guardadas (canais). Lenient por compatibilidade: uma
+        // entrada inválida é ignorada com warning, não invalida o projeto.
+        const QJsonArray savedArr = m_root.value(QStringLiteral("savedSelections")).toArray();
+        for (const auto& v : savedArr) {
+            const QJsonObject o = v.toObject();
+            const QUuid id = QUuid::fromString(o.value(QStringLiteral("id")).toString());
+            const QString name = o.value(QStringLiteral("name")).toString();
+            const QString file = o.value(QStringLiteral("file")).toString();
+            if (id.isNull() || file.isEmpty())
+                continue;
+            const QImage mask = decodeAlphaMaskPng(m_media.value(file));
+            if (mask.isNull()) {
+                qCWarning(lcSerialization)
+                    << "Ignoring unreadable saved selection entry" << id;
+                continue;
             }
-            doc->setPixelSelection(std::move(restored));
+            SelectionSpace space = inferSelectionSpace(mask, QSize(width, height));
+            const QString spaceName = o.value(QStringLiteral("space")).toString();
+            if (!spaceName.isEmpty()) {
+                const auto declaredSpace = selectionSpaceFromName(spaceName);
+                if (declaredSpace)
+                    space = *declaredSpace;
+                else
+                    qCWarning(lcSerialization)
+                        << "Unknown saved selection space; inferring from dimensions"
+                        << id << spaceName;
+            }
+            if (space == SelectionSpace::Document
+                && mask.size() != QSize(width, height)) {
+                qCWarning(lcSerialization)
+                    << "Ignoring document-space saved selection with invalid dimensions"
+                    << id;
+                continue;
+            }
+            doc->restoreSavedSelection(id, name, mask, space);
+        }
+
+        // Guias (lenient: entradas inválidas são ignoradas).
+        const QJsonArray guidesArr = m_root.value(QStringLiteral("guides")).toArray();
+        if (!guidesArr.isEmpty()) {
+            std::vector<Guide> guides;
+            for (const auto& v : guidesArr) {
+                const QJsonObject o = v.toObject();
+                Guide g;
+                g.horizontal = o.value(QStringLiteral("horizontal")).toBool(true);
+                g.position = o.value(QStringLiteral("position")).toDouble();
+                // Canvas Size/Rotate podem deixar uma guia fora dos limites
+                // visíveis. Isso é uma coordenada de documento válida e deve
+                // sobreviver ao round-trip; apenas NaN/inf são inválidos.
+                if (std::isfinite(g.position))
+                    guides.push_back(g);
+            }
+            if (!guides.empty())
+                doc->setGuides(std::move(guides));
         }
 
         if (m_root.contains(QStringLiteral("layerComps"))) {
@@ -1183,6 +1382,12 @@ private:
         image->assetId = LayerId(o.value(QStringLiteral("assetId")).toString());
         image->naturalWidth = o.value(QStringLiteral("naturalWidth")).toInt();
         image->naturalHeight = o.value(QStringLiteral("naturalHeight")).toInt();
+        const QString adjustmentId = o.value(QStringLiteral("adjustmentLayerId")).toString();
+        if (!adjustmentId.isEmpty()) {
+            const QUuid parsed = QUuid::fromString(adjustmentId);
+            if (!parsed.isNull())
+                image->adjustmentLayerId = parsed;
+        }
 
         const QString maskFile = o.value(QStringLiteral("alphaMask")).toString();
         if (!maskFile.isEmpty()) {
@@ -1371,10 +1576,16 @@ private:
             // Limite derivado do enum: um projecto gravado por uma versão
             // com mais tipos carrega, um com kind inválido é rejeitado.
             if (kindRaw < 0
-                || kindRaw > static_cast<int>(AdjustmentType::Vignette)) {
+                || kindRaw > static_cast<int>(AdjustmentType::Ripple)) {
                 return false;
             }
             adjustment->kind = static_cast<AdjustmentType>(kindRaw);
+        }
+        const QString sourceId = o.value(QStringLiteral("sourceLayerId")).toString();
+        if (!sourceId.isEmpty()) {
+            const QUuid parsed = QUuid::fromString(sourceId);
+            if (!parsed.isNull())
+                adjustment->sourceLayerId = parsed;
         }
         const QJsonArray paramsArr =
             o.value(QStringLiteral("parameters")).toArray();
@@ -1535,6 +1746,43 @@ bool saveDocument(const Document& doc, const QString& filePath,
                   QString* errorMessage,
                   const QImage* thumbnail)
 {
+    const QSize documentSize(doc.width(), doc.height());
+    auto validateMask = [&](const QImage& mask, SelectionSpace space,
+                            const QString& description) {
+        if (mask.width() <= 0 || mask.height() <= 0) {
+            if (errorMessage)
+                *errorMessage = QStringLiteral("Cannot save %1 with invalid dimensions.")
+                    .arg(description);
+            return false;
+        }
+        if (space == SelectionSpace::Document && mask.size() != documentSize) {
+            if (errorMessage)
+                *errorMessage = QStringLiteral(
+                    "Cannot save %1: its dimensions do not match the document.")
+                    .arg(description);
+            return false;
+        }
+        return true;
+    };
+
+    if (!doc.pixelSelection().isNull()
+        && !validateMask(doc.pixelSelection(), doc.pixelSelectionSpace(),
+                         QStringLiteral("the active pixel selection")))
+        return false;
+    for (const SavedSelection& saved : doc.savedSelections()) {
+        if (!saved.mask.isNull()
+            && !validateMask(saved.mask, saved.space,
+                             QStringLiteral("saved selection \"%1\"").arg(saved.name)))
+            return false;
+    }
+    for (const Guide& guide : doc.guides()) {
+        if (!std::isfinite(guide.position)) {
+            if (errorMessage)
+                *errorMessage = QStringLiteral("Cannot save a guide with a non-finite position.");
+            return false;
+        }
+    }
+
     const QByteArray bytes =
         QJsonDocument(buildProjectJson(doc)).toJson(QJsonDocument::Indented);
 
@@ -1604,6 +1852,7 @@ std::unique_ptr<Document> loadDocument(const QString& filePath,
                     bytes = entryBytes;
                 else if (entryName.startsWith(QLatin1String("media/"))
                          || entryName.startsWith(QLatin1String("masks/"))
+                         || entryName.startsWith(QLatin1String("selections/"))
                          || entryName == QLatin1String("selection.png"))
                     media.insert(entryName, entryBytes);
                 mz_free(data);

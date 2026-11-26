@@ -46,18 +46,7 @@ void HealingTool::mousePress(QMouseEvent* event, const QPointF& docPos, const To
     if (!ctx.selectedLayerId.isNull())
         targetLayer = ctx.document->findLayer(ctx.selectedLayerId);
     if (!targetLayer || targetLayer->type() != LayerType::Image) {
-        const auto& children = ctx.document->rootGroup()->children;
-        for (auto it = children.rbegin(); it != children.rend(); ++it) {
-            Layer* l = it->get();
-            if (l && l->visible && l->type() == LayerType::Image) {
-                const QTransform m = l->transform.matrix(l->contentBounds());
-                const QPointF local = m.inverted().map(docPos);
-                if (l->contentBounds().contains(local)) {
-                    targetLayer = l;
-                    break;
-                }
-            }
-        }
+        targetLayer = topmostImageLayerAt(ctx, docPos);
     }
     if (!targetLayer || !SelectionOperations::canEditPixels(*ctx.document, targetLayer->id())) {
         reportPixelsLocked(ctx);
@@ -76,13 +65,13 @@ void HealingTool::mousePress(QMouseEvent* event, const QPointF& docPos, const To
             m_origHeight = img->naturalHeight;
             m_origTransform = layer->transform;
 
-            const QTransform matrix = layer->transform.matrix(layer->contentBounds());
-            const QPoint dstLocal = matrix.inverted().map(docPos).toPoint();
+            const QPoint dstLocal = documentToLayerPoint(*ctx.document, *layer, docPos).toPoint();
 
             m_workingImage = ctx.document->assets().decodedImage(img->assetId);
             if (!m_workingImage.isNull())
                 m_workingImage = m_workingImage.copy(); // detached: não corrompe o cache
             if (!m_workingImage.isNull()) {
+                m_originalImage = m_workingImage.copy();
                 m_isHealing = true;
                 m_workingImage = ImageProcessing::removeRedEye(
                     m_workingImage, dstLocal, m_radius);
@@ -106,25 +95,13 @@ void HealingTool::mousePress(QMouseEvent* event, const QPointF& docPos, const To
         if (!ctx.selectedLayerId.isNull())
             layer = ctx.document->findLayer(ctx.selectedLayerId);
         if (!layer || layer->type() != LayerType::Image) {
-            const auto& children = ctx.document->rootGroup()->children;
-            for (auto it = children.rbegin(); it != children.rend(); ++it) {
-                Layer* l = it->get();
-                if (l && l->visible && !l->locked && l->type() == LayerType::Image) {
-                    const QTransform m = l->transform.matrix(l->contentBounds());
-                    const QPointF local = m.inverted().map(docPos);
-                    if (l->contentBounds().contains(local)) {
-                        if (ctx.selectLayer)
-                            ctx.selectLayer(l->id());
-                        layer = l;
-                        break;
-                    }
-                }
-            }
+            layer = topmostImageLayerAt(ctx, docPos);
+            if (layer && ctx.selectLayer)
+                ctx.selectLayer(layer->id());
         }
 
         if (layer && layer->type() == LayerType::Image) {
-            const QTransform matrix = layer->transform.matrix(layer->contentBounds());
-            m_srcPointLocal = matrix.inverted().map(docPos).toPoint();
+            m_srcPointLocal = documentToLayerPoint(*ctx.document, *layer, docPos).toPoint();
             m_srcLayerId = layer->id();
             m_hasSource = true;
 
@@ -162,6 +139,7 @@ void HealingTool::mousePress(QMouseEvent* event, const QPointF& docPos, const To
             m_workingImage = ctx.document->assets().decodedImage(img->assetId);
             if (!m_workingImage.isNull()) {
                 m_workingImage = m_workingImage.copy(); // detached once per stroke
+                m_originalImage = m_workingImage.copy();
                 m_strokeFormat = m_workingImage.format();
                 if (m_workingImage.format() != QImage::Format_ARGB32_Premultiplied)
                     m_workingImage = m_workingImage.convertToFormat(QImage::Format_ARGB32_Premultiplied);
@@ -170,8 +148,7 @@ void HealingTool::mousePress(QMouseEvent* event, const QPointF& docPos, const To
             }
             if (!m_workingImage.isNull()) {
                 m_isHealing = true;
-                const QTransform matrix = layer->transform.matrix(layer->contentBounds());
-                const QPoint dstLocal = matrix.inverted().map(docPos).toPoint();
+                const QPoint dstLocal = documentToLayerPoint(*ctx.document, *layer, docPos).toPoint();
 
                 m_lastHealRect = ImageProcessing::spotHealInPlace(
                     m_workingImage, m_strokeSnapshot, dstLocal, m_srcPointLocal,
@@ -205,8 +182,7 @@ void HealingTool::mouseMove(QMouseEvent* event, const QPointF& docPos, const Too
 
         if (layer && layer->type() == LayerType::Image) {
             auto* img = static_cast<ImageLayer*>(layer);
-            const QTransform matrix = layer->transform.matrix(layer->contentBounds());
-            const QPoint dstLocal = matrix.inverted().map(docPos).toPoint();
+            const QPoint dstLocal = documentToLayerPoint(*ctx.document, *layer, docPos).toPoint();
 
             if (m_mode == Mode::RedEye) {
                 // RedEye: um clique, uma correção — o arrasto não repete.
@@ -249,6 +225,7 @@ void HealingTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const 
 
         if (layer && layer->type() == LayerType::Image) {
             auto* img = static_cast<ImageLayer*>(layer);
+            m_workingImage = constrainToPixelSelection(ctx, m_originalImage, m_workingImage);
             if (m_strokeFormat != QImage::Format_Invalid &&
                 m_workingImage.format() != m_strokeFormat)
                 m_workingImage = m_workingImage.convertToFormat(m_strokeFormat);
@@ -279,6 +256,7 @@ void HealingTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const 
 
     m_isHealing = false;
     m_workingImage = QImage();
+    m_originalImage = QImage();
     m_strokeSnapshot = QImage();
     m_strokeFormat = QImage::Format_Invalid;
     m_lastHealRect = QRect();
@@ -300,7 +278,7 @@ void HealingTool::drawOverlay(QPainter* painter, const ToolContext& ctx)
             srcLayer = ctx.document->findLayer(ctx.selectedLayerId);
 
         if (srcLayer && srcLayer->type() == LayerType::Image) {
-            const QTransform layerToDoc = srcLayer->transform.matrix(srcLayer->contentBounds());
+            const QTransform layerToDoc = layerToDocumentTransform(*ctx.document, *srcLayer);
             const QTransform layerToDevice = layerToDoc * ctx.docToDevice;
             const QPointF srcScreen = layerToDevice.map(QPointF(m_srcPointLocal));
 
@@ -335,6 +313,7 @@ void HealingTool::cancel(const ToolContext& ctx)
         ctx.clearLayerPreview();
     m_isHealing = false;
     m_workingImage = QImage();
+    m_originalImage = QImage();
     m_strokeSnapshot = QImage();
     m_strokeFormat = QImage::Format_Invalid;
     m_lastHealRect = QRect();

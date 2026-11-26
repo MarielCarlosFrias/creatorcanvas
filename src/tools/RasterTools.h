@@ -68,6 +68,7 @@ private:
     QPointF m_hoverDocPos;
     bool m_hoverValid = false;
     QImage m_workingImage;
+    QImage m_originalImage;
 
     LayerId m_origAssetId;
     int m_origWidth = 0;

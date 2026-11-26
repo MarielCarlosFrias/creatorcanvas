@@ -32,4 +32,13 @@ bool exportSliceToImage(const Document& doc, const QRectF& sliceRect,
                         int quality, double scale,
                         QString* errorMessage = nullptr);
 
+/// Renders the document into a single-page PDF without the interactive
+/// CachingRenderer, so shapes, paths and simple text are painted directly as
+/// PDF vector operators whenever the renderer supports it. Bitmap layers and
+/// features requiring raster compositing (for example clipping/adjustment
+/// stacks or raster effects) are necessarily embedded as images. |scale|
+/// multiplies the canvas size.
+bool exportDocumentToPdf(const Document& doc, const QString& filePath,
+                         double scale, QString* errorMessage = nullptr);
+
 } // namespace cc

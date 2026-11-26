@@ -6,17 +6,21 @@
 #include "core/layers/Layer.h"
 #include "core/layers/ToneAdjustments.h"
 #include "core/image/AdjustmentEngine.h"
+#include "core/selection/SelectionOperations.h"
 
 #include <QBrush>
 #include <QFont>
 #include <QGuiApplication>
 #include <QHash>
+#include <QFile>
 #include <QImage>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPen>
+#include <QRegularExpression>
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include "core/image/ImageProcessing.h"
 
 namespace cc {
@@ -614,6 +618,8 @@ void drawShape(QPainter* painter, const ShapeLayer& shape)
 
 struct OutlineCacheKey {
     LayerId assetId;
+    qint64 pixelsKey = 0;
+    QSize sourceSize;
     QRgb color = 0;
     int width10 = 0;
     int blur10 = 0;
@@ -623,6 +629,8 @@ struct OutlineCacheKey {
 
     bool operator==(const OutlineCacheKey& o) const {
         return assetId == o.assetId
+            && pixelsKey == o.pixelsKey
+            && sourceSize == o.sourceSize
             && color == o.color
             && width10 == o.width10
             && blur10 == o.blur10
@@ -633,13 +641,8 @@ struct OutlineCacheKey {
 };
 
 inline size_t qHash(const OutlineCacheKey& k, size_t seed = 0) {
-    return ::qHash(k.assetId.toString(), seed)
-        ^ ::qHash(k.color)
-        ^ ::qHash(k.width10)
-        ^ ::qHash(k.blur10)
-        ^ ::qHash(k.opacity100)
-        ^ ::qHash(k.naturalW)
-        ^ ::qHash(k.naturalH);
+    return qHashMulti(seed, k.assetId, k.pixelsKey, k.sourceSize, k.color,
+                      k.width10, k.blur10, k.opacity100, k.naturalW, k.naturalH);
 }
 
 struct CachedOutline {
@@ -649,11 +652,17 @@ struct CachedOutline {
 
 static QHash<OutlineCacheKey, CachedOutline> s_outlineCache;
 
-void renderImageOutline(QPainter* painter, const ImageLayer& image, const Document& doc)
+void renderImageOutline(QPainter* painter, const ImageLayer& image,
+                        const QImage& fullImg)
 {
+    if (fullImg.isNull())
+        return;
+
     const auto& outline = image.effects.outline;
     OutlineCacheKey key;
     key.assetId = image.assetId;
+    key.pixelsKey = static_cast<qint64>(fullImg.cacheKey());
+    key.sourceSize = fullImg.size();
     key.color = outline.color.rgba();
     key.width10 = static_cast<int>(std::round(outline.width * 10.0));
     key.blur10 = static_cast<int>(std::round(outline.blur * 10.0));
@@ -671,9 +680,8 @@ void renderImageOutline(QPainter* painter, const ImageLayer& image, const Docume
         return;
     }
 
-    const QImage fullImg = doc.assets().decodedImage(image.assetId);
-    if (fullImg.isNull()) return;
-
+    // A silhueta vem dos mesmos pixels mascarados/ajustados do conteúdo.
+    // Usar o asset cru aqui fazia o efeito reaparecer em áreas removidas.
     // Geração acelerada: downscale para no máximo 1280px se a textura for gigante
     const int maxDim = 1280;
     double scaleDown = 1.0;
@@ -741,6 +749,8 @@ void renderImageOutline(QPainter* painter, const ImageLayer& image, const Docume
 
 struct DropShadowCacheKey {
     LayerId assetId;
+    qint64 pixelsKey = 0;
+    QSize sourceSize;
     QRgb color = 0;
     int distance10 = 0;
     int angle10 = 0;
@@ -751,6 +761,8 @@ struct DropShadowCacheKey {
 
     bool operator==(const DropShadowCacheKey& o) const {
         return assetId == o.assetId
+            && pixelsKey == o.pixelsKey
+            && sourceSize == o.sourceSize
             && color == o.color
             && distance10 == o.distance10
             && angle10 == o.angle10
@@ -762,14 +774,9 @@ struct DropShadowCacheKey {
 };
 
 inline size_t qHash(const DropShadowCacheKey& k, size_t seed = 0) {
-    return ::qHash(k.assetId.toString(), seed)
-        ^ ::qHash(k.color)
-        ^ ::qHash(k.distance10)
-        ^ ::qHash(k.angle10)
-        ^ ::qHash(k.blur10)
-        ^ ::qHash(k.opacity100)
-        ^ ::qHash(k.naturalW)
-        ^ ::qHash(k.naturalH);
+    return qHashMulti(seed, k.assetId, k.pixelsKey, k.sourceSize, k.color,
+                      k.distance10, k.angle10, k.blur10, k.opacity100,
+                      k.naturalW, k.naturalH);
 }
 
 struct CachedDropShadow {
@@ -781,12 +788,18 @@ struct CachedDropShadow {
 
 static QHash<DropShadowCacheKey, CachedDropShadow> s_dropShadowCache;
 
-void renderImageDropShadow(QPainter* painter, const ImageLayer& image, const Document& doc)
+void renderImageDropShadow(QPainter* painter, const ImageLayer& image,
+                           const QImage& fullImg)
 {
+    if (fullImg.isNull())
+        return;
+
     const auto& shadow = image.effects.dropShadow;
 
     DropShadowCacheKey key;
     key.assetId = image.assetId;
+    key.pixelsKey = static_cast<qint64>(fullImg.cacheKey());
+    key.sourceSize = fullImg.size();
     key.color = shadow.color.rgba();
     key.distance10 = static_cast<int>(std::round(shadow.distance * 10.0));
     key.angle10 = static_cast<int>(std::round(shadow.angleDeg * 10.0));
@@ -806,9 +819,8 @@ void renderImageDropShadow(QPainter* painter, const ImageLayer& image, const Doc
         return;
     }
 
-    const QImage fullImg = doc.assets().decodedImage(image.assetId);
-    if (fullImg.isNull()) return;
-
+    // Tal como o outline, a sombra usa o bitmap depois da máscara e dos
+    // ajustes; a chave acima distingue também prévias e máscaras revisadas.
     const double rad = qDegreesToRadians(shadow.angleDeg);
     const double offsetX = shadow.distance * std::cos(rad);
     const double offsetY = shadow.distance * std::sin(rad);
@@ -916,6 +928,9 @@ void applyImageInnerShadow(QImage& target, const ImageInnerShadow& shadow)
 
 /// Declaração antecipada de applyAdjustment (definida mais abaixo no arquivo).
 QImage applyAdjustment(const QImage& acc, const AdjustmentLayer& adj);
+
+/// Hash do estado da AdjustmentLayer (definido junto de applyAdjustment).
+static quint64 adjustmentStateKey(const AdjustmentLayer& adj);
 
 /// Compõe uma lista de camadas (filhos de um grupo) num buffer em espaço
 /// de documento, aplicando máscaras de recorte (clipped) e camadas de
@@ -1400,10 +1415,26 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
 
             // Ajuste não destrutivo vinculado a esta camada de imagem.
             // Os parâmetros do AdjustmentLayer são aplicados sobre os pixels
-            // em tempo real, sem modificar o asset subjacente.
+            // em tempo real, sem modificar o asset subjacente. O resultado é
+            // cacheado na própria camada (chave = bitmap de entrada + estado
+            // do ajuste): antes, cada repaint recalculava o ajuste inteiro —
+            // era a lentidão depois de aplicar um ajuste na aba Imagem.
             if (image.adjustmentLayerId) {
-                if (const auto* adj = doc.findAdjustmentLayer(*image.adjustmentLayerId)) {
-                    maskedPixels = applyAdjustment(maskedPixels, *adj);
+                // A camada de ajuste invisível não produz efeito (como no
+                // Photoshop) — e a chave da cache inclui a visibilidade.
+                if (const auto* adj = doc.findAdjustmentLayer(*image.adjustmentLayerId);
+                    adj && adj->visible) {
+                    const qint64 inKey = static_cast<qint64>(maskedPixels.cacheKey());
+                    const quint64 adjKey = adjustmentStateKey(*adj);
+                    if (image.adjustedRenderCache.isNull()
+                        || image.adjustedRenderSourceKey != inKey
+                        || image.adjustedRenderAdjKey != adjKey
+                        || image.adjustedRenderCache.size() != maskedPixels.size()) {
+                        image.adjustedRenderCache = applyAdjustment(maskedPixels, *adj);
+                        image.adjustedRenderSourceKey = inKey;
+                        image.adjustedRenderAdjKey = adjKey;
+                    }
+                    maskedPixels = image.adjustedRenderCache;
                 }
             }
 
@@ -1411,12 +1442,12 @@ void drawLayer(QPainter* painter, const Layer& layer, const Document& doc,
 
             // Efeito Sombra Projetada (Drop Shadow)
             if (image.effects.dropShadow.enabled) {
-                renderImageDropShadow(painter, image, doc);
+                renderImageDropShadow(painter, image, maskedPixels);
             }
 
             // Efeito Contorno / Glow ("Sticker Effect")
             if (image.effects.outline.enabled && image.effects.outline.width > 0.0) {
-                renderImageOutline(painter, image, doc);
+                renderImageOutline(painter, image, maskedPixels);
             }
 
             // Efeito Sobreposição de Cor (Color Overlay - Photoshop Style)
@@ -1507,8 +1538,15 @@ bool subtreeNeedsCompositing(const GroupLayer* group)
             continue;
         if (child->clipped)
             return true;
-        if (child->type() == LayerType::Adjustment)
+        if (child->type() == LayerType::Adjustment) {
+            // Ajuste LINKADO a uma imagem (sourceLayerId) é aplicado no nível
+            // da própria imagem (drawLayer) — não precisa do buffer acumulado
+            // e não deve ser aplicado de novo no caminho de composição.
+            const auto* adj = static_cast<const AdjustmentLayer*>(child.get());
+            if (adj->sourceLayerId.has_value())
+                continue;
             return true;
+        }
         if (child->type() == LayerType::Group
             && subtreeNeedsCompositing(static_cast<const GroupLayer*>(child.get())))
             return true;
@@ -1524,13 +1562,38 @@ bool needsCompositing(const GroupLayer* root)
     return subtreeNeedsCompositing(root);
 }
 
+/// Hash do estado completo de uma AdjustmentLayer (kind + opacidade +
+/// parâmetros) — chave da cache do resultado ajustado no ImageLayer.
+static quint64 adjustmentStateKey(const AdjustmentLayer& adj)
+{
+    quint64 h = 1469598103934665603ULL;
+    auto mix = [&h](quint64 v) {
+        h ^= v + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+    };
+    mix(static_cast<quint64>(adj.kind));
+    mix(static_cast<quint64>(adj.opacity() * 100000.0f));
+    mix(adj.visible ? 1 : 0);
+    mix(adj.parameters.size());
+    for (const auto& [k, v] : adj.parameters) {
+        mix(qHash(k));
+        quint64 bits = 0;
+        static_assert(sizeof(bits) == sizeof(v));
+        std::memcpy(&bits, &v, sizeof(bits));
+        mix(bits);
+    }
+    return h;
+}
+
 /// Aplica o efeito da camada de ajuste ao acumulado (Photocraft: a camada
 /// de ajuste processa tudo abaixo dela na pilha). A força do efeito é a
 /// opacidade da camada (Photoshop: 100% = efeito total, 0% = nada).
 QImage applyAdjustment(const QImage& acc, const AdjustmentLayer& adj)
 {
     const float strength = std::clamp(adj.opacity(), 0.0f, 1.0f);
-    return applyAdjustmentParameters(acc, adj.kind, adj.parameters, strength);
+    const QImage adjusted = applyAdjustmentParameters(acc, adj.kind, adj.parameters, strength);
+    if (!adj.vectorMask.isNull() && adj.vectorMask.size() == acc.size())
+        return SelectionOperations::applySelectionMask(acc, adjusted, adj.vectorMask);
+    return adjusted;
 }
 
 /// Compõe uma lista de camadas (filhos de um grupo) num buffer, aplicando
@@ -1592,6 +1655,12 @@ QImage composeLayers(const std::vector<std::unique_ptr<Layer>>& layers,
                 continue;
 
             if (child->type() == LayerType::Adjustment) {
+                // Ajuste linkado a uma imagem é aplicado no nível da imagem
+                // (drawLayer) — aqui só valem os ajustes SOLTOS na pilha.
+                // Aplicar os dois seria 2× o efeito (bug detetado por bench).
+                const auto* adjLayer = static_cast<const AdjustmentLayer*>(child.get());
+                if (adjLayer->sourceLayerId.has_value())
+                    continue;
                 // Camada de ajuste: processa o ACUMULADO (tudo abaixo
                 // dela na pilha), como o engine do PhotoCraft. O
                 // painter precisa ser encerrado antes de substituir o
@@ -1722,10 +1791,26 @@ void SoftwareRenderer::renderDocument(const Document& doc, QPainter* painter,
 
         const QSize docSize(doc.width(), doc.height());
 
-        // Cache do compósito: documentos com recortes/ajustes eram
-        // reconstruídos por inteiro em CADA pintura.
-        if (compositeFromCache(painter, doc, docToDevice, canvasOnDevice, docSize,
-                               options)) {
+        // No modo interativo (arrasto de camada/handles) o buffer de composição
+        // é reduzido (máx. 1200 px) e não entra na cache de compósito: cada
+        // frame de arrasto tem revisão nova, e o ajuste píxel-a-píxel sobre o
+        // buffer em tamanho cheio era o que travava a UI com ajustes na pilha.
+        QSize bufferSize = docSize;
+        QTransform baseTransform;
+        const bool downscale = options.interactive
+                               && qMax(docSize.width(), docSize.height()) > 1200;
+        if (downscale) {
+            const double f = 1200.0 / qMax(docSize.width(), docSize.height());
+            bufferSize = QSize(qMax(1, int(docSize.width() * f)),
+                               qMax(1, int(docSize.height() * f)));
+            baseTransform.scale(f, f);
+        }
+
+        // Cache do compósito (só fora do modo interativo): documentos com
+        // recortes/ajustes eram reconstruídos por inteiro em CADA pintura.
+        if (!options.interactive
+            && compositeFromCache(painter, doc, docToDevice, canvasOnDevice, docSize,
+                                  options)) {
             painter->save();
             painter->resetTransform();
             painter->setPen(QPen(options.canvasBorder, 1.0));
@@ -1736,17 +1821,24 @@ void SoftwareRenderer::renderDocument(const Document& doc, QPainter* painter,
         }
 
         const QImage acc = composeLayers(root->children, doc, canvasRect, options,
-                                         QTransform(), docSize);
+                                         baseTransform, bufferSize);
         if (acc.isNull())
             return;
 
-        storeComposite(acc, doc, docSize, docToDevice, options);
+        if (!options.interactive)
+            storeComposite(acc, doc, docSize, docToDevice, options);
 
         painter->save();
         painter->setTransform(docToDevice);
         painter->setClipRect(canvasRect);
         painter->setRenderHint(QPainter::SmoothPixmapTransform, !options.interactive);
-        painter->drawImage(0, 0, acc);
+        if (downscale) {
+            // buffer reduzido → esticar de volta para o tamanho do documento
+            painter->drawImage(QRectF(0, 0, docSize.width(), docSize.height()),
+                               acc, QRectF(QPointF(0, 0), bufferSize));
+        } else {
+            painter->drawImage(0, 0, acc);
+        }
         painter->restore();
     }
 
@@ -1790,17 +1882,15 @@ void renderSiblingLayers(const Document& doc, const QList<QUuid>& layerIds,
         // Camada recortada: o conteúdo exportado é o da própria camada,
         // mas recortado pelo ALFA da camada base (a primeira camada não
         // recortada abaixo dela no mesmo grupo) — como no Photoshop.
-        const int index = parent->children.size()
-            - [&] {
-                int idx = 0;
-                for (int i = 0; i < static_cast<int>(parent->children.size()); ++i) {
-                    if (parent->children[static_cast<std::size_t>(i)]->id() == child->id()) {
-                        idx = i;
-                        break;
-                    }
-                }
-                return idx;
-            }();
+        const int index = [&] {
+            for (int i = 0; i < static_cast<int>(parent->children.size()); ++i) {
+                if (parent->children[static_cast<std::size_t>(i)]->id() == child->id())
+                    return i;
+            }
+            return -1;
+        }();
+        if (index < 0)
+            continue;
         const Layer* base = nullptr;
         for (int i = index - 1; i >= 0; --i) {
             const auto* candidate = parent->children[static_cast<std::size_t>(i)].get();
@@ -1987,14 +2077,58 @@ bool layerCacheable(const Layer& layer, const RenderOptions& options)
 // visível (~3 MB cada): 64 MB faziam o cache thrashar (enchia, desalojava e
 // esvaziava entre pinturas — zero acertos). 256 MB cobre o caso normal; o
 // número de entradas é o limite de segurança.
-constexpr qint64 kCacheBudgetBytes = 256 * 1024 * 1024;   // 256 MB
+constexpr qint64 kCacheBudgetBytesBig = 256 * 1024 * 1024;    // 256 MB
+constexpr qint64 kCacheBudgetBytesMedium = 192 * 1024 * 1024; // 192 MB
+constexpr qint64 kCacheBudgetBytesSmall = 96 * 1024 * 1024;   // 96 MB
 // O número de entradas tem de cobrir documentos com muitas camadas: com 16
 // um documento de 35 camadas NUNCA acertava o cache (cada insert desalojava
 // uma entrada viva). Quem limita a memória é o orçamento em bytes.
 constexpr int kCacheMaxEntries = 512;
 // Um compósito de documento grande não deve competir com a cache de camadas:
 // acima deste tamanho, não se cacheia (desenha directo).
-constexpr qint64 kMaxCompositeBytes = 96 * 1024 * 1024;   // 96 MB
+constexpr qint64 kMaxCompositeBytesBig = 96 * 1024 * 1024;    // 96 MB
+constexpr qint64 kMaxCompositeBytesSmall = 48 * 1024 * 1024;  // 48 MB
+
+/// Memória total da máquina (Linux: /proc/meminfo). 0 = desconhecida.
+qint64 systemMemoryBytes()
+{
+#if defined(Q_OS_LINUX)
+    QFile file(QStringLiteral("/proc/meminfo"));
+    if (file.open(QIODevice::ReadOnly)) {
+        const QString content = QString::fromUtf8(file.readAll());
+        static const QRegularExpression pattern(
+            QStringLiteral("MemTotal:[[:space:]]+([0-9]+)[[:space:]]+kB"));
+        const auto match = pattern.match(content);
+        if (match.hasMatch())
+            return match.captured(1).toLongLong() * 1024;
+    }
+#endif
+    return 0;
+}
+
+/// Orçamento da cache de camadas: em máquinas com pouca RAM o tecto baixa,
+/// porque 256 MB + 96 MB de compósito eram a maior reserva de memória do
+/// programa. O valor é calculado uma única vez.
+qint64 cacheBudgetBytes()
+{
+    static const qint64 budget = [] {
+        const qint64 total = systemMemoryBytes();
+        constexpr qint64 gb = 1024ll * 1024 * 1024;
+        if (total <= 0)
+            return kCacheBudgetBytesBig;      // desconhecido: conservador
+        if (total < 6 * gb)
+            return kCacheBudgetBytesSmall;     // 4 GB
+        if (total < 12 * gb)
+            return kCacheBudgetBytesMedium;    // 8 GB
+        return kCacheBudgetBytesBig;           // 16 GB+
+    }();
+    return budget;
+}
+
+qint64 compositeBudgetBytes()
+{
+    return qMin(kMaxCompositeBytesBig, cacheBudgetBytes() / 2);
+}
 
 } // namespace
 
@@ -2024,8 +2158,9 @@ bool CachingRenderer::drawCachedLayer(QPainter* painter, const Layer& layer,
     if (device.isEmpty() || device.width() <= 0 || device.height() <= 0)
         return false;
 
-    const Key key{layer.id(), doc.revision(), documentFingerprint(doc), device,
-                  options.interactive, docToDevice.m11()};
+    const Key key{layer.id(), doc.revision(),
+                  m_frameFingerprint ? m_frameFingerprint : documentFingerprint(doc),
+                  device, options.interactive, docToDevice.m11()};
 
     if (auto it = m_cache.find(key); it != m_cache.end()) {
         ++m_hits;
@@ -2037,7 +2172,14 @@ bool CachingRenderer::drawCachedLayer(QPainter* painter, const Layer& layer,
         // deslocada pelo pan antigo).
         painter->save();
         painter->resetTransform();
-        painter->drawPixmap(canvasOnDevice.topLeft().toPoint(), it->pixmap);
+        // O buffer contém apenas os pixels da camada. O blend tem de ser
+        // aplicado na colagem contra o acumulado real, não apenas durante a
+        // rasterização isolada (onde o destino é transparente).
+        painter->setCompositionMode(compositionMode(layer.blendMode));
+        if (!it->pixmap.isNull())
+            painter->drawPixmap(canvasOnDevice.topLeft().toPoint(), it->pixmap);
+        else
+            painter->drawImage(canvasOnDevice.topLeft().toPoint(), it->image);
         painter->restore();
         return true;
     }
@@ -2079,8 +2221,7 @@ bool CachingRenderer::drawCachedLayer(QPainter* painter, const Layer& layer,
         if (entry.pixmap.isNull())
             return false;
     } else {
-        // Headless / offscreen tests: cache is disabled to avoid QPixmap creation warning.
-        return false;
+        entry.image = img;
     }
     entry.bytes = static_cast<qint64>(img.sizeInBytes());
     // O ponto de blit é por ENTRADA (cada camada tem a sua área). O pixmap
@@ -2094,10 +2235,14 @@ bool CachingRenderer::drawCachedLayer(QPainter* painter, const Layer& layer,
     evictToFit();
 
 
-    // Colar na origem ACTUAL do canvas (o pixmap é pan-invariante).
+    // Colar na origem ACTUAL do canvas (o buffer é pan-invariante).
     painter->save();
     painter->resetTransform();
-    painter->drawPixmap(canvasOnDevice.topLeft().toPoint(), entry.pixmap);
+    painter->setCompositionMode(compositionMode(layer.blendMode));
+    if (!entry.pixmap.isNull())
+        painter->drawPixmap(canvasOnDevice.topLeft().toPoint(), entry.pixmap);
+    else
+        painter->drawImage(canvasOnDevice.topLeft().toPoint(), entry.image);
     painter->restore();
     return true;
 }
@@ -2117,7 +2262,7 @@ void CachingRenderer::dropLayer(const QUuid& layerId)
 
 void CachingRenderer::evictToFit()
 {
-    while ((m_bytes > kCacheBudgetBytes || m_cache.size() > kCacheMaxEntries)
+    while ((m_bytes > cacheBudgetBytes() || m_cache.size() > kCacheMaxEntries)
            && !m_lru.isEmpty()) {
         const Key oldest = m_lru.takeFirst();
         auto it = m_cache.find(oldest);
@@ -2139,8 +2284,8 @@ bool CachingRenderer::compositeFromCache(QPainter* painter, const Document& doc,
         return false;
 
     const CompositeKey key{compositeKey(doc), doc.revision(),
-                           documentFingerprint(doc), docSize,
-                           docToDevice.m11(), options.interactive};
+                           m_frameFingerprint ? m_frameFingerprint : documentFingerprint(doc),
+                           docSize, docToDevice.m11(), options.interactive};
     if (auto it = m_compositeCache.find(key); it != m_compositeCache.end()) {
         ++m_compositeHits;
         // O compósito está em coordenadas de documento: colar com a mesma
@@ -2166,22 +2311,32 @@ void CachingRenderer::storeComposite(const QImage& composite, const Document& do
     // desalojar tudo o resto — nesses casos é melhor não cachear.
     if (composite.isNull() || docSize.isEmpty())
         return;
-    if (composite.sizeInBytes() > kMaxCompositeBytes)
+    if (composite.sizeInBytes() > compositeBudgetBytes())
         return;
 
     const CompositeKey key{compositeKey(doc), doc.revision(),
-                           documentFingerprint(doc), docSize,
-                           docToDevice.m11(), options.interactive};
-    m_compositeCache.insert(key, composite.copy());
-    m_bytes += composite.sizeInBytes();
-    if (m_compositeBytes + composite.sizeInBytes() > kMaxCompositeBytes)
-        evictComposites();
+                           m_frameFingerprint ? m_frameFingerprint : documentFingerprint(doc),
+                           docSize, docToDevice.m11(), options.interactive};
+    const QImage cached = composite.copy();
+    if (cached.isNull() || cached.sizeInBytes() > compositeBudgetBytes())
+        return;
+
+    // insert() substitui entradas com a mesma revisão/fingerprint. Descontar
+    // primeiro o valor antigo evita contar duas vezes a mesma chave.
+    if (auto it = m_compositeCache.find(key); it != m_compositeCache.end()) {
+        m_compositeBytes -= it.value().sizeInBytes();
+        m_compositeCache.erase(it);
+    }
+
+    m_compositeBytes += cached.sizeInBytes();
+    m_compositeCache.insert(key, cached);
+    evictComposites();
 }
 
 void CachingRenderer::evictComposites()
 {
     while (!m_compositeCache.isEmpty()
-           && m_compositeBytes > kMaxCompositeBytes / 2) {
+           && m_compositeBytes > compositeBudgetBytes()) {
         const auto oldest = m_compositeCache.constBegin();
         m_compositeBytes -= oldest.value().sizeInBytes();
         m_compositeCache.erase(oldest);
@@ -2193,6 +2348,8 @@ void CachingRenderer::clearCaches()
     m_cache.clear();
     m_lru.clear();
     m_bytes = 0;
+    m_hits = 0;
+    m_misses = 0;
     m_compositeCache.clear();
     m_compositeBytes = 0;
     m_compositeHits = 0;
@@ -2209,10 +2366,47 @@ void CachingRenderer::invalidateAllLayers()
     clearCaches();
 }
 
+void CachingRenderer::renderDocument(const Document& doc, QPainter* painter,
+                                     const QTransform& docToDevice,
+                                     const RenderOptions& options)
+{
+    // A árvore não muda durante uma chamada de render. Calcular a fingerprint
+    // uma única vez evita o padrão O(camadas²) do caminho cacheado.
+    m_frameFingerprint = documentFingerprint(doc);
+    SoftwareRenderer::renderDocument(doc, painter, docToDevice, options);
+    m_frameFingerprint = 0;
+}
+
 IRenderer& defaultRenderer()
 {
     static CachingRenderer renderer;
     return renderer;
+}
+
+bool shapeContainsPoint(const ShapeLayer& shape, const QPointF& localPoint,
+                        double tolerance)
+{
+    if (shape.points.size() < 2)
+        return false;
+    const int radius = std::clamp(static_cast<int>(std::ceil(
+        std::max(1.0, tolerance + shape.strokeWidth * 0.5))), 1, 32);
+    const int size = radius * 2 + 3;
+    QImage probe(size, size, QImage::Format_ARGB32_Premultiplied);
+    probe.fill(Qt::transparent);
+    QPainter painter(&probe);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.translate(radius + 1 - localPoint.x(), radius + 1 - localPoint.y());
+    drawShape(&painter, shape);
+    painter.end();
+    const int cx = radius + 1;
+    const int cy = radius + 1;
+    for (int y = std::max(0, cy - radius); y <= std::min(size - 1, cy + radius); ++y) {
+        for (int x = std::max(0, cx - radius); x <= std::min(size - 1, cx + radius); ++x) {
+            if (qAlpha(probe.pixel(x, y)) > 8)
+                return true;
+        }
+    }
+    return false;
 }
 
 } // namespace cc

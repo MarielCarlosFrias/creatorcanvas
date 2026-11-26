@@ -36,6 +36,9 @@ public:
     void setPaintColor(const QColor& color);
     QColor currentPaintColor() const { return m_currentPaintColor; }
 
+signals:
+    void paintColorChanged(const QColor& color);
+
 private:
     void buildUi();
     void syncInitialValues();

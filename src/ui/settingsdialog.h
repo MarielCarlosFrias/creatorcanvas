@@ -29,18 +29,22 @@ private:
     QComboBox* m_language = nullptr;
     QComboBox* m_autosave = nullptr;
     QComboBox* m_historyLimit = nullptr;
+    QComboBox* m_historyMemory = nullptr;
     QCheckBox* m_gpuAcceleration = nullptr;
     QCheckBox* m_darkMode = nullptr;
     QCheckBox* m_confirmExit = nullptr;
     QCheckBox* m_showGrid = nullptr;
     QCheckBox* m_snapToGrid = nullptr;
+    QCheckBox* m_advancedMode = nullptr;
     QLabel* m_languageLabel = nullptr;
     QLabel* m_autosaveLabel = nullptr;
     QLabel* m_historyLimitLabel = nullptr;
+    QLabel* m_historyMemoryLabel = nullptr;
     QLabel* m_gpuAccelerationLabel = nullptr;
     QLabel* m_restartHintLabel = nullptr;
     QLabel* m_appearanceLabel = nullptr;
     QLabel* m_canvasLabel = nullptr;
+    QLabel* m_advancedLabel = nullptr;
 };
 
 } // namespace cc

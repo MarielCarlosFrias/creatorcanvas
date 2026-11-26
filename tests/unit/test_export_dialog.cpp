@@ -2,6 +2,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QPushButton>
+#include <QRadioButton>
 
 #include "ui/exportdialog.h"
 #include "core/Document.h"
@@ -111,6 +112,56 @@ private slots:
         QCOMPARE(dlg.settings().transparent, false);
         format->setCurrentIndex(pngIndex);
         QCOMPARE(dlg.settings().transparent, false);
+    }
+    void testVectorFormatsHaveInherentTransparencyAndScale()
+    {
+        QTemporaryDir tmpDir;
+        SettingsService settings(tmpDir.path() + "/settings.json");
+        I18nService i18n(&settings, {":/locales"});
+        i18n.loadAvailableLanguages();
+
+        Document doc(640, 480, 96);
+        auto layer = std::make_unique<ImageLayer>();
+        const LayerId layerId = layer->id();
+        doc.addLayer(std::move(layer));
+        ExportDialog dlg(&doc, &i18n, layerId);
+
+        QComboBox* format = nullptr;
+        for (QComboBox* combo : dlg.findChildren<QComboBox*>())
+            if (combo->findData(QStringLiteral("png")) >= 0) {
+                format = combo;
+                break;
+            }
+        QVERIFY(format != nullptr);
+        QComboBox* scale = nullptr;
+        for (QComboBox* combo : dlg.findChildren<QComboBox*>())
+            if (combo != format && combo->findData(2.0) >= 0) {
+                scale = combo;
+                break;
+            }
+        QVERIFY(scale != nullptr);
+        QCheckBox* transparent = nullptr;
+        for (QCheckBox* box : dlg.findChildren<QCheckBox*>())
+            transparent = box;
+        QVERIFY(transparent != nullptr);
+
+        scale->setCurrentIndex(scale->findData(2.0));
+        for (const QString& fmt : {QStringLiteral("pdf"), QStringLiteral("svg")}) {
+            const int index = format->findData(fmt);
+            QVERIFY(index >= 0);
+            format->setCurrentIndex(index);
+            QCOMPARE(dlg.settings().scale, 2.0);
+            // PDF/SVG preservam a transparência inerente; não é um toggle
+            // destrutivo como em PNG/JPEG.
+            QVERIFY(!transparent->isEnabled());
+            QVERIFY(transparent->isChecked());
+            QVERIFY(dlg.settings().transparent);
+            // Exportação vetorial/híbrida é sempre do documento inteiro.
+            const auto radios = dlg.findChildren<QRadioButton*>();
+            for (QRadioButton* radio : radios)
+                if (radio->text().contains(QLatin1String("layer"), Qt::CaseInsensitive))
+                    QVERIFY(!radio->isEnabled());
+        }
     }
 };
 

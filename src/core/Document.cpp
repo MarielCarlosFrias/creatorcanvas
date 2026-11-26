@@ -1,5 +1,7 @@
 #include "Document.h"
 
+#include "geometry/LayerTransform.h"
+
 #include <algorithm>
 #include <functional>
 #include <cstddef>
@@ -9,8 +11,40 @@
 #include <QDateTime>
 #include <QDataStream>
 #include <QIODevice>
+#include <QTransform>
+#include <QtMath>
 
 namespace cc {
+
+namespace {
+
+QImage selectionInLayerSpace(const Document& document, const Layer& layer,
+                             const QImage& documentSelection)
+{
+    if (documentSelection.isNull())
+        return {};
+    const QSize layerSize = layer.contentBounds().size().toSize();
+    if (layerSize.isEmpty())
+        return {};
+    const QTransform layerToDocument = layerToDocumentMatrix(document, layer);
+    if (qFuzzyIsNull(layerToDocument.determinant()))
+        return {};
+    const QImage source = documentSelection.convertToFormat(QImage::Format_Alpha8);
+    QImage result(layerSize, QImage::Format_Alpha8);
+    result.fill(0);
+    for (int y = 0; y < result.height(); ++y) {
+        uchar* dst = result.scanLine(y);
+        for (int x = 0; x < result.width(); ++x) {
+            const QPointF documentPoint = layerToDocument.map(QPointF(x + 0.5, y + 0.5));
+            const QPoint sourcePoint(qRound(documentPoint.x()), qRound(documentPoint.y()));
+            if (source.rect().contains(sourcePoint))
+                dst[x] = source.constScanLine(sourcePoint.y())[sourcePoint.x()];
+        }
+    }
+    return result;
+}
+
+}
 
 Document::Document(int width, int height, int dpi, QObject* parent)
     : QObject(parent)
@@ -44,6 +78,126 @@ void Document::setIccProfile(const QByteArray& profile)
     m_iccProfile = profile;
     bumpRevision();
     emit structureChanged();
+}
+
+bool Document::setCanvasSize(int width, int height, const QPointF& layerOffset)
+{
+    const int w = qMax(1, width);
+    const int h = qMax(1, height);
+    if (w == m_width && h == m_height && layerOffset.isNull())
+        return false;
+
+    QTransform oldToNew;
+    oldToNew.translate(layerOffset.x(), layerOffset.y());
+    m_selection.transformDocumentMasks(QSize(w, h), oldToNew);
+
+    for (Guide& guide : m_guides)
+        guide.position += guide.horizontal ? layerOffset.y() : layerOffset.x();
+
+    const QRectF canvasRect(0.0, 0.0, w, h);
+    for (WebSlice& slice : m_webSlices) {
+        slice.rect.translate(layerOffset);
+        slice.rect = slice.rect.intersected(canvasRect);
+    }
+    m_webSlices.erase(
+        std::remove_if(m_webSlices.begin(), m_webSlices.end(),
+                       [](const WebSlice& slice) {
+                           return slice.rect.isEmpty() || !slice.rect.isValid();
+                       }),
+        m_webSlices.end());
+
+    m_width = w;
+    m_height = h;
+    // O offset aplica-se só às camadas do grupo raiz: as transforms dos
+    // grupos propagam-se aos filhos, portanto deslocar a raiz desloca tudo.
+    if (!layerOffset.isNull()) {
+        for (auto& child : m_root->children)
+            child->transform.position += layerOffset;
+    }
+    bumpRevision();
+    emit canvasSizeChanged(m_width, m_height);
+    emit structureChanged();
+    return true;
+}
+
+bool Document::rotateCanvas(double degrees)
+{
+    double d = std::fmod(degrees, 360.0);
+    if (d > 180.0)
+        d -= 360.0;
+    if (d < -180.0)
+        d += 360.0;
+    if (qFuzzyIsNull(d))
+        return false;
+    const double absDegrees = std::abs(d);
+    if (!qFuzzyCompare(absDegrees, 90.0)
+        && !qFuzzyCompare(absDegrees, 180.0))
+        return false;
+
+    const bool swapWH = qFuzzyCompare(absDegrees, 90.0);
+    const int newW = swapWH ? m_height : m_width;
+    const int newH = swapWH ? m_width : m_height;
+    const QPointF oldCenter(m_width / 2.0, m_height / 2.0);
+    const QPointF newCenter(newW / 2.0, newH / 2.0);
+    const QPointF shift = newCenter - oldCenter;
+
+    QTransform rot;
+    rot.translate(oldCenter.x(), oldCenter.y());
+    rot.rotate(d);
+    rot.translate(-oldCenter.x(), -oldCenter.y());
+
+    QTransform oldToNew;
+    oldToNew.translate(newCenter.x(), newCenter.y());
+    oldToNew.rotate(d);
+    oldToNew.translate(-oldCenter.x(), -oldCenter.y());
+    m_selection.transformDocumentMasks(QSize(newW, newH), oldToNew);
+
+    if (swapWH) {
+        const bool clockwise = d > 0.0;
+        for (Guide& guide : m_guides) {
+            if (guide.horizontal) {
+                guide.horizontal = false;
+                guide.position = clockwise ? m_height - guide.position
+                                           : guide.position;
+            } else {
+                guide.horizontal = true;
+                guide.position = clockwise ? guide.position
+                                           : m_width - guide.position;
+            }
+        }
+    } else {
+        for (Guide& guide : m_guides) {
+            guide.position = (guide.horizontal ? m_height : m_width)
+                - guide.position;
+        }
+    }
+
+    const QRectF canvasRect(0.0, 0.0, newW, newH);
+    for (WebSlice& slice : m_webSlices) {
+        slice.rect = oldToNew.mapRect(slice.rect).normalized().intersected(canvasRect);
+    }
+    m_webSlices.erase(
+        std::remove_if(m_webSlices.begin(), m_webSlices.end(),
+                       [](const WebSlice& slice) {
+                           return slice.rect.isEmpty() || !slice.rect.isValid();
+                       }),
+        m_webSlices.end());
+
+    // Só as camadas do grupo raiz: a rotação do grupo propaga-se aos filhos
+    // (a matrix do pai compõe com a do filho), rodá-las também rodaria 2×.
+    for (auto& child : m_root->children) {
+        AffineTransform t = child->transform;
+        t.position = rot.map(t.position) + shift;
+        t.rotationDeg += d;
+        child->transform = t;
+    }
+
+    m_width = newW;
+    m_height = newH;
+    bumpRevision();
+    emit canvasSizeChanged(m_width, m_height);
+    emit structureChanged();
+    return true;
 }
 
 Layer* Document::findLayer(const LayerId& id) const
@@ -539,6 +693,17 @@ LayerId Document::createAdjustmentLayer(AdjustmentType type,
     auto adj = std::make_unique<AdjustmentLayer>();
     adj->kind = type;
     adj->sourceLayerId = sourceLayerId;
+    // A seleção ativa torna-se uma máscara persistente do ajuste. Assim,
+    // criar Brilho/Contraste, Curvas etc. não "esquece" a área que o
+    // utilizador tinha selecionado, e o efeito continua não destrutivo.
+    if (!m_selection.image().isNull()) {
+        if (sourceLayerId) {
+            if (const Layer* source = findLayer(*sourceLayerId))
+                adj->vectorMask = selectionInLayerSpace(*this, *source, m_selection.image());
+        } else {
+            adj->vectorMask = m_selection.image().convertToFormat(QImage::Format_Alpha8);
+        }
+    }
     const LayerId newId = adj->id();
     if (!addLayer(std::move(adj), nullptr, -1))
         return {};
@@ -596,9 +761,42 @@ bool Document::setLayerTransform(const LayerId& id, const AffineTransform& trans
     const auto locks = effectiveLocks(id);
     if (locks.position || locks.all)
         return false;
+
+    // Guardar os bounds dos grupos pais ANTES da mudança. O centro desses
+    // bounds entra na matriz do grupo; se o filho se deslocar e o centro se
+    // mover, a matriz do grupo não pode mudar com ele ou o movimento seria
+    // cancelado (a imagem ficava parada enquanto o handle se deslocava).
+    std::vector<std::pair<GroupLayer*, QRectF>> ancestors;
+    for (GroupLayer* parent = parentOf(id);
+         parent && parent != m_root.get();
+         parent = parentOf(parent->id()))
+        ancestors.emplace_back(parent, parent->contentBounds());
+
     layer->transform = transform;
+
+    // Mantém a matriz de cada grupo constante: compensa apenas a variação do
+    // centro pela parte linear do transform do grupo (rotação/escala/shear).
+    std::vector<LayerId> changedAncestors;
+    for (const auto& [parent, oldBounds] : ancestors) {
+        const AffineTransform oldParentTransform = parent->transform;
+        const QRectF newBounds = parent->contentBounds();
+        if (oldBounds.isEmpty() && !newBounds.isEmpty()) {
+            parent->transform.position = newBounds.center();
+        } else if (!oldBounds.isEmpty() && !newBounds.isEmpty()) {
+            QTransform linear;
+            linear.rotate(parent->transform.rotationDeg);
+            linear.shear(parent->transform.shearX, parent->transform.shearY);
+            linear.scale(parent->transform.scaleX, parent->transform.scaleY);
+            parent->transform.position += linear.map(newBounds.center() - oldBounds.center());
+        }
+        if (parent->id() != id && parent->transform != oldParentTransform)
+            changedAncestors.push_back(parent->id());
+    }
+
     bumpRevision();
     emit layerPropertyChanged(id);
+    for (const LayerId& ancestorId : changedAncestors)
+        emit layerPropertyChanged(ancestorId);
     return true;
 }
 
@@ -1090,9 +1288,22 @@ bool Document::removeLayerAlphaMask(const LayerId& id)
     return true;
 }
 
+SelectionSpace Document::inferredSelectionSpace(const QImage& mask) const
+{
+    return !mask.isNull() && mask.size() != QSize(m_width, m_height)
+        ? SelectionSpace::Layer
+        : SelectionSpace::Document;
+}
+
 void Document::setPixelSelection(QImage selection)
 {
-    m_selection.setImage(std::move(selection));
+    const SelectionSpace space = inferredSelectionSpace(selection);
+    setPixelSelection(std::move(selection), space);
+}
+
+void Document::setPixelSelection(QImage selection, SelectionSpace space)
+{
+    m_selection.setImage(std::move(selection), space);
     bumpRevision();
     emit structureChanged();
 }
@@ -1102,6 +1313,58 @@ void Document::clearPixelSelection()
     if (m_selection.image().isNull())
         return;
     m_selection.clear();
+    bumpRevision();
+    emit structureChanged();
+}
+
+QUuid Document::addSavedSelection(const QString& name, const QImage& mask)
+{
+    return addSavedSelection(name, mask, inferredSelectionSpace(mask));
+}
+
+QUuid Document::addSavedSelection(const QString& name, const QImage& mask,
+                                  SelectionSpace space)
+{
+    const QUuid id = m_selection.addSavedSelection(name, mask, space);
+    bumpRevision();
+    return id;
+}
+
+QUuid Document::restoreSavedSelection(const QUuid& id, const QString& name,
+                                      const QImage& mask)
+{
+    return restoreSavedSelection(id, name, mask, inferredSelectionSpace(mask));
+}
+
+QUuid Document::restoreSavedSelection(const QUuid& id, const QString& name,
+                                      const QImage& mask, SelectionSpace space)
+{
+    const QUuid newId = m_selection.addSavedSelection(id, name, mask, space);
+    bumpRevision();
+    return newId;
+}
+
+bool Document::removeSavedSelection(const QUuid& id)
+{
+    if (!m_selection.removeSavedSelection(id))
+        return false;
+    bumpRevision();
+    emit structureChanged();
+    return true;
+}
+
+void Document::clearSavedSelections()
+{
+    if (m_selection.savedSelections().empty())
+        return;
+    m_selection.clearSavedSelections();
+    bumpRevision();
+    emit structureChanged();
+}
+
+void Document::restoreSelectionSnapshot(const SelectionState& snapshot)
+{
+    m_selection = snapshot;
     bumpRevision();
     emit structureChanged();
 }
@@ -1187,6 +1450,36 @@ void Document::clearWebSlices()
     emit structureChanged();
 }
 
+void Document::setWebSlices(std::vector<WebSlice> slices)
+{
+    m_webSlices = std::move(slices);
+    bumpRevision();
+    emit structureChanged();
+}
+
+void Document::addGuide(Guide guide)
+{
+    m_guides.push_back(guide);
+    bumpRevision();
+    emit structureChanged();
+}
+
+void Document::clearGuides()
+{
+    if (m_guides.empty())
+        return;
+    m_guides.clear();
+    bumpRevision();
+    emit structureChanged();
+}
+
+void Document::setGuides(std::vector<Guide> guides)
+{
+    m_guides = std::move(guides);
+    bumpRevision();
+    emit structureChanged();
+}
+
 QUuid Document::createDocumentVersion(const QString& name, const QString& description)
 {
     DocumentVersion version;
@@ -1253,7 +1546,8 @@ bool Document::restoreDocumentVersion(const QUuid& versionId)
         emit structureChanged();
     }
 
-    m_selection.setImage(std::move(pixelSelection));
+    const SelectionSpace selectionSpace = inferredSelectionSpace(pixelSelection);
+    m_selection.setImage(std::move(pixelSelection), selectionSpace);
     m_layerComps = layerComps;
     m_webSlices = webSlices;
 

@@ -16,6 +16,16 @@ class SelectionOperations final
 {
 public:
     static QImage inverted(const QImage& selection);
+
+    /// Converte a seleção ativa para o bitmap local de uma camada. Uma
+    /// seleção Layer já é local e só é aceite com as dimensões exatas; uma
+    /// seleção Document é amostrada através da transformação completa da
+    /// camada (incluindo os grupos ancestrais, na ordem usada pelo renderer).
+    static QImage selectionMaskInLayerSpace(const Document& document,
+                                            const ImageLayer& image,
+                                            const QImage& selection,
+                                            SelectionSpace space);
+
     static bool extract(const QImage& source, const QImage& selection,
                         QImage* image, QRect* bounds);
     static bool extractToLayer(Document& document, CommandStack* history,

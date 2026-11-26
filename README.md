@@ -12,7 +12,7 @@ Create high-impact YouTube thumbnails, social media posts, stories, banners, and
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-blue?style=for-the-badge)](https://github.com/MarielCarlosFrias/creatorcanvas)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen?style=for-the-badge)](#)
-[![Tests](https://img.shields.io/badge/tests-40%2F40_passing-brightgreen?style=for-the-badge)](#)
+[![Tests](https://img.shields.io/badge/tests-54%2F54_passing-brightgreen?style=for-the-badge)](#)
 
 <br/>
 
@@ -28,7 +28,7 @@ Create high-impact YouTube thumbnails, social media posts, stories, banners, and
 
 Most photo editing tools are either overly basic web canvas tools or intimidating legacy suites designed for print prepress. **CreatorCanvas** focuses strictly on modern digital creators:
 
-- ⚡ **Lightweight & Blazing Fast** — Pure C++20 with Qt 6. Instant startup, silky-smooth panning/zooming, and minimal memory usage.
+- ⚡ **Lightweight & Blazing Fast** — Pure C++20 with Qt 6. Instant startup, silky-smooth panning/zooming, and minimal memory usage — with a configurable history memory budget and a render cache that adapts to your machine's RAM.
 - 📐 **Format-First Workflow** — Built-in templates & safe zones for YouTube, Instagram, TikTok, LinkedIn, and Twitter/X.
 - 🛡️ **Rock-Solid Stability** — Centralized `DocumentController`, atomic project autosave, and complete crash recovery dialog.
 - ✂️ **Non-Destructive Alpha Masks & Selections** — Cut, copy, isolate, and mask raster layers without destroying source pixels.
@@ -62,12 +62,18 @@ Most photo editing tools are either overly basic web canvas tools or intimidatin
 - **Organization**: Drag-and-drop reordering, color tags (8 colors), blend modes (12), opacity + fill opacity, granular per-pixel locks, and layer link groups.
 - **Clipping Masks**: Clip a layer to the one below it (Photoshop-style) — works inside groups too, via `Layer ▸ Create Clipping Mask` (`Ctrl+Alt+G`).
 - **Alpha Masking**: Non-destructive persistent layer masks saved directly inside project files with render-caching for instant movement.
-- **Adjustment Layers**: Levels, Curves, Brightness/Contrast, Hue/Saturation, Color Balance, Photo Filter, Channel Mixer, Invert, Threshold, Posterize and Gradient Map — applied non-destructively at render time.
+- **Adjustment Layers & Smart Filters**: Levels, Curves, Brightness/Contrast, Hue/Saturation, Color Balance, Photo Filter, Channel Mixer, Invert, Threshold, Posterize and Gradient Map, plus Blur, Motion Blur, Noise, Twirl, Pinch and Ripple as editable non-destructive adjustment layers by default (destructive mode remains optional).
+
+### 🖼️ Image, Canvas & Export
+- **Image Size / Resample**: resample image assets and masks with Nearest Neighbor, Bilinear or Bicubic, preserving selections, guides, slices and undo/redo without cumulative resampling.
+- **Canvas Size / Rotate Canvas**: crop/expand or rotate the canvas independently of Image Size.
+- **Rulers & draggable guides**: pull horizontal/vertical guides directly from the rulers; guides persist in the project.
+- **Batch processing**: resize and convert PNG/JPEG/WebP, import flattened PSD composites, and export PDF/SVG.
 
 ### ✂️ Centralized Selection & Cut Suite
 - **Selection Tools**: Rectangular/Elliptical Marquee (Shift adds, Alt subtracts, feather), Polygonal Scissors, and Magic Wand with adjustable color tolerance.
 - **Select Subject (AI)**: one click turns the local ONNX model into a pixel selection of the subject — the background is kept, so you can copy the subject to a new layer, feather the edge or composite it over another image (`Ctrl+Alt+S`).
-- **Smart Operations**: Invert selection, clean contour visualization, Copy to new layer, and Cut (creates isolated layer and hides original cleanly).
+- **Smart Operations**: Invert selection, clean contour visualization, Copy to new layer, Cut (creates isolated layer and hides original cleanly), and **Transform Selection** to move/scale/rotate only the selection outline with undo and explicit Document/Layer space.
 
 - **Refine Edge** (advanced mode) — smooth, expand/contract and feather the active selection with a live mask preview, applied as a single undo step.
 - **Text-style presets** — save a text layer's look (font, colour, outline, shadow, gradient) and re-apply it in one click; four built-in creator styles ship with the app (advanced mode).
@@ -94,12 +100,28 @@ Most photo editing tools are either overly basic web canvas tools or intimidatin
 - **Numeric transform**: X/Y/W/H/rotation fields for the selected layer, aspect-locked, one undo step per drag.
 - **Workspace layouts** — save, restore and delete named dock layouts (`Window ▸ Workspace Layout`).
 - **Customizable shortcuts** — reassign any action in `Help ▸ Keyboard Shortcuts`; overrides persist across sessions.
+- **Command palette** — press `Ctrl+K` (or `Help ▸ Command Palette…`) and type to find *any* command by name — menus, tools, shapes, filters and adjustments included — then `Enter` to run it. No more hunting through 11 menus.
+- **One-click PNG copy** — `Ctrl+Shift+E` (`File ▸ Save PNG Copy…`) exports the whole document as PNG in a single file dialog and confirms in the status bar.
+- **Simple mode by default** — the app starts with only the essential tools; professional surfaces (histogram, node editing, Refine Edge, multi-stop gradients, text on path) appear when you switch **Advanced Mode** — now also a checkbox in `Settings`, applying immediately.
+- **Beginner help everywhere** — every tool explains itself in the status bar when you pick it, an empty canvas tells you how to start (drag an image, `T` for text, `Ctrl+K` for commands), a one-time tips bar introduces `Ctrl+K`, and the start screen's empty state links straight to the shortcut list and to sample projects.
+- **71 built-in resources across three packs** — the Starter Pack (23 backgrounds, textures and YouTube end screens), a Textures pack (32: papers, cracked wall, carpet, plastics, topographic and abstract) and an Overlays pack (16 dust/noise/grunge PNGs that apply with Screen blending). Browse from the start screen or `Ctrl+B`; picking a background with no document open starts a canvas at that exact size.
+- **12 ready-to-edit sample projects** — four of them built on the pack: thumbnail, YouTube end screen, Instagram post and channel banner, all listed as cards on the start screen.
+- **A guided first run** — a one-time welcome dialog asks for your language, a 4-step **Quick tour** (Help ▸ Quick tour) points at the tool bar, options, layers and export, and a **First steps** panel ticks off "create a document → add a layer → arrange → export" until you're ready to work alone.
 
 ### 💾 Document Lifecycle & Safety
 - **DocumentController**: Centralized engine synchronizing canvas, layers, inspectors, history, and background services.
 - **Smart Autosave & Recovery**: Auto-save with dirty-state checks, atomic writes (`.tmp` to target), and interactive crash recovery dialog (Open, Open as Copy, Discard).
 - **Batch processing**: apply a set of operations to many files at once (`File ▸ Batch`).
 - **Layer Comps & Web Slices**: save and apply named layer states (single undo step), and export named rectangles of the canvas for the web — slices are drawn on the canvas with their name and format (`Layer ▸ Layer Comps`, `File ▸ Web Slices`).
+
+### 🆕 CreatorCanvas 0.3 — Productivity & Interoperability
+- **Multi-layer clipboard** — Copy/Cut/Paste across documents with asset and adjustment-link remapping, plus **Paste Into Selection** mapped from document space to the pasted bitmap.
+- **Persistent selection channels** — named document/layer-space selections survive project save/load; **Reselect**, **Fill**, **Stroke** and **Clear** are undoable.
+- **Canvas Size & Rotate Canvas** — with anchor selection and coherent selection, guide and web-slice transforms, including undo/redo.
+- **Filter gallery** — Gaussian/Motion Blur, monochrome or colour Noise, and Twirl/Pinch/Ripple distortions, computed asynchronously with selection and lock awareness.
+- **Hybrid SVG & PDF export** — vector content is preserved where supported; **minimal PSD import** handles flattened 8/16-bit grayscale/RGB files, raw or PackBits RLE.
+- **Navigator & Swatches docks**, rulers, persistent guides and a status-bar colour readout.
+- **Rendering correctness & speed** — cached blend modes, bounded composite caches, masked effects, and group/re-parent transforms that preserve nested flip/shear/rotation.
 
 ### 🌍 Internationalization & Accessibility
 - Native multi-language support (English, Portuguese `pt-BR` and Swedish `sv`) with on-the-fly switching.
@@ -185,7 +207,7 @@ build\windows-release\bin\Release\CreatorCanvas.exe
 
 Every commit passes a comprehensive verification pipeline:
 
-- **Unit Test Suites**: 40/40 test executables passing (`test_document`, `test_layers`, `test_tools`, `test_serialization`, `test_effects`, etc.).
+- **Unit Test Suites**: 54/54 test executables passing (`test_document`, `test_layers`, `test_tools`, `test_serialization`, `test_effects`, `test_layer_clipboard`, `test_selection_transform`, `test_image_size`, `test_smart_filters`, `test_batch`, `test_panels`, etc.).
 - **Self-Diagnostic Smoke Test**:
   ```bash
   ./build/linux-debug/bin/CreatorCanvas --smoke-test
@@ -206,7 +228,7 @@ Contribuições são bem-vindas! Comece por aqui:
 1. **Leia o guia completo**: [`CONTRIBUTING.md`](CONTRIBUTING.md) e [`DOCUMENTATION.md`](DOCUMENTATION.md)
 2. **Verifique o estado atual**: abra uma issue antes de começar a implementar algo grande
 3. **Faça o fork**, crie uma branch (`git checkout -b feat/minha-mudanca`), faça suas alterações e envie um PR
-4. **Testes**: todos os 39 testes devem passar (`ctest --output-on-failure`)
+4. **Testes**: os 54 testes automatizados ativos devem passar (`ctest --output-on-failure`; o smoke test interativo do MiniPaint fica desativado por padrão quando não há display)
 5. **Strings de usuário**: nada hardcoded — use `I18nService::t("namespace", "chave")` e adicione a chave em todos os catálogos embarcados (`en`, `pt-BR`, `sv`)
 6. **Commits**: use Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, etc.) ou marque com milestone (`M<n>: <descrição>`)
 

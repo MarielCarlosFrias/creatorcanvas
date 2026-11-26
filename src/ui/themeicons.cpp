@@ -1,6 +1,10 @@
 #include "themeicons.h"
 
 #include <QPainter>
+#include <QMutex>
+#include <QMutexLocker>
+#include <QHash>
+
 #include <QPainterPath>
 #include <QFont>
 #include <QLinearGradient>
@@ -24,18 +28,57 @@ QPixmap renderPixmap(int size, const std::function<void(QPainter&, int)>& drawFn
 
 QIcon makeMultiSizeIcon(const std::function<void(QPainter&, int)>& drawFn)
 {
+    // 16/32 cobrem todos os tamanhos usados na UI (barras 18-24 px, linhas
+    // do painel 22 px, rebidos 12-18 px): o terceiro pixmap a 48 px nunca
+    // era usado e custava 1/3 da memoria e do tempo de geracao de cada icone.
     QIcon icon;
-    icon.addPixmap(renderPixmap(24, drawFn));
+    icon.addPixmap(renderPixmap(16, drawFn));
     icon.addPixmap(renderPixmap(32, drawFn));
-    icon.addPixmap(renderPixmap(48, drawFn));
     return icon;
 }
 
 } // namespace
+// Memoizacao: cada icone vetorial era re-renderizado (3 pixmaps via QPainter)
+// em TODA chamada -- paineis de camadas, barras e start screen chamam estas
+// funcoes dezenas de vezes por refresh. O cache devolve o mesmo QIcon sem
+// redesenhar, mantendo a API publica identica.
+QIcon cachedIcon(const QString& key, const std::function<void(QPainter&, int)>& drawFn)
+{
+    static QMutex mutex;
+    static QHash<QString, QIcon> cache;
+    QMutexLocker locker(&mutex);
+    auto it = cache.constFind(key);
+    if (it != cache.constEnd())
+        return it.value();
+    const QIcon icon = makeMultiSizeIcon(drawFn);
+    if (cache.size() < 1024)
+        cache.insert(key, icon);
+    return icon;
+}
+
+QIcon cachedIcon(const QString& key, const QColor& color,
+                 const std::function<void(QPainter&, int)>& drawFn)
+{
+    return cachedIcon(key + QLatin1Char('|') + color.name(QColor::HexArgb), drawFn);
+}
+
+// Aceita um icone ja construido (casos com tamanhos proprios, ex. appIcon).
+QIcon cachedIcon(const QString& key, const QIcon& built)
+{
+    static QMutex mutex;
+    static QHash<QString, QIcon> cache;
+    QMutexLocker locker(&mutex);
+    auto it = cache.constFind(key);
+    if (it != cache.constEnd())
+        return it.value();
+    if (cache.size() < 1024)
+        cache.insert(key, built);
+    return built;
+}
 
 QIcon ThemeIcons::toolSelect(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("toolSelect"), color, [color](QPainter& p, int s) {
         p.setPen(QPen(QColor(20, 20, 20), 1.5));
         p.setBrush(color);
 
@@ -55,7 +98,7 @@ QIcon ThemeIcons::toolSelect(const QColor& color)
 
 QIcon ThemeIcons::toolCrop(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("toolCrop"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         QPen pen(color, 2.0 * scale, Qt::SolidLine, Qt::SquareCap, Qt::MiterJoin);
         p.setPen(pen);
@@ -73,7 +116,7 @@ QIcon ThemeIcons::toolCrop(const QColor& color)
 
 QIcon ThemeIcons::toolScissors(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("toolScissors"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap));
         p.setBrush(Qt::NoBrush);
@@ -90,7 +133,7 @@ QIcon ThemeIcons::toolScissors(const QColor& color)
 
 QIcon ThemeIcons::toolWand(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("toolWand"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         // Wand stick
         p.setPen(QPen(color, 2.0 * scale, Qt::SolidLine, Qt::RoundCap));
@@ -118,7 +161,7 @@ QIcon ThemeIcons::toolWand(const QColor& color)
 
 QIcon ThemeIcons::toolClone(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("toolClone"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap));
         p.setBrush(color);
@@ -140,7 +183,7 @@ QIcon ThemeIcons::toolClone(const QColor& color)
 
 QIcon ThemeIcons::toolPaint(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("toolPaint"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         // Handle
         p.setPen(QPen(color, 2.2 * scale, Qt::SolidLine, Qt::RoundCap));
@@ -164,7 +207,7 @@ QIcon ThemeIcons::toolPaint(const QColor& color)
 
 QIcon ThemeIcons::toolFlood(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("toolFlood"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap));
         p.setBrush(Qt::NoBrush);
@@ -192,7 +235,7 @@ QIcon ThemeIcons::toolFlood(const QColor& color)
 
 QIcon ThemeIcons::toolEyedropper(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("toolEyedropper"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         p.setBrush(Qt::NoBrush);
@@ -221,7 +264,7 @@ QIcon ThemeIcons::toolEyedropper(const QColor& color)
 
 QIcon ThemeIcons::toolText(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("toolText"), color, [color](QPainter& p, int s) {
         p.setPen(color);
         QFont f = p.font();
         f.setPixelSize(static_cast<int>(s * 0.72));
@@ -233,7 +276,7 @@ QIcon ThemeIcons::toolText(const QColor& color)
 
 QIcon ThemeIcons::toolShape(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("toolShape"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 2.0 * scale));
         p.setBrush(QColor(color.red(), color.green(), color.blue(), 60));
@@ -243,7 +286,7 @@ QIcon ThemeIcons::toolShape(const QColor& color)
 
 QIcon ThemeIcons::layerVisibility(bool visible)
 {
-    return makeMultiSizeIcon([visible](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("layerVisibility|") + QLatin1Char(visible ? '1' : '0'), [visible](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         QColor color = visible ? QColor(220, 220, 220) : QColor(110, 110, 110);
         p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap));
@@ -270,7 +313,7 @@ QIcon ThemeIcons::layerVisibility(bool visible)
 
 QIcon ThemeIcons::layerLock(bool locked)
 {
-    return makeMultiSizeIcon([locked](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("layerLock|") + QLatin1Char(locked ? '1' : '0'), [locked](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         QColor color = locked ? QColor(240, 180, 50) : QColor(120, 120, 120);
         p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap));
@@ -300,7 +343,7 @@ QIcon ThemeIcons::layerLock(bool locked)
 
 QIcon ThemeIcons::layerTypeText()
 {
-    return makeMultiSizeIcon([](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("layerTypeText"), [](QPainter& p, int s) {
         p.setPen(QColor(100, 180, 255));
         QFont f = p.font();
         f.setPixelSize(static_cast<int>(s * 0.75));
@@ -312,7 +355,7 @@ QIcon ThemeIcons::layerTypeText()
 
 QIcon ThemeIcons::layerTypeImage()
 {
-    return makeMultiSizeIcon([](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("layerTypeImage"), [](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(QColor(120, 210, 120), 1.6 * scale));
         p.setBrush(Qt::NoBrush);
@@ -336,7 +379,7 @@ QIcon ThemeIcons::layerTypeImage()
 
 QIcon ThemeIcons::layerTypeShape()
 {
-    return makeMultiSizeIcon([](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("layerTypeShape"), [](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(QColor(230, 150, 70), 1.8 * scale));
         p.setBrush(QColor(230, 150, 70, 80));
@@ -346,7 +389,7 @@ QIcon ThemeIcons::layerTypeShape()
 
 QIcon ThemeIcons::layerTypePaint()
 {
-    return makeMultiSizeIcon([](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("layerTypePaint"), [](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(QColor(220, 120, 220), 2.0 * scale, Qt::SolidLine, Qt::RoundCap));
         p.drawLine(QPointF(17 * scale, 6 * scale), QPointF(10 * scale, 13 * scale));
@@ -364,7 +407,7 @@ QIcon ThemeIcons::layerTypePaint()
 
 QIcon ThemeIcons::layerTypeGroup()
 {
-    return makeMultiSizeIcon([](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("layerTypeGroup"), [](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(QColor(200, 200, 200), 1.6 * scale));
         p.setBrush(QColor(200, 200, 200, 40));
@@ -383,7 +426,7 @@ QIcon ThemeIcons::layerTypeGroup()
 
 QIcon ThemeIcons::layerTypeAdjustment()
 {
-    return makeMultiSizeIcon([](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("layerTypeAdjustment"), [](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         const QRectF rect(4 * scale, 4 * scale, 16 * scale, 16 * scale);
         p.setPen(QPen(QColor(77, 170, 252), 1.6 * scale));
@@ -402,7 +445,7 @@ QIcon ThemeIcons::layerTypeAdjustment()
 
 QIcon ThemeIcons::iconClipMask(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("iconClipMask"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         p.setBrush(Qt::NoBrush);
@@ -428,7 +471,7 @@ QIcon ThemeIcons::iconClipMask(const QColor& color)
 
 QIcon ThemeIcons::iconLockTransparency(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("iconLockTransparency"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(Qt::NoPen);
         p.setBrush(color);
@@ -448,7 +491,7 @@ QIcon ThemeIcons::iconLockTransparency(const QColor& color)
 
 QIcon ThemeIcons::iconLockPixels(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("iconLockPixels"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap));
         p.setBrush(Qt::NoBrush);
@@ -465,7 +508,7 @@ QIcon ThemeIcons::iconLockPixels(const QColor& color)
 
 QIcon ThemeIcons::iconLockPosition(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("iconLockPosition"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 1.6 * scale, Qt::SolidLine, Qt::RoundCap));
         p.setBrush(Qt::NoBrush);
@@ -482,7 +525,7 @@ QIcon ThemeIcons::iconLockPosition(const QColor& color)
 
 QIcon ThemeIcons::iconLockAll(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("iconLockAll"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap));
         p.setBrush(color);
@@ -496,7 +539,7 @@ QIcon ThemeIcons::iconLockAll(const QColor& color)
 
 QIcon ThemeIcons::iconChevronDown(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("iconChevronDown"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 2.0 * scale, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         p.setBrush(Qt::NoBrush);
@@ -511,7 +554,7 @@ QIcon ThemeIcons::iconChevronDown(const QColor& color)
 
 QIcon ThemeIcons::iconChevronRight(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("iconChevronRight"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 2.0 * scale, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         p.setBrush(Qt::NoBrush);
@@ -526,7 +569,7 @@ QIcon ThemeIcons::iconChevronRight(const QColor& color)
 
 QIcon ThemeIcons::actionAdd()
 {
-    return makeMultiSizeIcon([](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionAdd"), [](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(QColor(100, 200, 100), 2.2 * scale, Qt::SolidLine, Qt::RoundCap));
         p.drawLine(QPointF(12 * scale, 5 * scale), QPointF(12 * scale, 19 * scale));
@@ -536,7 +579,7 @@ QIcon ThemeIcons::actionAdd()
 
 QIcon ThemeIcons::actionDuplicate()
 {
-    return makeMultiSizeIcon([](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionDuplicate"), [](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(QColor(200, 200, 200), 1.6 * scale));
         p.setBrush(Qt::NoBrush);
@@ -550,7 +593,7 @@ QIcon ThemeIcons::actionDuplicate()
 
 QIcon ThemeIcons::actionDelete()
 {
-    return makeMultiSizeIcon([](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionDelete"), [](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(QColor(220, 80, 80), 1.8 * scale, Qt::SolidLine, Qt::RoundCap));
         p.setBrush(Qt::NoBrush);
@@ -571,7 +614,7 @@ QIcon ThemeIcons::actionDelete()
 
 QIcon ThemeIcons::actionMoveUp()
 {
-    return makeMultiSizeIcon([](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionMoveUp"), [](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(QColor(200, 200, 200), 2.0 * scale, Qt::SolidLine, Qt::RoundCap));
         p.drawLine(QPointF(6 * scale, 14 * scale), QPointF(12 * scale, 8 * scale));
@@ -581,7 +624,7 @@ QIcon ThemeIcons::actionMoveUp()
 
 QIcon ThemeIcons::actionMoveDown()
 {
-    return makeMultiSizeIcon([](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionMoveDown"), [](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(QColor(200, 200, 200), 2.0 * scale, Qt::SolidLine, Qt::RoundCap));
         p.drawLine(QPointF(6 * scale, 10 * scale), QPointF(12 * scale, 16 * scale));
@@ -591,7 +634,7 @@ QIcon ThemeIcons::actionMoveDown()
 
 QIcon ThemeIcons::actionNewDocument()
 {
-    return makeMultiSizeIcon([](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionNewDocument"), [](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(QColor(240, 240, 240), 1.8 * scale));
         p.setBrush(Qt::NoBrush);
@@ -614,7 +657,7 @@ QIcon ThemeIcons::actionNewDocument()
 
 QIcon ThemeIcons::actionOpenFolder()
 {
-    return makeMultiSizeIcon([](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionOpenFolder"), [](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(QColor(240, 240, 240), 1.8 * scale));
         p.setBrush(Qt::NoBrush);
@@ -804,20 +847,20 @@ QIcon ThemeIcons::appIcon()
         p.drawLine(QPointF(20 * scale, 43 * scale), QPointF(34 * scale, 43 * scale));
     };
 
-    QIcon icon;
-    icon.addPixmap(renderPixmap(16, drawAppLogo));
-    icon.addPixmap(renderPixmap(24, drawAppLogo));
-    icon.addPixmap(renderPixmap(32, drawAppLogo));
-    icon.addPixmap(renderPixmap(48, drawAppLogo));
-    icon.addPixmap(renderPixmap(64, drawAppLogo));
-    icon.addPixmap(renderPixmap(128, drawAppLogo));
-    icon.addPixmap(renderPixmap(256, drawAppLogo));
-    return icon;
+    QIcon built;
+    built.addPixmap(renderPixmap(16, drawAppLogo));
+    built.addPixmap(renderPixmap(24, drawAppLogo));
+    built.addPixmap(renderPixmap(32, drawAppLogo));
+    built.addPixmap(renderPixmap(48, drawAppLogo));
+    built.addPixmap(renderPixmap(64, drawAppLogo));
+    built.addPixmap(renderPixmap(128, drawAppLogo));
+    built.addPixmap(renderPixmap(256, drawAppLogo));
+    return cachedIcon(QStringLiteral("appIcon"), built);
 }
 
 QIcon ThemeIcons::actionSave(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionSave"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         p.setBrush(Qt::NoBrush);
@@ -844,7 +887,7 @@ QIcon ThemeIcons::actionSave(const QColor& color)
 
 QIcon ThemeIcons::actionSaveAs(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionSaveAs"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         p.setBrush(Qt::NoBrush);
@@ -869,7 +912,7 @@ QIcon ThemeIcons::actionSaveAs(const QColor& color)
 
 QIcon ThemeIcons::actionImport(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionImport"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap));
         p.setBrush(Qt::NoBrush);
@@ -887,7 +930,7 @@ QIcon ThemeIcons::actionImport(const QColor& color)
 
 QIcon ThemeIcons::actionExport(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionExport"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap));
         p.setBrush(Qt::NoBrush);
@@ -910,7 +953,7 @@ QIcon ThemeIcons::actionExport(const QColor& color)
 
 QIcon ThemeIcons::actionQuit(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionQuit"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 2.0 * scale, Qt::SolidLine, Qt::RoundCap));
         p.setBrush(Qt::NoBrush);
@@ -925,7 +968,7 @@ QIcon ThemeIcons::actionQuit(const QColor& color)
 
 QIcon ThemeIcons::actionUndo(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionUndo"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 2.0 * scale, Qt::SolidLine, Qt::RoundCap));
         p.setBrush(Qt::NoBrush);
@@ -944,7 +987,7 @@ QIcon ThemeIcons::actionUndo(const QColor& color)
 
 QIcon ThemeIcons::actionRedo(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionRedo"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 2.0 * scale, Qt::SolidLine, Qt::RoundCap));
         p.setBrush(Qt::NoBrush);
@@ -963,7 +1006,7 @@ QIcon ThemeIcons::actionRedo(const QColor& color)
 
 QIcon ThemeIcons::actionHistory(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionHistory"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap));
         p.setBrush(Qt::NoBrush);
@@ -984,7 +1027,7 @@ QIcon ThemeIcons::actionHistory(const QColor& color)
 
 QIcon ThemeIcons::actionZoomIn(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionZoomIn"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 2.0 * scale, Qt::SolidLine, Qt::RoundCap));
         p.setBrush(Qt::NoBrush);
@@ -1002,7 +1045,7 @@ QIcon ThemeIcons::actionZoomIn(const QColor& color)
 
 QIcon ThemeIcons::actionZoomOut(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionZoomOut"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 2.0 * scale, Qt::SolidLine, Qt::RoundCap));
         p.setBrush(Qt::NoBrush);
@@ -1019,7 +1062,7 @@ QIcon ThemeIcons::actionZoomOut(const QColor& color)
 
 QIcon ThemeIcons::actionZoomFit(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionZoomFit"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 2.0 * scale, Qt::SolidLine, Qt::RoundCap));
         p.setBrush(Qt::NoBrush);
@@ -1049,7 +1092,7 @@ QIcon ThemeIcons::actionZoomFit(const QColor& color)
 
 QIcon ThemeIcons::actionGrid(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionGrid"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 1.6 * scale, Qt::SolidLine, Qt::RoundCap));
         p.setBrush(Qt::NoBrush);
@@ -1066,7 +1109,7 @@ QIcon ThemeIcons::actionGrid(const QColor& color)
 
 QIcon ThemeIcons::actionSnap(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionSnap"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 2.2 * scale, Qt::SolidLine, Qt::RoundCap));
         p.setBrush(Qt::NoBrush);
@@ -1088,7 +1131,7 @@ QIcon ThemeIcons::actionSnap(const QColor& color)
 
 QIcon ThemeIcons::actionFlipH(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionFlipH"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(QColor(120, 130, 150), 1.5 * scale, Qt::DashLine));
         p.drawLine(QPointF(12 * scale, 3 * scale), QPointF(12 * scale, 21 * scale));
@@ -1110,7 +1153,7 @@ QIcon ThemeIcons::actionFlipH(const QColor& color)
 
 QIcon ThemeIcons::actionFlipV(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionFlipV"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(QColor(120, 130, 150), 1.5 * scale, Qt::DashLine));
         p.drawLine(QPointF(3 * scale, 12 * scale), QPointF(21 * scale, 12 * scale));
@@ -1132,7 +1175,7 @@ QIcon ThemeIcons::actionFlipV(const QColor& color)
 
 QIcon ThemeIcons::actionRotateLeft(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionRotateLeft"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         // 3/4 de circulo (270 graus), abrindo para a direita
         p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap));
@@ -1152,7 +1195,7 @@ QIcon ThemeIcons::actionRotateLeft(const QColor& color)
 
 QIcon ThemeIcons::actionRotateRight(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionRotateRight"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap));
         p.setBrush(Qt::NoBrush);
@@ -1171,7 +1214,7 @@ QIcon ThemeIcons::actionRotateRight(const QColor& color)
 
 QIcon ThemeIcons::actionAlignLeft(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionAlignLeft"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(QColor(43, 120, 228), 2.2 * scale, Qt::SolidLine, Qt::RoundCap));
         p.drawLine(QPointF(4 * scale, 3 * scale), QPointF(4 * scale, 21 * scale));
@@ -1185,7 +1228,7 @@ QIcon ThemeIcons::actionAlignLeft(const QColor& color)
 
 QIcon ThemeIcons::actionAlignCenter(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionAlignCenter"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(QColor(43, 120, 228), 2.2 * scale, Qt::SolidLine, Qt::RoundCap));
         p.drawLine(QPointF(12 * scale, 3 * scale), QPointF(12 * scale, 21 * scale));
@@ -1199,7 +1242,7 @@ QIcon ThemeIcons::actionAlignCenter(const QColor& color)
 
 QIcon ThemeIcons::actionAlignRight(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionAlignRight"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(QColor(43, 120, 228), 2.2 * scale, Qt::SolidLine, Qt::RoundCap));
         p.drawLine(QPointF(20 * scale, 3 * scale), QPointF(20 * scale, 21 * scale));
@@ -1213,7 +1256,7 @@ QIcon ThemeIcons::actionAlignRight(const QColor& color)
 
 QIcon ThemeIcons::actionAlignTop(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionAlignTop"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(QColor(43, 120, 228), 2.2 * scale, Qt::SolidLine, Qt::RoundCap));
         p.drawLine(QPointF(3 * scale, 4 * scale), QPointF(21 * scale, 4 * scale));
@@ -1227,7 +1270,7 @@ QIcon ThemeIcons::actionAlignTop(const QColor& color)
 
 QIcon ThemeIcons::actionAlignMiddle(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionAlignMiddle"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(QColor(43, 120, 228), 2.2 * scale, Qt::SolidLine, Qt::RoundCap));
         p.drawLine(QPointF(3 * scale, 12 * scale), QPointF(21 * scale, 12 * scale));
@@ -1241,7 +1284,7 @@ QIcon ThemeIcons::actionAlignMiddle(const QColor& color)
 
 QIcon ThemeIcons::actionAlignBottom(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionAlignBottom"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(QColor(43, 120, 228), 2.2 * scale, Qt::SolidLine, Qt::RoundCap));
         p.drawLine(QPointF(3 * scale, 20 * scale), QPointF(21 * scale, 20 * scale));
@@ -1255,7 +1298,7 @@ QIcon ThemeIcons::actionAlignBottom(const QColor& color)
 
 QIcon ThemeIcons::actionDistributeH(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionDistributeH"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(QColor(43, 120, 228), 1.8 * scale, Qt::SolidLine));
         p.drawLine(QPointF(3 * scale, 4 * scale), QPointF(3 * scale, 20 * scale));
@@ -1270,7 +1313,7 @@ QIcon ThemeIcons::actionDistributeH(const QColor& color)
 
 QIcon ThemeIcons::actionDistributeV(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionDistributeV"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(QColor(43, 120, 228), 1.8 * scale, Qt::SolidLine));
         p.drawLine(QPointF(4 * scale, 3 * scale), QPointF(20 * scale, 3 * scale));
@@ -1285,7 +1328,7 @@ QIcon ThemeIcons::actionDistributeV(const QColor& color)
 
 QIcon ThemeIcons::actionSettings(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionSettings"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 2.0 * scale, Qt::SolidLine, Qt::RoundCap));
         p.setBrush(Qt::NoBrush);
@@ -1306,7 +1349,7 @@ QIcon ThemeIcons::actionSettings(const QColor& color)
 
 QIcon ThemeIcons::actionAbout(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionAbout"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 1.8 * scale, Qt::SolidLine, Qt::RoundCap));
         p.setBrush(Qt::NoBrush);
@@ -1324,7 +1367,7 @@ QIcon ThemeIcons::actionAbout(const QColor& color)
 
 QIcon ThemeIcons::actionCheck(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionCheck"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 2.4 * scale, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         p.setBrush(Qt::NoBrush);
@@ -1339,7 +1382,7 @@ QIcon ThemeIcons::actionCheck(const QColor& color)
 
 QIcon ThemeIcons::actionCancel(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("actionCancel"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 2.2 * scale, Qt::SolidLine, Qt::RoundCap));
         p.setBrush(Qt::NoBrush);
@@ -1351,7 +1394,7 @@ QIcon ThemeIcons::actionCancel(const QColor& color)
 
 QIcon ThemeIcons::toolMarquee(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("toolMarquee"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setPen(QPen(color, 1.6 * scale, Qt::DashLine));
         p.setBrush(Qt::NoBrush);
@@ -1367,7 +1410,7 @@ QIcon ThemeIcons::toolMarquee(const QColor& color)
 
 QIcon ThemeIcons::toolGradient(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("toolGradient"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         QLinearGradient g(QPointF(4 * scale, 0), QPointF(20 * scale, 0));
         QColor tint = color;
@@ -1387,7 +1430,7 @@ QIcon ThemeIcons::toolGradient(const QColor& color)
 
 QIcon ThemeIcons::toolRetouch(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("toolRetouch"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         p.setBrush(Qt::NoBrush);
         for (int i = 0; i < 3; ++i) {
@@ -1405,7 +1448,7 @@ QIcon ThemeIcons::toolRetouch(const QColor& color)
 
 QIcon ThemeIcons::toolPen(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("toolPen"), color, [color](QPainter& p, int s) {
         const qreal k = s / 24.0;
         // Corpo da caneta (diagonal) + bico.
         p.setPen(QPen(color, 1.6 * k, Qt::SolidLine, Qt::RoundCap));
@@ -1424,7 +1467,7 @@ QIcon ThemeIcons::toolPen(const QColor& color)
 
 QIcon ThemeIcons::toolHealing(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("toolHealing"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         // Círculo de reparo + cruz
         p.setPen(QPen(color, 1.6 * scale));
@@ -1438,7 +1481,7 @@ QIcon ThemeIcons::toolHealing(const QColor& color)
 
 QIcon ThemeIcons::toolVectorNodes(const QColor& color)
 {
-    return makeMultiSizeIcon([color](QPainter& p, int s) {
+    return cachedIcon(QStringLiteral("toolVectorNodes"), color, [color](QPainter& p, int s) {
         const qreal scale = s / 24.0;
         // Curva Bezier estilizada com nós âncora
         p.setPen(QPen(color, 1.6 * scale, Qt::SolidLine, Qt::RoundCap));

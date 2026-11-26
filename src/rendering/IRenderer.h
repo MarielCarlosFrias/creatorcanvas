@@ -101,10 +101,16 @@ protected:
 /// Chave: (id da camada, revisão do documento, tamanho do canvas no
 /// dispositivo, modo interactivo). A revisão é monotónica, portanto uma
 /// edição no documento invalida tudo o que estiver velho — sem risco de
-/// pixmap obsoleto. Orçamento: 16 entradas / 64 MB, com despejo LRU.
+/// pixmap obsoleto. Orçamento: 512 entradas e 96/192/256 MB de pixmaps
+/// por camada conforme a RAM da máquina (`cacheBudgetBytes()` em
+/// CanvasRenderer.cpp), com despejo LRU; o composite do documento inteiro
+/// tem um orçamento próprio (`compositeBudgetBytes()`, metade do anterior).
 class CachingRenderer final : public SoftwareRenderer
 {
 public:
+    void renderDocument(const Document& doc, QPainter* painter,
+                        const QTransform& docToDevice,
+                        const RenderOptions& options) override;
     void clearCaches() override;
     const char* name() const override { return "software+cache"; }
 
@@ -119,11 +125,12 @@ public:
                         const QSize& docSize, const QTransform& docToDevice,
                         const RenderOptions& options) override;
 
-    /// Estatísticas para diagnóstico (acertos/Total desde o arranque).
+    /// Estatísticas para diagnóstico (desde a última limpeza das caches).
     int cacheHits() const { return m_hits; }
     int cacheMisses() const { return m_misses; }
     int compositeHits() const { return m_compositeHits; }
     int compositeMisses() const { return m_compositeMisses; }
+    qint64 cacheBytes() const { return m_bytes; }
 
     /// Chave do cache: camada + revisão do documento + tamanho do canvas no
     /// dispositivo + modo interactivo. Pública para o qHash poder usá-la.
@@ -154,6 +161,9 @@ protected:
 private:
     struct Entry {
         QPixmap pixmap;
+        // Offscreen/headless fallback: keeps the same cache semantics without
+        // requiring a native pixmap backend (and lets tests exercise hits).
+        QImage image;
         qint64 bytes = 0;
     };
 
@@ -162,6 +172,9 @@ private:
 
     QHash<Key, Entry> m_cache;
     QList<Key> m_lru;
+    /// Fingerprint calculada uma vez por chamada de renderDocument(), em vez
+    /// de percorrer a árvore novamente para cada camada cacheável.
+    quint64 m_frameFingerprint = 0;
     int m_hits = 0;
     int m_misses = 0;
     qint64 m_bytes = 0;

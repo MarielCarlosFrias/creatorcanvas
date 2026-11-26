@@ -2,7 +2,7 @@
 
 Technical reference for CreatorCanvas: architecture, data model, rendering, persistence, i18n, testing, build/packaging, conventions, and known limitations.
 
-**Scope of this document:** current **`main`**. Last tagged release is **v0.2.1** (2026-11-04), which bundles milestones M0–M23 plus the M21–M23 feature work (multi-select, alignment/distribution/grouping, grid and safe-zone overlays, layout templates, extra raster tools — crop, scissors, magic wand, clone stamp, flood fill, gradient, retouch, healing, marquee —, the modular `cc_tools` architecture (`ICanvasTool`), and Photoshop-style layer drag-and-drop reordering with full undo/redo). The CMake `project()` version (`0.2.1`) matches the tag. `main` after the tag adds: Photoshop-style clipping masks (also inside groups, honoured by export), perspective mockups (4-point warp, free-form mode), the pen (Bézier) tool, batch processing, workspace layout save/restore, customizable keyboard shortcuts, performance work (scanline flood fill / magic wand, lazy asset encoding), and the Swedish (`sv`) translation contributed by the community. The post-`v0.2.1` feature set on this branch adds: **Select Subject (AI)** (non-destructive subject selection from the ONNX model), the **adjustments panel** (curves/levels via a shared `AdjustmentEngine`, with a non-destructive `AdjustmentLayer` path), **Layer Comps** and **Web Slices** panels with export, **numeric transform** (X/Y/W/H/rotation), and the **`IRenderer` seam with per-layer render cache**.
+**Scope of this document:** current **`main`**, version **0.3.0**. Last tagged release is **v0.2.2** (2026-11-20). This branch includes the complete M0–M23 foundation and, after it, the AI/adjustments/layer-comps/web-slices work plus: multi-layer clipboard with cross-document asset remapping, persistent document/layer-space selections, Canvas Size/Rotate with undoable selection/guide/slice transforms, Image Size/Resample, Transform Selection, editable Smart Filters, hybrid SVG/PDF export, minimal PSD composite import and PSD/PDF/SVG Batch processing, draggable rulers/guides, Navigator and Swatches panels, and substantial correctness/performance work in grouping and the rendering caches. The CMake `project()` version is **0.3.0**.
 
 ## Table of contents
 
@@ -27,7 +27,7 @@ Technical reference for CreatorCanvas: architecture, data model, rendering, pers
 
 ## 1. Overview
 
-CreatorCanvas is a layer-based image editor aimed at digital content creators. Typical flow: *pick a platform preset or layout template → compose images, shapes, and brush strokes → style text (outline, shadow, gradient) → crop / cut out / adjust color / remove background → export PNG, JPEG, or WebP*.
+CreatorCanvas is a layer-based image editor aimed at digital content creators. Typical flow: *pick a platform preset or layout template → compose images, shapes, and brush strokes → style text (outline, shadow, gradient) → crop / cut out / adjust color / remove background → export PNG, JPEG, WebP, hybrid SVG or PDF*. PSD flattened composites can also be imported (8/16-bit grayscale/RGB, raw or PackBits RLE).
 
 **Shipped in v0.2.1 (M0–M23):** document model, command stack, ZIP+JSON projects, software canvas renderer, transform gestures, layers panel, text + shape tools, settings, export, autosave, start screen, packaging, snapping, paint/fill, text gradients, shear, image inspector, ONNX background removal, multi-select, group/align/distribute, grid, safe zones, templates, crop/scissors/wand/clone/flood-fill/gradient/retouch/healing/marquee tools, the modular `cc_tools` architecture, Photoshop-style layer drag-and-drop, clipping masks, perspective mockups, pen (Bézier) tool, batch processing, workspace layouts, and customizable shortcuts.
 
@@ -293,7 +293,9 @@ Image Inspector live preview writes a temporary asset via `Document::setImageLay
   - `LayerListWidget` provides dynamic drop indicator and computes target index based on cursor position relative to item vertical midpoint.
   - Layer reordering executes through `ReorderLayerCommand` on the `CommandStack`, preserving non-destructive undo/redo history.
 - **Adjustments panel** (`Image ▸ Adjustments…`) — 11 entries: Brightness/Contrast, Hue/Saturation, Shadows/Highlights, Vignette, Invert, Posterize, Threshold, Levels (per channel), Curves (per channel, spline shown from the same LUT the engine uses), Channel Mixer, Gradient Map. Live preview (scaled to 480 px), non-destructive by default. In **advanced mode** the panel also shows a live histogram (channels + luminance, with the Levels in/out markers drawn on it).
-- **Advanced mode** (`Window ▸ Advanced Mode`) — reveals the professional surface: histogram in adjustments, the four advanced adjustment types (Shadows/Highlights, Vignette, Channel Mixer, Gradient Map), the live adjustments section in the image inspector, node editing, text-style presets, the Refine Edge panel, the multi-stop gradient editor (linear/radial/**conical**), and text on path. Off by default and persisted in `SettingsService` (`advanced/mode`).
+- **Advanced mode** (`Window ▸ Advanced Mode`, or the checkbox in `Settings ▸ Advanced mode`) — reveals the professional surface: histogram in adjustments, the four advanced adjustment types (Shadows/Highlights, Vignette, Channel Mixer, Gradient Map), the live adjustments section in the image inspector, node editing, text-style presets, the Refine Edge panel, the multi-stop gradient editor (linear/radial/**conical**), and text on path. Off by default and persisted in `SettingsService` (`advanced/mode`). Switching it in the dialog applies immediately (`SettingsService::changed` → `MainWindow::applyAdvancedMode`), without a restart.
+- **Command palette** (`Ctrl+K`, also `Help ▸ Command Palette…`) — `CommandPalette` (`src/ui/commandpalette.{h,cpp}`) is a `Qt::Popup` with incremental search over **every** registered action. `ActionManager::allActions()` enumerates the actions (they are children of the manager, in menu order) and `ActionManager::actionId()` maps each one to its stable shortcut-registry id (`file.new`, `layer.duplicate`, …). Every action created in `createActions()` is registered in `registerShortcutActions()`, so extras that used to be orphaned (8 extra shapes, 11 artistic filters, `Select ▸ Modify`, safe zones, layer comps, web slices, advanced mode, sample projects) are searchable and shortcut-configurable. Matching is substring-first with a subsequence fallback ("plp" finds "Paleta…"), disabled actions sink to the bottom, `↑`/`↓`/`PageUp`/`PageDown` move, `Enter` runs, `Esc` closes.
+- **One-step PNG copy** (`File ▸ Save PNG Copy…`, `Ctrl+Shift+E`) — `MainWindow::quickExportDocumentPng()` mirrors the layer quick-export: a single file dialog, fixed quality and the result confirmed in the status bar (no modal). The full `ExportDialog` remains for scale/format/quality control.
 
 ### How to use the advanced tools (quick guide)
 
@@ -382,10 +384,14 @@ Setup scripts: `scripts/fetch_onnx.sh` (Linux), `scripts/fetch_onnx.bat` (Window
 ZIP archive:
 
 ```
-manifest.json        document state, layers, metadata
-thumbnail.png        ~320×180 preview for Recent Projects
-media/<uuid>.png     embedded image assets
+project.json                 document state, layers, metadata
+thumbnail.png                ~320×180 preview for Recent Projects
+media/<uuid>.png             embedded image assets
+selection.png                active pixel selection (optional)
+selections/<uuid>.png        named saved selections (optional)
 ```
+
+The manifest carries optional `pixelSelectionSpace` and per-saved-selection `space` metadata (`document` or `layer`), so masks no longer have to match the canvas dimensions. Guides and web slices are also persisted and are transformed together with Canvas Size/Rotate. Save rejects incoherent document-space masks and non-finite guides before creating the file; legacy projects without metadata are inferred by dimensions, with an explicit overload for the ambiguous equal-size case.
 
 `cc::loadProjectThumbnail()` reads only `thumbnail.png` from the ZIP central directory (no full project inflate).
 
@@ -406,17 +412,22 @@ The manifest also carries the document color space, the pixel selection, and the
 `src/imageio/DocumentExporter.{h,cpp}`:
 
 - PNG (lossless), JPEG (flattened onto background), WebP
+- Hybrid SVG (`SvgExporter.{h,cpp}`): vector shapes/text/paths where supported, embedded PNG for images/complex compositing; scale changes output dimensions without scaling the `viewBox`
+- PDF (`exportDocumentToPdf`): paints through `SoftwareRenderer` directly into `QPdfWriter`, avoiding the caching renderer's pixmap path where possible
+- PSD import (`PsdImporter.{h,cpp}`): flattened 8/16-bit grayscale/RGB composite, raw or PackBits RLE, bounds-checked and re-encoded as PNG
 - Scale multiplier and JPEG/WebP quality
 - `transparentBackground` flag on `exportDocumentToImage()`/`exportLayerToImage()`: keeps the alpha channel (PNG/WebP) or flattens onto white when off — JPEG is always opaque
 - `core/color/IccProfiles.{h,cpp}` resolves installed ICC profiles (`CC_ICC_DIR` overrides the search paths) and tags exported PNG (`iCCP`, before IDAT), JPEG (`ICC_PROFILE` APP2 markers) and WebP (RIFF `ICCP`) files, including web slices. Tagging is atomic and a missing profile is a no-op
 - `ImageImporter` preserves the original embedded ICC bytes; a newly created document recognises the initial working space when possible and the native project persists both `colorSpace` and the profile. Export prefers that original profile, including custom profiles unknown to the host
 - When importing into an existing document, supported profiles are converted to the document's working space with `QColorSpace`; the asset is re-encoded as PNG so subsequent decoding sees converted pixels. Unsupported profiles are preserved unchanged, never partially rewritten
-- Calls `renderDocument()` off-screen without editor overlays
+- Raster export calls `renderDocument()` off-screen without editor overlays; PDF deliberately instantiates `SoftwareRenderer` to keep vector text/shapes as PDF operators whenever the layer does not require raster compositing
 - Exporting a clipped layer applies the same mask (`renderSiblingLayers`), so the file matches the screen
 
 `ExportDialog` (`src/ui/exportdialog.{h,cpp}`) is the `File ▸ Export As...` surface: scope control (full canvas vs selected layer), one row of platform preset chips (Original, Instagram, Story/TikTok, YouTube, Twitter/X — each applies format/quality/scale), the output card (format, quality, scale, transparency), a live checkerboard preview and the estimated file size (proxy render scaled by pixel ratio). Translating between languages re-renders the preview in place. JPEG has no alpha: the transparency toggle disables itself and the choice is remembered, restored when an alpha-capable format returns (covered by `test_export_dialog`).
 
 `MiniPaintBridge` (`src/services/minipaintbridge.cpp`) — `Image ▸ Edit in MiniPaint` — is covered by `test_minipaint_bridge`: a stub on `PATH` replays the documented launch contract (argument set, exit codes, output import) without the real editor.
+
+**Fast paths:** `File ▸ Save PNG Copy…` (`Ctrl+Shift+E`) exports the whole document as PNG in one file dialog (quality 95, scale 1, transparency on), and the layers-panel context menu keeps the per-layer variant; both confirm in the status bar instead of a modal popup — only real failures raise a `QMessageBox`. `MainWindow::exportImage()` also switched its success message to the status bar, so a routine export never interrupts the flow.
 
 Batch runs over many files at once are driven by `BatchDialog` (UI layer), which reuses the same import/render/export pipeline.
 
@@ -431,9 +442,67 @@ Batch runs over many files at once are driven by `BatchDialog` (UI layer), which
 - Continuous edits (inspector sliders, live preview) can merge while dragging
 - Raster tools commit a new asset + optional transform when the gesture ends
 
+### Resource packs (`services/packstore.{h,cpp}`)
+
+Three packs ship embedded: `starter` (23 items: backgrounds, textures and
+ready-made end screens), `texturas` (32 opaque textures) and
+`sobreposicoes` (16 alpha overlays). The browser's category filter is built
+from `PackStore::categories()` (manifest-driven), overlay thumbnails are
+composited over mid-grey so their pattern is visible, and
+`MainWindow::applyPackItem()` gives overlays a **Screen** blend mode when
+applied to an open document. Encoding choices (JPEG progressive q80 at
+1280 px for textures, greyscale+alpha PNG at 900–1100 px for overlays) are
+documented in `resources/packs/README.md`.
+
+- Each folder under `resources/packs/` is one pack with a `pack.json` manifest
+  (`id`, `version`, `items[].file/key/category`). Everything is embedded via
+  `resources/packs.qrc` under `:/packs`; the object is pulled out of the static
+  library with an explicit `qInitResources_packs()` (same trick as
+  `:/locales`).
+- `PackStore::packs()` enumerates the packs by listing `:/packs` with `QDir`,
+  so adding files only means listing them in the `.qrc` and the manifest.
+- `PackBrowser` (`ui/packbrowser.{h,cpp}`) shows the grid with a category
+  filter and emits `itemChosen(resource, naturalSize)`.
+  `MainWindow::applyPackItem()` imports the chosen item through the regular
+  importer, so the usual colour-space/undo handling applies: with no document
+  open the image becomes the canvas at its exact size (the intended
+  "background" flow); with a document open it enters as a fitted layer.
+- Entry points: the start-screen button, `Layer ▸ Backgrounds & textures...`
+  (`Ctrl+B`) and the command palette (`layer.backgrounds`).
+- **Starter pack**: 23 items curated from the user's own editing pack
+  (`~/Documentos/Pack de ediçao`) — 6 thumbnail backgrounds, 12 textures
+  (10 hexagon ramps, vintage paper, dust, film grain) and 3 ready-made YouTube
+  end screens — re-encoded at 1600 px (1920 px for the templates), JPEG
+  progressive quality 82 or optimised PNG, source metadata stripped:
+  **2.9 MB**. Provenance and redistribution notes live in
+  `resources/packs/README.md`.
+- Covered by `test_pack_store`: manifest/resources consistency (every file
+  exists and opens), every label translated in all catalogs, and the browser's
+  category filtering.
+
+### Memory guards
+
+- **Undo history budget** (`core/history/CommandStack`) — besides the step
+  count, the stack tracks a byte budget (default 512 MB, configurable in
+  Settings). `Command::estimatedBytes()` covers the snapshots a command owns
+  (pixel selections, transform selections, alpha/vector masks, image-resize
+  snapshots); bitmaps referenced by id live in the `AssetStore`, so
+  `MainWindow` installs a footprint probe (`AssetStore::approximateBytes()`)
+  and the stack closes the account. When the budget is exceeded the oldest
+  steps are dropped (never all, so the current step stays undoable) and the
+  usual `assetsOrphaned` GC frees what they kept alive.
+- **Adaptive render cache** (`rendering/CanvasRenderer`) —
+  `cacheBudgetBytes()`/`compositeBudgetBytes()` read `/proc/meminfo` once and
+  pick 96/192/256 MB for the per-layer cache and half of that for the
+  document composite, instead of a fixed 256 + 96 MB.
+- **Autosave** defers when a mouse button is held *or* any modal dialog is
+  open.
+- **Export dialogs** start at `general/lastExportDir` → project folder →
+  home (`MainWindow::initialExportDir`).
+
 ## 12. Testing & Verification
 
-**45** test executables/targets in `tests/CMakeLists.txt` (all run with `QT_QPA_PLATFORM=offscreen`), in registration order:
+**54** registered CTest tests: 52 `cc_add_test` suites plus the optional `minipaint_smoke` (skipped cleanly when no display is available). All Qt tests run with `QT_QPA_PLATFORM=offscreen`. The current suites cover:
 
 1. `test_settings` — preferences persistence
 2. `test_i18n` — catalogs, key symmetry, fallback, and a **source scan** that fails if any `t("section", "key")` used in `src/` is missing from either catalog (regression: the status bar showed the raw key `editor.canvas.status.paintHelp`)
@@ -475,6 +544,20 @@ Batch runs over many files at once are driven by `BatchDialog` (UI layer), which
 38. `test_mockup_dialog` — mockup dialog state (logo disabled until a source is set)
 39. `test_mainwindow_tabs` — selecting a layer keeps the active inspector tab; adjustments dialog request contract (non-destructive by default); adjustments section creates the linked layer; Layer Comps and Web Slices dialogs end-to-end (save/apply/remove, numeric and from-selection slices, real slice export)
 40. `test_overlays` — web-slice overlay: nothing drawn without slices, rect + label drawn with slices (clamped inside the view), multiple slices cycle colours and invalid rects are ignored
+41. `test_saved_selections` — previous/saved selection state, document/layer-space persistence, resize/rotate and invalid-project rejection
+42. `test_layer_clipboard` — empty capture, multi-layer and cross-document asset remapping, adjustment links, group deduplication, undo/redo
+43. `test_panels` — Navigator initial thumbnail and document updates; Swatches/ToolOptions colour synchronization
+44. `test_canvas_ops` — Canvas Size/Rotate transforms, selections, guides, slices and undo/redo
+45. `test_textstyles` — text-style presets
+46. `test_canvas_transform` — widget-free viewport transform
+47. `test_minipaint_bridge` — external MiniPaint launch contract
+48. `test_layer_operations` — grouping/re-parent/multi-parent geometry, flip/shear/rotation and undo/redo (registered earlier in the file)
+50. `test_selection_transform` — selection-outline move/scale/rotate, anti-aliasing, explicit spaces and undo/redo
+51. `test_image_size` — Nearest/Bilinear/Bicubic resampling, assets/masks, shared/nested layers, snapshots and dialog
+52. `test_smart_filters` — non-destructive/destructive filters, render, undo/redo and persistence including linked IDs
+53. `test_batch` — robust PNG/PSD input, resize, PNG/PDF/SVG output and overwrite rules
+53. `test_dialog_labels` — Image Size and Refine Edge dialogs show translated labels/buttons (no raw i18n keys) in en and pt-BR
+54. `minipaint_smoke` — optional MiniPaint OpenGL smoke test
 
 Several UI tests compile the corresponding `src/ui/*.cpp` file directly into the test executable instead of linking `creatorcanvas` (e.g. `test_mainwindow_tabs` compiles `mainwindow.cpp` and its dialog dependencies). When adding a test, keep this pattern and keep the symbols single-defined — a duplicated non-inline definition across translation units is an ODR violation (this bit `HealingTool` once already).
 
@@ -493,6 +576,51 @@ QT_QPA_PLATFORM=offscreen CreatorCanvas --ui-snapshot /tmp/shots
 ```
 
 Renders the editor at 1600×1000, 1280×800, 1024×700, 900×620 and 800×520 for every tool (13 tools → 65 PNGs) so responsive layout can be reviewed headlessly through the same `MainWindow` the user runs.
+
+### Beginner help (hints)
+
+Three complementary surfaces, all driven by `I18nService` (`editor.hints.*`) and
+covered by `test_mainwindow_tabs`:
+
+- **Tool hint** — `CanvasView::toolChanged` → `MainWindow::showToolHint()`
+  prints a one-line usage description in the status bar (tool + modifiers).
+  Keys: `hints.tool.<name>`.
+- **Empty-canvas hint** — a `QLabel#CanvasEmptyHint` child of the canvas
+  (transparent to mouse events, centred by
+  `MainWindow::positionCanvasEmptyHint()`), shown while the document has no
+  root children (`Document::rootGroup()->children.empty()`); hidden by
+  `structureChanged` / `enterEditor` / `resizeEvent`.
+- **Tips bar** — `QFrame#TipsBar` above the central stack
+  (`MainWindow::showBeginnerTipsBar()`), shown on entering the editor until the
+  user closes it; the dismissal is persisted in `SettingsService`
+  (`general/hintsBarDismissed`) and re-armed only by deleting the key.
+
+The start screen's empty state (no recent projects) adds two link buttons
+(`QPushButton#LinkButton`, `start.emptyShortcuts` / `start.emptySamples`) wired
+to the shortcut dialog and to the sample projects.
+
+### Guided first run
+
+Three pieces, all opt-out-once and covered by `test_onboarding`:
+
+- **`WelcomeDialog`** (`src/ui/welcomedialog.{h,cpp}`) — shown from `main.cpp`
+  before `MainWindow` is built, so the chosen language already labels the whole
+  UI; the flag lives in `general/welcomeShown`. Automated startup modes return
+  before this point, so headless runs never block on it.
+- **`OnboardingTour`** (`src/ui/onboardingtour.{h,cpp}`) — a frameless popup
+  parented to the main window, anchored under each target
+  (`MainWindow::startOnboardingTour` fills the targets: tool bar, options bar,
+  layers dock, quick tool bar). Scheduled once per install
+  (`QTimer::singleShot(900)` after the first `attachDocument`); skipped or
+  finished sets `general/tourCompleted`, and **Help ▸ Quick tour** clears the
+  flag to replay it.
+- **`OnboardingPanel`** (`src/ui/onboardingpanel.{h,cpp}`) — a dock rebuilt from
+  live state by `MainWindow::updateOnboarding()` (document / layers / selection /
+  `general/hasExported`); it hides itself when every step is done and is never
+  shown on the start screen or in automated modes.
+
+Status-bar micro-hints complete the set: `hints.selectLayerFirst` (Delete with
+nothing selected) and `hints.doubleClickToEditText` (text layer selected).
 
 ## 13. Build & distribution
 
@@ -519,9 +647,11 @@ Install rules also stage locales, presets, desktop/AppStream files, and the SVG 
 
 Already on `main` (do not treat as future work): multi-select, group/align/distribute, grid, safe zones, templates, extra raster tools, modular `cc_tools` architecture, Photoshop-style layer drag-and-drop, clipping masks, perspective mockups, pen (Bézier) tool, batch processing, workspace layouts, customizable shortcuts, the adjustments panel (curves/levels with a non-destructive path), layer comps and web slices with export.
 
+Delivered after `v0.2.2` (in addition to the `v0.2.1`+ list below): clipboard (copy/cut/paste/paste-into-selection, internal layer clipboard + system image), selection channels (save/load persisted in the project, reselect), Edit ▸ Fill/Stroke/Clear, Layer ▸ Duplicate/Merge Down/Rasterize, Canvas Size with anchor and Rotate Canvas (undoable), filter gallery (Blur/Noise/Distort), PDF + SVG export, minimal PSD import (flattened composite, raw/RLE), rulers + persistent guides, Navigator and Swatches panels, status-bar color readout, and the first `MainWindow` split step (`ui/mainwindow_selection.cpp`).
+
 Still ahead:
 
-1. **Split `CanvasView` / `MainWindow`** — mostly done: overlays live in `CanvasOverlayRenderer` (492 lines), handle/hit-testing in `CanvasGestureHandler` (213), the context menu in `CanvasContextMenu` (212), inline text in `InlineTextEditor` (122). The zoom/transform/fit block is now its own widget-free unit, `CanvasTransform` (`src/ui/canvastransform.{h,cpp}`, 128 lines), unit-tested in isolation by `test_canvas_transform`; `CanvasView` (1936 lines) keeps viewport/transform *use*, hit-testing and event orchestration.
+1. **Split `CanvasView` / `MainWindow`** — in progress: overlays live in `CanvasOverlayRenderer`, handle/hit-testing in `CanvasGestureHandler` (213), the context menu in `CanvasContextMenu` (212), inline text in `InlineTextEditor` (122), zoom/transform/fit in the widget-free `CanvasTransform` (unit-tested by `test_canvas_transform`), and selection/clipboard/filter-apply in `ui/mainwindow_selection.cpp`; `CanvasView` keeps viewport/transform *use*, hit-testing and event orchestration, and `mainwindow.cpp` (~3.5k lines) still needs further incremental cuts with tests.
 2. **GPU viewport** — blocked by the environment, not by the code: the `IRenderer` seam exists and both rendering paths are cached (fast path 3.1×, compositing path 4.3×), but a QRhi needs a native surface, which does not exist under `QT_QPA_PLATFORM=offscreen`. Any Vulkan/Direct3D/RHI backend must be written and verified on a machine with a real display before it can ship.
 3. **Richer blend modes** — only if compositing moves beyond the current twelve `QPainter` modes.
 4. **macOS** — real bundle, notarization, and CI; `MACOSX_BUNDLE` on the target is not a shipping product.
@@ -542,11 +672,14 @@ Logs live under the OS application data directory used by `LogService` / `Settin
 
 - **ICC conversion is import-scoped** — PNG/JPEG/WebP import, native-project persistence and export preserve the source profile; importing into an existing document also converts supported RGB profiles to its working space and re-encodes the asset. There is still no soft-proofing UI, per-layer colour-space editor or display/monitor colour management.
 - **Still images only** — no timeline or video export; that is a separate product milestone requiring a specification.
+- **Selection-space association is by the caller** — active/saved selections carry `SelectionSpace::{Document,Layer}` and persist in the project, but no `LayerId` is stored. Legacy masks with exactly the document dimensions are inherently ambiguous; the explicit overload resolves new cases. Canvas resize/rotate transforms document-space masks, guides and slices with full undo/redo; layer-space masks stay local to the bitmap.
 - **Software compositor** — the renderer has per-layer caches and an `IRenderer` seam, but very large layer trees can still hitch. A real GPU/QRhi path requires validation on a native display.
 - **Adjustment commits are non-destructive by default** — the *Adjustments* dialog exposes a "Não-destrutivo (camada de ajuste)" checkbox, checked by default, and `executeApplyAdjustment()` creates/updates an `AdjustmentLayer` that renders at render time (undo/redo as a single command); unchecking it bakes a new raster asset as before. Image layers linked to an adjustment layer can be re-edited live from the image inspector (advanced mode) via `setAdjustmentParameters()`.
 - **`Layer` encapsulation** — production mutations are command-driven, including Layer Comp undo notifications, but public fields still make future accidental bypasses possible. Encapsulation is a maintenance follow-up, not a known current UI undo defect.
 - **MiniPaint needs SFML 3 at build time** — *Image ▸ Edit in MiniPaint* is built in-tree and packages bundle its SFML runtime. CI installs it on Linux and downloads the SDK on Windows; the Windows portable path still needs validation on a Windows runner, which cannot be reproduced on this Linux host.
-- **UI concentration** — `CanvasView`'s overlays, gestures, context menu, inline text and transform are extracted, but `mainwindow.cpp` (about 3k lines) remains the main composition root and should be split incrementally with tests, not in a risky bulk rewrite.
+- **UI concentration** — `CanvasView`'s overlays, gestures, context menu, inline text and transform are extracted, and selection/clipboard/filter-apply live in `ui/mainwindow_selection.cpp`, but `mainwindow.cpp` (about 3.5k lines) remains the main composition root and should be split incrementally with tests, not in a risky bulk rewrite.
+- **Hybrid vector export** — SVG and PDF preserve vector elements where supported, but images, masks and some compositing/effect paths necessarily remain raster. PDF deliberately uses `SoftwareRenderer` rather than the caching path to avoid rasterizing vector layers through pixmaps. SVG scale changes output dimensions while preserving the document `viewBox`.
+- **PSD support is intentionally minimal** — only the flattened composite of 8/16-bit grayscale/RGB PSD files, raw or PackBits RLE. Layers, PSB, CMYK and other colour modes are rejected safely.
 - **Spot Healing source is picked per stroke, not per click** — right-click (or `Shift`+click) sets the healing source point, then clicking heals; locked pixels are still respected. There is no patch-match synthesis (the patch is cloned from the source point).
 - **Gradients** — linear, radial, conical and multi-stop ramps are available in the normal inspector; conical is serialized as `"conical"` and older readers fall back to linear.
 - **Platform isolation is intentionally small** — production C++ currently has only two `Q_OS_*` branches (MiniPaint executable suffix and ICC search paths); larger platform differences remain in build/packaging scripts. A `platform/` module should be introduced only when those branches actually grow.

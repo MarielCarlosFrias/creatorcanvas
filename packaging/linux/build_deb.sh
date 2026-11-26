@@ -66,6 +66,42 @@ if [ -x "$MINIPAINT_BIN" ]; then
     done
 fi
 
+# Simbolos de depuracao nao tem uso em runtime: ~3,7 MB a menos por
+# binario instalado.
+for binpath in "$DEBROOT/usr/bin/CreatorCanvas" "$DEBROOT/usr/bin/minipaint-standalone"; do
+    if [ -f "$binpath" ]; then
+        strip --strip-unneeded "$binpath" 2>/dev/null || true
+    fi
+done
+
+# O vendored do ONNX Runtime traz tres copias REAIS de 16 MB
+# (libonnxruntime.so, .so.1 e .so.1.19.0). Hardlinks poupam 32 MB no .deb:
+# o loader resolve o SONAME igualmente e o dpkg-deb guarda o inode uma vez.
+python3 - "$DEBROOT" <<'PY'
+import hashlib
+import os
+import sys
+
+debroot = sys.argv[1]
+seen = {}
+for root, _dirs, files in os.walk(os.path.join(debroot, "usr")):
+    for name in files:
+        path = os.path.join(root, name)
+        if os.path.islink(path) or not os.path.isfile(path):
+            continue
+        digest = hashlib.md5()
+        with open(path, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1 << 20), b""):
+                digest.update(chunk)
+        key = digest.hexdigest()
+        if key in seen:
+            os.unlink(path)
+            os.link(seen[key], path)
+            print("    hardlink: %s" % os.path.relpath(path, debroot))
+        else:
+            seen[key] = path
+PY
+
 cat > "$DEBROOT/DEBIAN/control" <<EOF
 Package: $PKG_NAME
 Version: $VERSION

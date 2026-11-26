@@ -9,7 +9,7 @@
 ; VERSION pode ser sobrescrito pela linha de comando do makensis
 ; (/DVERSION=x.y.z). Sem override, usa o valor do projeto.
 !ifndef VERSION
-    !define VERSION "0.2.2"
+    !define VERSION "0.3.0"
 !endif
 Name "CreatorCanvas"
 OutFile "CreatorCanvas-${VERSION}-Setup.exe"

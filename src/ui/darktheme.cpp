@@ -153,6 +153,13 @@ QString buildQss(const Skin& k)
     // -- Labels de secao e Start Screen --
     s += "QLabel#SectionLabel { font-size: 13px; font-weight: 600; color: " + k.textHi + "; }";
     s += "QLabel#HeroTitle { font-size: 24px; font-weight: 700; color: " + k.textHi + "; }";
+    s += "QLabel#WelcomeTitle { font-size: 20px; font-weight: 700; color: " + k.textHi + "; }";
+    s += "QLabel#WelcomeLangCaption { font-size: 12px; color: " + k.textMd + "; }";
+    s += "QLabel#TourStep { font-size: 11px; font-weight: 700; color: " + k.accent + "; }";
+    s += "QLabel#TourText { font-size: 12px; color: " + k.textHi + "; }";
+    s += "QFrame#TourPopup { background-color: " + k.base2 + "; border: 1px solid " + k.accent + "; border-radius: 8px; }";
+    s += "QLabel#OnboardingStepDone { color: " + k.accent + "; font-size: 12px; }";
+    s += "QLabel#OnboardingStepPending { color: " + k.textMd + "; font-size: 12px; }";
     s += "QLabel#HeroTagline { font-size: 12px; color: " + k.textMd + "; }";
     s += "QWidget#EmptyState { background-color: " + k.base2 + "; border: 1px dashed " + k.line + "; border-radius: 8px; }";
     s += "QLabel#TemplatePreview { background-color: " + k.base0 + "; border: none; border-radius: 6px; }";
@@ -160,6 +167,14 @@ QString buildQss(const Skin& k)
     s += "QLabel#TemplateTitle { font-size: 11px; font-weight: 600; color: " + k.textHi + "; border: none; background: transparent; }";
     s += "QLabel#TemplateDims { font-size: 9px; color: " + k.textMd + "; border: none; background: transparent; }";
     s += "QLabel#HintLabel { color: " + k.textLo + "; font-size: 11px; border: none; }";
+    s += "QLabel#CanvasEmptyHint { color: " + k.textLo + "; font-size: 15px; border: none; background: transparent; }";
+    s += "QLabel#PaletteHint { color: " + k.textLo + "; font-size: 11px; border: none; }";
+
+    // -- Ajuda a iniciantes --
+    s += "QFrame#TipsBar { background-color: " + k.base2 + "; border: 1px solid " + k.line + "; border-radius: 6px; margin: 6px 10px 0px 10px; }";
+    s += "QFrame#TipsBar QLabel { color: " + k.textMd + "; font-size: 11px; background: transparent; border: none; }";
+    s += "QPushButton#LinkButton { background: transparent; border: none; color: " + k.accent + "; font-size: 11px; font-weight: 600; padding: 2px 4px; text-align: center; }";
+    s += "QPushButton#LinkButton:hover { color: " + k.textHi + "; text-decoration: underline; }";
     s += "QScrollArea#StartScrollArea { background: transparent; border: none; }";
 
     // -- Checkbox / Slider / GroupBox / Tooltip / Progress --

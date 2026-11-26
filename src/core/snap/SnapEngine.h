@@ -49,12 +49,17 @@ public:
     void setThreshold(double thresholdDocPx);
     double threshold() const { return m_threshold; }
 
-    /// |moving|             the layer the user is currently manipulating
-    /// |currentDocRect|     its rect in document coordinates (already with
-    ///                      current transform applied — caller computes this)
-    /// |canvasRect|         the document canvas rect (0,0,w,h)
-    /// |otherLayers|        all OTHER layers visible/unlocked (the engine
-    ///                      skips the moving one automatically by id)
+    /// Versão hierárquica: os bounds dos alvos incluem todos os grupos
+    /// ancestrais e a camada móvel, incluindo a sua subárvore, é excluída.
+    /// |currentDocRect| contém a prévia atual da camada em espaço de documento.
+    SnapResult computeSnap(const Document& document,
+                           const Layer& moving,
+                           const QRectF& currentDocRect,
+                           const QRectF& canvasRect,
+                           const QList<Layer*>& otherLayers) const;
+
+    /// Overload de compatibilidade para geometria sem grupos. Novos callers
+    /// com uma árvore de camadas devem fornecer o Document acima.
     SnapResult computeSnap(const Layer& moving,
                            const QRectF& currentDocRect,
                            const QRectF& canvasRect,
@@ -68,7 +73,9 @@ private:
         GuideLine guide;
     };
 
-    QList<Candidate> gatherCandidates(const QRectF& moving,
+    QList<Candidate> gatherCandidates(const Document* document,
+                                      const Layer& movingLayer,
+                                      const QRectF& moving,
                                       const QRectF& canvas,
                                       const QList<Layer*>& others) const;
 

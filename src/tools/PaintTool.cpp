@@ -38,20 +38,9 @@ void PaintTool::mousePress(QMouseEvent* event, const QPointF& docPos, const Tool
         layer = ctx.document->findLayer(ctx.selectedLayerId);
 
     if (!layer || layer->type() != LayerType::Image) {
-        const auto& children = ctx.document->rootGroup()->children;
-        for (auto it = children.rbegin(); it != children.rend(); ++it) {
-            Layer* l = it->get();
-            if (l && l->visible && l->type() == LayerType::Image) {
-                const QTransform m = l->transform.matrix(l->contentBounds());
-                const QPointF local = m.inverted().map(docPos);
-                if (l->contentBounds().contains(local)) {
-                    if (ctx.selectLayer)
-                        ctx.selectLayer(l->id());
-                    layer = l;
-                    break;
-                }
-            }
-        }
+        layer = topmostImageLayerAt(ctx, docPos);
+        if (layer && ctx.selectLayer)
+            ctx.selectLayer(layer->id());
     }
 
     if (!layer || layer->type() != LayerType::Image) {
@@ -87,8 +76,7 @@ void PaintTool::mousePress(QMouseEvent* event, const QPointF& docPos, const Tool
     }
 
     auto* img = static_cast<ImageLayer*>(layer);
-    const QTransform matrix = layer->transform.matrix(layer->contentBounds());
-    const QPointF localPos = matrix.inverted().map(docPos);
+    const QPointF localPos = documentToLayerPoint(*ctx.document, *layer, docPos);
 
     m_activeLayerId = layer->id();
     m_origAssetId = img->assetId;
@@ -108,6 +96,7 @@ void PaintTool::mousePress(QMouseEvent* event, const QPointF& docPos, const Tool
                                 QImage::Format_ARGB32_Premultiplied);
         m_workingImage.fill(Qt::transparent);
     }
+    m_originalImage = m_workingImage.copy();
 
     m_prevPointLocal = localPos;
     m_isPainting = true;
@@ -133,8 +122,7 @@ void PaintTool::mouseMove(QMouseEvent* event, const QPointF& docPos, const ToolC
     if (m_isPainting && ctx.document && !m_activeLayerId.isNull()) {
         Layer* layer = ctx.document->findLayer(m_activeLayerId);
         if (layer && layer->type() == LayerType::Image) {
-            const QTransform matrix = layer->transform.matrix(layer->contentBounds());
-            const QPointF localPos = matrix.inverted().map(docPos);
+            const QPointF localPos = documentToLayerPoint(*ctx.document, *layer, docPos);
 
             ImageProcessing::paintStrokeInPlace(
                 m_workingImage, m_prevPointLocal, localPos,
@@ -164,7 +152,11 @@ void PaintTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const To
         if (layer && layer->type() == LayerType::Image) {
             auto* img = static_cast<ImageLayer*>(layer);
 
-            const QImage original = ctx.document->assets().decodedImage(m_origAssetId);
+            // A prévia é mantida fluida durante o traço; a máscara é aplicada
+            // uma vez aqui para que inclusive imagens grandes não travem o PC.
+            m_workingImage = constrainToPixelSelection(ctx, m_originalImage, m_workingImage);
+
+            const QImage& original = m_originalImage;
             if (!original.isNull() && m_workingImage.size() == original.size()
                 && m_workingImage.format() == original.format()) {
                 bool identical = true;
@@ -183,6 +175,7 @@ void PaintTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const To
                     if (ctx.clearLayerPreview)
                         ctx.clearLayerPreview();
                     m_workingImage = QImage();
+                    m_originalImage = QImage();
                     if (ctx.requestUpdate)
                         ctx.requestUpdate();
                     return;
@@ -216,6 +209,7 @@ void PaintTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, const To
 
     m_isPainting = false;
     m_workingImage = QImage();
+    m_originalImage = QImage();
     if (ctx.requestUpdate)
         ctx.requestUpdate();
 }
@@ -249,6 +243,7 @@ void PaintTool::cancel(const ToolContext& ctx)
         ctx.clearLayerPreview();
     m_isPainting = false;
     m_workingImage = QImage();
+    m_originalImage = QImage();
     if (ctx.requestUpdate)
         ctx.requestUpdate();
 }

@@ -2,6 +2,9 @@
 /// seleccionar uma camada NÃO deve trocar a aba activa — o utilizador
 /// permanece onde está até carregar ele próprio noutra aba.
 #include <QtTest>
+#include <QAction>
+#include <QClipboard>
+#include <QGuiApplication>
 #include <QDockWidget>
 #include <QMouseEvent>
 #include <QSpinBox>
@@ -13,9 +16,15 @@
 #include <QPainter>
 #include <QImage>
 #include <QTemporaryDir>
+#include <QLabel>
+#include <QFrame>
+#include <QPushButton>
+#include <QStatusBar>
+#include <QToolButton>
 
 #include "core/Document.h"
 #include "core/document/NewDocumentSpec.h"
+#include "core/serialization/ProjectFile.h"
 #include "ui/imageinspector.h"
 #include "ui/adjustmentsection.h"
 #include "ui/layercompsdialog.h"
@@ -29,6 +38,10 @@
 #include "imageio/DocumentExporter.h"
 #include "core/layers/Layer.h"
 #include "ui/mainwindow.h"
+#include "ui/onboardingpanel.h"
+#include "ui/packbrowser.h"
+#include <QComboBox>
+#include <QListWidget>
 #include "ui/designtokens.h"
 #include "ui/collapsiblesection.h"
 #include "localization/i18nservice.h"
@@ -160,6 +173,72 @@ private slots:
         QVERIFY(selected != nullptr);
         QVERIFY(selected->adjustmentLayerId.has_value());
         QVERIFY(doc.findAdjustmentLayer(*selected->adjustmentLayerId) != nullptr);
+    }
+
+    void adjustmentSliderThenCanvasRepaint()
+    {
+        // Fluxo suspeito do crash em release: aplicar ajuste na aba Imagem e
+        // depois repintar o canvas de verdade (paint do widget, não só
+        // renderDocument directo).
+        QTemporaryDir tmpDir;
+        SettingsService settings(tmpDir.path() + "/settings.json");
+        I18nService i18n(&settings, {":/locales"});
+        i18n.loadAvailableLanguages();
+
+        MainWindow window(&settings, &i18n, nullptr, /*suppressStartupInteractions=*/true);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+
+        Document* doc = window.document();
+        QVERIFY(doc != nullptr);
+        QImage img(320, 240, QImage::Format_ARGB32);
+        img.fill(QColor(90, 120, 160, 255));
+        auto layer = std::make_unique<ImageLayer>();
+        layer->assetId = doc->assets().addImage(img);
+        layer->naturalWidth = 320;
+        layer->naturalHeight = 240;
+        layer->transform.position = QPointF(doc->width() / 2.0, doc->height() / 2.0);
+        const LayerId imageId = layer->id();
+        QVERIFY(doc->addLayer(std::move(layer)));
+        window.selectLayer(imageId);
+        QCoreApplication::processEvents();
+
+        auto* inspector = window.findChild<ImageInspector*>();
+        QVERIFY(inspector != nullptr);
+        inspector->setAdvancedMode(true);
+        inspector->setSelectedLayer(imageId);
+        QCoreApplication::processEvents();
+
+        auto* section = inspector->findChild<AdjustmentsSection*>();
+        QVERIFY(section != nullptr);
+        const auto sliders = section->findChildren<QSlider*>();
+        QVERIFY(sliders.size() >= 4);
+
+        auto* canvas = window.findChild<CanvasView*>();
+        QVERIFY(canvas != nullptr);
+
+        // Simula arrastar o slider de brilho várias vezes com repaint real.
+        for (int v = -100; v <= 100; v += 25) {
+            sliders.at(0)->setValue(v);
+            QCoreApplication::processEvents();
+            canvas->update();
+            QCoreApplication::processEvents();
+            window.grab(); // força paintEvent completo
+        }
+
+        // E um undo/redo em cima disso.
+        for (int i = 0; i < 9; ++i) {
+            QKeyEvent undo(QEvent::KeyPress, Qt::Key_Z, Qt::ControlModifier);
+            QApplication::sendEvent(&window, &undo);
+            QCoreApplication::processEvents();
+            window.grab();
+        }
+        for (int i = 0; i < 9; ++i) {
+            QKeyEvent redo(QEvent::KeyPress, Qt::Key_Y, Qt::ControlModifier);
+            QApplication::sendEvent(&window, &redo);
+            QCoreApplication::processEvents();
+            window.grab();
+        }
     }
 
     void inspectorDockAdaptsToTextMetrics()
@@ -562,6 +641,429 @@ private slots:
         QCOMPARE(doc.webSlices().size(), 1u);
         history.undo();
         QCOMPARE(doc.webSlices().size(), 2u);
+    }
+
+    void pasteIntoWithEmptyClipboardDoesNotTouchSelectedLayer()
+    {
+        QTemporaryDir tmpDir;
+        SettingsService settings(tmpDir.path() + "/settings.json");
+        I18nService i18n(&settings, {":/locales"});
+        i18n.loadAvailableLanguages();
+        MainWindow window(&settings, &i18n, nullptr, true);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+
+        Document* doc = window.document();
+        QVERIFY(doc != nullptr);
+        QImage pixels(32, 32, QImage::Format_ARGB32);
+        pixels.fill(QColor(100, 120, 140, 255));
+        auto layer = std::make_unique<ImageLayer>();
+        layer->assetId = doc->assets().addImage(pixels);
+        layer->naturalWidth = 32;
+        layer->naturalHeight = 32;
+        layer->transform.position = QPointF(50, 50);
+        const LayerId id = layer->id();
+        QVERIFY(doc->addLayer(std::move(layer)));
+        window.selectLayer(id);
+
+        QImage selection(doc->width(), doc->height(), QImage::Format_Alpha8);
+        selection.fill(255);
+        doc->setPixelSelection(selection);
+        QGuiApplication::clipboard()->clear();
+        const size_t beforeCount = doc->rootGroup()->children.size();
+
+        QAction* pasteInto = nullptr;
+        for (QAction* action : window.findChildren<QAction*>())
+            if (action->shortcut() == QKeySequence(QStringLiteral("Ctrl+Shift+V"))) {
+                pasteInto = action;
+                break;
+            }
+        QVERIFY(pasteInto != nullptr);
+        pasteInto->trigger();
+        QCoreApplication::processEvents();
+
+        // No-op total: não cola e, sobretudo, não aplica máscara à camada atual.
+        QCOMPARE(doc->rootGroup()->children.size(), beforeCount);
+        const auto* current = dynamic_cast<const ImageLayer*>(doc->findLayer(id));
+        QVERIFY(current != nullptr);
+        QVERIFY(current->alphaMask.isNull());
+    }
+
+    void groupedLayerMoveFollowsPointer()
+    {
+        QTemporaryDir tmpDir;
+        QVERIFY(tmpDir.isValid());
+        const QString project = tmpDir.filePath(QStringLiteral("legacy_group.creatorcanvas"));
+        {
+            Document doc(800, 600);
+            QImage pixels(100, 80, QImage::Format_ARGB32);
+            pixels.fill(QColor(200, 40, 40));
+            auto image = std::make_unique<ImageLayer>();
+            image->name = QStringLiteral("Mockup test"); // exclui snap neste teste
+            image->assetId = doc.assets().addImage(pixels);
+            image->naturalWidth = 100;
+            image->naturalHeight = 80;
+            image->transform.position = QPointF(300, 250);
+            auto group = std::make_unique<GroupLayer>();
+            group->name = QStringLiteral("Legacy");
+            group->children.push_back(std::move(image));
+            // Assinatura antiga: matriz do grupo desloca o conteúdo para o canto.
+            group->transform.position = QPointF(0, 0);
+            QVERIFY(doc.addLayer(std::move(group)));
+            QString error;
+            QImage thumb(32, 32, QImage::Format_ARGB32);
+            thumb.fill(Qt::white);
+            QVERIFY2(cc::saveDocument(doc, project, &error, &thumb), qPrintable(error));
+        }
+
+        SettingsService settings(tmpDir.filePath("settings.json"));
+        I18nService i18n(&settings, {":/locales"});
+        i18n.loadAvailableLanguages();
+        MainWindow window(&settings, &i18n, nullptr, true);
+        window.openFromPath(project);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+
+        Document* doc = window.document();
+        QVERIFY(doc != nullptr);
+        GroupLayer* group = nullptr;
+        ImageLayer* image = nullptr;
+        for (const auto& child : doc->rootGroup()->children) {
+            if (child->type() == LayerType::Group) {
+                group = static_cast<GroupLayer*>(child.get());
+                if (!group->children.empty())
+                    image = dynamic_cast<ImageLayer*>(group->children.front().get());
+                break;
+            }
+        }
+        QVERIFY(group != nullptr && image != nullptr);
+        // O loader migra o grupo legado: matriz identidade.
+        QVERIFY((group->transform.position - group->contentBounds().center()).manhattanLength() < 0.01);
+
+        auto* canvas = window.findChild<CanvasView*>();
+        QVERIFY(canvas != nullptr);
+        window.selectLayer(image->id());
+        QCoreApplication::processEvents();
+
+        const QRectF bounds = image->contentBounds();
+        const QTransform imageToDoc = group->transform.matrix(group->contentBounds())
+                                      * image->transform.matrix(bounds);
+        const QPoint docCenter = imageToDoc.map(bounds.center()).toPoint();
+        const QPoint widgetCenter = canvas->docToDevice().map(docCenter);
+        const QPointF oldPosition = image->transform.position;
+
+        // Desativa o snap para testar apenas o espaço do grupo.
+        canvas->setSnapToGrid(false);
+        QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, widgetCenter);
+        QTest::mouseMove(canvas, widgetCenter + QPoint(60, 30));
+        QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier,
+                            widgetCenter + QPoint(60, 30));
+
+        const QPointF moved = image->transform.position - oldPosition;
+        const QPointF expected = canvas->deviceToDoc().map(widgetCenter + QPoint(60, 30))
+                                 - canvas->deviceToDoc().map(widgetCenter);
+        QVERIFY2(qAbs(moved.x() - expected.x()) < 1.0
+                 && qAbs(moved.y() - expected.y()) < 1.0,
+                 qPrintable(QStringLiteral("delta inesperado: (%1,%2), esperado: (%3,%4)")
+                                .arg(moved.x()).arg(moved.y())
+                                .arg(expected.x()).arg(expected.y())));
+    }
+
+    void legacyGroupMoveKeepsLayerAndHandlesAligned()
+    {
+        Document doc(800, 600);
+        CommandStack history;
+        QImage pixels(100, 80, QImage::Format_ARGB32);
+        pixels.fill(QColor(200, 40, 40));
+        auto image = std::make_unique<ImageLayer>();
+        image->name = QStringLiteral("Mockup test");
+        image->assetId = doc.assets().addImage(pixels);
+        image->naturalWidth = 100;
+        image->naturalHeight = 80;
+        image->transform.position = QPointF(300, 250);
+        const LayerId imageId = image->id();
+        auto group = std::make_unique<GroupLayer>();
+        group->name = QStringLiteral("Legacy");
+        group->children.push_back(std::move(image));
+        group->transform.position = QPointF(0, 0);
+        GroupLayer* groupPtr = group.get();
+        QVERIFY(doc.addLayer(std::move(group)));
+
+        CanvasView canvas;
+        canvas.setDocument(&doc);
+        canvas.setHistory(&history);
+        canvas.resize(900, 650);
+        canvas.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&canvas));
+        canvas.setSelectedLayer(imageId);
+        QCoreApplication::processEvents();
+
+        auto* imageLayer = dynamic_cast<ImageLayer*>(doc.findLayer(imageId));
+        QVERIFY(imageLayer != nullptr);
+        const QRectF bounds = imageLayer->contentBounds();
+        const QTransform before = imageLayer->transform.matrix(bounds)
+                                  * groupPtr->transform.matrix(groupPtr->contentBounds());
+        const QPointF oldFullCenter = before.map(bounds.center());
+        const QPointF oldPosition = imageLayer->transform.position;
+        const QPoint widgetCenter = canvas.docToDevice().map(oldFullCenter).toPoint();
+
+        QTest::mousePress(&canvas, Qt::LeftButton, Qt::NoModifier, widgetCenter);
+        QTest::mouseMove(&canvas, widgetCenter + QPoint(60, 30));
+        QTest::mouseRelease(&canvas, Qt::LeftButton, Qt::NoModifier,
+                            widgetCenter + QPoint(60, 30));
+
+        const QTransform after = imageLayer->transform.matrix(bounds)
+                                 * groupPtr->transform.matrix(groupPtr->contentBounds());
+        const QPointF newFullCenter = after.map(bounds.center());
+        const QPointF localDelta = imageLayer->transform.position - oldPosition;
+        const QPointF fullDelta = newFullCenter - oldFullCenter;
+        QVERIFY2(qAbs(fullDelta.x() - localDelta.x()) < 1.0
+                 && qAbs(fullDelta.y() - localDelta.y()) < 1.0,
+                 qPrintable(QStringLiteral("local=(%1,%2), composto=(%3,%4)")
+                                .arg(localDelta.x()).arg(localDelta.y())
+                                .arg(fullDelta.x()).arg(fullDelta.y())));
+    }
+
+    void draggingFromRulersCreatesGuides()
+    {
+        Document doc(800, 600);
+        CommandStack history;
+        CanvasView canvas;
+        canvas.setDocument(&doc);
+        canvas.setHistory(&history);
+        canvas.resize(900, 650);
+        canvas.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&canvas));
+        canvas.setShowRulers(true);
+        canvas.setShowGuides(true);
+
+        // Régua superior → guia horizontal na posição de release.
+        const QPoint start(200, 10);
+        const QPoint end(260, 220);
+        QTest::mousePress(&canvas, Qt::LeftButton, Qt::NoModifier, start);
+        QTest::mouseMove(&canvas, end);
+        QTest::mouseRelease(&canvas, Qt::LeftButton, Qt::NoModifier, end);
+        QCOMPARE(doc.guides().size(), size_t(1));
+        QVERIFY(doc.guides()[0].horizontal);
+        const double expectedY = canvas.deviceToDoc().map(end).y();
+        QVERIFY(qAbs(doc.guides()[0].position - expectedY) < 1.0);
+
+        // Régua esquerda → guia vertical.
+        const QPoint startV(10, 240);
+        const QPoint endV(340, 260);
+        QTest::mousePress(&canvas, Qt::LeftButton, Qt::NoModifier, startV);
+        QTest::mouseMove(&canvas, endV);
+        QTest::mouseRelease(&canvas, Qt::LeftButton, Qt::NoModifier, endV);
+        QCOMPARE(doc.guides().size(), size_t(2));
+        QVERIFY(!doc.guides()[1].horizontal);
+        const double expectedX = canvas.deviceToDoc().map(endV).x();
+        QVERIFY(qAbs(doc.guides()[1].position - expectedX) < 1.0);
+    }
+
+    void sidePanelsParticipateInCompactLayoutCycle()
+    {
+        QTemporaryDir tmpDir;
+        SettingsService settings(tmpDir.path() + "/settings.json");
+        I18nService i18n(&settings, {":/locales"});
+        i18n.loadAvailableLanguages();
+        const QString project = tmpDir.filePath("compact.creatorcanvas");
+        {
+            Document doc(800, 600);
+            QString error;
+            QImage thumb(16, 16, QImage::Format_ARGB32);
+            thumb.fill(Qt::white);
+            QVERIFY(cc::saveDocument(doc, project, &error, &thumb));
+        }
+        MainWindow window(&settings, &i18n, nullptr, true);
+        window.openFromPath(project); // entra no editor, não no ecrã inicial
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+
+        auto* navigator = window.findChild<QDockWidget*>(QStringLiteral("NavigatorDock"));
+        auto* swatches = window.findChild<QDockWidget*>(QStringLiteral("SwatchesDock"));
+        QVERIFY(navigator && swatches);
+        navigator->setVisible(true);
+        swatches->setVisible(true);
+
+        window.resize(800, 520);
+        QCoreApplication::processEvents();
+        QVERIFY(!navigator->isVisible());
+        QVERIFY(!swatches->isVisible());
+
+        window.resize(1440, 900);
+        QCoreApplication::processEvents();
+        QVERIFY(navigator->isVisible());
+        QVERIFY(swatches->isVisible());
+    }
+
+    void sidePanelsShowTranslateAndDestroySafely()
+    {
+        QTemporaryDir tmpDir;
+        SettingsService settings(tmpDir.path() + "/settings.json");
+        I18nService i18n(&settings, {":/locales"});
+        i18n.loadAvailableLanguages();
+        MainWindow window(&settings, &i18n, nullptr, true);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+
+        auto* navigator = window.findChild<QDockWidget*>(QStringLiteral("NavigatorDock"));
+        auto* swatches = window.findChild<QDockWidget*>(QStringLiteral("SwatchesDock"));
+        QVERIFY(navigator != nullptr);
+        QVERIFY(swatches != nullptr);
+        navigator->setVisible(true);
+        swatches->setVisible(true);
+        QCoreApplication::processEvents();
+        QVERIFY(!navigator->windowTitle().isEmpty());
+        QVERIFY(!swatches->windowTitle().isEmpty());
+        window.close();
+        QCoreApplication::processEvents();
+        // A destruição no fim do slot não pode chamar lambdas com `this` morto.
+    }
+
+    // ---- Ajuda a iniciantes: dicas vivas ----
+    void beginnerHintsFollowTheDocumentState()
+    {
+        QTemporaryDir tmpDir;
+        SettingsService settings(tmpDir.path() + "/settings.json");
+        I18nService i18n(&settings, {":/locales"});
+        QVERIFY(i18n.loadAvailableLanguages());
+
+        MainWindow window(&settings, &i18n, nullptr,
+                          /*suppressStartupInteractions=*/true);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+
+        auto* tipsBar = window.findChild<QFrame*>("TipsBar");
+        auto* emptyHint = window.findChild<QLabel*>("CanvasEmptyHint");
+        QVERIFY(tipsBar);
+        QVERIFY(emptyHint);
+
+        // 1) Barra de dicas visível de início e dispensável (persistida).
+        QVERIFY(tipsBar->isVisible());
+        QVERIFY(!settings.hintsBarDismissed());
+        auto* closeBtn = tipsBar->findChild<QToolButton*>();
+        QVERIFY(closeBtn);
+        QTest::mouseClick(static_cast<QWidget*>(closeBtn), Qt::LeftButton);
+        QVERIFY(!tipsBar->isVisible());
+        QVERIFY(settings.hintsBarDismissed());
+
+        // 2) Dica do canvas vazio Some quando o documento ganha camadas.
+        window.createDemoDocumentForSnapshot();
+        QCoreApplication::processEvents();
+        QVERIFY(window.document());
+        if (window.document()->rootGroup()->children.empty()) {
+            // Documento de demonstração pode vir vazio: cria uma camada.
+            auto layer = std::make_unique<cc::TextLayer>();
+            window.document()->addLayer(std::move(layer));
+        }
+        QCoreApplication::processEvents();
+        QVERIFY(!window.document()->rootGroup()->children.empty());
+        QVERIFY(!emptyHint->isVisible());
+
+        // 3) Trocar de ferramenta publica uma dica na barra de estado.
+        I18nService i18n2(&settings, {":/locales"});
+        const QString before = window.statusBar()->currentMessage();
+        Q_UNUSED(before);
+        window.selectToolByName("paint");
+        QCoreApplication::processEvents();
+        QVERIFY(!window.statusBar()->currentMessage().isEmpty());
+        window.close();
+        QCoreApplication::processEvents();
+    }
+
+    // ---- Painel "Primeiros passos": fechar tem de ser definitivo ----
+    void onboardingPanelDismissPersists()
+    {
+        QTemporaryDir tmpDir;
+        SettingsService settings(tmpDir.path() + "/settings.json");
+        I18nService i18n(&settings, {":/locales"});
+        QVERIFY(i18n.loadAvailableLanguages());
+        QVERIFY(!settings.onboardingDismissed());
+
+        MainWindow window(&settings, &i18n, nullptr,
+                          /*suppressStartupInteractions=*/true);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+
+        auto* dock = window.findChild<QDockWidget*>("OnboardingDock");
+        auto* panel = window.findChild<cc::OnboardingPanel*>();
+        QVERIFY(dock && panel);
+        // Entrar no editor (criar um documento) e deixar assentar: o painel
+        // so aparece no editor, nunca no ecra inicial.
+        window.createDemoDocumentForSnapshot();
+        QCoreApplication::processEvents();
+        QTest::qWait(50);
+        QVERIFY(dock->isVisible());
+        QVERIFY(!dock->windowTitle().isEmpty());
+
+        auto* button = panel->findChild<QPushButton*>();
+        QVERIFY(button);
+        QTest::mouseClick(static_cast<QWidget*>(button), Qt::LeftButton);
+        QVERIFY(!dock->isVisible());
+        QVERIFY(settings.onboardingDismissed());
+
+        // Actividade que dispara updateOnboarding() nao pode faze-lo voltar.
+        window.createDemoDocumentForSnapshot();
+        QCoreApplication::processEvents();
+        window.selectToolByName("paint");
+        QCoreApplication::processEvents();
+        QVERIFY(!dock->isVisible());
+
+        window.close();
+        QCoreApplication::processEvents();
+    }
+
+    // ---- Integracao: aplicar sobreposicao cria UMA camada em Screen ----
+    void packOverlayAppliesOnceWithScreenBlend()
+    {
+        QTemporaryDir tmpDir;
+        SettingsService settings(tmpDir.path() + "/settings.json");
+        I18nService i18n(&settings, {":/locales"});
+        QVERIFY(i18n.loadAvailableLanguages());
+
+        MainWindow window(&settings, &i18n, nullptr,
+                          /*suppressStartupInteractions=*/true);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        window.createDemoDocumentForSnapshot();
+        QCoreApplication::processEvents();
+
+        Document* doc = window.document();
+        QVERIFY(doc && doc->rootGroup());
+        const int before = static_cast<int>(doc->rootGroup()->children.size());
+        QVERIFY(before > 0);
+
+        // Abre o navegador pelo atalho (caminho real do utilizador).
+        QTest::keyClick(&window, Qt::Key_B, Qt::ControlModifier | Qt::ShiftModifier);
+        QCoreApplication::processEvents();
+        auto* browser = window.findChild<cc::PackBrowser*>();
+        QVERIFY(browser);
+
+        auto* combo = browser->findChild<QComboBox*>();
+        auto* grid = browser->findChild<QListWidget*>();
+        QVERIFY(combo && grid);
+        for (int i = 0; i < combo->count(); ++i) {
+            if (combo->itemData(i).toString() == QLatin1String("overlay")) {
+                combo->setCurrentIndex(i);
+                break;
+            }
+        }
+        QVERIFY(grid->count() > 0);
+        QCoreApplication::processEvents();
+        QTest::qWait(50);
+
+        // Activa pelo teclado (Enter): o caminho completo
+        // navegador -> MainWindow -> importImage fica coberto.
+        grid->setCurrentRow(0);
+        QTest::keyClick(grid, Qt::Key_Return);
+        QCoreApplication::processEvents();
+
+        QCOMPARE(static_cast<int>(doc->rootGroup()->children.size()), before + 1);
+        Layer* added = doc->rootGroup()->children.back().get();
+        QCOMPARE(added->blendMode, cc::BlendMode::Screen);
+
+        window.close();
+        QCoreApplication::processEvents();
     }
 };
 

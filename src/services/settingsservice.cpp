@@ -7,6 +7,8 @@ namespace {
 constexpr auto kLanguage         = "general/language";
 constexpr auto kAutosaveInterval = "general/autosaveIntervalMinutes";
 constexpr auto kHistoryLimit     = "general/historyLimit";
+
+constexpr auto kHistoryMemory     = "general/historyMemoryBudgetMb";
 constexpr auto kGpuAcceleration  = "performance/gpuAcceleration";
 constexpr auto kDarkMode         = "appearance/darkMode";
 constexpr auto kConfirmExit      = "general/confirmBeforeExit";
@@ -14,6 +16,17 @@ constexpr auto kShowGrid         = "canvas/showGridByDefault";
 constexpr auto kSnapToGrid       = "canvas/snapToGridByDefault";
 
 constexpr auto kAdvancedMode      = "advanced/mode";
+
+constexpr auto kHintsBarDismissed  = "general/hintsBarDismissed";
+
+constexpr auto kWelcomeShown        = "general/welcomeShown";
+constexpr auto kTourCompleted       = "general/tourCompleted";
+
+constexpr auto kHasExported          = "general/hasExported";
+
+constexpr auto kLastExportDir         = "general/lastExportDir";
+
+constexpr auto kOnboardingDismissed   = "general/onboardingDismissed";
 
 constexpr auto kWindowGeometry   = "window/geometry";
 constexpr auto kWindowState      = "window/state";
@@ -65,6 +78,18 @@ void SettingsService::setHistoryLimit(int limit)
     setValue(kHistoryLimit, qBound(1, limit, 5000));
 }
 
+int SettingsService::historyMemoryBudgetMb() const
+{
+    bool ok = false;
+    const int v = value(kHistoryMemory, 512).toInt(&ok);
+    return ok ? qBound(0, v, 16384) : 512;
+}
+
+void SettingsService::setHistoryMemoryBudgetMb(int mb)
+{
+    setValue(kHistoryMemory, qBound(0, mb, 16384));
+}
+
 bool SettingsService::gpuAccelerationEnabled() const
 {
     return value(kGpuAcceleration, false).toBool();
@@ -85,6 +110,68 @@ bool SettingsService::snapToGridByDefault() const { return value(kSnapToGrid, fa
 void SettingsService::setSnapToGridByDefault(bool enabled) { setValue(kSnapToGrid, enabled); }
 bool SettingsService::advancedModeEnabled() const { return value(kAdvancedMode, false).toBool(); }
 void SettingsService::setAdvancedModeEnabled(bool enabled) { setValue(kAdvancedMode, enabled); }
+
+bool SettingsService::hintsBarDismissed() const
+{
+    return value(kHintsBarDismissed, false).toBool();
+}
+
+void SettingsService::setHintsBarDismissed(bool dismissed)
+{
+    setValue(kHintsBarDismissed, dismissed);
+}
+
+bool SettingsService::welcomeShown() const
+{
+    return value(kWelcomeShown, false).toBool();
+}
+
+void SettingsService::setWelcomeShown(bool shown)
+{
+    setValue(kWelcomeShown, shown);
+}
+
+bool SettingsService::tourCompleted() const
+{
+    return value(kTourCompleted, false).toBool();
+}
+
+void SettingsService::setTourCompleted(bool completed)
+{
+    setValue(kTourCompleted, completed);
+}
+
+bool SettingsService::hasExported() const
+{
+    return value(kHasExported, false).toBool();
+}
+
+void SettingsService::setHasExported(bool exported)
+{
+    setValue(kHasExported, exported);
+}
+
+QString SettingsService::lastExportDir() const
+{
+    return value(kLastExportDir, QString()).toString();
+}
+
+void SettingsService::setLastExportDir(const QString& dir)
+{
+    if (dir.isEmpty())
+        return;
+    setValue(kLastExportDir, dir);
+}
+
+bool SettingsService::onboardingDismissed() const
+{
+    return value(kOnboardingDismissed, false).toBool();
+}
+
+void SettingsService::setOnboardingDismissed(bool dismissed)
+{
+    setValue(kOnboardingDismissed, dismissed);
+}
 
 QByteArray SettingsService::windowGeometry() const
 {

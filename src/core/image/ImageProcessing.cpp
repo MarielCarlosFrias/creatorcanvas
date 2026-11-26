@@ -4,6 +4,7 @@
 #include <QLineF>
 #include <QPainter>
 #include <QPainterPath>
+#include <QRandomGenerator>
 #include <QRadialGradient>
 
 #include <algorithm>
@@ -479,35 +480,71 @@ QImage ImageProcessing::paintStroke(const QImage& target, const QPointF& prevPoi
 void ImageProcessing::paintStrokeInPlace(QImage& target, const QPointF& prevPoint, const QPointF& curPoint,
                                          const BrushParams& params)
 {
-    QPainter painter(&target);
-    const int clampedSize = std::clamp(params.size, 1, 300);
-    const qreal clampedOpacity = std::clamp(params.opacity, 0.0, 1.0);
-    painter.setRenderHint(QPainter::Antialiasing, true);
-    switch (params.type) {
-    case BrushType::Brush:
-    default: {
-        QColor c = params.color;
-        c.setAlphaF(clampedOpacity * params.pressure);
-        if (prevPoint == curPoint) {
-            painter.setPen(Qt::NoPen);
-            painter.setBrush(c);
-            painter.drawEllipse(curPoint, clampedSize / 2.0, clampedSize / 2.0);
-        } else {
-            QPen pen(c, clampedSize, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
-            painter.setPen(pen);
-            painter.drawLine(prevPoint, curPoint);
-        }
-        break;
+    if (target.isNull())
+        return;
+    if (target.format() != QImage::Format_ARGB32_Premultiplied
+        && target.format() != QImage::Format_ARGB32) {
+        target = target.convertToFormat(QImage::Format_ARGB32_Premultiplied);
     }
-    case BrushType::Pencil:
-    case BrushType::Highlighter:
-    case BrushType::Airbrush:
-    case BrushType::Texture:
-    case BrushType::Scatter:
-    case BrushType::Rotation:
-    case BrushType::Eraser:
-        // Delegates to same rendering as Brush for now
-        break;
+
+    const int clampedSize = std::clamp(params.size, 1, 300);
+    const qreal clampedOpacity = std::clamp(params.opacity * params.pressure, 0.0, 1.0);
+
+    // Os tipos clássicos compartilham o rasterizador consolidado acima. A
+    // versão anterior deste overload apenas desenhava o tipo Brush e fazia os
+    // demais aparentarem funcionar, mas sem alterar um único pixel.
+    if (params.type != BrushType::Texture && params.type != BrushType::Scatter
+        && params.type != BrushType::Rotation) {
+        paintStrokeInPlace(target, prevPoint, curPoint, params.type, params.color,
+                           clampedSize, clampedOpacity);
+        return;
+    }
+
+    QPainter painter(&target);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    if ((params.type == BrushType::Texture || params.type == BrushType::Rotation)
+        && !params.texture.isNull()) {
+        const qreal distance = QLineF(prevPoint, curPoint).length();
+        const qreal spacing = std::max<qreal>(1.0, clampedSize * std::max<qreal>(0.05, params.spacing / 100.0));
+        const int stamps = std::max(1, static_cast<int>(std::ceil(distance / spacing)));
+        for (int i = 0; i <= stamps; ++i) {
+            const qreal t = static_cast<qreal>(i) / stamps;
+            const QPointF point = prevPoint + (curPoint - prevPoint) * t;
+            painter.save();
+            painter.setOpacity(clampedOpacity);
+            painter.translate(point);
+            qreal angle = params.rotation;
+            if (params.type == BrushType::Rotation)
+                angle += (QRandomGenerator::global()->generateDouble() * 2.0 - 1.0)
+                       * params.rotationJitter;
+            painter.rotate(angle);
+            const QImage stamp = params.texture.scaled(clampedSize, clampedSize,
+                                                        Qt::KeepAspectRatio,
+                                                        Qt::SmoothTransformation);
+            painter.drawImage(QPointF(-stamp.width() / 2.0, -stamp.height() / 2.0), stamp);
+            painter.restore();
+        }
+        return;
+    }
+
+    // Scatter faz carimbos espaçados e com jitter determinístico por traço.
+    QColor color = params.color;
+    color.setAlphaF(clampedOpacity);
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(color);
+    const qreal distance = QLineF(prevPoint, curPoint).length();
+    const qreal spacing = std::max<qreal>(1.0, clampedSize * std::max<qreal>(0.05, params.spacing / 100.0));
+    const int stamps = std::max(1, static_cast<int>(std::ceil(distance / spacing)));
+    const qreal jitterRadius = params.type == BrushType::Scatter
+        ? clampedSize * std::clamp(params.jitter, 0.0, 1.0) * 0.5 : 0.0;
+    for (int i = 0; i <= stamps; ++i) {
+        const qreal t = static_cast<qreal>(i) / stamps;
+        QPointF point = prevPoint + (curPoint - prevPoint) * t;
+        if (jitterRadius > 0.0) {
+            point.rx() += (QRandomGenerator::global()->generateDouble() * 2.0 - 1.0) * jitterRadius;
+            point.ry() += (QRandomGenerator::global()->generateDouble() * 2.0 - 1.0) * jitterRadius;
+        }
+        painter.drawEllipse(point, clampedSize / 2.0, clampedSize / 2.0);
     }
 }
 
@@ -733,6 +770,161 @@ QImage ImageProcessing::applyBlur(const QImage& source, double radius)
         Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
 
     return small.scaled(source.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+}
+
+namespace {
+
+/// Amostragem bilinear com clamp nas bordas (para warps por mapeamento inverso).
+QRgb sampleBilinearClamped(const QImage& img, double x, double y)
+{
+    const int x0 = qFloor(x);
+    const int y0 = qFloor(y);
+    const double fx = x - x0;
+    const double fy = y - y0;
+    auto px = [&](int xx, int yy) -> QRgb {
+        xx = qBound(0, xx, img.width() - 1);
+        yy = qBound(0, yy, img.height() - 1);
+        return img.pixel(xx, yy);
+    };
+    const QRgb c00 = px(x0, y0);
+    const QRgb c10 = px(x0 + 1, y0);
+    const QRgb c01 = px(x0, y0 + 1);
+    const QRgb c11 = px(x0 + 1, y0 + 1);
+    auto lerp = [](int a, int b, double t) { return a + int((b - a) * t); };
+    const int r = lerp(lerp(qRed(c00), qRed(c10), fx), lerp(qRed(c01), qRed(c11), fx), fy);
+    const int g = lerp(lerp(qGreen(c00), qGreen(c10), fx), lerp(qGreen(c01), qGreen(c11), fx), fy);
+    const int b = lerp(lerp(qBlue(c00), qBlue(c10), fx), lerp(qBlue(c01), qBlue(c11), fx), fy);
+    const int a = lerp(lerp(qAlpha(c00), qAlpha(c10), fx), lerp(qAlpha(c01), qAlpha(c11), fx), fy);
+    return qRgba(r, g, b, a);
+}
+
+} // namespace
+
+QImage ImageProcessing::applyMotionBlur(const QImage& source, double angleDeg,
+                                        double lengthPx)
+{
+    if (source.isNull() || lengthPx < 1.0)
+        return source;
+
+    const QImage src = source.convertToFormat(QImage::Format_ARGB32);
+    QImage out(src.size(), QImage::Format_ARGB32);
+    const double rad = qDegreesToRadians(angleDeg);
+    const double dx = std::cos(rad);
+    const double dy = std::sin(rad);
+    const int steps = qMin(48, qMax(2, static_cast<int>(std::lround(lengthPx))));
+    const double half = (steps - 1) / 2.0;
+
+    for (int y = 0; y < src.height(); ++y) {
+        QRgb* dstLine = reinterpret_cast<QRgb*>(out.scanLine(y));
+        for (int x = 0; x < src.width(); ++x) {
+            int r = 0, g = 0, b = 0, a = 0;
+            for (int i = 0; i < steps; ++i) {
+                const double t = i - half;
+                const QRgb p = sampleBilinearClamped(src, x - t * dx, y - t * dy);
+                r += qRed(p);
+                g += qGreen(p);
+                b += qBlue(p);
+                a += qAlpha(p);
+            }
+            dstLine[x] = qRgba(r / steps, g / steps, b / steps, a / steps);
+        }
+    }
+    return out;
+}
+
+QImage ImageProcessing::applyNoise(const QImage& source, double amountPercent,
+                                   bool monochrome)
+{
+    if (source.isNull() || amountPercent <= 0.0)
+        return source;
+
+    QImage out = source.convertToFormat(QImage::Format_ARGB32);
+    const int amp = static_cast<int>(std::clamp(amountPercent, 0.0, 100.0)
+                                      / 100.0 * 255.0);
+    if (amp <= 0)
+        return out;
+    // Seed fixa: o resultado é determinístico (testes e previsibilidade).
+    QRandomGenerator rng(0x5EEDu);
+
+    for (int y = 0; y < out.height(); ++y) {
+        QRgb* line = reinterpret_cast<QRgb*>(out.scanLine(y));
+        for (int x = 0; x < out.width(); ++x) {
+            const QRgb p = line[x];
+            if (monochrome) {
+                const int n = rng.bounded(-amp, amp + 1);
+                const int gray = qBound(0, qRed(p) + n, 255);
+                line[x] = qRgba(gray, gray, gray, qAlpha(p));
+            } else {
+                const int nr = rng.bounded(-amp, amp + 1);
+                const int ng = rng.bounded(-amp, amp + 1);
+                const int nb = rng.bounded(-amp, amp + 1);
+                line[x] = qRgba(qBound(0, qRed(p) + nr, 255),
+                                qBound(0, qGreen(p) + ng, 255),
+                                qBound(0, qBlue(p) + nb, 255),
+                                qAlpha(p));
+            }
+        }
+    }
+    return out;
+}
+
+QImage ImageProcessing::applyDistort(const QImage& source, DistortMode mode,
+                                     double amount, double wavelengthPx)
+{
+    if (source.isNull() || qFuzzyIsNull(amount))
+        return source;
+
+    const QImage src = source.convertToFormat(QImage::Format_ARGB32);
+    QImage out(src.size(), QImage::Format_ARGB32);
+    const double cx = src.width() / 2.0;
+    const double cy = src.height() / 2.0;
+    const double rmax = qMin(cx, cy);
+    if (rmax < 1.0)
+        return src;
+    const double lambda = (mode == DistortMode::Ripple && wavelengthPx > 0.0)
+                              ? wavelengthPx
+                              : rmax / 3.0;
+    const double amt = std::clamp(amount, -1.0, 1.0);
+
+    for (int y = 0; y < src.height(); ++y) {
+        QRgb* dstLine = reinterpret_cast<QRgb*>(out.scanLine(y));
+        for (int x = 0; x < src.width(); ++x) {
+            const double dx = x - cx;
+            const double dy = y - cy;
+            const double r = std::hypot(dx, dy);
+            double sx = x;
+            double sy = y;
+            switch (mode) {
+            case DistortMode::Twirl: {
+                // Inverso: roda o vetor dst no sentido contrário, com ângulo
+                // máximo no centro que decai até 0 na borda.
+                const double theta = amt * 2.0 * M_PI
+                                     * (1.0 - qMin(1.0, r / rmax));
+                const double c = std::cos(-theta);
+                const double s = std::sin(-theta);
+                sx = cx + dx * c - dy * s;
+                sy = cy + dx * s + dy * c;
+                break;
+            }
+            case DistortMode::Pinch: {
+                // |src-centro| = rmax * (r/rmax)^(1+amt): amt>0 comprime a
+                // fonte para o centro (pinça), amt<0 expande (barriga).
+                const double f = std::pow(qMax(1e-9, qMin(1.0, r / rmax)), amt);
+                sx = cx + dx * f;
+                sy = cy + dy * f;
+                break;
+            }
+            case DistortMode::Ripple: {
+                const double amp = amt * lambda / 4.0;
+                sx = x + amp * std::sin(2.0 * M_PI * dy / lambda);
+                sy = y + amp * std::cos(2.0 * M_PI * dx / lambda);
+                break;
+            }
+            }
+            dstLine[x] = sampleBilinearClamped(src, sx, sy);
+        }
+    }
+    return out;
 }
 
 QImage ImageProcessing::applySharpen(const QImage& source, double amount)

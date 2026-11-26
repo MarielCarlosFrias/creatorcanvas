@@ -123,6 +123,12 @@ private:
     int m_newWidth;
     int m_newHeight;
     AffineTransform m_newTransform;
+    qint64 estimatedBytes() const override
+    {
+        return m_oldAlphaMask.sizeInBytes() + m_newAlphaMask.sizeInBytes()
+             + m_oldVectorMask.sizeInBytes() + m_newVectorMask.sizeInBytes();
+    }
+
     QImage m_oldAlphaMask;
     QImage m_newAlphaMask;
     QImage m_oldVectorMask;

@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QVariant>
 #include <QDateTime>
+#include <QPointF>
 #include <QtGlobal>
 
 #include <memory>
@@ -10,6 +11,7 @@
 #include <QSet>
 
 #include "assets/AssetStore.h"
+#include "document/Guide.h"
 #include "document/LayerComps.h"
 #include "document/WebSlice.h"
 #include "document/DocumentVersion.h"
@@ -40,6 +42,16 @@ public:
     int width() const { return m_width; }
     int height() const { return m_height; }
     int dpi() const { return m_dpi; }
+
+    /// Altera as dimensões da tela (canvas). As camadas mantêm as transforms;
+    /// |layerOffset| desloca as camadas do grupo raiz (usado pela âncora do
+    /// diálogo "Canvas Size"). Emite canvasSizeChanged.
+    bool setCanvasSize(int width, int height, const QPointF& layerOffset = {});
+
+    /// Rotaciona a tela em `degrees` (90, -90 ou 180): troca W/H quando
+    /// necessário e roda as transforms das camadas do grupo raiz à volta do
+    /// centro do canvas (grupos propagam a rotação aos filhos).
+    bool rotateCanvas(double degrees);
 
     ColorSpace colorSpace() const { return m_colorSpace; }
     void setColorSpace(ColorSpace space);
@@ -155,8 +167,37 @@ public:
     bool removeLayerAlphaMask(const LayerId& id);
 
     const QImage& pixelSelection() const { return m_selection.image(); }
+    SelectionSpace pixelSelectionSpace() const { return m_selection.imageSpace(); }
+    /// A API legacy infere Document quando as dimensões coincidem com o
+    /// canvas e Layer nos restantes casos. O overload explícito elimina a
+    /// ambiguidade quando uma camada tem exatamente o tamanho do documento.
     void setPixelSelection(QImage selection);
+    void setPixelSelection(QImage selection, SelectionSpace space);
     void clearPixelSelection();
+
+    /// Última seleção descartada/substituída — usado pelo comando Reselect.
+    const QImage& previousPixelSelection() const { return m_selection.previousImage(); }
+
+    // Seleções guardadas com nome (canais de seleção).
+    const std::vector<SavedSelection>& savedSelections() const { return m_selection.savedSelections(); }
+    QUuid addSavedSelection(const QString& name, const QImage& mask);
+    QUuid addSavedSelection(const QString& name, const QImage& mask,
+                            SelectionSpace space);
+    /// Restaura uma seleção guardada vinda do projeto, preservando o id/espaço.
+    QUuid restoreSavedSelection(const QUuid& id, const QString& name, const QImage& mask);
+    QUuid restoreSavedSelection(const QUuid& id, const QString& name, const QImage& mask,
+                                SelectionSpace space);
+    bool removeSavedSelection(const QUuid& id);
+    const SavedSelection* findSavedSelection(const QUuid& id) const
+    {
+        return m_selection.findSavedSelection(id);
+    }
+    void clearSavedSelections();
+
+    /// Snapshot usado pelos comandos de canvas: recorte/rotação não são
+    /// reversíveis por simples aplicação da transformação inversa.
+    SelectionState selectionSnapshot() const { return m_selection; }
+    void restoreSelectionSnapshot(const SelectionState& snapshot);
 
     // Layer Comps (Composições de Camadas estilo PhotoCraft / Photoshop)
     const std::vector<LayerComp>& layerComps() const { return m_layerComps; }
@@ -169,6 +210,13 @@ public:
     void addWebSlice(WebSlice slice);
     bool removeWebSlice(const QString& sliceId);
     void clearWebSlices();
+    void setWebSlices(std::vector<WebSlice> slices);
+
+    // Guias do canvas (coordenadas de documento)
+    const std::vector<Guide>& guides() const { return m_guides; }
+    void addGuide(Guide guide);
+    void clearGuides();
+    void setGuides(std::vector<Guide> guides);
 
     quint64 revision() const { return m_revision; }
 
@@ -196,11 +244,13 @@ public:
 signals:
     void structureChanged();
     void layerPropertyChanged(const LayerId& id);
+    void canvasSizeChanged(int width, int height);
 
 private:
     Layer* findRecursive(GroupLayer* group, const LayerId& id) const;
     GroupLayer* findParentRecursive(GroupLayer* group, const LayerId& id) const;
     std::unique_ptr<Layer> detachLayer(const LayerId& id);
+    SelectionSpace inferredSelectionSpace(const QImage& mask) const;
     void bumpRevision() { ++m_revision; }
 
     int m_width;
@@ -214,6 +264,7 @@ private:
     SelectionState m_selection;
     std::vector<LayerComp> m_layerComps;
     std::vector<WebSlice> m_webSlices;
+    std::vector<Guide> m_guides;
 
     // Version History
     DocumentVersionStore m_documentVersions;

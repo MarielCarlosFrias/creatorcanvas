@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QByteArray>
+#include <QHash>
 #include <QImage>
 #include <QString>
 #include <QVector>
@@ -47,11 +48,22 @@ public:
     /// (a codificação PNG é cara em imagens grandes e só é necessária no
     /// salvamento). É const porque a codificação é memoizada no asset.
     const QByteArray& encodedBytes(const LayerId& id) const;
+    /// Memória aproximada que o asset ocupa AGORA (bitmap descompactado,
+    /// bytes codificados ou ambos) — sem codificar nada. Usada pelo
+    /// orçamento de memória do histórico.
+    qint64 approximateBytes(const LayerId& id) const;
 
 private:
+    /// Reconstrói o índice id → posição (depois de remoções).
+    void reindex();
+
     // mutable: a codificação sob demanda acontece num método const
     // (encodedBytes) e memoiza o resultado dentro do próprio asset.
     mutable QVector<Asset> m_assets;
+    // Índice id → posição em m_assets. find/remove/encodedBytes eram
+    // lineares e correm a cada render e a cada saving; com dezenas de
+    // assets isso domina. Ocultado atrás dos mesmos métodos públicos.
+    QHash<LayerId, int> m_index;
 };
 
 } // namespace cc

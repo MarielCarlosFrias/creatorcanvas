@@ -27,6 +27,7 @@ void MenuBuilder::buildMenus(I18nService* i18n)
     fileMenu->addSeparator();
     fileMenu->addAction(m_actions->importAction);
     fileMenu->addAction(m_actions->exportAction);
+    fileMenu->addAction(m_actions->exportDocumentPngAction);
     fileMenu->addAction(m_actions->batchAction);
     fileMenu->addAction(m_actions->webSlicesAction);
     fileMenu->addAction(m_actions->workspaceLayoutAction);
@@ -37,6 +38,15 @@ void MenuBuilder::buildMenus(I18nService* i18n)
     editMenu = m_menuBar->addMenu(QString());
     editMenu->addAction(m_actions->undoAction);
     editMenu->addAction(m_actions->redoAction);
+    editMenu->addSeparator();
+    editMenu->addAction(m_actions->copyAction);
+    editMenu->addAction(m_actions->cutAction);
+    editMenu->addAction(m_actions->pasteAction);
+    editMenu->addAction(m_actions->pasteIntoAction);
+    editMenu->addSeparator();
+    editMenu->addAction(m_actions->fillSelectionAction);
+    editMenu->addAction(m_actions->strokeSelectionAction);
+    editMenu->addAction(m_actions->clearSelectionAction);
 
     // --- Imagem ---
     imageMenu = m_menuBar->addMenu(QStringLiteral("Image"));
@@ -47,6 +57,13 @@ void MenuBuilder::buildMenus(I18nService* i18n)
     imageMenu->addAction(m_actions->flipVAction);
     imageMenu->addAction(m_actions->rotateLeftAction);
     imageMenu->addAction(m_actions->rotateRightAction);
+    imageMenu->addSeparator();
+    imageMenu->addAction(m_actions->imageSizeAction);
+    imageMenu->addAction(m_actions->canvasSizeAction);
+    rotateCanvasMenu = imageMenu->addMenu(QString());
+    rotateCanvasMenu->addAction(m_actions->rotateCanvasCwAction);
+    rotateCanvasMenu->addAction(m_actions->rotateCanvasCcwAction);
+    rotateCanvasMenu->addAction(m_actions->rotateCanvas180Action);
     imageMenu->addSeparator();
     imageMenu->addAction(m_actions->removeBgAiAction);
     imageMenu->addAction(m_actions->removeBgAiQuickAction);
@@ -73,11 +90,26 @@ void MenuBuilder::buildMenus(I18nService* i18n)
             toneMenu->addAction(m_actions->filterActions[i]);
     }
 
+    blurMenu = filterMenu->addMenu(QString());
+    blurMenu->addAction(m_actions->blurGaussianAction);
+    blurMenu->addAction(m_actions->blurMotionAction);
+    noiseMenu = filterMenu->addMenu(QString());
+    noiseMenu->addAction(m_actions->noiseAddAction);
+    distortMenu = filterMenu->addMenu(QString());
+    distortMenu->addAction(m_actions->distortTwirlAction);
+    distortMenu->addAction(m_actions->distortPinchAction);
+    distortMenu->addAction(m_actions->distortRippleAction);
+
     // --- Seleção ---
     selectMenu = m_menuBar->addMenu(QStringLiteral("Select"));
     selectMenu->addAction(m_actions->selectAllAction);
     selectMenu->addAction(m_actions->deselectAction);
     selectMenu->addAction(m_actions->invertSelectionAction);
+    selectMenu->addAction(m_actions->reselectAction);
+    selectMenu->addAction(m_actions->transformSelectionAction);
+    selectMenu->addSeparator();
+    selectMenu->addAction(m_actions->saveSelectionAction);
+    loadSelectionMenu = selectMenu->addMenu(QString());
     selectMenu->addSeparator();
     selectMenu->addAction(m_actions->selectionOpsAction);
 
@@ -92,6 +124,7 @@ void MenuBuilder::buildMenus(I18nService* i18n)
 
     // --- Camada ---
     layerMenu = m_menuBar->addMenu(QString());
+    layerMenu->addAction(m_actions->backgroundsAction);
     layerMenu->addAction(m_actions->addTextAction);
     layerMenu->addAction(m_actions->addFillLayerAction);
     layerMenu->addAction(m_actions->addAdjustmentLayerAction);
@@ -131,6 +164,7 @@ void MenuBuilder::buildMenus(I18nService* i18n)
     layerMenu->addAction(m_actions->ungroupAction);
     layerMenu->addSeparator();
     layerMenu->addAction(m_actions->mergeSelectedAction);
+    layerMenu->addAction(m_actions->mergeDownAction);
     layerMenu->addAction(m_actions->mergeVisibleAction);
     layerMenu->addAction(m_actions->flattenAction);
     layerMenu->addSeparator();
@@ -142,6 +176,12 @@ void MenuBuilder::buildMenus(I18nService* i18n)
     layerMenu->addAction(m_actions->createClippingMaskAction);
     layerMenu->addAction(m_actions->releaseClippingMaskAction);
     layerMenu->addSeparator();
+    layerMenu->addAction(m_actions->duplicateLayerAction);
+    layerMenu->addAction(m_actions->rasterizeLayerAction);
+    layerMenu->addSeparator();
+    // Exportação rápida da camada: antes só existia no menu de contexto.
+    layerMenu->addAction(m_actions->quickExportLayerPngAction);
+    layerMenu->addSeparator();
     layerMenu->addAction(m_actions->deleteAction);
 
     // --- Exibir ---
@@ -152,7 +192,13 @@ void MenuBuilder::buildMenus(I18nService* i18n)
     viewMenu->addSeparator();
     viewMenu->addAction(m_actions->toggleGridAction);
     viewMenu->addAction(m_actions->toggleSnapAction);
+    viewMenu->addAction(m_actions->toggleRulersAction);
     viewMenu->addAction(m_actions->toggleHistoryAction);
+    guidesMenu = viewMenu->addMenu(QString());
+    guidesMenu->addAction(m_actions->toggleGuidesAction);
+    guidesMenu->addAction(m_actions->newGuideAction);
+    guidesMenu->addAction(m_actions->clearGuidesAction);
+    viewMenu->addSeparator();
 
     safeZoneMenu = viewMenu->addMenu(QString());
     safeZoneMenu->addAction(m_actions->safeNoneAction);
@@ -168,6 +214,8 @@ void MenuBuilder::buildMenus(I18nService* i18n)
     panelsMenu->addAction(m_actions->toggleTextDockAction);
     panelsMenu->addAction(m_actions->toggleShapeDockAction);
     panelsMenu->addAction(m_actions->toggleImageDockAction);
+    panelsMenu->addAction(m_actions->toggleNavigatorAction);
+    panelsMenu->addAction(m_actions->toggleSwatchesAction);
 
     // --- Ferramentas ---
     toolsMenu = m_menuBar->addMenu(QString());
@@ -201,6 +249,8 @@ void MenuBuilder::buildMenus(I18nService* i18n)
     windowMenu->addAction(m_actions->toggleTextDockAction);
     windowMenu->addAction(m_actions->toggleShapeDockAction);
     windowMenu->addAction(m_actions->toggleImageDockAction);
+    windowMenu->addAction(m_actions->toggleNavigatorAction);
+    windowMenu->addAction(m_actions->toggleSwatchesAction);
     windowMenu->addAction(m_actions->toggleHistoryAction);
 
     // --- Configurações & Ajuda ---
@@ -209,6 +259,8 @@ void MenuBuilder::buildMenus(I18nService* i18n)
     settingsMenu->addAction(m_actions->shortcutsAction);
 
     helpMenu = m_menuBar->addMenu(QString());
+    helpMenu->addAction(m_actions->commandPaletteAction);
+    helpMenu->addAction(m_actions->quickTourAction);
     helpMenu->addAction(m_actions->startScreenAction);
     helpMenu->addAction(m_actions->sampleProjectsAction);
     helpMenu->addSeparator();
@@ -231,16 +283,26 @@ void MenuBuilder::retranslate(I18nService* i18n)
         editMenu->setTitle(i18n->t("common", "menu.edit"));
     if (imageMenu)
         imageMenu->setTitle(i18n->t("common", "menu.image"));
+    if (rotateCanvasMenu)
+        rotateCanvasMenu->setTitle(i18n->t("common", "menu.image.rotateCanvas"));
     if (filterMenu)
         filterMenu->setTitle(i18n->t("common", "menu.filter"));
     if (artisticMenu)
         artisticMenu->setTitle(i18n->t("editor", "filters.artistic"));
     if (toneMenu)
         toneMenu->setTitle(i18n->t("editor", "filters.tone"));
+    if (blurMenu)
+        blurMenu->setTitle(i18n->t("editor", "filters.blurMenu"));
+    if (noiseMenu)
+        noiseMenu->setTitle(i18n->t("editor", "filters.noiseMenu"));
+    if (distortMenu)
+        distortMenu->setTitle(i18n->t("editor", "filters.distortMenu"));
     if (selectMenu)
         selectMenu->setTitle(i18n->t("common", "menu.select"));
     if (modifyMenu)
         modifyMenu->setTitle(i18n->t("editor", "selection.modify.title"));
+    if (loadSelectionMenu)
+        loadSelectionMenu->setTitle(i18n->t("editor", "selection.loadMenu"));
     if (layerMenu)
         layerMenu->setTitle(i18n->t("common", "menu.layer"));
     if (addShapeMenu)
@@ -253,6 +315,8 @@ void MenuBuilder::retranslate(I18nService* i18n)
         safeZoneMenu->setTitle(i18n->t("common", "menu.view.safeZones"));
     if (panelsMenu)
         panelsMenu->setTitle(i18n->t("common", "menu.view.panels"));
+    if (guidesMenu)
+        guidesMenu->setTitle(i18n->t("editor", "guides.title"));
     if (toolsMenu)
         toolsMenu->setTitle(i18n->t("editor", "tools.title"));
     if (selectionToolsMenu)

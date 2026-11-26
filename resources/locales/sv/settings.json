@@ -5,12 +5,16 @@
         "autosave": "Autospara (minuter)",
         "gpuAcceleration": "GPU-acceleration",
         "gpuAccelerationHint": "Att byta till GPU-acceleration kräver att programmet startas om.",
+        "gpuUnavailableHint": "GPU-acceleration är inte tillgänglig än; programvaru-renderaren används.",
         "appearance": "Utseende",
         "darkMode": "Använd mörkt läge",
         "confirmExit": "Bekräfta innan du stänger om du har osparade ändringar",
         "canvas": "Arbetsyta",
         "showGrid": "Visa ett rutnät när du öppnar ett dokument",
         "snapToGrid": "Fäst objekt till rutnätet",
-        "historyLimit": "Gräns för historik"
+        "advancedMode": "Avancerat läge",
+    "advancedModeHint": "Visar proffsverktyg (histogram, nodredigering, kantförfining, flerfärgsgraderingar, text längs bana). Gäller direkt.",
+    "historyMemory": "Minnesgräns för historik (MB)",
+    "historyLimit": "Gräns för historik"
     }
 }

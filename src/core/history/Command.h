@@ -3,6 +3,7 @@
 #include <QString>
 #include <QSet>
 #include <QUuid>
+#include <QtGlobal>
 #include "core/layers/Layer.h"
 
 namespace cc {
@@ -29,6 +30,12 @@ public:
     // appear as one logical history step. Commands that cannot be combined
     // simply keep the default false result.
     virtual bool mergeWith(const Command&) { return false; }
+
+    /// Memória que ESTE comando mantém directamente (snapshots de QImage,
+    /// máscaras). Bitmaps referenciados por id vivem no AssetStore e são
+    /// medidos pelo proprietário da pilha (ver CommandStack::setAssetProbe).
+    /// A soma de ambos alimenta o orçamento de memória do histórico.
+    virtual qint64 estimatedBytes() const { return 0; }
 
     const QString& name() const { return m_name; }
 

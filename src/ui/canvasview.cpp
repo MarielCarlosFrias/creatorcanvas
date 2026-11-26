@@ -4,6 +4,7 @@
 #include "core/image/BackgroundRemover.h"
 #include "core/image/ImageProcessing.h"
 #include "core/history/DocumentCommands.h"
+#include "core/geometry/LayerTransform.h"
 #include "core/selection/SelectionEngine.h"
 #include "core/selection/SelectionOperations.h"
 #include "core/commands/SelectionCommands.h"
@@ -39,6 +40,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPainterPathStroker>
 #include <QPen>
 #include <QPolygonF>
 #include <QUrl>
@@ -182,6 +184,13 @@ void CanvasView::setDocument(Document* document)
     update();
 }
 
+void CanvasView::refreshDocumentGeometry()
+{
+    if (m_document)
+        m_transform->setDocumentSize(QSize(m_document->width(), m_document->height()));
+    update();
+}
+
 void CanvasView::setI18n(I18nService* i18n)
 {
     m_i18n = i18n;
@@ -267,7 +276,9 @@ void CanvasView::selectLayer(const LayerId& id)
 {
     if (m_inlineTextEditor && m_inlineTextEditor->isEditing() && id != m_inlineTextEditor->editingLayerId())
         commitTextEdit();
-    if (m_selectedId == id)
+    const bool hadMulti = !m_multiSelection.isEmpty();
+    m_multiSelection.clear();
+    if (m_selectedId == id && !hadMulti)
         return;
     m_selectedId = id;
 
@@ -325,34 +336,85 @@ void CanvasView::setMultiSelection(const QList<LayerId>& ids)
 }
 
 namespace {
-// Coleta recursivamente as camadas folha (desce em grupos) que intersectam a
-// área de seleção — rubber band também tem que achar formas dentro de grupos.
-void collectRubberBandHits(const GroupLayer& group, const QRectF& docRect,
-                           QList<Layer*>& result)
+bool textContainsPoint(const TextLayer& text, const QPointF& localPoint)
 {
+    if (text.content.isEmpty())
+        return false;
+    const QRectF bounds = text.contentBounds();
+    const int radius = 2;
+    QImage probe(2 * radius + 3, 2 * radius + 3,
+                 QImage::Format_ARGB32_Premultiplied);
+    probe.fill(Qt::transparent);
+    QPainter painter(&probe);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    QFont font(text.fontFamily);
+    font.setPointSizeF(text.sizePt > 0.0 ? text.sizePt : 1.0);
+    font.setBold(text.bold);
+    font.setItalic(text.italic);
+    font.setUnderline(text.underline);
+    if (text.letterSpacingPx != 0.0)
+        font.setLetterSpacing(QFont::AbsoluteSpacing, text.letterSpacingPx);
+    painter.setFont(font);
+    painter.setPen(text.color);
+    painter.translate(radius + 1 - localPoint.x(), radius + 1 - localPoint.y());
+    const int flags = Qt::TextWordWrap
+        | (text.align == TextAlignment::Center ? Qt::AlignHCenter
+            : text.align == TextAlignment::Right ? Qt::AlignRight : Qt::AlignLeft);
+    painter.drawText(bounds, flags, text.content);
+    painter.end();
+    return qAlpha(probe.pixel(radius + 1, radius + 1)) > 8;
+}
+
+bool hasLayerTransform(const Layer& layer)
+{
+    const auto& t = layer.transform;
+    return t.position != QPointF(0, 0) || t.rotationDeg != 0.0
+        || t.scaleX != 1.0 || t.scaleY != 1.0
+        || t.shearX != 0.0 || t.shearY != 0.0;
+}
+
+// Coleta recursivamente as camadas folha (desce em grupos), mantendo a
+// transformação acumulada. O modo containment implementa a convenção de
+// editores: arrasto esquerda->direita exige inclusão total; direita->esquerda
+// aceita interseção.
+void collectRubberBandHits(const GroupLayer& group, const QRectF& docRect,
+                           QList<Layer*>& result, bool containment,
+                           const QTransform& parentToDoc = QTransform(),
+                           bool isRoot = false)
+{
+    const QRectF groupBounds = group.contentBounds();
+    const QTransform groupToDoc = (isRoot || !hasLayerTransform(group)) ? parentToDoc
+        : group.transform.matrix(groupBounds) * parentToDoc;
+    if (group.locked || group.locks.all)
+        return;
     for (const auto& child : group.children) {
         Layer* layer = child.get();
         if (!layer->visible || layer->locked) continue;
         if (layer->type() == LayerType::Background) continue;
         if (layer->type() == LayerType::Group) {
             collectRubberBandHits(static_cast<const GroupLayer&>(*layer),
-                                  docRect, result);
+                                  docRect, result, containment, groupToDoc, false);
             continue;
         }
         const QRectF bounds = layer->contentBounds();
         if (bounds.isEmpty()) continue;
-        const QRectF layerDocRect = layer->transform.matrix(bounds).mapRect(bounds);
-        if (docRect.intersects(layerDocRect))
+        const QRectF layerDocRect = (layer->transform.matrix(bounds)
+            * groupToDoc).mapRect(bounds);
+        const bool hit = containment ? docRect.contains(layerDocRect)
+                                     : docRect.intersects(layerDocRect);
+        if (hit)
             result.append(layer);
     }
 }
 } // namespace
 
-QList<Layer*> CanvasView::hitTestRubberBand(const QRectF& docRect) const
+QList<Layer*> CanvasView::hitTestRubberBand(const QRectF& docRect,
+                                            bool containment) const
 {
     QList<Layer*> result;
     if (!m_document) return result;
-    collectRubberBandHits(*m_document->rootGroup(), docRect, result);
+    collectRubberBandHits(*m_document->rootGroup(), docRect, result,
+                          containment, QTransform(), true);
     return result;
 }
 
@@ -360,6 +422,10 @@ void CanvasView::setShowGrid(bool show) { m_showGrid = show; update(); }
 void CanvasView::setSnapToGrid(bool snap) { m_snapToGrid = snap; }
 void CanvasView::setGridSpacing(int spacing) { m_gridSpacing = std::clamp(spacing, 10, 200); update(); }
 void CanvasView::setSafeZoneMode(int mode) { m_safeZoneMode = std::clamp(mode, 0, 3); update(); }
+
+void CanvasView::setShowRulers(bool on) { m_showRulers = on; update(); }
+
+void CanvasView::setShowGuides(bool on) { m_showGuides = on; update(); }
 
 double CanvasView::zoom() const
 {
@@ -422,12 +488,14 @@ bool CanvasView::imagePixelTransparent(const ImageLayer& image,
     // Limite contra as dimensões REAIS do bitmap decodificado, não contra
     // naturalWidth/naturalHeight salvos no projeto: um arquivo editado à mão
     // ou corrompido pode divergir, e indexar scanLine fora dos limites é OOB.
-    const int maxX = qMin(image.naturalWidth, src.width()) - 1;
-    const int maxY = qMin(image.naturalHeight, src.height()) - 1;
+    const int maxX = src.width() - 1;
+    const int maxY = src.height() - 1;
     if (maxX < 0 || maxY < 0)
         return false;
-    const int ix = qBound(0, static_cast<int>(std::floor(local.x())), maxX);
-    const int iy = qBound(0, static_cast<int>(std::floor(local.y())), maxY);
+    const int ix = qBound(0, static_cast<int>(std::floor(
+        local.x() * src.width() / image.naturalWidth)), maxX);
+    const int iy = qBound(0, static_cast<int>(std::floor(
+        local.y() * src.height() / image.naturalHeight)), maxY);
 
     // Fast-path 32bpp: leitura direta do pixel, sem conversão nem cópia.
     int alpha = 255;
@@ -459,28 +527,41 @@ bool CanvasView::imagePixelTransparent(const ImageLayer& image,
 // filhos visíveis.
 Layer* CanvasView::hitTestChildrenRecursive(const GroupLayer& group,
                                             const QPointF& docPos,
-                                            bool includeLocked) const
+                                            bool includeLocked,
+                                            const QTransform& parentToDoc,
+                                            float parentOpacity) const
 {
+    const QRectF groupBounds = group.contentBounds();
+    const bool isRoot = m_document && (&group == m_document->rootGroup());
+    const QTransform groupToDoc = (isRoot || !hasLayerTransform(group)) ? parentToDoc
+        : group.transform.matrix(groupBounds) * parentToDoc;
+    if (!includeLocked && (group.locked || group.locks.all))
+        return nullptr;
+    const float groupOpacity = parentOpacity * group.opacity();
+    if (groupOpacity <= 0.01f)
+        return nullptr;
     for (auto it = group.children.rbegin(); it != group.children.rend(); ++it) {
         Layer* layer = it->get();
         if (!layer->visible)
             continue;
         if (!includeLocked && (layer->locked || layer->locks.all))
             continue;
-        if (layer->opacity() <= 0.01f)
+        if (groupOpacity * layer->opacity() <= 0.01f)
             continue; // invisível de fato não captura cliques
         if (layer->type() == LayerType::Background)
             continue;
         if (layer->type() == LayerType::Group) {
             if (Layer* child = hitTestChildrenRecursive(
-                    static_cast<const GroupLayer&>(*layer), docPos, includeLocked))
+                    static_cast<const GroupLayer&>(*layer), docPos, includeLocked,
+                    groupToDoc, groupOpacity))
                 return child;
             continue; // clicou fora dos filhos: o grupo não captura
         }
         const QRectF bounds = layer->contentBounds();
         if (bounds.isEmpty())
             continue;
-        const QPointF local = layer->transform.matrix(bounds).inverted().map(docPos);
+        const QTransform layerToDoc = layer->transform.matrix(bounds) * groupToDoc;
+        const QPointF local = layerToDoc.inverted().map(docPos);
         if (!bounds.contains(local))
             continue;
 
@@ -489,6 +570,22 @@ Layer* CanvasView::hitTestChildrenRecursive(const GroupLayer& group,
         // baixo, não a imagem inteira.
         if (layer->type() == LayerType::Image) {
             if (imagePixelTransparent(static_cast<const ImageLayer&>(*layer), local))
+                continue;
+        } else if (layer->type() == LayerType::Shape) {
+            if (!shapeContainsPoint(static_cast<const ShapeLayer&>(*layer), local))
+                continue;
+        } else if (layer->type() == LayerType::Vector) {
+            const auto& vector = static_cast<const VectorLayer&>(*layer);
+            QPainterPath hitPath = vector.path;
+            if (vector.strokeEnabled && vector.strokeWidth > 0.0) {
+                QPainterPathStroker stroker;
+                stroker.setWidth(vector.strokeWidth + 2.0);
+                hitPath |= stroker.createStroke(vector.path);
+            }
+            if (hitPath.isEmpty() || !hitPath.contains(local))
+                continue;
+        } else if (layer->type() == LayerType::Text) {
+            if (!textContainsPoint(static_cast<const TextLayer&>(*layer), local))
                 continue;
         }
         return layer;
@@ -507,7 +604,8 @@ CanvasView::HandleSet CanvasView::handlePositions(const Layer& layer) const
 {
     if (!m_document)
         return HandleSet();
-    return CanvasGestureHandler::computeHandles(layer, docToDevice());
+    return CanvasGestureHandler::computeHandles(
+        layer, layerToDocumentMatrix(*m_document, layer), docToDevice());
 }
 
 int CanvasView::handleAt(const QPointF& widgetPos) const
@@ -692,6 +790,21 @@ void CanvasView::paintEvent(QPaintEvent*)
     }
 
     CanvasOverlayRenderer::drawSnapGuides(&painter, m_document->width(), m_document->height(), m_activeGuides, m_transform->zoom(), docToDevice());
+
+    if (m_showGuides && !m_document->guides().empty()) {
+        CanvasOverlayRenderer::drawGuides(&painter, m_document->width(), m_document->height(),
+                                          m_document->guides(), docToDevice());
+    }
+    if (m_draggingGuide) {
+        const Guide preview{m_dragGuideHorizontal, m_dragGuidePosition};
+        const std::vector<Guide> previewGuides{preview};
+        CanvasOverlayRenderer::drawGuides(&painter, m_document->width(), m_document->height(),
+                                          previewGuides, docToDevice());
+    }
+
+    if (m_showRulers) {
+        CanvasOverlayRenderer::drawRulers(&painter, size(), docToDevice(), 18, dark);
+    }
 }
 
 void CanvasView::setImagePreview(const LayerId& id, const QImage& image)
@@ -742,6 +855,23 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
     }
 
     const QPointF docPos = deviceToDoc().map(QPointF(event->pos()));
+
+    // Arrastar guias a partir das réguas (faixas de 18 px desenhadas pelo
+    // CanvasOverlayRenderer). O documento só muda no release; durante o gesto
+    // mostramos apenas a prévia da linha.
+    if (event->button() == Qt::LeftButton && m_showRulers) {
+        const bool onTopRuler = event->pos().y() <= 18 && event->pos().x() > 18;
+        const bool onLeftRuler = event->pos().x() <= 18 && event->pos().y() > 18;
+        if (onTopRuler || onLeftRuler) {
+            m_draggingGuide = true;
+            m_dragGuideHorizontal = onTopRuler;
+            m_dragGuidePosition = onTopRuler ? docPos.y() : docPos.x();
+            setCursor(onTopRuler ? Qt::SplitHCursor : Qt::SplitVCursor);
+            update();
+            event->accept();
+            return;
+        }
+    }
 
     if (m_mockupPlacementActive) {
         if (event->button() == Qt::RightButton) {
@@ -837,10 +967,11 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
                     return;
                 }
 
+                const QTransform layerToDoc = layerToDocumentMatrix(*m_document, *layer);
                 if (handle == 8) {
-                    m_gestureHandler.startRotate(*layer, docPos);
+                    m_gestureHandler.startRotate(*layer, docPos, layerToDoc);
                 } else {
-                    m_gestureHandler.startScale(*layer, handle, docPos);
+                    m_gestureHandler.startScale(*layer, handle, docPos, layerToDoc);
                 }
                 event->accept();
                 return;
@@ -930,6 +1061,14 @@ void CanvasView::collectSnapTargets(GroupLayer* group, const LayerId& excludeId,
 
 void CanvasView::mouseMoveEvent(QMouseEvent* event)
 {
+    if (m_draggingGuide) {
+        const QPointF docPos = deviceToDoc().map(QPointF(event->pos()));
+        m_dragGuidePosition = m_dragGuideHorizontal ? docPos.y() : docPos.x();
+        update();
+        event->accept();
+        return;
+    }
+
     if (m_panning) {
         const QPoint delta = event->pos() - m_lastMousePos;
         m_lastMousePos = event->pos();
@@ -993,7 +1132,8 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event)
 
                     // 2. Calcula a caixa delimitadora atual da camada em coordenadas do documento
                     const QRectF bounds = layer->contentBounds();
-                    const QRectF currentDocRect = t.matrix(bounds).mapRect(bounds);
+                    const QRectF currentDocRect = layerToDocumentMatrix(
+                        *m_document, *layer, t).mapRect(bounds);
                     const QRectF canvasRect(0, 0, m_document->width(), m_document->height());
 
                     // 3. Coleta todas as outras camadas visíveis para comparar posições de bordas e centros
@@ -1002,11 +1142,19 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event)
                         collectSnapTargets(root, m_selectedId, others);
 
                     // 4. Computa se há alinhamento com o centro/bordas do documento ou com outras camadas
-                    const SnapResult snap = m_snapEngine.computeSnap(*layer, currentDocRect,
-                                                                     canvasRect, others);
+                    const SnapResult snap = m_snapEngine.computeSnap(
+                        *m_document, *layer, currentDocRect, canvasRect, others);
 
-                    // 5. Aplica a atração magnética (delta) diretamente na posição da camada para alinhá-la
-                    t.position += snap.delta;
+                    // O delta chega em espaço de documento; position pertence ao
+                    // espaço do pai. Remove rotação/escala/shear dos ancestrais
+                    // antes de o aplicar, sem lhes somar a translação.
+                    bool invertible = false;
+                    const QTransform documentToParent = layerParentToDocumentMatrix(
+                        *m_document, *layer).inverted(&invertible);
+                    if (invertible) {
+                        t.position += documentToParent.map(snap.delta)
+                            - documentToParent.map(QPointF());
+                    }
 
                     // 6. Salva as linhas guias calculadas para que o paintEvent as desenhe imediatamente
                     m_activeGuides = snap.guides;
@@ -1041,6 +1189,25 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event)
 
 void CanvasView::mouseReleaseEvent(QMouseEvent* event)
 {
+    if (m_draggingGuide) {
+        const bool valid = m_document
+            && (m_dragGuideHorizontal
+                    ? (m_dragGuidePosition >= 0.0 && m_dragGuidePosition <= m_document->height())
+                    : (m_dragGuidePosition >= 0.0 && m_dragGuidePosition <= m_document->width()));
+        if (valid) {
+            Guide guide;
+            guide.horizontal = m_dragGuideHorizontal;
+            guide.position = m_dragGuidePosition;
+            m_document->addGuide(guide);
+            m_showGuides = true;
+        }
+        m_draggingGuide = false;
+        updateCursor(event->pos());
+        update();
+        event->accept();
+        return;
+    }
+
     if (m_panning
         && (event->button() == Qt::MiddleButton
             || event->button() == Qt::LeftButton)) {
@@ -1068,7 +1235,8 @@ void CanvasView::mouseReleaseEvent(QMouseEvent* event)
         if (m_document) {
             const QRectF selRect = QRectF(m_rubberBandStart, m_rubberBandCurrent).normalized();
             if (selRect.width() > 4 || selRect.height() > 4) {
-                QList<Layer*> hits = hitTestRubberBand(selRect);
+                const bool containment = m_rubberBandCurrent.x() >= m_rubberBandStart.x();
+                QList<Layer*> hits = hitTestRubberBand(selRect, containment);
                 QList<LayerId> ids;
                 for (Layer* l : hits)
                     ids.append(l->id());
@@ -1285,11 +1453,15 @@ void CanvasView::contextMenuEvent(QContextMenuEvent* event)
 
     const QPointF docPos = deviceToDoc().map(QPointF(event->pos()));
     Layer* layer = hitTestLayer(docPos, true);
-    if (!layer && !m_selectedId.isNull())
-        layer = m_document->findLayer(m_selectedId);
     if (!layer || layer->type() == LayerType::Background)
+    {
+        // Clique direito em área vazia não deve operar sobre a camada que
+        // estava selecionada anteriormente.
+        event->ignore();
         return;
+    }
 
+    m_multiSelection.clear();
     selectLayer(layer->id());
 
     CanvasContextMenu::show(this, *m_document, m_history, m_i18n, layer->id(), event->globalPos(), this);

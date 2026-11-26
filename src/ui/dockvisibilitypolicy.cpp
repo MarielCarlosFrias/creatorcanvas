@@ -4,10 +4,12 @@ namespace cc {
 
 void DockVisibilityPolicy::setDocks(QDockWidget* layers, QDockWidget* text,
                                     QDockWidget* shape, QDockWidget* image,
-                                    QDockWidget* history)
+                                    QDockWidget* history,
+                                    QDockWidget* navigator,
+                                    QDockWidget* swatches)
 {
     m_layers = layers;
-    m_secondary = {text, shape, image, history};
+    m_secondary = {text, shape, image, history, navigator, swatches};
 }
 
 void DockVisibilityPolicy::apply(bool ultraCompact)

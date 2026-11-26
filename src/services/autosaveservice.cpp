@@ -144,7 +144,11 @@ void AutosaveService::onTimeout()
 {
     // Se o usuário estiver no meio de uma interação ativa de mouse (arrasto, traço de pincel, seleção),
     // adia o salvamento em 3 segundos para evitar qualquer micro-congelamento ou captura de estado transitório.
-    if (QApplication::mouseButtons() != Qt::NoButton) {
+    // Diálogo modal aberto (exportar, ajustes, IA): o estado vai mudar de
+    // seguida, e gravar agora é trabalho desperdiçado mais um congelamento
+    // visível por baixo do diálogo.
+    if (QApplication::mouseButtons() != Qt::NoButton
+        || QApplication::activeModalWidget() != nullptr) {
         m_timer.start(3000);
         return;
     }

@@ -30,6 +30,11 @@ public:
 
     // --- Geometria dos Handles e Hit-Testing ---
     static CanvasHandles computeHandles(const Layer& layer, const QTransform& docToDevice);
+    /// Variante para camadas dentro de grupos: recebe a transformação completa
+    /// da camada até ao documento (grupos pais incluídos).
+    static CanvasHandles computeHandles(const Layer& layer,
+                                        const QTransform& layerToDocument,
+                                        const QTransform& docToDevice);
     static int hitTestHandle(const QPointF& widgetPos, const CanvasHandles& handles, double radius = kHandleRadius);
     static Qt::CursorShape handleCursor(int handleIndex);
     static Qt::CursorShape determineCursor(const QPointF& widgetPos,
@@ -41,8 +46,10 @@ public:
     CanvasGestureType gestureType() const { return m_type; }
     int activeHandle() const { return m_activeHandle; }
 
-    void startRotate(const Layer& layer, const QPointF& docPos);
-    void startScale(const Layer& layer, int handle, const QPointF& docPos);
+    void startRotate(const Layer& layer, const QPointF& docPos,
+                     const QTransform& layerToDocument = QTransform());
+    void startScale(const Layer& layer, int handle, const QPointF& docPos,
+                    const QTransform& layerToDocument = QTransform());
     void startMove(const Layer& layer, const QPointF& docPos, const QList<Layer*>& multiLayers = {});
 
     /// Computa a nova transformação da camada com base na posição atual no documento
@@ -69,6 +76,8 @@ private:
     QPointF m_localPress;
     QPointF m_rotateCenter;
     double m_rotateStartAngle = 0.0;
+    QTransform m_layerToDocument;
+    QTransform m_parentToDocument;
     QSizeF m_gestureStartBox;
     QList<AffineTransform> m_multiGestureStarts;
 };

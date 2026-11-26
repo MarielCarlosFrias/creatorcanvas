@@ -33,28 +33,16 @@ void MagicWandTool::mousePress(QMouseEvent* event, const QPointF& docPos, const 
         layer = ctx.document->findLayer(ctx.selectedLayerId);
 
     if (!layer || layer->type() != LayerType::Image) {
-        const auto& children = ctx.document->rootGroup()->children;
-        for (auto it = children.rbegin(); it != children.rend(); ++it) {
-            Layer* l = it->get();
-            if (l && l->visible && !l->locked && l->type() == LayerType::Image) {
-                const QTransform m = l->transform.matrix(l->contentBounds());
-                const QPointF local = m.inverted().map(docPos);
-                if (l->contentBounds().contains(local)) {
-                    if (ctx.selectLayer)
-                        ctx.selectLayer(l->id());
-                    layer = l;
-                    break;
-                }
-            }
-        }
+        layer = topmostImageLayerAt(ctx, docPos);
+        if (layer && ctx.selectLayer)
+            ctx.selectLayer(layer->id());
     }
 
     if (layer && layer->type() == LayerType::Image) {
         auto* imgLayer = static_cast<ImageLayer*>(layer);
         const QImage oldImg = ctx.document->assets().decodedImage(imgLayer->assetId);
         if (!oldImg.isNull()) {
-            const QTransform matrix = imgLayer->transform.matrix(imgLayer->contentBounds());
-            const QPoint imgPos = matrix.inverted().map(docPos).toPoint();
+            const QPoint imgPos = documentToLayerPoint(*ctx.document, *imgLayer, docPos).toPoint();
             if (imgPos.x() >= 0 && imgPos.x() < oldImg.width() && imgPos.y() >= 0 && imgPos.y() < oldImg.height()) {
                 QImage clearedImg = ImageProcessing::removeBackground(oldImg, imgPos, m_tolerance, m_contiguous);
                 // Qt 6 does not expose alphaChannel(); copy the alpha plane
@@ -120,18 +108,7 @@ void CloneStampTool::mousePress(QMouseEvent* event, const QPointF& docPos, const
     if (!ctx.selectedLayerId.isNull())
         targetLayer = ctx.document->findLayer(ctx.selectedLayerId);
     if (!targetLayer || targetLayer->type() != LayerType::Image) {
-        const auto& children = ctx.document->rootGroup()->children;
-        for (auto it = children.rbegin(); it != children.rend(); ++it) {
-            Layer* l = it->get();
-            if (l && l->visible && l->type() == LayerType::Image) {
-                const QTransform m = l->transform.matrix(l->contentBounds());
-                const QPointF local = m.inverted().map(docPos);
-                if (l->contentBounds().contains(local)) {
-                    targetLayer = l;
-                    break;
-                }
-            }
-        }
+        targetLayer = topmostImageLayerAt(ctx, docPos);
     }
     if (!targetLayer || !SelectionOperations::canEditPixels(*ctx.document, targetLayer->id())) {
         reportPixelsLocked(ctx);
@@ -149,25 +126,13 @@ void CloneStampTool::mousePress(QMouseEvent* event, const QPointF& docPos, const
             layer = ctx.document->findLayer(ctx.selectedLayerId);
 
         if (!layer || layer->type() != LayerType::Image) {
-            const auto& children = ctx.document->rootGroup()->children;
-            for (auto it = children.rbegin(); it != children.rend(); ++it) {
-                Layer* l = it->get();
-                if (l && l->visible && !l->locked && l->type() == LayerType::Image) {
-                    const QTransform m = l->transform.matrix(l->contentBounds());
-                    const QPointF local = m.inverted().map(docPos);
-                    if (l->contentBounds().contains(local)) {
-                        if (ctx.selectLayer)
-                            ctx.selectLayer(l->id());
-                        layer = l;
-                        break;
-                    }
-                }
-            }
+            layer = topmostImageLayerAt(ctx, docPos);
+            if (layer && ctx.selectLayer)
+                ctx.selectLayer(layer->id());
         }
 
         if (layer && layer->type() == LayerType::Image) {
-            const QTransform matrix = layer->transform.matrix(layer->contentBounds());
-            m_srcPointLocal = matrix.inverted().map(docPos).toPoint();
+            m_srcPointLocal = documentToLayerPoint(*ctx.document, *layer, docPos).toPoint();
             m_currentSrcLocal = m_srcPointLocal;
             m_srcLayerId = layer->id();
             m_hasSource = true;
@@ -202,10 +167,10 @@ void CloneStampTool::mousePress(QMouseEvent* event, const QPointF& docPos, const
             if (!m_workingImage.isNull())
                 m_workingImage = m_workingImage.copy(); // detached: não corrompe o cache do asset
             if (!m_workingImage.isNull()) {
+                m_originalImage = m_workingImage.copy();
                 m_srcSnapshot = m_workingImage.copy();
                 m_isCloning = true;
-                const QTransform matrix = layer->transform.matrix(layer->contentBounds());
-                const QPoint dstLocal = matrix.inverted().map(docPos).toPoint();
+                const QPoint dstLocal = documentToLayerPoint(*ctx.document, *layer, docPos).toPoint();
                 m_cloneOffset = dstLocal - m_srcPointLocal;
                 m_currentSrcLocal = m_srcPointLocal;
 
@@ -235,8 +200,7 @@ void CloneStampTool::mouseMove(QMouseEvent* event, const QPointF& docPos, const 
 
         if (layer && layer->type() == LayerType::Image && !m_workingImage.isNull()) {
             auto* img = static_cast<ImageLayer*>(layer);
-            const QTransform matrix = layer->transform.matrix(layer->contentBounds());
-            const QPoint dstLocal = matrix.inverted().map(docPos).toPoint();
+            const QPoint dstLocal = documentToLayerPoint(*ctx.document, *layer, docPos).toPoint();
             m_currentSrcLocal = dstLocal - m_cloneOffset;
 
             const QImage& srcImg = !m_srcSnapshot.isNull() ? m_srcSnapshot : m_workingImage;
@@ -265,6 +229,7 @@ void CloneStampTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, con
 
         if (layer && layer->type() == LayerType::Image) {
             auto* img = static_cast<ImageLayer*>(layer);
+            m_workingImage = constrainToPixelSelection(ctx, m_originalImage, m_workingImage);
             const LayerId finalAssetId = ctx.document->assets().addImage(m_workingImage);
 
             if (ctx.clearLayerPreview)
@@ -288,6 +253,7 @@ void CloneStampTool::mouseRelease(QMouseEvent* event, const QPointF& docPos, con
 
     m_isCloning = false;
     m_workingImage = QImage();
+    m_originalImage = QImage();
     m_srcSnapshot = QImage();
     m_currentSrcLocal = m_srcPointLocal;
     if (ctx.requestUpdate)
@@ -308,7 +274,7 @@ void CloneStampTool::drawOverlay(QPainter* painter, const ToolContext& ctx)
             srcLayer = ctx.document->findLayer(ctx.selectedLayerId);
 
         if (srcLayer && srcLayer->type() == LayerType::Image) {
-            const QTransform layerToDoc = srcLayer->transform.matrix(srcLayer->contentBounds());
+            const QTransform layerToDoc = layerToDocumentTransform(*ctx.document, *srcLayer);
             const QTransform layerToDevice = layerToDoc * ctx.docToDevice;
             const QPoint displaySrc = m_isCloning ? m_currentSrcLocal : m_srcPointLocal;
             const QPointF srcScreen = layerToDevice.map(QPointF(displaySrc));
@@ -344,6 +310,7 @@ void CloneStampTool::cancel(const ToolContext& ctx)
         ctx.clearLayerPreview(); // documento nunca foi mutado
     m_isCloning = false;
     m_workingImage = QImage();
+    m_originalImage = QImage();
     m_srcSnapshot = QImage();
     m_currentSrcLocal = m_srcPointLocal;
     if (ctx.requestUpdate)
@@ -373,18 +340,7 @@ void FloodFillTool::mousePress(QMouseEvent* event, const QPointF& docPos, const 
     if (!ctx.selectedLayerId.isNull())
         targetLayer = ctx.document->findLayer(ctx.selectedLayerId);
     if (!targetLayer || targetLayer->type() != LayerType::Image) {
-        const auto& children = ctx.document->rootGroup()->children;
-        for (auto it = children.rbegin(); it != children.rend(); ++it) {
-            Layer* l = it->get();
-            if (l && l->visible && l->type() == LayerType::Image) {
-                const QTransform m = l->transform.matrix(l->contentBounds());
-                const QPointF local = m.inverted().map(docPos);
-                if (l->contentBounds().contains(local)) {
-                    targetLayer = l;
-                    break;
-                }
-            }
-        }
+        targetLayer = topmostImageLayerAt(ctx, docPos);
     }
     if (!targetLayer || !SelectionOperations::canEditPixels(*ctx.document, targetLayer->id())) {
         reportPixelsLocked(ctx);
@@ -397,30 +353,19 @@ void FloodFillTool::mousePress(QMouseEvent* event, const QPointF& docPos, const 
         layer = ctx.document->findLayer(ctx.selectedLayerId);
 
     if (!layer || layer->type() != LayerType::Image) {
-        const auto& children = ctx.document->rootGroup()->children;
-        for (auto it = children.rbegin(); it != children.rend(); ++it) {
-            Layer* l = it->get();
-            if (l && l->visible && !l->locked && l->type() == LayerType::Image) {
-                const QTransform m = l->transform.matrix(l->contentBounds());
-                const QPointF local = m.inverted().map(docPos);
-                if (l->contentBounds().contains(local)) {
-                    if (ctx.selectLayer)
-                        ctx.selectLayer(l->id());
-                    layer = l;
-                    break;
-                }
-            }
-        }
+        layer = topmostImageLayerAt(ctx, docPos);
+        if (layer && ctx.selectLayer)
+            ctx.selectLayer(layer->id());
     }
 
     if (layer && layer->type() == LayerType::Image) {
         auto* imgLayer = static_cast<ImageLayer*>(layer);
         const QImage oldImg = ctx.document->assets().decodedImage(imgLayer->assetId);
         if (!oldImg.isNull()) {
-            const QTransform matrix = imgLayer->transform.matrix(imgLayer->contentBounds());
-            const QPoint imgPos = matrix.inverted().map(docPos).toPoint();
+            const QPoint imgPos = documentToLayerPoint(*ctx.document, *imgLayer, docPos).toPoint();
             if (imgPos.x() >= 0 && imgPos.x() < oldImg.width() && imgPos.y() >= 0 && imgPos.y() < oldImg.height()) {
-                const QImage filledImg = ImageProcessing::floodFill(oldImg, imgPos, m_color, m_tolerance);
+                const QImage filledImg = constrainToPixelSelection(
+                    ctx, oldImg, ImageProcessing::floodFill(oldImg, imgPos, m_color, m_tolerance));
                 if (filledImg.isNull()) {
                     event->accept();
                     return;

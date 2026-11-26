@@ -19,6 +19,10 @@ using AdjustmentParams = std::vector<std::pair<QString, double>>;
 /// Lê um parâmetro com default (ausente = identidade na maioria dos casos).
 double adjustmentParam(const AdjustmentParams& params, const QString& key, double def);
 
+/// Verdadeiro para os seis filtros que podem ser aplicados como Smart Filter
+/// (AdjustmentLayer ligada) ou cozidos no asset da camada de imagem.
+bool isSmartFilterType(AdjustmentType kind);
+
 /// Lê um canal de níveis dos parâmetros. Prefixos usados:
 /// "levels.master", "levels.r", "levels.g", "levels.b".
 LevelsChannel levelsFromParams(const AdjustmentParams& params, const QString& prefix);
@@ -42,6 +46,13 @@ AdjustmentParams encodeCurves(const std::vector<CurvePoint>& master,
 /// opacidade de uma camada de ajuste no renderer.
 /// Imagem nula ou parâmetros identidade devolvem a própria imagem (sem
 /// cópia), para que prévias e renders não paguem por ajustes vazios.
+///
+/// Smart Filters (defaults correspondem aos antigos filtros destrutivos):
+///  - Blur: "radius" = 5 px;
+///  - MotionBlur: "angle" = 0 graus, "length" = 15 px;
+///  - Noise: "amount" = 10 %, "monochrome" = 0 (qualquer valor > 0,5 activa);
+///  - DistortTwirl/Pinch/Ripple: "amount" = 0,5;
+///  - Ripple aceita ainda "wavelength" em px (0 = automático).
 QImage applyAdjustmentParameters(const QImage& source, AdjustmentType kind,
                                  const AdjustmentParams& params, float strength = 1.0f);
 

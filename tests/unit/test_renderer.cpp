@@ -4,6 +4,8 @@
 #include "rendering/IRenderer.h"
 #include "core/layers/Gradient.h"
 #include "core/serialization/ProjectFile.h"
+#include "core/history/CommandStack.h"
+#include "core/commands/AdjustmentLayerCommands.h"
 
 #include <QGuiApplication>
 #include <QImage>
@@ -495,6 +497,413 @@ private slots:
         const auto* lt = dynamic_cast<const TextLayer*>(loadedText);
         QVERIFY(lt->pathLayerId.has_value());
         QCOMPARE(lt->pathOffsetPct, 0.5);
+
+        clearRendererCaches();
+    }
+
+    void linkedAdjustmentRendersAndInvalidatesOnParamChange()
+    {
+        Document doc(64, 64);
+        QImage gray(64, 64, QImage::Format_ARGB32);
+        gray.fill(QColor(100, 100, 100, 255));
+        auto img = std::make_unique<ImageLayer>();
+        img->assetId = doc.assets().addImage(gray);
+        img->naturalWidth = 64;
+        img->naturalHeight = 64;
+        img->transform.position = QPointF(32, 32);
+        const LayerId imgId = img->id();
+        QVERIFY(doc.addLayer(std::move(img)));
+
+        // Liga uma adjustment layer de brilho/contraste.
+        const LayerId adjId = doc.createAdjustmentLayer(
+            AdjustmentType::BrightnessContrast, imgId);
+        QVERIFY(!adjId.isNull());
+        QVERIFY(doc.setLayerAdjustmentLayerId(imgId, adjId));
+        QVERIFY(doc.setAdjustmentParameters(adjId, {{QStringLiteral("brightness"), 0.0},
+                                                     {QStringLiteral("contrast"), 0.0}}));
+
+        QImage out1(64, 64, QImage::Format_RGB32);
+        out1.fill(Qt::black);
+        renderTo(out1, doc);
+        const QColor base = out1.pixelColor(32, 32);
+        QVERIFY(qAbs(base.red() - 100) <= 2); // brilho 0 ≈ inalterado
+
+        // Render repetido com os mesmos parâmetros = resultado idêntico
+        // (a cache do ajuste está correta e não corrompe o pixmap).
+        QImage out1b(64, 64, QImage::Format_RGB32);
+        out1b.fill(Qt::black);
+        renderTo(out1b, doc);
+        QCOMPARE(out1b.pixelColor(32, 32), base);
+
+        // Mudar parâmetros invalida a cache: o render seguinte reflete o novo
+        // valor (não fica preso ao resultado antigo).
+        QVERIFY(doc.setAdjustmentParameters(adjId, {{QStringLiteral("brightness"), 50.0},
+                                                     {QStringLiteral("contrast"), 0.0}}));
+        QImage out2(64, 64, QImage::Format_RGB32);
+        out2.fill(Qt::black);
+        renderTo(out2, doc);
+        const QColor brighter = out2.pixelColor(32, 32);
+        // brilho=50 em cinza 100 → ~228 com UMA aplicação. Se o ajuste fosse
+        // aplicado 2× (nível da imagem + nível da árvore), daria 255 (clamp).
+        QVERIFY(brighter.red() > base.red() + 100);
+        QVERIFY2(brighter.red() < 250, "ajuste linkado aplicado mais de uma vez?");
+
+        // De novo sem mudar nada: idêntico ao anterior (cache válida).
+        QImage out2b(64, 64, QImage::Format_RGB32);
+        out2b.fill(Qt::black);
+        renderTo(out2b, doc);
+        QCOMPARE(out2b.pixelColor(32, 32), brighter);
+
+        clearRendererCaches();
+    }
+
+    void linkedAdjustmentAffectsOnlyItsImage()
+    {
+        // Duas imagens sólidas lado a lado; ajuste linkado só à de cima.
+        Document doc(220, 100);
+        QImage redImg(100, 100, QImage::Format_ARGB32);
+        redImg.fill(QColor(200, 30, 30));
+        auto red = std::make_unique<ImageLayer>();
+        red->assetId = doc.assets().addImage(redImg);
+        red->naturalWidth = 100;
+        red->naturalHeight = 100;
+        red->transform.position = QPointF(50, 50);
+        QVERIFY(doc.addLayer(std::move(red)));
+
+        QImage blueImg(100, 100, QImage::Format_ARGB32);
+        blueImg.fill(QColor(30, 30, 200));
+        auto blue = std::make_unique<ImageLayer>();
+        blue->assetId = doc.assets().addImage(blueImg);
+        blue->naturalWidth = 100;
+        blue->naturalHeight = 100;
+        blue->transform.position = QPointF(170, 50);
+        const LayerId blueId = blue->id();
+        QVERIFY(doc.addLayer(std::move(blue)));
+
+        const LayerId adjId = doc.createAdjustmentLayer(
+            AdjustmentType::BrightnessContrast, blueId);
+        QVERIFY(doc.setLayerAdjustmentLayerId(blueId, adjId));
+        QVERIFY(doc.setAdjustmentParameters(adjId, {{QStringLiteral("brightness"), 50.0},
+                                                     {QStringLiteral("contrast"), 0.0}}));
+
+        QImage out(220, 100, QImage::Format_RGB32);
+        out.fill(Qt::black);
+        renderTo(out, doc);
+        // a vermelha (sem ajuste) NÃO muda
+        QCOMPARE(out.pixelColor(50, 50).red(), 200);
+        // a azul muda exatamente 1× (não 2×, não vazamento)
+        const int blueRed = out.pixelColor(170, 50).red();
+        QVERIFY2(blueRed > 30 + 100, "ajuste não aplicado?");
+        QVERIFY2(blueRed < 250, "ajuste aplicado 2×?");
+
+        // Esconder a camada de ajuste remove o efeito (só na azul).
+        QVERIFY(doc.setLayerVisible(adjId, false));
+        QImage out2(220, 100, QImage::Format_RGB32);
+        out2.fill(Qt::black);
+        renderTo(out2, doc);
+        QCOMPARE(out2.pixelColor(170, 50).red(), 30);
+        QCOMPARE(out2.pixelColor(50, 50).red(), 200);
+
+        clearRendererCaches();
+    }
+
+    void unlinkedAdjustmentAffectsAllBelow()
+    {
+        // Ajuste SOLTO na pilha (sem sourceLayerId) afeta tudo abaixo —
+        // comportamento Photoshop intencional para adjustment layers livres.
+        Document doc(220, 100);
+        QImage redImg(100, 100, QImage::Format_ARGB32);
+        redImg.fill(QColor(200, 30, 30));
+        auto red = std::make_unique<ImageLayer>();
+        red->assetId = doc.assets().addImage(redImg);
+        red->naturalWidth = 100;
+        red->naturalHeight = 100;
+        red->transform.position = QPointF(50, 50);
+        QVERIFY(doc.addLayer(std::move(red)));
+
+        auto adj = std::make_unique<AdjustmentLayer>();
+        adj->kind = AdjustmentType::BrightnessContrast;
+        adj->parameters = {{QStringLiteral("brightness"), 50.0},
+                           {QStringLiteral("contrast"), 0.0}};
+        QVERIFY(doc.addLayer(std::move(adj)));
+
+        QImage out(220, 100, QImage::Format_RGB32);
+        out.fill(Qt::black);
+        renderTo(out, doc);
+        // brilho=50 em 200 → 327 → clamp 255: claramente afetada (>240)
+        QVERIFY(out.pixelColor(50, 50).red() > 240);
+
+        clearRendererCaches();
+    }
+
+    void layerCacheReappliesBlendModeOnEveryBlit()
+    {
+        Document doc(16, 16);
+        auto bg = std::make_unique<BackgroundLayer>();
+        bg->fill = QColor(40, 100, 160);
+        QVERIFY(doc.addLayer(std::move(bg)));
+
+        QImage pixels(16, 16, QImage::Format_ARGB32_Premultiplied);
+        pixels.fill(QColor(200, 80, 40, 255));
+        auto image = std::make_unique<ImageLayer>();
+        image->assetId = doc.assets().addImage(pixels);
+        image->naturalWidth = 16;
+        image->naturalHeight = 16;
+        image->transform.position = QPointF(8, 8);
+        image->blendMode = BlendMode::Multiply;
+        const LayerId imageId = image->id();
+        QVERIFY(doc.addLayer(std::move(image)));
+
+        RenderOptions options;
+        options.drawCheckerboard = false;
+        options.canvasBorder = QColor(0, 0, 0, 0);
+        auto render = [&](IRenderer& renderer) {
+            QImage out(16, 16, QImage::Format_ARGB32_Premultiplied);
+            out.fill(Qt::transparent);
+            QPainter painter(&out);
+            renderer.renderDocument(doc, &painter, QTransform(), options);
+            painter.end();
+            return out;
+        };
+
+        SoftwareRenderer plain;
+        const QImage reference = render(plain);
+        CachingRenderer caching;
+        const QImage warm = render(caching);
+        QCOMPARE(warm, reference);
+        const QImage cached = render(caching);
+        QCOMPARE(cached, reference);
+        QCOMPARE(caching.cacheHits(), 1);
+        QVERIFY(caching.cacheBytes() > 0);
+
+        // dropLayer tem de descontar exatamente a entrada removida; clear
+        // reinicia tanto os bytes como as estatísticas das duas caches.
+        caching.invalidateLayer(imageId);
+        QCOMPARE(caching.cacheBytes(), qint64(0));
+        caching.clearCaches();
+        QCOMPARE(caching.cacheBytes(), qint64(0));
+        QCOMPARE(caching.cacheHits(), 0);
+        QCOMPARE(caching.cacheMisses(), 0);
+    }
+
+    void imageEffectsUseMaskedPixelsAndSourceAwareKeys()
+    {
+        clearRendererCaches();
+        Document doc(8, 8);
+        QImage bitmap(8, 8, QImage::Format_ARGB32_Premultiplied);
+        bitmap.fill(QColor(30, 80, 200, 255));
+
+        auto image = std::make_unique<ImageLayer>();
+        image->assetId = doc.assets().addImage(bitmap);
+        image->naturalWidth = 8;
+        image->naturalHeight = 8;
+        image->transform.position = QPointF(4, 4);
+        image->setFillOpacity(0.0f); // isola os dois efeitos do conteúdo
+        image->effects.dropShadow.enabled = true;
+        image->effects.dropShadow.distance = 0.0;
+        image->effects.dropShadow.blur = 0.0;
+        image->effects.dropShadow.opacity = 1.0;
+        image->effects.dropShadow.color = QColor(255, 0, 0, 255);
+        image->effects.outline.enabled = true;
+        image->effects.outline.width = 1.0;
+        image->effects.outline.blur = 0.0;
+        image->effects.outline.opacity = 1.0;
+        image->effects.outline.color = QColor(0, 255, 0, 255);
+        const LayerId imageId = image->id();
+        QVERIFY(doc.addLayer(std::move(image)));
+
+        const auto halfMask = [](bool left) {
+            QImage mask(8, 8, QImage::Format_Alpha8);
+            for (int y = 0; y < 8; ++y) {
+                uchar* row = mask.scanLine(y);
+                for (int x = 0; x < 8; ++x)
+                    row[x] = ((x < 4) == left) ? 255 : 0;
+            }
+            return mask;
+        };
+        QVERIFY(doc.setLayerAlphaMask(imageId, halfMask(true)));
+
+        RenderOptions options;
+        options.drawCheckerboard = false;
+        options.canvasBorder = QColor(0, 0, 0, 0);
+        QImage first(8, 8, QImage::Format_ARGB32_Premultiplied);
+        first.fill(Qt::transparent);
+        renderTo(first, doc, options);
+        QVERIFY(first.pixelColor(0, 4).alpha() > 0);
+        QCOMPARE(first.pixelColor(7, 4).alpha(), 0);
+
+        // Não limpar caches: a nova máscara tem de produzir uma nova chave.
+        // Caso contrário a segunda pintura reutiliza a silhueta da esquerda.
+        QVERIFY(doc.setLayerAlphaMask(imageId, halfMask(false)));
+        QImage second(8, 8, QImage::Format_ARGB32_Premultiplied);
+        second.fill(Qt::transparent);
+        renderTo(second, doc, options);
+        QCOMPARE(second.pixelColor(0, 4).alpha(), 0);
+        QVERIFY(second.pixelColor(7, 4).alpha() > 0);
+        clearRendererCaches();
+    }
+
+    void siblingClippingUsesImmediateVisibleBase()
+    {
+        Document doc(16, 16);
+        const auto solidLayer = [&doc](const QColor& color, const QSize& size,
+                                       const QPointF& position) {
+            QImage pixels(size, QImage::Format_ARGB32_Premultiplied);
+            pixels.fill(color);
+            auto layer = std::make_unique<ImageLayer>();
+            layer->assetId = doc.assets().addImage(pixels);
+            layer->naturalWidth = size.width();
+            layer->naturalHeight = size.height();
+            layer->transform.position = position;
+            return layer;
+        };
+
+        auto bottom = solidLayer(Qt::red, QSize(4, 4), QPointF(2, 2));
+        QVERIFY(doc.addLayer(std::move(bottom)));
+        auto immediate = solidLayer(Qt::green, QSize(4, 4), QPointF(10, 2));
+        QVERIFY(doc.addLayer(std::move(immediate)));
+        auto clipped = solidLayer(Qt::yellow, QSize(16, 16), QPointF(8, 8));
+        clipped->clipped = true;
+        const LayerId clippedId = clipped->id();
+        QVERIFY(doc.addLayer(std::move(clipped)));
+
+        QImage out(16, 16, QImage::Format_ARGB32_Premultiplied);
+        out.fill(Qt::transparent);
+        QPainter painter(&out);
+        renderSiblingLayers(doc, QList<QUuid>{clippedId}, &painter);
+        painter.end();
+
+        // A base é a camada imediatamente abaixo (índice 1), não a camada 0.
+        QCOMPARE(out.pixelColor(10, 2), QColor(Qt::yellow));
+        QCOMPARE(out.pixelColor(2, 2).alpha(), 0);
+    }
+
+    void compositeCacheAccountingReplacementBudgetAndClear()
+    {
+        CachingRenderer renderer;
+        Document doc(8, 8);
+        const QSize docSize(8, 8);
+        QImage small(docSize, QImage::Format_ARGB32_Premultiplied);
+        small.fill(Qt::red);
+        const qint64 smallBytes = small.sizeInBytes();
+
+        renderer.storeComposite(small, doc, docSize, QTransform(), {});
+        QCOMPARE(renderer.cacheBytes(), qint64(0)); // caches independentes
+        QCOMPARE(renderer.m_compositeBytes, smallBytes);
+        QCOMPARE(renderer.m_compositeCache.size(), 1);
+
+        // Mesma revisão/fingerprint = substituição, nunca dupla contagem.
+        renderer.storeComposite(small, doc, docSize, QTransform(), {});
+        QCOMPARE(renderer.m_compositeBytes, smallBytes);
+        QCOMPARE(renderer.m_compositeCache.size(), 1);
+
+        auto bg = std::make_unique<BackgroundLayer>();
+        bg->fill = Qt::black;
+        const LayerId bgId = bg->id();
+        QVERIFY(doc.addLayer(std::move(bg))); // nova revisão = nova chave
+        renderer.storeComposite(small, doc, docSize, QTransform(), {});
+        QCOMPARE(renderer.m_compositeBytes, smallBytes * 2);
+        QCOMPARE(renderer.m_compositeCache.size(), 2);
+
+        const auto storedBytes = [&renderer] {
+            qint64 total = 0;
+            for (auto it = renderer.m_compositeCache.constBegin();
+                 it != renderer.m_compositeCache.constEnd(); ++it)
+                total += it.value().sizeInBytes();
+            return total;
+        };
+        QCOMPARE(renderer.m_compositeBytes, storedBytes());
+
+        // Duas entradas de 64 MiB excedem o orçamento de 96 MiB. A cache deve
+        // despejar até caber, mantendo o contador igual à soma real das QImages.
+        QImage large(4096, 4096, QImage::Format_ARGB32_Premultiplied);
+        QVERIFY(!large.isNull());
+        large.fill(Qt::transparent);
+        QVERIFY(doc.setLayerVisible(bgId, false));
+        renderer.storeComposite(large, doc, docSize, QTransform(), {});
+        QVERIFY(doc.setLayerVisible(bgId, true));
+        renderer.storeComposite(large, doc, docSize, QTransform(), {});
+        constexpr qint64 budget = qint64(96) * 1024 * 1024;
+        QVERIFY(renderer.m_compositeBytes > 0);
+        QVERIFY(renderer.m_compositeBytes <= budget);
+        QCOMPARE(renderer.m_compositeBytes, storedBytes());
+        QCOMPARE(renderer.cacheBytes(), qint64(0));
+
+        renderer.clearCaches();
+        QCOMPARE(renderer.m_compositeBytes, qint64(0));
+        QCOMPARE(renderer.cacheBytes(), qint64(0));
+        QVERIFY(renderer.m_compositeCache.isEmpty());
+        QCOMPARE(renderer.compositeHits(), 0);
+        QCOMPARE(renderer.compositeMisses(), 0);
+    }
+
+    void adjustmentSliderStress()
+    {
+        // Imita o fluxo da aba Imagem: criar adjustment linkada e depois uma
+        // sequência de updates (arrastar slider) com render entre cada um,
+        // seguidos de undo/redo — exercita a cache do ajuste e os comandos.
+        Document doc(96, 96);
+        CommandStack history;
+        QImage img(96, 96, QImage::Format_ARGB32);
+        img.fill(QColor(90, 120, 160, 255));
+        auto layer = std::make_unique<ImageLayer>();
+        layer->assetId = doc.assets().addImage(img);
+        layer->naturalWidth = 96;
+        layer->naturalHeight = 96;
+        layer->transform.position = QPointF(48, 48);
+        const LayerId imgId = layer->id();
+        QVERIFY(doc.addLayer(std::move(layer)));
+
+        auto create = std::make_unique<CreateAdjustmentLayerCommand>(
+            doc, AdjustmentType::BrightnessContrast,
+            AdjustmentParams{{QStringLiteral("brightness"), 0.0},
+                             {QStringLiteral("contrast"), 0.0}},
+            imgId, QStringLiteral("adjustment.create"), 1.0f);
+        const LayerId adjId = [&] {
+            auto* raw = create.get();
+            history.execute(std::move(create));
+            return raw->createdId();
+        }();
+        QVERIFY(!adjId.isNull());
+
+        QImage out(96, 96, QImage::Format_RGB32);
+        QColor last(0, 0, 0);
+        for (int i = 0; i <= 20; ++i) {
+            const double b = -100.0 + i * 10.0; // arrasto do slider
+            const auto* adj = doc.findAdjustmentLayer(adjId);
+            history.execute(std::make_unique<UpdateAdjustmentLayerCommand>(
+                doc, adjId, adj->kind, adj->kind, adj->parameters,
+                AdjustmentParams{{QStringLiteral("brightness"), b},
+                                 {QStringLiteral("contrast"), 0.0}},
+                QStringLiteral("adjustment.update")));
+            out.fill(Qt::black);
+            renderTo(out, doc);
+            last = out.pixelColor(48, 48);
+        }
+        // brilho máximo → píxel mais claro que o original
+        QVERIFY(last.red() > 90 + 40);
+
+        // undo de todos os updates + criação → volta ao original
+        for (int i = 0; i < 21; ++i)
+            history.undo();
+        QVERIFY(doc.findAdjustmentLayer(adjId) == nullptr);
+        out.fill(Qt::black);
+        renderTo(out, doc);
+        const QColor restored = out.pixelColor(48, 48);
+        QVERIFY(qAbs(restored.red() - 90) <= 2);
+
+        // redo tudo → o vínculo volta a existir (o id regenera no redo do
+        // comando de criação — comportamento pré-existente; procuramos pelo
+        // link na camada de imagem, não pelo id antigo).
+        for (int i = 0; i < 21; ++i)
+            history.redo();
+        const auto* imgLayer = static_cast<const ImageLayer*>(doc.findLayer(imgId));
+        QVERIFY(imgLayer != nullptr);
+        QVERIFY(imgLayer->adjustmentLayerId.has_value());
+        QVERIFY(doc.findAdjustmentLayer(*imgLayer->adjustmentLayerId) != nullptr);
+        out.fill(Qt::black);
+        renderTo(out, doc); // não pode crashar
+        QVERIFY(out.pixelColor(48, 48).red() >= 0);
 
         clearRendererCaches();
     }

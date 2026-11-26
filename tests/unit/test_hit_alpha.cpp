@@ -204,6 +204,115 @@ private slots:
         QCOMPARE(qRound(mx.y() - mn.y()), drawn.height());
         QCOMPARE(QPoint(qRound(mn.x()), qRound(mn.y())), drawn.topLeft());
     }
+
+    void shapeHitUsesRealGeometry()
+    {
+        CanvasView canvas;
+        Document doc(200, 200, 96);
+
+        auto under = std::make_unique<ShapeLayer>();
+        under->kind = ShapeKind::Rectangle;
+        under->points = QPolygonF{QPointF(-90, -90), QPointF(90, -90),
+                                  QPointF(90, 90), QPointF(-90, 90)};
+        under->fill = QColor(Qt::red);
+        under->transform.position = QPointF(100, 100);
+        const LayerId underId = under->id();
+        doc.addLayer(std::move(under));
+
+        auto ellipse = std::make_unique<ShapeLayer>();
+        ellipse->kind = ShapeKind::Ellipse;
+        ellipse->points = QPolygonF{QPointF(-60, -40), QPointF(60, -40),
+                                    QPointF(60, 40), QPointF(-60, 40)};
+        ellipse->fill = QColor(Qt::blue);
+        ellipse->transform.position = QPointF(100, 100);
+        const LayerId ellipseId = ellipse->id();
+        doc.addLayer(std::move(ellipse));
+
+        canvas.setDocument(&doc);
+        canvas.resize(600, 600);
+        const QPoint outsideEllipse = canvas.docToDevice().map(QPointF(45, 45)).toPoint();
+        QMouseEvent press(QEvent::MouseButtonPress, outsideEllipse, outsideEllipse,
+                          Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(&canvas, &press);
+        QCOMPARE(canvas.selectedLayers().first(), underId);
+
+        const QPoint insideEllipse = canvas.docToDevice().map(QPointF(100, 100)).toPoint();
+        QMouseEvent press2(QEvent::MouseButtonPress, insideEllipse, insideEllipse,
+                           Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(&canvas, &press2);
+        QCOMPARE(canvas.selectedLayers().first(), ellipseId);
+    }
+
+    void groupedTransformIsIncludedInHitTest()
+    {
+        CanvasView canvas;
+        Document doc(300, 200, 96);
+        auto group = std::make_unique<GroupLayer>();
+        group->transform.position = QPointF(220, 100);
+        auto shape = std::make_unique<ShapeLayer>();
+        shape->kind = ShapeKind::Rectangle;
+        shape->points = QPolygonF{QPointF(-30, -20), QPointF(30, -20),
+                                  QPointF(30, 20), QPointF(-30, 20)};
+        shape->fill = QColor(Qt::green);
+        const LayerId shapeId = shape->id();
+        group->children.push_back(std::move(shape));
+        doc.addLayer(std::move(group));
+
+        canvas.setDocument(&doc);
+        canvas.resize(600, 400);
+        const QPoint device = canvas.docToDevice().map(QPointF(220, 100)).toPoint();
+        QMouseEvent press(QEvent::MouseButtonPress, device, device,
+                          Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(&canvas, &press);
+        QCOMPARE(canvas.selectedLayers().first(), shapeId);
+    }
+
+    void nestedGroupHitUsesLayerThenParentOrder()
+    {
+        CanvasView canvas;
+        Document doc(400, 300, 96);
+        auto outer = std::make_unique<GroupLayer>();
+        outer->transform.position = QPointF(230, 140);
+        outer->transform.rotationDeg = 73.0;
+        outer->transform.scaleY = 0.8;
+        auto inner = std::make_unique<GroupLayer>();
+        inner->transform.position = QPointF(70, 50);
+        inner->transform.rotationDeg = -41.0;
+        inner->transform.shearX = 0.15;
+        auto shape = std::make_unique<ShapeLayer>();
+        shape->kind = ShapeKind::Rectangle;
+        shape->points = QPolygonF{QPointF(-20, -10), QPointF(20, -10),
+                                  QPointF(20, 10), QPointF(-20, 10)};
+        shape->fill = QColor(Qt::yellow);
+        shape->transform.position = QPointF(35, 25);
+        shape->transform.rotationDeg = 27.0;
+        shape->transform.scaleX = 1.3;
+        const LayerId shapeId = shape->id();
+        GroupLayer* innerPtr = inner.get();
+        GroupLayer* outerPtr = outer.get();
+        inner->children.push_back(std::move(shape));
+        outer->children.push_back(std::move(inner));
+        QVERIFY(doc.addLayer(std::move(outer)));
+
+        const Layer* layer = doc.findLayer(shapeId);
+        const QRectF bounds = layer->contentBounds();
+        const QTransform shapeMatrix = layer->transform.matrix(bounds);
+        const QTransform innerMatrix = innerPtr->transform.matrix(innerPtr->contentBounds());
+        const QTransform outerMatrix = outerPtr->transform.matrix(outerPtr->contentBounds());
+        const QTransform expected = shapeMatrix * innerMatrix * outerMatrix;
+        const QPointF localSample(4, -3);
+        const QPointF docSample = expected.map(localSample);
+        const QPointF wrongOrderSample = (outerMatrix * innerMatrix * shapeMatrix).map(localSample);
+        QVERIFY((docSample - wrongOrderSample).manhattanLength() > 10.0);
+
+        canvas.setDocument(&doc);
+        canvas.resize(800, 600);
+        const QPoint device = canvas.docToDevice().map(docSample).toPoint();
+        QMouseEvent press(QEvent::MouseButtonPress, device, device,
+                          Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(&canvas, &press);
+        QCOMPARE(canvas.selectedLayers().first(), shapeId);
+    }
 };
 
 QTEST_MAIN(TestHitAlpha)

@@ -353,6 +353,8 @@ void ImageInspector::buildUi()
     auto* liveAdjustmentsLayout = new QVBoxLayout;
     liveAdjustmentsLayout->setContentsMargins(4, 4, 4, 4);
     m_liveAdjustmentsSection = new AdjustmentsSection(m_i18n, this);
+    connect(m_liveAdjustmentsSection, &AdjustmentsSection::adjustmentChanged,
+            this, &ImageInspector::canvasUpdateRequested);
     liveAdjustmentsLayout->addWidget(m_liveAdjustmentsSection);
     m_liveAdjustmentsContainer->setContentLayout(liveAdjustmentsLayout);
     m_liveAdjustmentsContainer->setVisible(false);   // revelado pelo modo avançado
@@ -1297,9 +1299,14 @@ void ImageInspector::openPuppetWarpDialog()
 
 void ImageInspector::schedulePreview()
 {
-    // Evita recalcular a imagem a cada evento individual do slider.
-    // O último valor é aplicado quando o utilizador abranda ou para o arrasto.
-    m_previewTimer.start(100);
+    // Invalida imediatamente o resultado anterior. Assim, uma imagem
+    // calculada para um valor antigo nunca pode substituir o último valor do
+    // slider. Se já houver uma tarefa, ela termina em background e apenas a
+    // última configuração será recalculada.
+    m_previewState.invalidate();
+    if (m_previewState.inFlight())
+        m_previewState.setQueued(true);
+    m_previewTimer.start(60);
 }
 
 void ImageInspector::onPreviewTimeout()
@@ -1358,10 +1365,10 @@ void ImageInspector::onPreviewTimeout()
 
     // Processa uma versão reduzida durante o preview para manter os sliders
     // responsivos. O resultado volta ao tamanho original antes de ser exibido.
-    constexpr qint64 kPreviewPixels = 1600000;
+    constexpr qint64 kPreviewPixels = 900000;
     const bool reducedPreview = qint64(original.width()) * original.height() > kPreviewPixels;
     const QImage previewSource = reducedPreview
-        ? original.scaled(QSize(1400, 1400), Qt::KeepAspectRatio, Qt::SmoothTransformation)
+        ? original.scaled(QSize(950, 950), Qt::KeepAspectRatio, Qt::SmoothTransformation)
         : original;
     const unsigned generation = m_previewState.nextGeneration();
     const LayerId layerId = m_id;
@@ -1404,11 +1411,27 @@ void ImageInspector::onPreviewTimeout()
             self->m_previewState.setQueued(false);
             self->schedulePreview();
         }
+        if (self->m_applyWhenPreviewReady && !self->m_previewState.queued()) {
+            self->m_applyWhenPreviewReady = false;
+            QMetaObject::invokeMethod(self, [self] {
+                if (self)
+                    self->applyAdjustments();
+            }, Qt::QueuedConnection);
+        }
     });
 }
 
 void ImageInspector::applyAdjustments()
 {
+    if (m_previewState.inFlight() || m_previewTimer.isActive()) {
+        // O botão Apply pode ser clicado durante o debounce ou enquanto a
+        // imagem está a ser processada. Não perde o clique: aplica assim que
+        // a prévia correspondente ao último valor ficar pronta.
+        m_applyWhenPreviewReady = true;
+        if (!m_previewState.inFlight())
+            m_previewTimer.start(0);
+        return;
+    }
     m_previewTimer.stop();
     ImageLayer* layer = nullptr;
     if (!editingLayer(&layer) || !m_document || m_originalAssetId.isNull())
@@ -1518,7 +1541,11 @@ void ImageInspector::applyPreset(int presetIndex)
                 const LayerId originalAssetId = layer->assetId;
                 const int originalWidth = layer->naturalWidth;
                 const int originalHeight = layer->naturalHeight;
-                const QImage selection = m_document->pixelSelection();
+                // A máscara pode estar em Document space ou pertencer a
+                // outra camada; converte-a antes de entrar no worker.
+                const QImage selection = SelectionOperations::selectionMaskInLayerSpace(
+                    *m_document, *layer, m_document->pixelSelection(),
+                    m_document->pixelSelectionSpace());
                 m_pixelFilterInFlight = true;
                 AsyncImageTask::start([base, selection, filter = *filterOpt] {
                     QImage filtered = ImageProcessing::applyPresetFilter(base, filter);

@@ -1,4 +1,5 @@
 #include "workspacelayout.h"
+#include "localization/i18nservice.h"
 
 #include <QDateTime>
 #include <QGuiApplication>
@@ -35,27 +36,34 @@ bool fitsOnAvailableScreen(const QRect& rect)
 
 } // namespace
 
-WorkspaceLayoutDialog::WorkspaceLayoutDialog(QWidget* parent)
+WorkspaceLayoutDialog::WorkspaceLayoutDialog(I18nService* i18n, QWidget* parent)
     : QDialog(parent)
+    , m_i18n(i18n)
 {
-    setWindowTitle(tr("Layouts de Workspace"));
+    setWindowTitle(tr_("title", QStringLiteral("Workspace Layouts")));
     setMinimumSize(500, 300);
     buildUi();
     updateLayoutList();
+}
+
+QString WorkspaceLayoutDialog::tr_(const QString& key, const QString& fallback) const
+{
+    return m_i18n ? m_i18n->t("common", QStringLiteral("workspaceDialog.") + key)
+                  : fallback;
 }
 
 void WorkspaceLayoutDialog::buildUi()
 {
     auto* layout = new QVBoxLayout(this);
 
-    auto* infoLabel = new QLabel(tr("Salve e restaure layouts de workspace."));
+    auto* infoLabel = new QLabel(tr_("info", QStringLiteral("Save and restore workspace layouts.")));
     infoLabel->setWordWrap(true);
     layout->addWidget(infoLabel);
 
     auto* nameLayout = new QHBoxLayout();
-    nameLayout->addWidget(new QLabel(tr("Nome do layout:")));
+    nameLayout->addWidget(new QLabel(tr_("name", QStringLiteral("Layout name:"))));
     m_layoutNameEdit = new QLineEdit();
-    m_layoutNameEdit->setPlaceholderText(tr("Nome do layout..."));
+    m_layoutNameEdit->setPlaceholderText(tr_("namePlaceholder", QStringLiteral("Layout name...")));
     nameLayout->addWidget(m_layoutNameEdit);
     layout->addLayout(nameLayout);
 
@@ -63,10 +71,10 @@ void WorkspaceLayoutDialog::buildUi()
     layout->addWidget(m_layoutCombo);
 
     auto* btnLayout = new QHBoxLayout();
-    auto* saveBtn = new QPushButton(tr("Salvar Layout"));
-    auto* loadBtn = new QPushButton(tr("Aplicar Layout"));
-    auto* deleteBtn = new QPushButton(tr("Excluir Layout"));
-    auto* closeBtn = new QPushButton(tr("Fechar"));
+    auto* saveBtn = new QPushButton(tr_("save", QStringLiteral("Save Layout")));
+    auto* loadBtn = new QPushButton(tr_("apply", QStringLiteral("Apply Layout")));
+    auto* deleteBtn = new QPushButton(tr_("delete", QStringLiteral("Delete Layout")));
+    auto* closeBtn = new QPushButton(tr_("close", QStringLiteral("Close")));
 
     btnLayout->addStretch();
     btnLayout->addWidget(saveBtn);
@@ -102,27 +110,27 @@ void WorkspaceLayoutDialog::saveLayout()
 {
     QString name = m_layoutNameEdit->text().trimmed();
     if (name.isEmpty()) {
-        QMessageBox::warning(this, tr("Erro"), tr("Digite um nome para o layout."));
+        QMessageBox::warning(this, tr_("error", QStringLiteral("Error")), tr_("enterName", QStringLiteral("Enter a layout name.")));
         return;
     }
     if (name.contains(u'/') || name.contains(u'\\')) {
-        QMessageBox::warning(this, tr("Erro"),
-                             tr("O nome do layout não pode conter / ou \\."));
+        QMessageBox::warning(this, tr_("error", QStringLiteral("Error")),
+                             tr_("invalidName", QStringLiteral("The layout name cannot contain / or \\.")));
         return;
     }
 
     QMainWindow* window = mainWindow();
     if (!window) {
-        QMessageBox::warning(this, tr("Erro"),
-                             tr("Não foi possível encontrar a janela principal."));
+        QMessageBox::warning(this, tr_("error", QStringLiteral("Error")),
+                             tr_("noMainWindow", QStringLiteral("Could not find the main window.")));
         return;
     }
 
     const QByteArray geometry = window->saveGeometry();
     const QByteArray state = window->saveState();
     if (geometry.isEmpty() || state.isEmpty()) {
-        QMessageBox::warning(this, tr("Erro"),
-                             tr("Não foi possível guardar o estado do workspace."));
+        QMessageBox::warning(this, tr_("error", QStringLiteral("Error")),
+                             tr_("saveFailed", QStringLiteral("Could not save the workspace state.")));
         return;
     }
 
@@ -144,7 +152,7 @@ void WorkspaceLayoutDialog::loadLayout()
 {
     QString name = m_layoutCombo->currentText();
     if (name.isEmpty()) {
-        QMessageBox::warning(this, tr("Erro"), tr("Selecione um layout."));
+        QMessageBox::warning(this, tr_("error", QStringLiteral("Error")), tr_("selectLayout", QStringLiteral("Select a layout.")));
         return;
     }
 
@@ -157,13 +165,13 @@ void WorkspaceLayoutDialog::loadLayout()
     settings.endGroup();
 
     if (geometry.isEmpty() || state.isEmpty()) {
-        QMessageBox::warning(this, tr("Erro"), tr("Layout nao encontrado."));
+        QMessageBox::warning(this, tr_("error", QStringLiteral("Error")), tr_("notFound", QStringLiteral("Layout not found.")));
         return;
     }
 
     if (!restoreLayout(geometry, state)) {
-        QMessageBox::warning(this, tr("Erro"),
-                             tr("Não foi possível aplicar este layout. Ele pode pertencer a outro ecrã."));
+        QMessageBox::warning(this, tr_("error", QStringLiteral("Error")),
+                             tr_("applyFailed", QStringLiteral("Could not apply this layout. It may belong to another screen.")));
         return;
     }
     accept();
@@ -173,7 +181,7 @@ void WorkspaceLayoutDialog::deleteLayout()
 {
     QString name = m_layoutCombo->currentText();
     if (name.isEmpty()) {
-        QMessageBox::warning(this, tr("Erro"), tr("Selecione um layout."));
+        QMessageBox::warning(this, tr_("error", QStringLiteral("Error")), tr_("selectLayout", QStringLiteral("Select a layout.")));
         return;
     }
 

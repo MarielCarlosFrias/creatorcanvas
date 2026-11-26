@@ -51,6 +51,7 @@ private:
     QPointF m_prevPointLocal;
     QPointF m_currentDocPos;
     QImage m_workingImage;
+    QImage m_originalImage;
 
     LayerId m_activeLayerId;
     LayerId m_origAssetId;

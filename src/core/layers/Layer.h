@@ -198,6 +198,12 @@ public:
     mutable QImage maskedPreviewCache;
     mutable qint64 maskedPreviewSourceKey = 0;
     mutable qint64 maskedPreviewMaskKey = 0;
+    // Cache do resultado do ajuste não destrutivo (applyAdjustment), que
+    // antes era recalculado píxel-a-píxel em TODOS os repaints. Chave: cacheKey
+    // da entrada + hash do estado do AdjustmentLayer (kind/opacidade/parâmetros).
+    mutable QImage adjustedRenderCache;
+    mutable qint64 adjustedRenderSourceKey = 0;
+    mutable quint64 adjustedRenderAdjKey = 0;
 };
 
 class TextLayer final : public Layer
@@ -286,7 +292,9 @@ enum class AdjustmentType { Levels, Curves, BrightnessContrast, HueSaturation,
                             // Adicionados depois: sempre no fim, para os
                             // inteiros gravados nos projectos antigos
                             // continuarem a significar o mesmo.
-                            ShadowsHighlights, Vignette };
+                            ShadowsHighlights, Vignette,
+                            // Filtros inteligentes: manter igualmente no fim.
+                            Blur, MotionBlur, Noise, DistortTwirl, Pinch, Ripple };
 
 class AdjustmentLayer final : public Layer
 {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/document/Guide.h"
 #include "core/document/WebSlice.h"
 #include "core/layers/Layer.h"
 #include "core/snap/SnapEngine.h"
@@ -67,6 +68,21 @@ public:
                                const QList<GuideLine>& guides,
                                double zoom,
                                const QTransform& toDevice);
+
+    /// Guias do documento (linhas cyan tracejadas em coordenadas de doc).
+    static void drawGuides(QPainter* painter,
+                           int docW,
+                           int docH,
+                           const std::vector<Guide>& guides,
+                           const QTransform& toDevice);
+
+    /// Réguas sobrepostas no topo/esquerda do widget (faixas de |rulerSize| px
+    /// com ticks a cada 10 px de documento e rótulos a cada 100 px).
+    static void drawRulers(QPainter* painter,
+                           const QSize& widgetSize,
+                           const QTransform& docToDevice,
+                           int rulerSize,
+                           bool darkTheme);
 
     /// Desenha as fatias de exportação web: rectângulo tracejado + etiqueta
     /// com o nome e o formato. É assim que o utilizador vê o que cada fatia

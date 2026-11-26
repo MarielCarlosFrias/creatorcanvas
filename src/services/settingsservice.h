@@ -33,6 +33,11 @@ public:
     int historyLimit() const;
     void setHistoryLimit(int limit);
 
+    /// Tecto de memoria do histórico em MB (0 = sem limite por memória).
+    /// Omissao: 512 MB (~10 snapshots de 4000x3000).
+    int historyMemoryBudgetMb() const;
+    void setHistoryMemoryBudgetMb(int mb);
+
     // Performance ----------------------------------------------------------
     bool gpuAccelerationEnabled() const;   // default false (software renderer)
     void setGpuAccelerationEnabled(bool enabled);
@@ -45,6 +50,29 @@ public:
     void setShowGridByDefault(bool enabled);
     bool snapToGridByDefault() const;
     void setSnapToGridByDefault(bool enabled);
+
+    /// Barra de dicas para iniciantes ("prima Ctrl+K..."): uma vez fechada
+    /// pelo utilizador, não volta a aparecer.
+    bool hintsBarDismissed() const;
+    void setHintsBarDismissed(bool dismissed);
+
+    /// Diálogo de boas-vindas (idioma) e tutorial guiado: aparecem uma vez.
+    bool welcomeShown() const;
+    void setWelcomeShown(bool shown);
+    bool tourCompleted() const;
+    void setTourCompleted(bool completed);
+
+    /// Usado pelos "Primeiros passos": o utilizador já exportou alguma vez.
+    bool hasExported() const;
+    void setHasExported(bool exported);
+
+    /// Painel "Primeiros passos": uma vez fechado, não volta a aparecer.
+    bool onboardingDismissed() const;
+    void setOnboardingDismissed(bool dismissed);
+
+    /// Última pasta usada numa exportação (diálogos de ficheiro).
+    QString lastExportDir() const;
+    void setLastExportDir(const QString& dir);
 
     /// Modo avançado: esconde as ferramentas profissionais (histograma,
     /// edição de nós, refine edge, gradientes multi-stop, texto em

@@ -1,9 +1,13 @@
 #include "core/Document.h"
+#include "core/geometry/LayerTransform.h"
 #include "core/layers/Layer.h"
 #include "core/snap/SnapEngine.h"
+#include "tools/ToolCommit.h"
 
 #include <QList>
 #include <QRectF>
+#include <QSet>
+#include <QSignalSpy>
 #include <QtTest>
 
 using namespace cc;
@@ -207,6 +211,190 @@ private slots:
         const auto result = engine.computeSnap(*doc.findLayer(bId),
                                                 bRect, canvas, others);
 
+        QVERIFY(result.guides.isEmpty());
+    }
+
+    void toolTransformUsesLayerThenParentOrder()
+    {
+        Document doc(400, 400);
+        auto outer = std::make_unique<GroupLayer>();
+        outer->transform.position = QPointF(240, 180);
+        outer->transform.rotationDeg = 31.0;
+        outer->transform.scaleX = 1.2;
+        outer->transform.scaleY = 0.8;
+        auto inner = std::make_unique<GroupLayer>();
+        inner->transform.position = QPointF(70, 45);
+        inner->transform.rotationDeg = -53.0;
+        inner->transform.shearX = 0.15;
+        auto image = makeImage(QStringLiteral("nested"), 12, 8);
+        image->transform.position = QPointF(20, 25);
+        image->transform.rotationDeg = 77.0;
+        image->transform.scaleX = 1.4;
+        const LayerId imageId = image->id();
+
+        inner->children.push_back(std::move(image));
+        outer->children.push_back(std::move(inner));
+        QVERIFY(doc.addLayer(std::move(outer)));
+
+        const Layer* nested = doc.findLayer(imageId);
+        const auto* innerGroup = static_cast<const GroupLayer*>(doc.parentOf(imageId));
+        const auto* outerGroup = static_cast<const GroupLayer*>(doc.parentOf(innerGroup->id()));
+        const QRectF bounds = nested->contentBounds();
+        const QTransform imageMatrix = nested->transform.matrix(bounds);
+        const QTransform innerMatrix = innerGroup->transform.matrix(innerGroup->contentBounds());
+        const QTransform outerMatrix = outerGroup->transform.matrix(outerGroup->contentBounds());
+        const QTransform expected = imageMatrix * innerMatrix * outerMatrix;
+        const QTransform actual = layerToDocumentTransform(doc, *nested);
+
+        for (const QPointF& point : {bounds.topLeft(), bounds.center(), bounds.bottomRight()}) {
+            QVERIFY((actual.map(point) - expected.map(point)).manhattanLength() < 1e-7);
+            QVERIFY((layerToDocumentMatrix(doc, *nested).map(point)
+                     - expected.map(point)).manhattanLength() < 1e-7);
+        }
+        const QPointF oldOrderPoint = (outerMatrix * innerMatrix * imageMatrix).map(bounds.topLeft());
+        QVERIFY((expected.map(bounds.topLeft()) - oldOrderPoint).manhattanLength() > 1.0);
+    }
+
+    void documentSelectionUsesLayerThenParentOrder()
+    {
+        Document doc(300, 300);
+        auto group = std::make_unique<GroupLayer>();
+        group->transform.position = QPointF(160, 140);
+        group->transform.rotationDeg = 70.0;
+        group->transform.scaleX = 1.3;
+        group->transform.scaleY = 0.9;
+        auto image = makeImage(QStringLiteral("source"), 5, 4);
+        image->transform.position = QPointF(45, 35);
+        image->transform.rotationDeg = 25.0;
+        image->transform.shearX = 0.2;
+        const LayerId imageId = image->id();
+        group->children.push_back(std::move(image));
+        QVERIFY(doc.addLayer(std::move(group)));
+
+        const Layer* sourceLayer = doc.findLayer(imageId);
+        const auto* parent = static_cast<const GroupLayer*>(doc.parentOf(imageId));
+        const QRectF bounds = sourceLayer->contentBounds();
+        const QTransform correct = sourceLayer->transform.matrix(bounds)
+            * parent->transform.matrix(parent->contentBounds());
+        const QTransform oldOrder = parent->transform.matrix(parent->contentBounds())
+            * sourceLayer->transform.matrix(bounds);
+
+        QImage selection(doc.width(), doc.height(), QImage::Format_Alpha8);
+        selection.fill(0);
+        QSet<QPoint> selectedPoints;
+        for (int y = 0; y < bounds.height(); ++y) {
+            for (int x = 0; x < bounds.width(); ++x) {
+                const QPointF docPoint = correct.map(QPointF(x + 0.5, y + 0.5));
+                const QPoint point(qRound(docPoint.x()), qRound(docPoint.y()));
+                if (selection.rect().contains(point)) {
+                    selection.scanLine(point.y())[point.x()] = 255;
+                    selectedPoints.insert(point);
+                }
+            }
+        }
+        bool distinguishesOrder = false;
+        for (int y = 0; y < bounds.height(); ++y) {
+            for (int x = 0; x < bounds.width(); ++x) {
+                const QPointF docPoint = oldOrder.map(QPointF(x + 0.5, y + 0.5));
+                const QPoint point(qRound(docPoint.x()), qRound(docPoint.y()));
+                distinguishesOrder = distinguishesOrder || !selectedPoints.contains(point);
+            }
+        }
+        QVERIFY(distinguishesOrder);
+
+        doc.setPixelSelection(selection, SelectionSpace::Document);
+        const LayerId adjustmentId = doc.createAdjustmentLayer(AdjustmentType::Invert, imageId);
+        const auto* adjustment = doc.findAdjustmentLayer(adjustmentId);
+        QVERIFY(adjustment != nullptr);
+        QCOMPARE(adjustment->vectorMask.size(), bounds.size().toSize());
+        for (int y = 0; y < bounds.height(); ++y)
+            for (int x = 0; x < bounds.width(); ++x)
+                QCOMPARE(int(adjustment->vectorMask.constScanLine(y)[x]), 255);
+    }
+
+    void setLayerTransformNotifiesAdjustedAncestorsOnce()
+    {
+        Document doc(300, 300);
+        auto outer = std::make_unique<GroupLayer>();
+        auto inner = std::make_unique<GroupLayer>();
+        auto image = makeImage(QStringLiteral("child"), 20, 10);
+        image->transform.position = QPointF(30, 20);
+        const LayerId imageId = image->id();
+        const LayerId innerId = inner->id();
+        const LayerId outerId = outer->id();
+        inner->children.push_back(std::move(image));
+        outer->children.push_back(std::move(inner));
+        QVERIFY(doc.addLayer(std::move(outer)));
+
+        QSignalSpy spy(&doc, &Document::layerPropertyChanged);
+        AffineTransform moved = doc.findLayer(imageId)->transform;
+        moved.position += QPointF(12, 7);
+        QVERIFY(doc.setLayerTransform(imageId, moved));
+
+        QList<LayerId> notified;
+        for (const auto& args : spy)
+            notified.push_back(args.at(0).toUuid());
+        QCOMPARE(notified.count(imageId), 1);
+        QCOMPARE(notified.count(innerId), 1);
+        QCOMPARE(notified.count(outerId), 1);
+        QCOMPARE(notified.size(), 3);
+    }
+
+    void snapTargetComposesTransformedAncestors()
+    {
+        Document doc(1000, 1000);
+        auto group = std::make_unique<GroupLayer>();
+        group->transform.position = QPointF(360, 280);
+        group->transform.rotationDeg = 90.0;
+        group->transform.scaleX = 1.4;
+        auto target = makeImage(QStringLiteral("target"), 40, 20);
+        target->transform.position = QPointF(40, 30);
+        target->transform.rotationDeg = 25.0;
+        const LayerId targetId = target->id();
+        group->children.push_back(std::move(target));
+        QVERIFY(doc.addLayer(std::move(group)));
+        auto moving = makeImage(QStringLiteral("moving"), 20, 20);
+        const LayerId movingId = moving->id();
+        QVERIFY(doc.addLayer(std::move(moving)));
+
+        const Layer* targetLayer = doc.findLayer(targetId);
+        const QRectF targetRect = layerToDocumentMatrix(doc, *targetLayer)
+            .mapRect(targetLayer->contentBounds());
+        const QRectF movingRect(targetRect.right() + 3.0, 700.0, 20.0, 20.0);
+        SnapEngine engine;
+        const SnapResult result = engine.computeSnap(
+            doc, *doc.findLayer(movingId), movingRect,
+            QRectF(0, 0, 1000, 1000), {doc.findLayer(targetId)});
+
+        QVERIFY(qAbs(result.delta.x() + 3.0) < 1e-7);
+        QCOMPARE(result.guides.size(), 1);
+        QCOMPARE(result.guides.first().kind, GuideLine::Kind::Vertical);
+        QVERIFY(qAbs(result.guides.first().axisPosition - targetRect.right()) < 1e-7);
+    }
+
+    void movingGroupAndDescendantsAreNotSnapTargets()
+    {
+        Document doc(1000, 1000);
+        auto group = std::make_unique<GroupLayer>();
+        group->transform.position = QPointF(250, 250);
+        group->transform.rotationDeg = 35.0;
+        auto child = makeImage(QStringLiteral("child"), 60, 40);
+        child->transform.position = QPointF(30, 20);
+        const LayerId childId = child->id();
+        group->children.push_back(std::move(child));
+        const LayerId groupId = group->id();
+        QVERIFY(doc.addLayer(std::move(group)));
+
+        Layer* moving = doc.findLayer(groupId);
+        Layer* descendant = doc.findLayer(childId);
+        const QRectF movingRect = layerToDocumentMatrix(doc, *descendant)
+            .mapRect(descendant->contentBounds());
+        SnapEngine engine;
+        const SnapResult result = engine.computeSnap(
+            doc, *moving, movingRect, QRectF(0, 0, 1000, 1000),
+            {moving, descendant});
+
+        QCOMPARE(result.delta, QPointF(0, 0));
         QVERIFY(result.guides.isEmpty());
     }
 

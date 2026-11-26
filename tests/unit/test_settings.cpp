@@ -21,6 +21,38 @@ private slots:
         QCOMPARE(s.gpuAccelerationEnabled(), false);
         // Modo avançado DESLIGADO por omissão: quem começa vê o essencial.
         QCOMPARE(s.advancedModeEnabled(), false);
+        // Barra de dicas aparece até ser dispensada.
+        QCOMPARE(s.hintsBarDismissed(), false);
+        // Orçamento de memória do histórico: 512 MB por omissão.
+        QCOMPARE(s.historyMemoryBudgetMb(), 512);
+    }
+
+    void historyMemoryBudgetPersists()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath("settings.ini");
+        {
+            SettingsService s(path);
+            s.setHistoryMemoryBudgetMb(256);
+        }
+        SettingsService s(path);
+        QCOMPARE(s.historyMemoryBudgetMb(), 256);
+    }
+
+    void hintsBarDismissalPersists()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath("settings.ini");
+        {
+            SettingsService s(path);
+            QSignalSpy spy(&s, &SettingsService::changed);
+            s.setHintsBarDismissed(true);
+            QCOMPARE(spy.count(), 1);
+        }
+        SettingsService s(path);
+        QVERIFY(s.hintsBarDismissed());
     }
 
     void persistsValuesAcrossInstances()

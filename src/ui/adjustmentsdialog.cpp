@@ -8,6 +8,7 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QTimer>
 #include <QDoubleSpinBox>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -554,7 +555,18 @@ void AdjustmentsDialog::onParamChanged()
     } else if (m_request.type == AdjustmentType::Curves && m_curve) {
         activeCurve() = m_curve->points();
     }
-    updatePreview();
+    schedulePreviewUpdate();
+}
+
+void AdjustmentsDialog::schedulePreviewUpdate()
+{
+    if (!m_previewTimer) {
+        m_previewTimer = new QTimer(this);
+        m_previewTimer->setSingleShot(true);
+        m_previewTimer->setInterval(60);
+        connect(m_previewTimer, &QTimer::timeout, this, &AdjustmentsDialog::updatePreview);
+    }
+    m_previewTimer->start();
 }
 
 void AdjustmentsDialog::collectParams()

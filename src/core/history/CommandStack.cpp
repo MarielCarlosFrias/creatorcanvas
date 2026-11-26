@@ -7,9 +7,10 @@
 
 namespace cc {
 
-CommandStack::CommandStack(int limit, QObject* parent)
+CommandStack::CommandStack(int limit, qint64 byteBudget, QObject* parent)
     : QObject(parent)
     , m_limit(qMax(1, limit))
+    , m_byteBudget(qMax<qint64>(0, byteBudget))
 {
 }
 
@@ -25,6 +26,51 @@ void CommandStack::setLimit(int limit)
         reportOrphanedAssets(std::move(dropped));
     }
     emit stateChanged();
+}
+
+void CommandStack::setByteBudget(qint64 bytes)
+{
+    m_byteBudget = qMax<qint64>(0, bytes);
+    trimToByteBudget();
+    emit stateChanged();
+}
+
+qint64 CommandStack::retainedBytes() const
+{
+    qint64 total = 0;
+    QSet<LayerId> assetIds;
+    for (const auto& cmd : m_undoStack) {
+        total += cmd->estimatedBytes();
+        cmd->collectAssetIds(assetIds);
+    }
+    for (const auto& cmd : m_redoStack) {
+        total += cmd->estimatedBytes();
+        cmd->collectAssetIds(assetIds);
+    }
+    if (m_assetProbe && !assetIds.isEmpty())
+        total += m_assetProbe(assetIds);
+    return total;
+}
+
+void CommandStack::dropOldestUndo()
+{
+    if (m_undoStack.empty())
+        return;
+    auto dropped = std::move(m_undoStack.front());
+    m_undoStack.erase(m_undoStack.begin());
+    std::vector<std::unique_ptr<Command>> vec;
+    vec.push_back(std::move(dropped));
+    reportOrphanedAssets(std::move(vec));
+}
+
+void CommandStack::trimToByteBudget()
+{
+    // 0 = sem limite por memória (só a contagem vale).
+    if (m_byteBudget <= 0)
+        return;
+    // Nunca esvazia a pilha: o passo actual tem de poder ser desfeito.
+    while (m_undoStack.size() > 1 && retainedBytes() > m_byteBudget)
+        dropOldestUndo();
 }
 
 void CommandStack::execute(std::unique_ptr<Command> command)
@@ -48,13 +94,9 @@ void CommandStack::execute(std::unique_ptr<Command> command)
 
     reportOrphanedAssets(std::move(m_redoStack));
     m_undoStack.push_back(std::move(command));
-    if (m_undoStack.size() > static_cast<std::size_t>(m_limit)) {
-        auto dropped = std::move(m_undoStack.front());
-        m_undoStack.erase(m_undoStack.begin());
-        std::vector<std::unique_ptr<Command>> vec;
-        vec.push_back(std::move(dropped));
-        reportOrphanedAssets(std::move(vec));
-    }
+    if (m_undoStack.size() > static_cast<std::size_t>(m_limit))
+        dropOldestUndo();
+    trimToByteBudget();
 
     emitStateChanged(wasUndoable, wasRedoable);
 }

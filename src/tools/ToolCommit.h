@@ -3,10 +3,13 @@
 #include "CanvasTool.h"
 #include "core/history/CommandStack.h"
 #include "core/history/DocumentCommands.h"
+#include "core/geometry/LayerTransform.h"
 #include "core/layers/Layer.h"
+#include "core/selection/SelectionOperations.h"
 #include "localization/i18nservice.h"
 #include <QImage>
 #include <QString>
+#include <QTransform>
 
 namespace cc {
 
@@ -18,6 +21,61 @@ inline LayerLocks effectiveLocksOf(const ToolContext& ctx)
     if (!ctx.document || ctx.selectedLayerId.isNull())
         return {};
     return ctx.document->effectiveLocks(ctx.selectedLayerId);
+}
+
+/// Transformação completa de uma camada para o espaço do documento. Ferramentas
+/// raster não podem usar apenas layer.transform: a camada pode estar dentro de
+/// vários grupos transformados.
+inline QTransform layerToDocumentTransform(const Document& document, const Layer& layer)
+{
+    return layerToDocumentMatrix(document, layer);
+}
+
+inline QPointF documentToLayerPoint(const Document& document, const Layer& layer,
+                                    const QPointF& documentPoint)
+{
+    bool invertible = false;
+    const QTransform inverse = layerToDocumentTransform(document, layer).inverted(&invertible);
+    return invertible ? inverse.map(documentPoint) : documentPoint;
+}
+
+/// Encontra a imagem visível mais acima sob um ponto, atravessando grupos.
+/// Isto mantém ferramentas raster coerentes com a seleção do canvas quando
+/// há pastas transformadas, em vez de inspecionar apenas a raiz do documento.
+inline ImageLayer* topmostImageLayerAt(const ToolContext& ctx, const QPointF& documentPoint)
+{
+    if (!ctx.document || !ctx.document->rootGroup())
+        return nullptr;
+    const auto visit = [&](const auto& self, GroupLayer* group) -> ImageLayer* {
+        for (auto it = group->children.rbegin(); it != group->children.rend(); ++it) {
+            Layer* candidate = it->get();
+            if (!candidate || !candidate->visible)
+                continue;
+            if (candidate->type() == LayerType::Group) {
+                if (ImageLayer* found = self(self, static_cast<GroupLayer*>(candidate)))
+                    return found;
+                continue;
+            }
+            if (candidate->type() != LayerType::Image)
+                continue;
+            const QPointF local = documentToLayerPoint(*ctx.document, *candidate, documentPoint);
+            if (candidate->contentBounds().contains(local))
+                return static_cast<ImageLayer*>(candidate);
+        }
+        return nullptr;
+    };
+    return visit(visit, ctx.document->rootGroup());
+}
+
+/// Mantém intactos os pixels fora da seleção ativa. É executado no fim do
+/// gesto, uma única vez, para não varrer imagens grandes a cada mouse move.
+inline QImage constrainToPixelSelection(const ToolContext& ctx, const QImage& original,
+                                        const QImage& edited)
+{
+    if (!ctx.document)
+        return edited;
+    return SelectionOperations::applySelectionMask(original, edited,
+                                                   ctx.document->pixelSelection());
 }
 
 /// Mensagem padrão quando a camada está trancada para pixels.

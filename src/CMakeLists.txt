@@ -88,8 +88,12 @@ add_library(cc_core STATIC
     core/color/IccProfiles.cpp
     imageio/ImageImporter.h
     imageio/ImageImporter.cpp
+    imageio/PsdImporter.h
+    imageio/PsdImporter.cpp
     imageio/DocumentExporter.h
     imageio/DocumentExporter.cpp
+    imageio/SvgExporter.h
+    imageio/SvgExporter.cpp
 )
 target_link_libraries(cc_core PUBLIC Qt6::Core Qt6::Gui miniz onnxruntime)
 target_include_directories(cc_core SYSTEM PRIVATE ${ONNX_DIR}/include)
@@ -114,13 +118,24 @@ add_library(cc_services STATIC
     services/settingsservice.cpp
     services/LayerOperations.h
     services/LayerOperations.cpp
+    services/LayerClipboard.h
+    services/LayerClipboard.cpp
+    services/SelectionTransform.h
+    services/SelectionTransform.cpp
+    services/ImageResizer.h
+    services/ImageResizer.cpp
+    services/BatchProcessor.h
+    services/BatchProcessor.cpp
     services/presetstore.h
     services/presetstore.cpp
     services/recentfiles.h
     services/recentfiles.cpp
     services/textstylestore.h
     services/textstylestore.cpp
+    services/packstore.h
+    services/packstore.cpp
     ${PROJECT_SOURCE_DIR}/resources/presets.qrc
+    ${PROJECT_SOURCE_DIR}/resources/packs.qrc
 )
 target_link_libraries(cc_services PUBLIC Qt6::Core Qt6::Gui cc_core)
 target_include_directories(cc_services PUBLIC ${PROJECT_SOURCE_DIR}/src)
@@ -236,6 +251,16 @@ add_executable(creatorcanvas
     ui/themeicons.cpp
     ui/collapsiblesection.h
     ui/collapsiblesection.cpp
+    ui/commandpalette.h
+    ui/commandpalette.cpp
+    ui/welcomedialog.h
+    ui/welcomedialog.cpp
+    ui/onboardingpanel.h
+    ui/onboardingpanel.cpp
+    ui/onboardingtour.h
+    ui/onboardingtour.cpp
+    ui/packbrowser.h
+    ui/packbrowser.cpp
     ui/tooloptionsbar.h
     ui/tooloptionsbar.cpp
     ui/canvasoverlayrenderer.h
@@ -246,6 +271,12 @@ add_executable(creatorcanvas
     ui/inlinetexteditor.cpp
     ui/canvasgesturehandler.h
     ui/canvasgesturehandler.cpp
+    ui/transformselectiondialog.h
+    ui/transformselectiondialog.cpp
+    ui/imagesizedialog.h
+    ui/imagesizedialog.cpp
+    ui/smartfilterdialog.h
+    ui/smartfilterdialog.cpp
     ui/actionmanager.h
     ui/actionmanager.cpp
     ui/menubuilder.h
@@ -270,6 +301,11 @@ add_executable(creatorcanvas
     ui/transformbar.cpp
     ui/toolslotbutton.h
     ui/toolslotbutton.cpp
+    ui/navigatorpanel.h
+    ui/navigatorpanel.cpp
+    ui/swatchpanel.h
+    ui/swatchpanel.cpp
+    ui/mainwindow_selection.cpp
 )
 target_link_libraries(creatorcanvas
     PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets

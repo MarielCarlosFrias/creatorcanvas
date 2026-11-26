@@ -8,6 +8,8 @@
 
 #include <memory>
 
+class QTimer;
+
 #include <QResizeEvent>
 
 class QComboBox;
@@ -59,6 +61,9 @@ private slots:
     void onChannelChanged(int index);
     void onParamChanged();
     void updatePreview();
+    /// updatePreview() adiado 60 ms — durante o arrasto de sliders o preview
+    /// (por-píxel + histograma) não corre a cada passo, só no fim do gesto.
+    void schedulePreviewUpdate();
 
 private:
     void buildUi();
@@ -101,6 +106,7 @@ protected:
     /// ainda não existem. Foi isto que fez o diálogo abrir directamente em
     /// "Níveis" crashar.
     bool m_buildingUi = false;
+    QTimer* m_previewTimer = nullptr;
 
     QListWidget* m_typeList = nullptr;
     QStackedWidget* m_pages = nullptr;

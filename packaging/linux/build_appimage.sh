@@ -42,6 +42,47 @@ if [ -d "$STAGING/lib/creatorcanvas" ]; then
     cp -d -r "$STAGING/lib/creatorcanvas/." "$APPDIR/usr/lib/creatorcanvas/"
 fi
 
+# 2b. O vendored do ONNX Runtime traz tres copias REAIS de 16 MB
+# (libonnxruntime.so, .so.1 e .so.1.19.0). Converter as repetidas em
+# hardlinks poupa 32 MB no pacote: o loader resolve o SONAME igualmente e
+# o mksquashfs guarda o inode uma unica vez.
+if [ -d "$APPDIR/usr/lib/creatorcanvas" ]; then
+    python3 - "$APPDIR" <<'PY'
+import hashlib
+import os
+import sys
+
+appdir = sys.argv[1]
+seen = {}
+for root, _dirs, files in os.walk(os.path.join(appdir, "usr")):
+    for name in files:
+        path = os.path.join(root, name)
+        if os.path.islink(path) or not os.path.isfile(path):
+            continue
+        digest = hashlib.md5()
+        with open(path, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1 << 20), b""):
+                digest.update(chunk)
+        key = digest.hexdigest()
+        if key in seen:
+            os.unlink(path)
+            os.link(seen[key], path)
+            print("    hardlink: %s -> %s"
+                  % (os.path.relpath(path, appdir),
+                     os.path.relpath(seen[key], appdir)))
+        else:
+            seen[key] = path
+PY
+fi
+
+# 2c. Simbolos de depuracao nao tem uso em runtime e inchavam o binario em
+# ~3,7 MB (36% do executavel).
+for binpath in "$APPDIR/usr/bin/creatorcanvas" "$APPDIR/usr/bin/minipaint-standalone"; do
+    if [ -f "$binpath" ]; then
+        strip --strip-unneeded "$binpath" 2>/dev/null || true
+    fi
+done
+
 # 3. Share assets, Models & Presets
 if [ -d "$STAGING/share/creatorcanvas" ]; then
     cp -r "$STAGING/share/creatorcanvas/." "$APPDIR/usr/share/creatorcanvas/"

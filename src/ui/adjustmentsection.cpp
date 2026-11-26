@@ -48,6 +48,11 @@ AdjustmentsSection::AdjustmentsSection(I18nService* i18n, QWidget* parent)
         auto* slider = new QSlider(Qt::Horizontal, this);
         slider->setRange(lo, hi);
         slider->setValue(value);
+        // Não renderiza o documento a cada pixel percorrido durante o
+        // arrasto. O valor visual acompanha o rato, mas valueChanged só é
+        // emitido ao soltar, produzindo um único ajuste/undo e uma única
+        // renderização pesada.
+        slider->setTracking(false);
         row->addWidget(label);
         row->addWidget(slider);
         layout->addLayout(row);
@@ -63,6 +68,7 @@ AdjustmentsSection::AdjustmentsSection(I18nService* i18n, QWidget* parent)
     m_strength = new QSlider(Qt::Horizontal, this);
     m_strength->setRange(0, 100);
     m_strength->setValue(100);
+    m_strength->setTracking(false);
     strengthRow->addWidget(m_strength);
     layout->addLayout(strengthRow);
 
@@ -247,6 +253,7 @@ void AdjustmentsSection::onSliderChanged()
         }
         m_doc->setAdjustmentParameters(adjId, params);
         m_doc->setLayerOpacity(adjId, strength);
+        emit adjustmentChanged();
         return;
     }
 
@@ -272,6 +279,7 @@ void AdjustmentsSection::onSliderChanged()
             *m_doc, type, params, m_imageLayer, QStringLiteral("adjustment.create"), strength);
         m_history->execute(std::move(cmd));
     }
+    emit adjustmentChanged();
 }
 
 void AdjustmentsSection::onStrengthChanged()

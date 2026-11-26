@@ -1,5 +1,6 @@
 #include "ImageImporter.h"
 
+#include "PsdImporter.h"
 #include "core/color/IccProfiles.h"
 
 #include <QBuffer>
@@ -25,6 +26,8 @@ QString sniffFormat(const QByteArray& bytes)
         return QStringLiteral("webp");
     if (startsWith(bytes, "BM", 2))
         return QStringLiteral("bmp");
+    if (startsWith(bytes, "8BPS", 4))
+        return QStringLiteral("psd");
     return {};
 }
 
@@ -62,6 +65,31 @@ ImportResult importImageFromFile(const QString& filePath,
         result.status = ImportStatus::UnsupportedFormat;
         result.errorMessage =
             QStringLiteral("Unrecognized image format (magic bytes).");
+        return result;
+    }
+
+    if (result.format == QLatin1String("psd")) {
+        // PSD: decodifica só a imagem composta (flattened) e re-codifica como
+        // PNG — o AssetStore guarda bytes decodificáveis por QImage.
+        QString psdError;
+        QImage composite;
+        if (!decodePsdComposite(result.encoded, &composite, &psdError, maxPixels)) {
+            result.status = ImportStatus::CorruptImage;
+            result.errorMessage = psdError;
+            return result;
+        }
+        QByteArray png;
+        QBuffer buffer(&png);
+        if (!buffer.open(QIODevice::WriteOnly) || !composite.save(&buffer, "PNG")) {
+            result.status = ImportStatus::CorruptImage;
+            result.errorMessage = QStringLiteral("Could not re-encode the PSD composite.");
+            return result;
+        }
+        buffer.close();
+        result.image = std::move(composite);
+        result.encoded = std::move(png);
+        result.format = QStringLiteral("png");
+        result.status = ImportStatus::Ok;
         return result;
     }
 

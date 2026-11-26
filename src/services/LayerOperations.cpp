@@ -242,24 +242,16 @@ LayerId groupSelected(Document& document,
     if (ids.size() < 2)
         return {};
 
-    if (history) {
-        auto cmd = std::make_unique<GroupLayersCommand>(document, ids, groupName);
-        const LayerId groupId = cmd->groupId();
+    // O caminho sem histórico usa exatamente o mesmo comando: agrupar uma
+    // seleção multi-pai exige as mesmas conversões e ajustes de bounds, não
+    // uma implementação simplificada com comportamento geométrico diferente.
+    auto cmd = std::make_unique<GroupLayersCommand>(document, ids, groupName);
+    const LayerId groupId = cmd->groupId();
+    if (history)
         history->execute(std::move(cmd));
-        return groupId;
-    } else {
-        auto group = std::make_unique<GroupLayer>();
-        group->name = groupName;
-        const LayerId groupId = group->id();
-
-        for (const auto& lid : ids) {
-            if (auto taken = document.takeLayer(lid))
-                group->children.push_back(std::move(taken));
-        }
-
-        document.addLayer(std::move(group));
-        return groupId;
-    }
+    else
+        cmd->redo();
+    return document.findLayer(groupId) ? groupId : LayerId();
 }
 
 LayerId ungroup(Document& document,
@@ -275,21 +267,12 @@ LayerId ungroup(Document& document,
         return {};
 
     const LayerId nextSelection = group->children.back()->id();
-    if (history) {
-        history->execute(std::make_unique<UngroupLayersCommand>(document, groupId));
-    } else {
-        GroupLayer* parent = document.parentOf(groupId);
-        const int insertion = document.indexOf(groupId);
-        auto holder = document.takeLayer(groupId);
-        auto* heldGroup = static_cast<GroupLayer*>(holder.get());
-        int index = insertion;
-        while (!heldGroup->children.empty()) {
-            auto child = std::move(heldGroup->children.front());
-            heldGroup->children.erase(heldGroup->children.begin());
-            document.addLayer(std::move(child), parent, index++);
-        }
-    }
-    return nextSelection;
+    auto cmd = std::make_unique<UngroupLayersCommand>(document, groupId);
+    if (history)
+        history->execute(std::move(cmd));
+    else
+        cmd->redo();
+    return document.findLayer(groupId) ? LayerId() : nextSelection;
 }
 
 bool flip(Document& document,

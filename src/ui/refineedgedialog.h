@@ -5,6 +5,7 @@
 
 class QSlider;
 class QLabel;
+class QTimer;
 
 namespace cc {
 
@@ -40,6 +41,7 @@ private:
     QSlider* m_expand = nullptr;
     QSlider* m_feather = nullptr;
     QLabel* m_preview = nullptr;
+    QTimer* m_previewTimer = nullptr;
 };
 
 } // namespace cc

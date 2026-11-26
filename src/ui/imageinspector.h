@@ -61,6 +61,7 @@ signals:
     void layerSelectedChanged(const cc::LayerId& id);
     void imagePreviewReady(const cc::LayerId& id, const QImage& image);
     void imagePreviewCleared();
+    void canvasUpdateRequested();
 
 private:
     void buildUi();
@@ -89,6 +90,7 @@ private:
     // cada valor intermédio de um arrasto criava uma thread e imagens grandes
     // esgotavam CPU/RAM, deixando a interface aparentemente travada.
     bool m_pixelFilterInFlight = false;
+    bool m_applyWhenPreviewReady = false;
     bool m_loading = false;
 
     // Perspectiva 3D / Tilt

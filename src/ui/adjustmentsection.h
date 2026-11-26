@@ -31,6 +31,9 @@ public:
 
     void setContext(Document* doc, CommandStack* history, const LayerId& imageLayerId);
 
+signals:
+    void adjustmentChanged();
+
 private slots:
     void onTypeChanged(int index);
     void onSliderChanged();

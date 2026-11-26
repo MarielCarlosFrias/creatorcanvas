@@ -6,6 +6,7 @@
 #include <QString>
 
 #include <memory>
+#include <functional>
 
 #include "core/Document.h"
 #include "core/history/CommandStack.h"
@@ -13,12 +14,15 @@
 #include "core/geometry/LayerAlignment.h"
 #include "services/presetstore.h"
 #include "services/textstylestore.h"
+#include "services/LayerClipboard.h"
 #include "services/minipaintbridge.h"
 #include "services/autosaveservice.h"
 #include "services/recentfiles.h"
+#include "tools/CanvasTool.h"
 
 class QCloseEvent;
 class QResizeEvent;
+class QShowEvent;
 class QDockWidget;
 class QLabel;
 class QMenu;
@@ -31,6 +35,9 @@ class QComboBox;
 class QCheckBox;
 class QPushButton;
 class QSlider;
+class QLabel;
+class QFrame;
+class QToolButton;
 
 namespace cc {
 
@@ -45,10 +52,16 @@ class TextInspector;
 class ShapeInspector;
 class ImageInspector;
 class HistoryPanel;
+class NavigatorPanel;
+class SwatchPanel;
 class StartScreen;
 class ToolOptionsBar;
 class ActionManager;
+class CommandPalette;
 class MenuBuilder;
+class OnboardingPanel;
+class OnboardingTour;
+class PackBrowser;
 class DockVisibilityPolicy;
 
 class MainWindow final : public QMainWindow
@@ -89,12 +102,14 @@ public:
 protected:
     void closeEvent(QCloseEvent*) override;
     void resizeEvent(QResizeEvent*) override;
+    void showEvent(QShowEvent*) override;
 
 private:
     void createDefaultDocument();
     void connectDocumentSignals();
     void buildCentralWidget();
     void buildLayersDock();
+    void buildSidePanels();
     void buildActions();
     void connectActionSignals();
     void buildToolBars();
@@ -111,8 +126,27 @@ private:
     void exportImage();
     void openBatchDialog();
     void openWorkspaceLayoutDialog();
-    bool processBatchFile(const QString& inputPath, const QString& outputPath, const QStringList& operations, bool overwrite);
+    void openCommandPalette();
+    void quickExportSelectedLayerPng();
+    void updateCanvasEmptyHint();
+    void positionCanvasEmptyHint();
+    void showBeginnerTipsBar();
+    void showToolHint(CanvasTool tool);
+    void buildOnboardingDock();
+    void updateOnboarding();
+    void startOnboardingTour();
+    void markExported();
+    void openPackBrowser();
+    void applyPackItem(const QString& resource, const QSize& naturalSize);
+    /// Pasta inicial dos diálogos de exportação: a última usada, senão a do
+    /// projecto, senão a home. Evita caçar a pasta em cada exportação.
+    QString initialExportDir(const QString& suggestedDir = QString()) const;
+    bool processBatchFile(const QString& inputPath, const QString& outputPath,
+                          const QStringList& operations, const QSize& resizeSize,
+                          const QByteArray& outputFormat, int outputQuality,
+                          bool overwrite);
     void quickExportLayerPng(const LayerId& id);
+    void quickExportDocumentPng();
     void flipLayer(bool horizontal);
     void rotateLayer(double degrees);
     void addText();
@@ -127,6 +161,9 @@ private:
     void mergeSelectedLayers();
     void mergeVisibleLayers();
     void flattenDocument();
+    void duplicateSelectedLayer();
+    void mergeDownSelectedLayer();
+    void rasterizeSelectedLayer();
     void addAdjustmentLayer(cc::AdjustmentType type);
     void textBehindSubject();
     void deleteSelectedLayer();
@@ -162,6 +199,31 @@ private:
     void retranslateUi();
     void restoreWindowLayout();
     void updateSelectionMenuEnabled();
+    void reselectSelection();
+    void openTransformSelectionDialog();
+    void saveCurrentSelection();
+    void rebuildLoadSelectionMenu();
+    void fillSelectionWithColor(const QColor& color);
+    void strokeSelectionWithColor(const QColor& color, double widthPx);
+    void clearSelectionPixels();
+    void copySelectedLayers();
+    void cutSelectedLayer();
+    bool pasteFromClipboard();
+    void pasteIntoSelection();
+    void openImageSizeDialog();
+    void openCanvasSizeDialog();
+    void openSmartFilterDialog(cc::AdjustmentType type);
+    void rotateCanvas(double degrees);
+    void newGuide();
+    /// Aplica um filtro de píxeis à camada de imagem ativa (com undo e
+    /// respeita a seleção ativa e os locks). |fn| recebe o bitmap original.
+    void applyImageFilterToActiveLayer(const std::function<QImage(const QImage&)>& fn,
+                                       const QString& commandName);
+    /// Substitui o bitmap da camada de imagem ativa com undo (um passo).
+    bool commitActiveLayerBitmap(const QImage& newImage, const QString& commandName,
+                                 const LayerId& layerId = {});
+    quint64 m_filterGeneration = 0;
+    bool m_filterInFlight = false;
     bool windowFitsOnScreen() const;
     void updateZoomLabel();
     void updatePositionLabel(const QPointF& documentPos);
@@ -192,6 +254,10 @@ private:
     QDockWidget* m_shapeDock = nullptr;
     QDockWidget* m_imageDock = nullptr;
     QDockWidget* m_historyDock = nullptr;
+    QDockWidget* m_navigatorDock = nullptr;
+    QDockWidget* m_swatchesDock = nullptr;
+    NavigatorPanel* m_navigatorPanel = nullptr;
+    SwatchPanel* m_swatchesPanel = nullptr;
     LayerId m_selectedId;
     QString m_currentFilePath;
     bool m_overwriteExisting = false;
@@ -201,6 +267,24 @@ private:
     bool m_modified = false;
 
     ActionManager* m_actions = nullptr;
+    // Paleta de comandos: instância única reaberta (destroyed limpa o ponteiro).
+    cc::CommandPalette* m_commandPalette = nullptr;
+
+    // Ajuda a iniciantes: dica centrada quando o documento não tem camadas
+    // e barra de dicas dispensável no topo do editor.
+    QLabel* m_canvasEmptyHint = nullptr;
+    QFrame* m_tipsBar = nullptr;
+
+    // Primeiros passos: painel com quatro objectivos que se marcam sozinhos.
+    QDockWidget* m_onboardingDock = nullptr;
+    cc::OnboardingPanel* m_onboardingPanel = nullptr;
+    cc::PackBrowser* m_packBrowser = nullptr;
+    std::unique_ptr<cc::OnboardingTour> m_tour;
+    bool m_hasExported = false;
+    bool m_onboardingDismissed = false;
+    bool m_tourScheduled = false;
+    QLabel* m_tipsBarLabel = nullptr;
+    QToolButton* m_tipsBarClose = nullptr;
     MenuBuilder* m_menuBuilder = nullptr;
 
     std::unique_ptr<cc::MiniPaintBridge> m_miniPaintBridge;
@@ -246,12 +330,22 @@ private:
     QAction* m_groupAction = nullptr;
     QAction* m_ungroupAction = nullptr;
     QAction* m_mergeSelectedAction = nullptr;
+    QAction* m_mergeDownAction = nullptr;
     QAction* m_mergeVisibleAction = nullptr;
     QAction* m_flattenAction = nullptr;
+    QAction* m_duplicateLayerAction = nullptr;
+    QAction* m_rasterizeLayerAction = nullptr;
     QAction* m_textBehindSubjectAction = nullptr;
     QAction* m_toggleGridAction = nullptr;
     QAction* m_toggleSnapAction = nullptr;
     QAction* m_toggleHistoryAction = nullptr;
+    QAction* m_toggleRulersAction = nullptr;
+    QAction* m_toggleGuidesAction = nullptr;
+    QAction* m_newGuideAction = nullptr;
+    QAction* m_clearGuidesAction = nullptr;
+    QAction* m_toggleNavigatorAction = nullptr;
+    QAction* m_toggleSwatchesAction = nullptr;
+    QMenu* m_guidesMenu = nullptr;
     QAction* m_toggleToolsBarAction = nullptr;
     QAction* m_toggleRightPanelAction = nullptr;
     QAction* m_toggleLayersDockAction = nullptr;
@@ -323,6 +417,33 @@ private:
     // Ações do menu Seleção (re-traduzidas em retranslateUi)
     QAction* m_deselectAction = nullptr;
     QAction* m_invertSelectionAction = nullptr;
+    QAction* m_reselectAction = nullptr;
+    QAction* m_saveSelectionAction = nullptr;
+    QMenu* m_loadSelectionMenu = nullptr;
+    // Ações do menu Editar sobre a seleção ativa
+    QAction* m_fillSelectionAction = nullptr;
+    QAction* m_strokeSelectionAction = nullptr;
+    QAction* m_clearSelectionAction = nullptr;
+    QAction* m_copyAction = nullptr;
+    QAction* m_cutAction = nullptr;
+    QAction* m_pasteAction = nullptr;
+    QAction* m_pasteIntoAction = nullptr;
+    QAction* m_canvasSizeAction = nullptr;
+    QAction* m_rotateCanvasCwAction = nullptr;
+    QAction* m_rotateCanvasCcwAction = nullptr;
+    QAction* m_rotateCanvas180Action = nullptr;
+    QMenu* m_rotateCanvasMenu = nullptr;
+    QAction* m_blurGaussianAction = nullptr;
+    QAction* m_blurMotionAction = nullptr;
+    QAction* m_noiseAddAction = nullptr;
+    QAction* m_distortTwirlAction = nullptr;
+    QAction* m_distortPinchAction = nullptr;
+    QAction* m_distortRippleAction = nullptr;
+    /// Clipboard interno de camadas e respetivos assets.
+    cc::LayerClipboard m_layerClipboard;
+    /// Identifica a imagem que NÓS colocámos no clipboard do sistema; se
+    /// outra aplicação a substituir, o snapshot interno deixa de ter prioridade.
+    qint64 m_systemClipboardImageKey = 0;
     QMenu* m_modifyMenu = nullptr;
     QList<QAction*> m_modifyActions;
     QAction* m_colorRangeAction = nullptr;

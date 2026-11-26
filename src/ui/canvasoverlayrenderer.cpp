@@ -537,4 +537,103 @@ void CanvasOverlayRenderer::drawPixelSelectionOutline(QPainter* painter,
     painter->restore();
 }
 
+void CanvasOverlayRenderer::drawGuides(QPainter* painter,
+                                        int docW,
+                                        int docH,
+                                        const std::vector<Guide>& guides,
+                                        const QTransform& toDevice)
+{
+    if (guides.empty() || docW <= 0 || docH <= 0)
+        return;
+
+    painter->save();
+    painter->resetTransform();
+
+    QPen pen(QColor(0x00, 0xb7, 0xeb, 220)); // cyan
+    pen.setWidthF(1.0);
+    pen.setStyle(Qt::DashLine);
+    pen.setCosmetic(true);
+    painter->setPen(pen);
+
+    const double minX = toDevice.inverted().map(QPointF(0, 0)).x();
+    const double maxX = toDevice.inverted().map(QPointF(1e9, 0)).x();
+    const double minY = toDevice.inverted().map(QPointF(0, 0)).y();
+    const double maxY = toDevice.inverted().map(QPointF(0, 1e9)).y();
+
+    for (const Guide& g : guides) {
+        if (g.horizontal) {
+            if (g.position < minY || g.position > maxY)
+                continue;
+            const double devY = toDevice.map(QPointF(0, g.position)).y();
+            painter->drawLine(QPointF(0, devY), QPointF(1e9, devY));
+        } else {
+            if (g.position < minX || g.position > maxX)
+                continue;
+            const double devX = toDevice.map(QPointF(g.position, 0)).x();
+            painter->drawLine(QPointF(devX, 0), QPointF(devX, 1e9));
+        }
+    }
+    painter->restore();
+}
+
+void CanvasOverlayRenderer::drawRulers(QPainter* painter,
+                                        const QSize& widgetSize,
+                                        const QTransform& docToDevice,
+                                        int rulerSize,
+                                        bool darkTheme)
+{
+    if (rulerSize <= 0 || widgetSize.isEmpty())
+        return;
+
+    painter->save();
+    painter->resetTransform();
+
+    const QColor bg = darkTheme ? QColor(0x2b, 0x2d, 0x30) : QColor(0xee, 0xee, 0xee);
+    const QColor fg = darkTheme ? QColor(0xb0, 0xb5, 0xbd) : QColor(0x40, 0x42, 0x45);
+    const QColor major = darkTheme ? QColor(0xd0, 0xd4, 0xda) : QColor(0x20, 0x22, 0x24);
+
+    // faixas
+    painter->fillRect(QRectF(0, 0, widgetSize.width(), rulerSize), bg);
+    painter->fillRect(QRectF(0, 0, rulerSize, widgetSize.height()), bg);
+    // canto
+    painter->fillRect(QRectF(0, 0, rulerSize, rulerSize),
+                      darkTheme ? QColor(0x23, 0x24, 0x27) : QColor(0xe0, 0xe0, 0xe0));
+
+    QTransform inv = docToDevice.inverted();
+    const double x0 = inv.map(QPointF(rulerSize, 0)).x();
+    const double x1 = inv.map(QPointF(widgetSize.width(), 0)).x();
+    const double y0 = inv.map(QPointF(0, rulerSize)).y();
+    const double y1 = inv.map(QPointF(0, widgetSize.height())).y();
+
+    QPen minorPen(fg);
+    minorPen.setWidthF(1.0);
+    minorPen.setCosmetic(true);
+    QPen majorPen(major);
+    majorPen.setWidthF(1.0);
+    majorPen.setCosmetic(true);
+    painter->setFont(QFont(painter->font().family(), 7));
+
+    // régua horizontal (topo)
+    for (int docX = int(std::floor(x0 / 10.0)) * 10; docX <= x1; docX += 10) {
+        const double devX = docToDevice.map(QPointF(docX, 0)).x();
+        const bool isMajor = (docX % 100) == 0;
+        painter->setPen(isMajor ? majorPen : minorPen);
+        const double len = isMajor ? rulerSize * 0.7 : rulerSize * 0.4;
+        painter->drawLine(QPointF(devX, rulerSize), QPointF(devX, rulerSize - len));
+        if (isMajor && devX > rulerSize)
+            painter->drawText(QPointF(devX + 2, rulerSize - 3), QString::number(docX));
+    }
+    // régua vertical (esquerda)
+    for (int docY = int(std::floor(y0 / 10.0)) * 10; docY <= y1; docY += 10) {
+        const double devY = docToDevice.map(QPointF(0, docY)).y();
+        const bool isMajor = (docY % 100) == 0;
+        painter->setPen(isMajor ? majorPen : minorPen);
+        const double len = isMajor ? rulerSize * 0.7 : rulerSize * 0.4;
+        painter->drawLine(QPointF(rulerSize, devY), QPointF(rulerSize - len, devY));
+        if (isMajor && devY > rulerSize)
+            painter->drawText(QPointF(2, devY - 2), QString::number(docY));
+    }
+    painter->restore();
+}
+
 } // namespace cc

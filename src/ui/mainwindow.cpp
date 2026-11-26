@@ -4,16 +4,24 @@
 #include "core/color/IccProfiles.h"
 #include "core/DocumentController.h"
 #include "core/selection/SelectionEngine.h"
+#include "core/selection/SelectionOperations.h"
+#include "core/image/ImageProcessing.h"
 #include "core/templates/TemplateFactory.h"
 #include "core/history/DocumentCommands.h"
 #include "core/commands/AdjustmentLayerCommands.h"
+#include "core/commands/ImageSizeCommands.h"
+#include "core/commands/SmartFilterCommands.h"
 #include "core/commands/SelectionCommands.h"
 #include "core/commands/LayerPropertyCommands.h"
 #include "core/layers/Layer.h"
 #include "core/serialization/ProjectFile.h"
 #include "imageio/ImageImporter.h"
 #include "imageio/DocumentExporter.h"
+#include "imageio/SvgExporter.h"
 #include "services/LayerOperations.h"
+#include "services/SelectionTransform.h"
+#include "services/ImageResizer.h"
+#include "services/BatchProcessor.h"
 #include "rendering/CanvasRenderer.h"
 #include "localization/i18nservice.h"
 #include "ui/adjustmentsdialog.h"
@@ -22,6 +30,11 @@
 #include "ui/refineedgedialog.h"
 #include "ui/webslicesdialog.h"
 #include "ui/canvasview.h"
+#include "ui/commandpalette.h"
+#include "ui/onboardingpanel.h"
+#include "ui/onboardingtour.h"
+#include "ui/packbrowser.h"
+#include "services/packstore.h"
 #include "ui/exportdialog.h"
 #include "ui/layerspanel.h"
 #include "ui/newdocumentdialog.h"
@@ -39,7 +52,12 @@
 #include "ui/recoverydialog.h"
 #include "ui/themeicons.h"
 #include "ui/tooloptionsbar.h"
+#include "ui/transformselectiondialog.h"
+#include "ui/imagesizedialog.h"
+#include "ui/smartfilterdialog.h"
 #include "ui/actionmanager.h"
+#include "ui/navigatorpanel.h"
+#include "ui/swatchpanel.h"
 #include "ui/batchdialog.h"
 #include "ui/shortcutdialog.h"
 #include "ui/workspacelayout.h"
@@ -51,10 +69,15 @@
 #include <QActionGroup>
 #include <QApplication>
 #include <QGuiApplication>
+#include <QClipboard>
 #include <QCheckBox>
 #include <QCloseEvent>
 #include <QColorDialog>
 #include <QComboBox>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QFormLayout>
+#include <QSpinBox>
 #include <QCursor>
 #include <QDockWidget>
 #include <QFileDialog>
@@ -151,7 +174,8 @@ MainWindow::~MainWindow()
     // (UBSan: "mainwindow.cpp: member access ... does not point to an
     // object of type 'MainWindow'"). Desconectar aqui é o ponto seguro.
     for (QDockWidget* dock : {m_layersDock, m_textDock, m_shapeDock,
-                              m_imageDock, m_historyDock}) {
+                              m_imageDock, m_historyDock,
+                              m_navigatorDock, m_swatchesDock}) {
         if (dock)
             dock->disconnect(this);
     }
@@ -180,7 +204,20 @@ MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
         std::make_unique<PresetStore>(configDir + QStringLiteral("/presets.json"));
     m_textStyleStore = std::make_unique<cc::TextStyleStore>(configDir + QStringLiteral("/text_styles.json"));
     m_history = std::make_unique<CommandStack>(
-        m_settings ? m_settings->historyLimit() : 100);
+        m_settings ? m_settings->historyLimit() : 100,
+        m_settings ? qint64(m_settings->historyMemoryBudgetMb()) * 1024 * 1024
+                   : CommandStack::kDefaultByteBudget);
+    // A pilha mede snapshots dos comandos; os bitmaps vivem no AssetStore —
+    // o probe fecha a conta (só a MainWindow conhece o documento).
+    m_history->setAssetFootprintProbe(
+        [this](const QSet<LayerId>& ids) -> qint64 {
+            if (!m_document)
+                return 0;
+            qint64 bytes = 0;
+            for (const LayerId& id : ids)
+                bytes += m_document->assets().approximateBytes(id);
+            return bytes;
+        });
     // GC de assets: quando comandos saem da pilha (limite, redo invalidado,
     // clear), os bitmaps que SÓ eles sustentavam são removidos do store,
     // desde que nenhuma camada atual os referencie. Sem isto, cada filtro
@@ -200,6 +237,22 @@ MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
         connect(m_settings, &SettingsService::changed, this, [this] {
             if (m_settings && m_history)
                 m_history->setLimit(m_settings->historyLimit());
+            // Modo avançado alterado nas Settings aplica-se de imediato, e o
+            // item de menu correspondente reflecte o novo estado.
+            const bool advanced = m_settings->advancedModeEnabled();
+            if (advanced != m_advancedMode) {
+                m_advancedMode = advanced;
+                if (m_toggleAdvancedModeAction)
+                    m_toggleAdvancedModeAction->setChecked(advanced);
+                applyAdvancedMode();
+            }
+            if (m_history && m_settings) {
+                // Orçamento de memória do histórico (0 = sem limite).
+                const qint64 budget =
+                    qint64(m_settings->historyMemoryBudgetMb()) * 1024 * 1024;
+                if (budget != m_history->byteBudget())
+                    m_history->setByteBudget(budget);
+            }
         });
     }
 
@@ -219,6 +272,17 @@ MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
 
     buildCentralWidget();
     buildLayersDock();
+    buildSidePanels();
+    // Primeiros passos + tutorial guiado (só fazem sentido com o editor).
+    buildOnboardingDock();
+    m_tour = std::make_unique<cc::OnboardingTour>(m_i18n, m_settings, this, this);
+    // Navigator e Swatches só existem depois de buildSidePanels(); regista-os
+    // agora na política responsiva (a chamada anterior tinha nullptr nestes dois).
+    if (m_dockVisibility) {
+        m_dockVisibility->setDocks(m_layersDock, m_textDock, m_shapeDock,
+                                   m_imageDock, m_historyDock,
+                                   m_navigatorDock, m_swatchesDock);
+    }
 
     m_docController->registerObserver(m_canvas);
     m_docController->registerObserver(m_layersPanel);
@@ -242,6 +306,8 @@ MainWindow::MainWindow(SettingsService* settings, I18nService* i18n,
 
     // Modo avançado: estado inicial vindo das settings.
     m_advancedMode = m_settings ? m_settings->advancedModeEnabled() : false;
+    m_hasExported = m_settings && m_settings->hasExported();
+    m_onboardingDismissed = m_settings && m_settings->onboardingDismissed();
     if (m_toggleAdvancedModeAction)
         m_toggleAdvancedModeAction->setChecked(m_advancedMode);
     applyAdvancedMode();
@@ -328,6 +394,19 @@ void MainWindow::resizeEvent(QResizeEvent* event)
     QMainWindow::resizeEvent(event);
 
     updateResponsiveLayout();
+    positionCanvasEmptyHint();
+}
+
+void MainWindow::showEvent(QShowEvent* event)
+{
+    QMainWindow::showEvent(event);
+
+    // A primeira apresentação pode acontecer depois de entrar no editor
+    // (o --ui-snapshot faz exactamente isso): as dicas e o painel de
+    // primeiros passos têm de ser reavaliados aqui.
+    updateCanvasEmptyHint();
+    updateOnboarding();
+    positionCanvasEmptyHint();
 }
 
 bool MainWindow::isEditorVisible() const
@@ -356,7 +435,8 @@ void MainWindow::updateResponsiveLayout()
     const bool ultraCompact = width() <= Design::UltraCompactWidth;
     const int dock = Design::dockWidth(width());
     ResponsiveLayout::setDockMinimumWidths(
-        {m_layersDock, m_textDock, m_shapeDock, m_imageDock, m_historyDock},
+        {m_layersDock, m_textDock, m_shapeDock, m_imageDock, m_historyDock,
+         m_navigatorDock, m_swatchesDock},
         dock, ultraCompact);
 
     // In the narrowest layout a tabified stack of inspectors consumes the
@@ -419,6 +499,10 @@ void MainWindow::attachDocument(std::unique_ptr<Document> doc, const QString& fi
     m_selectedId = LayerId();
     m_currentFilePath = filePath;
     m_modified = false;
+    // Resultados assíncronos de um documento anterior nunca podem ser
+    // aplicados ao novo documento.
+    ++m_filterGeneration;
+    m_filterInFlight = false;
     // Proveniência para o sidecar do autosave (de que projeto veio).
     if (m_autosave)
         m_autosave->setSourcePath(filePath);
@@ -430,7 +514,18 @@ void MainWindow::attachDocument(std::unique_ptr<Document> doc, const QString& fi
         m_docController->setDocument(std::move(doc), filePath);
         m_document = m_docController->currentDocument();
     }
+    if (m_navigatorPanel)
+        m_navigatorPanel->setDocument(m_document);
     connectDocumentSignals();
+    updateOnboarding();
+
+    // Tutorial guiado: uma única vez, depois da interface assentar. Só no
+    // arranque interactivo (--smoke-test/--ui-snapshot passam sem ele).
+    if (!m_suppressStartupInteractions && m_settings && !m_settings->tourCompleted()
+        && !m_tourScheduled) {
+        m_tourScheduled = true;
+        QTimer::singleShot(900, this, &MainWindow::startOnboardingTour);
+    }
 }
 
 void MainWindow::createDefaultDocument()
@@ -460,9 +555,15 @@ void MainWindow::connectDocumentSignals()
                 if (m_canvas)
                     m_canvas->pruneSelection();
                 updateSelectionMenuEnabled();
+                updateCanvasEmptyHint();
+                updateOnboarding();
             });
     connect(m_document, &Document::layerPropertyChanged,
             m_canvas, qOverload<>(&QWidget::update), Qt::UniqueConnection);
+    // Canvas Size / Rotate Canvas mudam as dimensões do documento: o canvas
+    // guarda o tamanho em cache, por isso precisa de o reler explicitamente.
+    connect(m_document, &Document::canvasSizeChanged,
+            m_canvas, &CanvasView::refreshDocumentGeometry, Qt::UniqueConnection);
     if (m_layersPanel) {
         connect(m_document, &Document::structureChanged,
                 m_layersPanel, &LayersPanel::refresh, Qt::UniqueConnection);
@@ -478,6 +579,35 @@ void MainWindow::buildCentralWidget()
     m_canvas = new CanvasView(this);
     m_canvas->setI18n(m_i18n);
     m_canvas->setHistory(m_history.get());
+
+    // Dica de canvas vazio: rótulo transparente aos eventos do rato, centrado
+    // sobre a viewport, visível só enquanto o documento não tiver camadas.
+    m_canvasEmptyHint = new QLabel(m_canvas);
+    m_canvasEmptyHint->setObjectName(QStringLiteral("CanvasEmptyHint"));
+    m_canvasEmptyHint->setAlignment(Qt::AlignCenter);
+    m_canvasEmptyHint->setWordWrap(true);
+    m_canvasEmptyHint->setAttribute(Qt::WA_TransparentForMouseEvents);
+    m_canvasEmptyHint->hide();
+
+    // Barra de dicas para iniciantes (dispensável, persistida em settings).
+    m_tipsBar = new QFrame(this);
+    m_tipsBar->setObjectName(QStringLiteral("TipsBar"));
+    auto* tipsLayout = new QHBoxLayout(m_tipsBar);
+    tipsLayout->setContentsMargins(10, 6, 8, 6);
+    m_tipsBarLabel = new QLabel(m_tipsBar);
+    m_tipsBarLabel->setWordWrap(true);
+    tipsLayout->addWidget(m_tipsBarLabel, 1);
+    m_tipsBarClose = new QToolButton(m_tipsBar);
+    m_tipsBarClose->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_tipsBarClose->setAutoRaise(true);
+    tipsLayout->addWidget(m_tipsBarClose);
+    connect(m_tipsBarClose, &QToolButton::clicked, this, [this] {
+        if (m_settings)
+            m_settings->setHintsBarDismissed(true);
+        if (m_tipsBar)
+            m_tipsBar->hide();
+    });
+    m_tipsBar->hide();
 
     m_transformBar = new TransformBar(this);
     m_transformBar->setI18n(m_i18n);
@@ -496,6 +626,16 @@ void MainWindow::buildCentralWidget()
             this, &MainWindow::openFromPath);
     connect(m_startScreen, &StartScreen::templateRequested,
             this, &MainWindow::startFromTemplate);
+    connect(m_startScreen, &StartScreen::backgroundsRequested,
+            this, &MainWindow::openPackBrowser);
+    // Estado vazio do ecrã inicial: atalhos directos para iniciantes.
+    connect(m_startScreen, &StartScreen::shortcutsRequested, this, [this] {
+        ShortcutDialog dialog(m_actions, this);
+        dialog.exec();
+        warnDuplicateShortcuts(this);
+    });
+    connect(m_startScreen, &StartScreen::sampleProjectsRequested, this,
+            &MainWindow::openSampleProjects);
 
     connect(m_canvas, &CanvasView::zoomChanged,
             this, &MainWindow::updateZoomLabel);
@@ -517,6 +657,15 @@ void MainWindow::buildCentralWidget()
     connect(m_canvas, &CanvasView::selectionChanged, this,
             [this](const LayerId& id) {
                 m_selectedId = id;
+                updateOnboarding();
+                // Camada de texto selecionada: dizer que o duplo clique edita.
+                if (m_i18n && m_document && !id.isNull()) {
+                    if (const Layer* layer = m_document->findLayer(id)) {
+                        if (layer->type() == LayerType::Text)
+                            statusBar()->showMessage(
+                                m_i18n->t("editor", "hints.doubleClickToEditText"), 4000);
+                    }
+                }
                 if (m_layersPanel)
                     m_layersPanel->setSelectedLayer(id);
                 if (m_textInspector)
@@ -554,8 +703,14 @@ void MainWindow::buildCentralWidget()
                     }
                 }
                 if (m_mergeSelectedAction) m_mergeSelectedAction->setEnabled(canMergeDown);
+                if (m_mergeDownAction) m_mergeDownAction->setEnabled(canMergeDown);
                 if (m_mergeVisibleAction) m_mergeVisibleAction->setEnabled(m_document != nullptr);
                 if (m_flattenAction) m_flattenAction->setEnabled(m_document != nullptr);
+                if (m_duplicateLayerAction) m_duplicateLayerAction->setEnabled(!id.isNull() && selected != nullptr);
+                if (m_rasterizeLayerAction) m_rasterizeLayerAction->setEnabled(
+                    selected && selected->type() != LayerType::Image
+                    && selected->type() != LayerType::Group
+                    && selected->type() != LayerType::Background);
 
                 // NÃO trocar de aba automaticamente ao seleccionar uma
                 // camada. O utilizador permanece onde está: se está na aba
@@ -601,10 +756,21 @@ void MainWindow::buildCentralWidget()
                     }
                     if (m_mergeSelectedAction)
                         m_mergeSelectedAction->setEnabled(mergeable);
+                    if (m_mergeDownAction)
+                        m_mergeDownAction->setEnabled(ids.size() == 1 && m_document != nullptr);
                     if (m_mergeVisibleAction)
                         m_mergeVisibleAction->setEnabled(m_document != nullptr);
                     if (m_flattenAction)
                         m_flattenAction->setEnabled(m_document != nullptr);
+                    if (m_duplicateLayerAction)
+                        m_duplicateLayerAction->setEnabled(!ids.isEmpty());
+                    if (m_rasterizeLayerAction && !ids.isEmpty()) {
+                        const Layer* l = m_document ? m_document->findLayer(ids.last()) : nullptr;
+                        m_rasterizeLayerAction->setEnabled(
+                            l && l->type() != LayerType::Image
+                            && l->type() != LayerType::Group
+                            && l->type() != LayerType::Background);
+                    }
                 }
             });
     connect(m_canvas, &CanvasView::transformCommitted, this,
@@ -687,6 +853,9 @@ void MainWindow::buildCentralWidget()
                         break;
                     }
                 }
+                // Dica de utilização da ferramenta: quem muda de ferramenta
+                // fica a saber o que ela faz sem abrir a ajuda.
+                showToolHint(tool);
             });
 
     connect(m_canvas, &CanvasView::colorPicked, this, [this](const QColor& color) {
@@ -737,7 +906,15 @@ void MainWindow::buildCentralWidget()
         statusBar()->showMessage(msg, 3000);
     });
 
-    setCentralWidget(m_centralStack);
+    // A barra de dicas fica por cima da stack (ecrã inicial + editor)
+    // dentro de um contentor próprio, para não depender de layouts alheios.
+    auto* centralHost = new QWidget(this);
+    auto* centralHostLayout = new QVBoxLayout(centralHost);
+    centralHostLayout->setContentsMargins(0, 0, 0, 0);
+    centralHostLayout->setSpacing(0);
+    centralHostLayout->addWidget(m_tipsBar);
+    centralHostLayout->addWidget(m_centralStack, 1);
+    setCentralWidget(centralHost);
 }
 
 void MainWindow::buildLayersDock()
@@ -847,6 +1024,8 @@ void MainWindow::buildLayersDock()
             m_canvas, &CanvasView::setImagePreview);
     connect(m_imageInspector, &ImageInspector::imagePreviewCleared,
             m_canvas, &CanvasView::clearImagePreview);
+    connect(m_imageInspector, &ImageInspector::canvasUpdateRequested,
+            m_canvas, qOverload<>(&QWidget::update));
     connect(m_canvas, &CanvasView::mockupAreaSelected,
             m_imageInspector, &ImageInspector::setMockupArea);
     connect(m_canvas, &CanvasView::mockupPlacementCancelled,
@@ -867,7 +1046,8 @@ void MainWindow::buildLayersDock()
 
     if (m_dockVisibility)
         m_dockVisibility->setDocks(m_layersDock, m_textDock, m_shapeDock,
-                                   m_imageDock, m_historyDock);
+                                   m_imageDock, m_historyDock,
+                                   m_navigatorDock, m_swatchesDock);
 
     // Build one explicit tab group for all right-side panels.  Tabifying each
     // dock against the same anchor avoids Qt creating a second tab row when
@@ -912,6 +1092,63 @@ void MainWindow::buildLayersDock()
     });
 }
 
+void MainWindow::buildSidePanels()
+{
+    // --- Navigator ---
+    m_navigatorPanel = new NavigatorPanel(this);
+    m_navigatorDock = new QDockWidget(QString(), this);
+    m_navigatorDock->setObjectName(QStringLiteral("NavigatorDock"));
+    m_navigatorDock->setWidget(m_navigatorPanel);
+    m_navigatorDock->setFeatures(QDockWidget::DockWidgetMovable
+                                 | QDockWidget::DockWidgetFloatable);
+    addDockWidget(Qt::RightDockWidgetArea, m_navigatorDock);
+    m_navigatorDock->hide();
+
+    m_navigatorPanel->setViewProvider([this]() {
+        if (m_navigatorPanel && m_canvas && m_document)
+            m_navigatorPanel->setViewport(m_canvas->zoom(), m_canvas->docToDevice(),
+                                          m_canvas->size());
+    });
+    connect(m_navigatorPanel, &NavigatorPanel::navigateRequested, this,
+            [this](const QPointF& docPos) {
+                if (m_canvas)
+                    m_canvas->centerOn(docPos);
+            });
+    connect(m_navigatorDock, &QDockWidget::visibilityChanged, this, [this](bool visible) {
+        if (m_toggleNavigatorAction && m_toggleNavigatorAction->isChecked() != visible)
+            m_toggleNavigatorAction->setChecked(visible);
+    });
+
+    // --- Swatches ---
+    m_swatchesPanel = new SwatchPanel(this);
+    m_swatchesDock = new QDockWidget(QString(), this);
+    m_swatchesDock->setObjectName(QStringLiteral("SwatchesDock"));
+    m_swatchesDock->setWidget(m_swatchesPanel);
+    m_swatchesDock->setFeatures(QDockWidget::DockWidgetMovable
+                               | QDockWidget::DockWidgetFloatable);
+    addDockWidget(Qt::RightDockWidgetArea, m_swatchesDock);
+    m_swatchesDock->hide();
+
+    if (m_toolOptionsBarWidget) {
+        m_swatchesPanel->setCurrentColor(m_toolOptionsBarWidget->currentPaintColor());
+        connect(m_toolOptionsBarWidget, &ToolOptionsBar::paintColorChanged,
+                m_swatchesPanel, &SwatchPanel::setCurrentColor);
+    }
+    connect(m_swatchesPanel, &SwatchPanel::colorSelected, this, [this](const QColor& color) {
+        if (m_toolOptionsBarWidget)
+            m_toolOptionsBarWidget->setPaintColor(color);
+        statusBar()->showMessage(
+            m_i18n ? m_i18n->t("editor", "canvas.status.colorPicked",
+                               {color.name(), color.red(), color.green(), color.blue()})
+                   : QStringLiteral("Color picked: %1").arg(color.name()),
+            2000);
+    });
+    connect(m_swatchesDock, &QDockWidget::visibilityChanged, this, [this](bool visible) {
+        if (m_toggleSwatchesAction && m_toggleSwatchesAction->isChecked() != visible)
+            m_toggleSwatchesAction->setChecked(visible);
+    });
+}
+
 void MainWindow::buildActions()
 {
     m_actions = new ActionManager(this);
@@ -930,6 +1167,12 @@ void MainWindow::buildActions()
     m_zoomOutAction = m_actions->zoomOutAction;
     m_zoomFitAction = m_actions->zoomFitAction;
     m_toggleGridAction = m_actions->toggleGridAction;
+    m_toggleRulersAction = m_actions->toggleRulersAction;
+    m_toggleGuidesAction = m_actions->toggleGuidesAction;
+    m_newGuideAction = m_actions->newGuideAction;
+    m_clearGuidesAction = m_actions->clearGuidesAction;
+    m_toggleNavigatorAction = m_actions->toggleNavigatorAction;
+    m_toggleSwatchesAction = m_actions->toggleSwatchesAction;
     m_toggleSnapAction = m_actions->toggleSnapAction;
     m_toggleHistoryAction = m_actions->toggleHistoryAction;
     m_toggleToolsBarAction = m_actions->toggleToolsBarAction;
@@ -982,6 +1225,28 @@ void MainWindow::buildActions()
     m_selectAllAction = m_actions->selectAllAction;
     m_deselectAction = m_actions->deselectAction;
     m_invertSelectionAction = m_actions->invertSelectionAction;
+    m_reselectAction = m_actions->reselectAction;
+    m_saveSelectionAction = m_actions->saveSelectionAction;
+    m_fillSelectionAction = m_actions->fillSelectionAction;
+    m_strokeSelectionAction = m_actions->strokeSelectionAction;
+    m_clearSelectionAction = m_actions->clearSelectionAction;
+    m_copyAction = m_actions->copyAction;
+    m_cutAction = m_actions->cutAction;
+    m_pasteAction = m_actions->pasteAction;
+    m_pasteIntoAction = m_actions->pasteIntoAction;
+    m_canvasSizeAction = m_actions->canvasSizeAction;
+    m_rotateCanvasCwAction = m_actions->rotateCanvasCwAction;
+    m_rotateCanvasCcwAction = m_actions->rotateCanvasCcwAction;
+    m_rotateCanvas180Action = m_actions->rotateCanvas180Action;
+    m_blurGaussianAction = m_actions->blurGaussianAction;
+    m_blurMotionAction = m_actions->blurMotionAction;
+    m_noiseAddAction = m_actions->noiseAddAction;
+    m_distortTwirlAction = m_actions->distortTwirlAction;
+    m_distortPinchAction = m_actions->distortPinchAction;
+    m_distortRippleAction = m_actions->distortRippleAction;
+    m_duplicateLayerAction = m_actions->duplicateLayerAction;
+    m_mergeDownAction = m_actions->mergeDownAction;
+    m_rasterizeLayerAction = m_actions->rasterizeLayerAction;
     m_selectionOpsAction = m_actions->selectionOpsAction;
     m_colorRangeAction = m_actions->colorRangeAction;
     m_selectSubjectAction = m_actions->selectSubjectAction;
@@ -1037,6 +1302,10 @@ void MainWindow::connectActionSignals()
     connect(m_saveAsAction, &QAction::triggered, this, &MainWindow::saveDocumentAs);
     connect(m_importAction, &QAction::triggered, this, &MainWindow::importImageViaDialog);
     connect(m_exportAction, &QAction::triggered, this, &MainWindow::exportImage);
+    connect(m_actions->exportDocumentPngAction, &QAction::triggered,
+            this, &MainWindow::quickExportDocumentPng);
+    connect(m_actions->quickExportLayerPngAction, &QAction::triggered,
+            this, &MainWindow::quickExportSelectedLayerPng);
     connect(m_actions->batchAction, &QAction::triggered, this, &MainWindow::openBatchDialog);
     connect(m_actions->workspaceLayoutAction, &QAction::triggered, this, &MainWindow::openWorkspaceLayoutDialog);
     connect(m_actions->shortcutsAction, &QAction::triggered, this, [this] {
@@ -1044,6 +1313,16 @@ void MainWindow::connectActionSignals()
         dialog.exec();
         warnDuplicateShortcuts(this);
     });
+    connect(m_actions->commandPaletteAction, &QAction::triggered,
+            this, &MainWindow::openCommandPalette);
+    // Tour rápido: repetir a partir da Ajuda limpa o "já visto".
+    connect(m_actions->quickTourAction, &QAction::triggered, this, [this] {
+        if (m_settings)
+            m_settings->setTourCompleted(false);
+        startOnboardingTour();
+    });
+    connect(m_actions->backgroundsAction, &QAction::triggered,
+            this, &MainWindow::openPackBrowser);
     connect(m_quitAction, &QAction::triggered, this, &MainWindow::close);
 
     // --- Edição & Histórico ---
@@ -1064,6 +1343,31 @@ void MainWindow::connectActionSignals()
     connect(m_toggleSnapAction, &QAction::triggered, this, [this](bool checked) {
         if (m_canvas) m_canvas->setSnapToGrid(checked);
     });
+    connect(m_toggleRulersAction, &QAction::triggered, this, [this](bool checked) {
+        if (m_canvas) m_canvas->setShowRulers(checked);
+    });
+    connect(m_toggleGuidesAction, &QAction::triggered, this, [this](bool checked) {
+        if (m_canvas) m_canvas->setShowGuides(checked);
+    });
+    connect(m_newGuideAction, &QAction::triggered, this, &MainWindow::newGuide);
+    connect(m_clearGuidesAction, &QAction::triggered, this, [this] {
+        if (m_document)
+            m_document->clearGuides();
+    });
+    connect(m_toggleNavigatorAction, &QAction::triggered, this, [this](bool checked) {
+        if (m_navigatorDock) {
+            m_navigatorDock->setVisible(checked);
+            if (checked)
+                m_navigatorDock->raise();
+        }
+    });
+    connect(m_toggleSwatchesAction, &QAction::triggered, this, [this](bool checked) {
+        if (m_swatchesDock) {
+            m_swatchesDock->setVisible(checked);
+            if (checked)
+                m_swatchesDock->raise();
+        }
+    });
     connect(m_toggleHistoryAction, &QAction::triggered, this, [this](bool checked) {
         if (m_historyDock) {
             m_historyDock->setVisible(checked);
@@ -1077,7 +1381,8 @@ void MainWindow::connectActionSignals()
     });
     connect(m_toggleRightPanelAction, &QAction::triggered, this, [this](bool checked) {
         const QList<QDockWidget*> panels = {m_layersDock, m_textDock, m_shapeDock,
-                                            m_imageDock, m_historyDock};
+                                            m_imageDock, m_historyDock,
+                                            m_navigatorDock, m_swatchesDock};
         for (auto* panel : panels)
             if (panel) panel->setVisible(checked);
         QTimer::singleShot(150, this, [this] { if (m_canvas) m_canvas->fitToViewport(); });
@@ -1192,8 +1497,11 @@ void MainWindow::connectActionSignals()
     connect(m_groupAction, &QAction::triggered, this, &MainWindow::groupSelectedLayers);
     connect(m_ungroupAction, &QAction::triggered, this, &MainWindow::ungroupSelectedLayer);
     connect(m_mergeSelectedAction, &QAction::triggered, this, &MainWindow::mergeSelectedLayers);
+    connect(m_mergeDownAction, &QAction::triggered, this, &MainWindow::mergeDownSelectedLayer);
     connect(m_mergeVisibleAction, &QAction::triggered, this, &MainWindow::mergeVisibleLayers);
     connect(m_flattenAction, &QAction::triggered, this, &MainWindow::flattenDocument);
+    connect(m_duplicateLayerAction, &QAction::triggered, this, &MainWindow::duplicateSelectedLayer);
+    connect(m_rasterizeLayerAction, &QAction::triggered, this, &MainWindow::rasterizeSelectedLayer);
     connect(m_textBehindSubjectAction, &QAction::triggered, this, &MainWindow::textBehindSubject);
     connect(m_flipHAction, &QAction::triggered, this, [this] { flipLayer(true); });
     connect(m_flipVAction, &QAction::triggered, this, [this] { flipLayer(false); });
@@ -1243,6 +1551,70 @@ void MainWindow::connectActionSignals()
         }
         executeSetPixelSelection(*m_document, m_history.get(), mask,
                                  QStringLiteral("selection.invert"));
+    });
+    connect(m_reselectAction, &QAction::triggered, this, &MainWindow::reselectSelection);
+    connect(m_actions->transformSelectionAction, &QAction::triggered,
+            this, &MainWindow::openTransformSelectionDialog);
+    connect(m_saveSelectionAction, &QAction::triggered, this, &MainWindow::saveCurrentSelection);
+    if (m_loadSelectionMenu) {
+        connect(m_loadSelectionMenu, &QMenu::aboutToShow,
+                this, &MainWindow::rebuildLoadSelectionMenu);
+    }
+    connect(m_fillSelectionAction, &QAction::triggered, this, [this] {
+        const QColor color = m_toolOptionsBarWidget
+                                 ? m_toolOptionsBarWidget->currentPaintColor()
+                                 : QColor(17, 17, 17);
+        fillSelectionWithColor(color);
+    });
+    connect(m_strokeSelectionAction, &QAction::triggered, this, [this] {
+        if (!m_document || m_document->pixelSelection().isNull())
+            return;
+        bool ok = false;
+        const double width = QInputDialog::getDouble(
+            this,
+            m_i18n ? m_i18n->t("editor", "selection.stroke.title")
+                   : QStringLiteral("Stroke Selection"),
+            m_i18n ? m_i18n->t("editor", "selection.modify.radius")
+                   : QStringLiteral("Width (px):"),
+            3.0, 1.0, 200.0, 1, &ok);
+        if (!ok)
+            return;
+        const QColor color = m_toolOptionsBarWidget
+                                 ? m_toolOptionsBarWidget->currentPaintColor()
+                                 : QColor(17, 17, 17);
+        strokeSelectionWithColor(color, width);
+    });
+    connect(m_clearSelectionAction, &QAction::triggered, this,
+            &MainWindow::clearSelectionPixels);
+    connect(m_copyAction, &QAction::triggered, this, &MainWindow::copySelectedLayers);
+    connect(m_cutAction, &QAction::triggered, this, &MainWindow::cutSelectedLayer);
+    connect(m_pasteAction, &QAction::triggered, this, &MainWindow::pasteFromClipboard);
+    connect(m_pasteIntoAction, &QAction::triggered, this, &MainWindow::pasteIntoSelection);
+    connect(m_actions->imageSizeAction, &QAction::triggered,
+            this, &MainWindow::openImageSizeDialog);
+    connect(m_canvasSizeAction, &QAction::triggered, this, &MainWindow::openCanvasSizeDialog);
+    connect(m_rotateCanvasCwAction, &QAction::triggered, this, [this] { rotateCanvas(90.0); });
+    connect(m_rotateCanvasCcwAction, &QAction::triggered, this, [this] { rotateCanvas(-90.0); });
+    connect(m_rotateCanvas180Action, &QAction::triggered, this, [this] { rotateCanvas(180.0); });
+
+    // --- Filtros com parâmetros: Smart Filter não destrutivo por omissão ---
+    connect(m_blurGaussianAction, &QAction::triggered, this, [this] {
+        openSmartFilterDialog(AdjustmentType::Blur);
+    });
+    connect(m_blurMotionAction, &QAction::triggered, this, [this] {
+        openSmartFilterDialog(AdjustmentType::MotionBlur);
+    });
+    connect(m_noiseAddAction, &QAction::triggered, this, [this] {
+        openSmartFilterDialog(AdjustmentType::Noise);
+    });
+    connect(m_distortTwirlAction, &QAction::triggered, this, [this] {
+        openSmartFilterDialog(AdjustmentType::DistortTwirl);
+    });
+    connect(m_distortPinchAction, &QAction::triggered, this, [this] {
+        openSmartFilterDialog(AdjustmentType::Pinch);
+    });
+    connect(m_distortRippleAction, &QAction::triggered, this, [this] {
+        openSmartFilterDialog(AdjustmentType::Ripple);
     });
     connect(m_selectionOpsAction, &QAction::triggered, this, [this] {
         if (m_canvas) m_canvas->openSelectionActionsMenu();
@@ -1593,12 +1965,15 @@ void MainWindow::buildMenus()
     m_toneMenu = m_menuBuilder->toneMenu;
     m_selectMenu = m_menuBuilder->selectMenu;
     m_modifyMenu = m_menuBuilder->modifyMenu;
+    m_loadSelectionMenu = m_menuBuilder->loadSelectionMenu;
+    m_rotateCanvasMenu = m_menuBuilder->rotateCanvasMenu;
     m_layerMenu = m_menuBuilder->layerMenu;
     m_addShapeMenu = m_menuBuilder->addShapeMenu;
     m_alignMenu = m_menuBuilder->alignMenu;
     m_viewMenu = m_menuBuilder->viewMenu;
     m_safeZoneMenu = m_menuBuilder->safeZoneMenu;
     m_panelsMenu = m_menuBuilder->panelsMenu;
+    m_guidesMenu = m_menuBuilder->guidesMenu;
     m_toolsMenu = m_menuBuilder->toolsMenu;
     m_selectionToolsMenu = m_menuBuilder->selectionToolsMenu;
     m_retouchToolsMenu = m_menuBuilder->retouchToolsMenu;
@@ -1664,7 +2039,39 @@ void MainWindow::updateSelectionMenuEnabled()
         m_selectionOpsAction->setEnabled(hasSelection);
     if (m_colorRangeAction)
         m_colorRangeAction->setEnabled(hasImageLayer);
+    const bool hasPrevious = m_document && !m_document->previousPixelSelection().isNull();
+    if (m_reselectAction)
+        m_reselectAction->setEnabled(hasPrevious);
+    if (m_actions && m_actions->transformSelectionAction)
+        m_actions->transformSelectionAction->setEnabled(hasSelection);
+    if (m_saveSelectionAction)
+        m_saveSelectionAction->setEnabled(hasSelection);
+    if (m_loadSelectionMenu)
+        m_loadSelectionMenu->setEnabled(!m_document
+                                        || !m_document->savedSelections().empty());
+    // Fill/Clear precisam de uma camada de imagem ativa (a seleção é
+    // opcional — sem ela, a operação cobre a camada toda, como no PS).
+    if (m_fillSelectionAction)
+        m_fillSelectionAction->setEnabled(hasImageLayer);
+    if (m_clearSelectionAction)
+        m_clearSelectionAction->setEnabled(hasImageLayer);
+    // Stroke só faz sentido com seleção ativa.
+    if (m_strokeSelectionAction)
+        m_strokeSelectionAction->setEnabled(hasSelection && hasImageLayer);
+    // Clipboard: copiar/recortar precisam de camada selecionada; colar
+    // fica ativo sempre que há documento (valida o conteúdo ao executar).
+    const bool hasLayer = m_document && !m_selectedId.isNull()
+                          && m_document->findLayer(m_selectedId) != nullptr;
+    if (m_copyAction)
+        m_copyAction->setEnabled(hasLayer);
+    if (m_cutAction)
+        m_cutAction->setEnabled(hasLayer);
+    if (m_pasteAction)
+        m_pasteAction->setEnabled(m_document != nullptr);
+    if (m_pasteIntoAction)
+        m_pasteIntoAction->setEnabled(m_document != nullptr && hasSelection);
 }
+
 
 void MainWindow::buildStatusBar()
 {
@@ -1690,6 +2097,9 @@ void MainWindow::showStartScreen()
     if (m_shapeDock) m_shapeDock->hide();
     if (m_imageDock) m_imageDock->hide();
     if (m_historyDock) m_historyDock->hide();
+    if (m_navigatorDock) m_navigatorDock->hide();
+    if (m_swatchesDock) m_swatchesDock->hide();
+    if (m_onboardingDock) m_onboardingDock->hide();
     if (m_quickToolBar) m_quickToolBar->hide();
     if (m_toolsBar) m_toolsBar->hide();
     if (m_toolsBarCompact) m_toolsBarCompact->hide();
@@ -1699,7 +2109,12 @@ void MainWindow::showStartScreen()
 
 void MainWindow::enterEditor()
 {
+    // A stack primeiro: isEditorVisible() e o painel de primeiros passos
+    // dependem do canvas ser o widget actual.
     m_centralStack->setCurrentWidget(m_canvas);
+    showBeginnerTipsBar();
+    updateCanvasEmptyHint();
+    updateOnboarding();
     if (m_layersDock) m_layersDock->show();
     if (m_textDock) m_textDock->show();
     if (m_shapeDock) m_shapeDock->show();
@@ -1802,7 +2217,7 @@ void MainWindow::importImageViaDialog()
         this,
         m_i18n->t("editor", "import.dialog.title"),
         QString(),
-        QStringLiteral("Images (*.png *.jpg *.jpeg *.webp *.bmp)"));
+        QStringLiteral("Images (*.png *.jpg *.jpeg *.webp *.bmp *.psd)"));
     if (!path.isEmpty())
         importImage(path);
 }
@@ -2181,6 +2596,87 @@ void MainWindow::flattenDocument()
         m_layersPanel->refresh();
 }
 
+void MainWindow::duplicateSelectedLayer()
+{
+    if (!m_document || !m_history || m_selectedId.isNull())
+        return;
+    if (!m_document->findLayer(m_selectedId))
+        return;
+    auto cmd = std::make_unique<DuplicateLayerCommand>(*m_document, m_selectedId);
+    const DuplicateLayerCommand* raw = cmd.get();
+    m_history->execute(std::move(cmd));
+    // Seleciona a cópia (o comando corre o redo de imediato, copyId já existe).
+    if (m_canvas && !raw->copyId().isNull())
+        m_canvas->setSelectedLayer(raw->copyId());
+    if (m_layersPanel)
+        m_layersPanel->refresh();
+}
+
+void MainWindow::mergeDownSelectedLayer()
+{
+    if (!m_document || !m_canvas || m_selectedId.isNull())
+        return;
+    // mergeSelected com uma única camada já implementa o "Merge Down"
+    // (mescla com a camada imediatamente abaixo, no mesmo grupo).
+    const LayerId mergedId = LayerOperations::mergeSelected(
+        *m_document, m_history.get(), {m_selectedId},
+        m_i18n ? m_i18n->t("editor", "layer.mergeDown") : tr("Merged down"));
+    if (mergedId.isNull()) {
+        statusBar()->showMessage(
+            m_i18n ? m_i18n->t("editor", "layer.mergeDownNothing")
+                   : tr("Nothing below to merge with."), 3500);
+        return;
+    }
+    m_canvas->setSelectedLayer(mergedId);
+    if (m_layersPanel)
+        m_layersPanel->refresh();
+}
+
+void MainWindow::rasterizeSelectedLayer()
+{
+    if (!m_document || m_selectedId.isNull())
+        return;
+    Layer* layer = m_document->findLayer(m_selectedId);
+    if (!layer)
+        return;
+    if (layer->type() == LayerType::Image || layer->type() == LayerType::Group
+        || layer->type() == LayerType::Background) {
+        statusBar()->showMessage(
+            m_i18n ? m_i18n->t("editor", "layer.rasterizeType")
+                   : tr("Only text, shape, vector, fill or adjustment layers can be rasterized."), 3500);
+        return;
+    }
+    const auto locks = m_document->effectiveLocks(m_selectedId);
+    if (locks.pixels || locks.all) {
+        statusBar()->showMessage(
+            m_i18n ? m_i18n->t("editor", "canvas.status.layerLocked")
+                   : tr("The layer is locked (image pixels)."), 3500);
+        return;
+    }
+    auto raster = LayerOperations::rasterLayerFor(*m_document, {m_selectedId},
+                                                  layer->name
+                                                      + (m_i18n ? m_i18n->t("editor", "layer.rasterizedSuffix")
+                                                                : tr(" rasterized")));
+    if (!raster) {
+        statusBar()->showMessage(
+            m_i18n ? m_i18n->t("editor", "layer.rasterizeFailed")
+                   : tr("Rasterize failed."), 3500);
+        return;
+    }
+    const LayerId rasterId = raster->id();
+    auto cmd = std::make_unique<ReplaceLayersWithRasterCommand>(
+        *m_document, QList<LayerId>{m_selectedId}, std::move(raster),
+        QStringLiteral("layer.rasterize"));
+    if (m_history)
+        m_history->execute(std::move(cmd));
+    else
+        cmd->redo();
+    if (m_canvas)
+        m_canvas->setSelectedLayer(rasterId);
+    if (m_layersPanel)
+        m_layersPanel->refresh();
+}
+
 void MainWindow::addAdjustmentLayer(cc::AdjustmentType type)
 {
     if (!m_document) return;
@@ -2292,6 +2788,10 @@ void MainWindow::exportImage()
         filter = QStringLiteral("JPEG (*.jpg *.jpeg)");
     else if (settings.format == QLatin1String("webp"))
         filter = QStringLiteral("WebP (*.webp)");
+    else if (settings.format == QLatin1String("pdf"))
+        filter = QStringLiteral("PDF (*.pdf)");
+    else if (settings.format == QLatin1String("svg"))
+        filter = QStringLiteral("SVG (*.svg)");
 
     QString defaultName = QStringLiteral("export");
     if (settings.exportSelectedLayerOnly && !settings.selectedLayerId.isNull()) {
@@ -2303,7 +2803,7 @@ void MainWindow::exportImage()
 
     QString path = QFileDialog::getSaveFileName(
         this, m_i18n->t("editor", "export.dialog.title"),
-        defaultName, filter);
+        QDir(initialExportDir()).filePath(defaultName), filter);
     if (path.isEmpty())
         return;
 
@@ -2315,7 +2815,11 @@ void MainWindow::exportImage()
     bool success = false;
     {
         QGuiApplication::setOverrideCursor(Qt::WaitCursor);
-        if (settings.exportSelectedLayerOnly && !settings.selectedLayerId.isNull()) {
+        if (settings.format == QLatin1String("pdf")) {
+            success = exportDocumentToPdf(*m_document, path, settings.scale, &error);
+        } else if (settings.format == QLatin1String("svg")) {
+            success = exportDocumentToSvg(*m_document, path, settings.scale, &error);
+        } else if (settings.exportSelectedLayerOnly && !settings.selectedLayerId.isNull()) {
             success = exportLayerToImage(*m_document, settings.selectedLayerId, path,
                                          settings.format, settings.quality,
                                          settings.scale, &error,
@@ -2333,9 +2837,14 @@ void MainWindow::exportImage()
                              m_i18n->t("editor", "export.error.title"), error);
         return;
     }
-    QMessageBox::information(
-        this, m_i18n->t("editor", "export.success.title"),
-        m_i18n->t("editor", "export.success").arg(path));
+    // Confirmação na barra de estado: um popup modal por exportação
+    // interrompe o fluxo de trabalho para informar algo que já é visível
+    // no sistema de ficheiros.
+    statusBar()->showMessage(m_i18n->t("editor", "export.success").arg(path), 4000);
+
+    if (m_settings)
+        m_settings->setLastExportDir(QFileInfo(path).absolutePath());
+    markExported();
 }
 
 void MainWindow::editSelectedLayerInMiniPaint()
@@ -2403,7 +2912,7 @@ void MainWindow::openBatchDialog()
     if (!m_i18n || !m_document)
         return;
 
-    BatchDialog dialog(this);
+    BatchDialog dialog(m_i18n, this);
     if (dialog.exec() != QDialog::Accepted)
         return;
 
@@ -2411,7 +2920,9 @@ void MainWindow::openBatchDialog()
     const QString outputDir = dialog.outputDirectory();
     const QStringList operations = dialog.operations();
     const bool overwrite = dialog.overwriteExisting();
-    (void)overwrite; // used via m_overwriteExisting member
+    const QSize resizeSize = dialog.resizeSize();
+    const QByteArray outputFormat = dialog.outputFormat();
+    const int outputQuality = dialog.outputQuality();
 
     if (files.isEmpty() || outputDir.isEmpty() || operations.isEmpty())
         return;
@@ -2446,11 +2957,10 @@ void MainWindow::openBatchDialog()
         QString outPath = outputDir + QDir::separator() + info.baseName();
 
         // Check if output exists
-        QFileInfo outFileInfo(outPath + ".png");
-        if (!outFileInfo.exists()) outFileInfo = QFileInfo(outputDir + QDir::separator() + info.baseName() + ".jpg");
-        if (!outFileInfo.exists()) outFileInfo = QFileInfo(outputDir + QDir::separator() + info.baseName() + ".webp");
+        const QString suffix = QString::fromLatin1(outputFormat.isEmpty() ? QByteArray("png") : outputFormat);
+        QFileInfo outFileInfo(outPath + "." + suffix);
 
-        if (outFileInfo.exists() && !m_overwriteExisting) {
+        if (outFileInfo.exists() && !overwrite) {
             errors.append(m_i18n->t("editor", "batch.error.exists").arg(info.fileName()));
             ++processed;
             continue;
@@ -2460,7 +2970,8 @@ void MainWindow::openBatchDialog()
         bool ok = false;
         {
             QGuiApplication::setOverrideCursor(Qt::WaitCursor);
-            ok = processBatchFile(inputPath, outPath, operations, m_overwriteExisting);
+            ok = processBatchFile(inputPath, outPath, operations, resizeSize,
+                                  outputFormat, outputQuality, overwrite);
             QGuiApplication::restoreOverrideCursor();
         }
 
@@ -2482,54 +2993,340 @@ void MainWindow::openBatchDialog()
 
 void MainWindow::openWorkspaceLayoutDialog()
 {
-    WorkspaceLayoutDialog dialog(this);
+    WorkspaceLayoutDialog dialog(m_i18n, this);
     dialog.exec();
 }
 
-bool MainWindow::processBatchFile(const QString& inputPath, const QString& outputPath,
-                                  const QStringList& operations, bool /*overwrite*/)
+void MainWindow::buildOnboardingDock()
 {
-    QImage image(inputPath);
-    if (image.isNull())
-        return false;
+    m_onboardingPanel = new cc::OnboardingPanel(m_i18n, this);
+    m_onboardingDock = new QDockWidget(this);
+    m_onboardingDock->setObjectName(QStringLiteral("OnboardingDock"));
+    m_onboardingDock->setWidget(m_onboardingPanel);
+    if (m_i18n)
+        m_onboardingDock->setWindowTitle(m_i18n->t("editor", "onboarding.title"));
+    m_onboardingDock->setAllowedAreas(Qt::RightDockWidgetArea
+                                      | Qt::LeftDockWidgetArea);
+    addDockWidget(Qt::RightDockWidgetArea, m_onboardingDock);
+    m_onboardingDock->hide();
 
-    QImage result = image;
+    // Fechar o painel (botão "Saltar" ou canto da dock) tem de ser
+    // definitivo: sem persistência ele voltava a cada updateOnboarding().
+    auto dismissOnboarding = [this] {
+        m_onboardingDismissed = true;
+        if (m_settings)
+            m_settings->setOnboardingDismissed(true);
+        if (m_onboardingDock)
+            m_onboardingDock->hide();
+    };
+    connect(m_onboardingPanel, &cc::OnboardingPanel::dismissed,
+            this, dismissOnboarding);
+    connect(m_onboardingDock, &QDockWidget::visibilityChanged, this,
+            [dismissOnboarding](bool visible) {
+                if (!visible)
+                    dismissOnboarding();
+            });
+}
 
-    for (const QString& op : operations) {
-        if (op == QLatin1String("resize")) {
-            // Parse size from dialog - for now use a default size
-            // In a real implementation, this would read from the dialog
-            QSize newSize(1920, 1080);
-            result = result.scaled(newSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-        } else if (op == QLatin1String("convert")) {
-            // Format conversion is handled at save time
-        } else if (op == QLatin1String("quality")) {
-            // Quality is handled at save time
+void MainWindow::openPackBrowser()
+{
+    if (!m_packBrowser) {
+        m_packBrowser = new cc::PackBrowser(m_i18n, this);
+        connect(m_packBrowser, &cc::PackBrowser::itemChosen,
+                this, &MainWindow::applyPackItem);
+    }
+    m_packBrowser->show();
+    m_packBrowser->raise();
+}
+
+void MainWindow::applyPackItem(const QString& resource, const QSize& naturalSize)
+{
+    if (resource.isEmpty())
+        return;
+
+    // Sem documento, a importacao cria um documento do tamanho exacto da
+    // imagem: o item passa a ser a propria tela (o caso de uso "fundo").
+    const bool hadDocument = (m_document != nullptr);
+    // A camada que o importador criou e a nova (ultima do grupo raiz); sem
+    // isto, o ajuste de sobreposição cairia na camada que estivesse
+    // selecionada -- mudando o layout do utilizador.
+    LayerId previousTop;
+    if (m_document && m_document->rootGroup() && !m_document->rootGroup()->children.empty()) {
+        previousTop = m_document->rootGroup()->children.back()->id();
+    }
+    importImage(resource);
+
+    LayerId imported;
+    if (m_document && m_document->rootGroup()) {
+        for (const auto& child : m_document->rootGroup()->children) {
+            if (child->id() != previousTop) {
+                imported = child->id();
+                break;
+            }
+        }
+    }
+    if (!imported.isNull())
+        m_canvas->setSelectedLayer(imported);
+
+    // Sobreposicoes (poeira, grunge) fazem sentido por cima do conteudo com
+    // modo de mesclagem Screen: o preto da-nos transparencia visual.
+    if (hadDocument && m_document && resource.contains(QStringLiteral("/sobreposicoes/"))
+        && !imported.isNull()) {
+        if (Layer* layer = m_document->findLayer(imported)) {
+            layer->transform.scaleX = static_cast<double>(m_document->width())
+                / qMax(1, naturalSize.width());
+            layer->transform.scaleY = static_cast<double>(m_document->height())
+                / qMax(1, naturalSize.height());
+            layer->transform.position = QPointF(m_document->width() / 2.0,
+                                                m_document->height() / 2.0);
+            layer->blendMode = cc::BlendMode::Screen;
+            if (m_docController)
+                m_docController->setModified(true);
         }
     }
 
-    // Determine output format
-    QString format = QStringLiteral("png");
-    for (const QString& op : operations) {
-        if (op == QLatin1String("convert")) {
-            // Default to PNG if no specific format selected
-            break;
-        }
+    if (m_i18n)
+        statusBar()->showMessage(m_i18n->t("editor", "pack.applied"), 3000);
+}
+
+QString MainWindow::initialExportDir(const QString& suggestedDir) const
+{
+    if (!suggestedDir.isEmpty())
+        return suggestedDir;
+    if (m_settings) {
+        const QString last = m_settings->lastExportDir();
+        if (!last.isEmpty() && QDir(last).exists())
+            return last;
+    }
+    if (!m_currentFilePath.isEmpty()) {
+        const QString dir = QFileInfo(m_currentFilePath).absolutePath();
+        if (QDir(dir).exists())
+            return dir;
+    }
+    return QDir::homePath();
+}
+
+void MainWindow::markExported()
+{
+    m_hasExported = true;
+    if (m_settings)
+        m_settings->setHasExported(true);
+    updateOnboarding();
+}
+
+void MainWindow::updateOnboarding()
+{
+    if (!m_onboardingPanel)
+        return;
+
+    const bool hasDocument = (m_document != nullptr);
+    const bool hasLayer = hasDocument && m_document->rootGroup()
+                        && !m_document->rootGroup()->children.empty();
+    const bool hasSelection = !m_selectedId.isNull();
+
+    m_onboardingPanel->setSteps({hasDocument, hasLayer, hasSelection, m_hasExported});
+
+    if (m_onboardingPanel->allDone()) {
+        m_onboardingDismissed = true;
+        if (m_onboardingDock && m_onboardingDock->isVisible())
+            m_onboardingDock->hide();
+        return;
     }
 
-    // Determine output file path with extension
-    QString finalPath = outputPath;
-    if (finalPath.endsWith(".png") || finalPath.endsWith(".jpg") || finalPath.endsWith(".jpeg") || finalPath.endsWith(".webp")) {
-        // Already has extension
+    // Visível apenas no editor e enquanto houver passos por concluir. O
+    // painel é passivo (não bloqueia nada), por isso aparece também nos modos
+    // automatizados -- excepto o tutorial, que esse é modal.
+    const bool shouldShow = isEditorVisible() && !m_onboardingDismissed;
+    if (m_onboardingDock)
+        m_onboardingDock->setVisible(shouldShow);
+}
+
+void MainWindow::startOnboardingTour()
+{
+    if (!m_tour || !m_toolsBar)
+        return;
+    QWidget* toolsBar = (m_toolsBar->isVisible()) ? static_cast<QWidget*>(m_toolsBar)
+                                                   : static_cast<QWidget*>(m_toolsBarCompact);
+    m_tour->setTargets({toolsBar, static_cast<QWidget*>(m_toolOptionsBar),
+                        static_cast<QWidget*>(m_layersDock),
+                        static_cast<QWidget*>(m_quickToolBar)});
+    m_tour->start();
+}
+
+void MainWindow::showToolHint(CanvasTool tool)
+{
+    if (!m_i18n || !statusBar())
+        return;
+
+    const char* key = nullptr;
+    switch (tool) {
+    case CanvasTool::Select:       key = "tool.select";     break;
+    case CanvasTool::Marquee:      key = "tool.marquee";    break;
+    case CanvasTool::Crop:         key = "tool.crop";       break;
+    case CanvasTool::Scissors:     key = "tool.scissors";   break;
+    case CanvasTool::MagicWand:    key = "tool.wand";       break;
+    case CanvasTool::CloneStamp:   key = "tool.clone";      break;
+    case CanvasTool::Paint:        key = "tool.paint";      break;
+    case CanvasTool::Gradient:     key = "tool.gradient";   break;
+    case CanvasTool::FloodFill:    key = "tool.flood";      break;
+    case CanvasTool::Eyedropper:   key = "tool.eyedropper"; break;
+    case CanvasTool::Vector:       key = "tool.pen";        break;
+    case CanvasTool::VectorNodes:  key = "tool.vectorNodes"; break;
+    case CanvasTool::Retouch:      key = "tool.retouch";    break;
+    case CanvasTool::Healing:      key = "tool.healing";    break;
+    default:                        return;
+    }
+    const QString hint = m_i18n->t("editor", QStringLiteral("hints.") + QLatin1String(key));
+    if (!hint.isEmpty())
+        statusBar()->showMessage(hint, 6000);
+}
+
+void MainWindow::updateCanvasEmptyHint()
+{
+    if (!m_canvasEmptyHint)
+        return;
+
+    // Só faz sentido com o editor visível e um documento sem camadas.
+    const bool empty = isEditorVisible() && m_document
+                     && m_document->rootGroup()
+                     && m_document->rootGroup()->children.empty();
+    if (!empty) {
+        m_canvasEmptyHint->hide();
+        return;
+    }
+
+    if (m_i18n) {
+        const QString title = m_i18n->t("editor", "hints.canvasEmptyTitle");
+        const QString hint = m_i18n->t("editor", "hints.canvasEmptyHint");
+        m_canvasEmptyHint->setText(title + QStringLiteral("\n") + hint);
+    }
+    positionCanvasEmptyHint();
+    m_canvasEmptyHint->show();
+    m_canvasEmptyHint->raise();
+}
+
+void MainWindow::positionCanvasEmptyHint()
+{
+    if (!m_canvas || !m_canvasEmptyHint || !m_canvasEmptyHint->isVisible())
+        return;
+
+    const QSize hintSize = m_canvasEmptyHint->sizeHint();
+    const QRect area = m_canvas->rect();
+    m_canvasEmptyHint->setGeometry(
+        (area.width() - hintSize.width()) / 2,
+        (area.height() - hintSize.height()) / 2,
+        hintSize.width(), hintSize.height());
+}
+
+void MainWindow::showBeginnerTipsBar()
+{
+    if (!m_tipsBar || !m_tipsBarLabel || !m_tipsBarClose)
+        return;
+
+    // Já dispensada (ou sem idioma): nada a mostrar.
+    if (!m_settings || !m_i18n || m_settings->hintsBarDismissed()) {
+        m_tipsBar->hide();
+        return;
+    }
+
+    m_tipsBarLabel->setText(m_i18n->t("editor", "hints.tipsBar"));
+    m_tipsBarClose->setText(m_i18n->t("editor", "hints.tipsBarDismiss"));
+    m_tipsBar->show();
+}
+
+void MainWindow::quickExportSelectedLayerPng()
+{
+    if (!m_selectedId.isNull())
+        quickExportLayerPng(m_selectedId);
+}
+
+void MainWindow::openCommandPalette()
+{
+    if (!m_actions)
+        return;
+    // Uma única instância reutilizada: refresh antes de mostrar mantém os
+    // rótulos no idioma actual e o estado das acções deste documento.
+    if (!m_commandPalette) {
+        m_commandPalette = new cc::CommandPalette(m_actions, m_i18n, this);
+        m_commandPalette->setAttribute(Qt::WA_DeleteOnClose);
+        connect(m_commandPalette, &QObject::destroyed, this, [this] {
+            m_commandPalette = nullptr;
+        });
     } else {
-        finalPath += ".png";
+        m_commandPalette->refresh();
+    }
+    m_commandPalette->show();
+    m_commandPalette->raise();
+}
+
+bool MainWindow::processBatchFile(const QString& inputPath, const QString& outputPath,
+                                  const QStringList& operations, const QSize& resizeSize,
+                                  const QByteArray& outputFormat, int outputQuality,
+                                  bool overwrite)
+{
+    BatchImageOptions options;
+    options.operations = operations;
+    options.resizeSize = resizeSize;
+    options.outputFormat = outputFormat;
+    options.outputQuality = outputQuality;
+    options.overwrite = overwrite;
+    QString error;
+    const bool ok = processBatchImageFile(inputPath, outputPath, options, &error);
+    if (!ok && !error.isEmpty())
+        qWarning() << "Batch processing failed for" << inputPath << ":" << error;
+    return ok;
+}
+
+void MainWindow::quickExportDocumentPng()
+{
+    if (!m_document)
+        return;
+
+    // Caminho rápido de um passo para o caso mais comum (PNG do documento
+    // inteiro): um único diálogo de ficheiro, qualidade fixa e confirmação
+    // na barra de estado -- sem o diálogo de exportação completo.
+    QString defaultName = QStringLiteral("document");
+    if (!m_currentFilePath.isEmpty())
+        defaultName = QFileInfo(m_currentFilePath).completeBaseName();
+    defaultName.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|]")), QStringLiteral("_"));
+
+    const QString exportDir = initialExportDir();
+
+    const QString defaultPath = QDir(exportDir).filePath(defaultName + QStringLiteral(".png"));
+    const QString path = QFileDialog::getSaveFileName(
+        this,
+        m_i18n ? m_i18n->t("editor", "export.quickPng") : QStringLiteral("Save PNG Copy"),
+        defaultPath,
+        QStringLiteral("PNG (*.png)"));
+
+    if (path.isEmpty())
+        return;
+
+    QString error;
+    bool success = false;
+    {
+        QGuiApplication::setOverrideCursor(Qt::WaitCursor);
+        success = exportDocumentToImage(*m_document, path, QStringLiteral("png"),
+                                        95, 1.0, &error, true);
+        QGuiApplication::restoreOverrideCursor();
     }
 
-    // Check if file exists and overwrite not allowed
-    QFileInfo info(finalPath);
+    if (!success) {
+        QMessageBox::warning(
+            this,
+            m_i18n ? m_i18n->t("editor", "export.error.title") : QStringLiteral("Export failed"),
+            error);
+        return;
+    }
 
-    bool resultOk = result.save(finalPath);
-    return resultOk;
+    statusBar()->showMessage(
+        m_i18n ? m_i18n->t("editor", "export.success").arg(path)
+               : QStringLiteral("Exported to %1").arg(path),
+        4000);
+
+    if (m_settings)
+        m_settings->setLastExportDir(QFileInfo(path).absolutePath());
+    markExported();
 }
 
 void MainWindow::quickExportLayerPng(const LayerId& id)
@@ -2547,10 +3344,7 @@ void MainWindow::quickExportLayerPng(const LayerId& id)
     // Sanitize filename
     defaultName.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|]")), QStringLiteral("_"));
 
-    QString exportDir = QDir::homePath();
-    if (!m_currentFilePath.isEmpty()) {
-        exportDir = QFileInfo(m_currentFilePath).absolutePath();
-    }
+    const QString exportDir = initialExportDir();
 
     const QString defaultPath = QDir(exportDir).filePath(defaultName + QStringLiteral(".png"));
 
@@ -2578,6 +3372,10 @@ void MainWindow::quickExportLayerPng(const LayerId& id)
     statusBar()->showMessage(
         m_i18n ? m_i18n->t("editor", "export.success").arg(path) : QStringLiteral("Exported to %1").arg(path),
         4000);
+
+    if (m_settings)
+        m_settings->setLastExportDir(QFileInfo(path).absolutePath());
+    markExported();
 }
 
 void MainWindow::flipLayer(bool horizontal)
@@ -2594,10 +3392,175 @@ void MainWindow::rotateLayer(double degrees)
     LayerOperations::rotate(*m_document, m_history.get(), m_selectedId, degrees);
 }
 
+void MainWindow::openImageSizeDialog()
+{
+    if (!m_document || !m_history)
+        return;
+    ImageSizeDialog dialog(m_document, m_i18n, this);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+    const ImageResizeOptions options = dialog.options();
+    if (options.size == QSize(m_document->width(), m_document->height()))
+        return;
+    auto command = std::make_unique<ResizeImageCommand>(*m_document, options);
+    auto* raw = command.get();
+    m_history->execute(std::move(command));
+    if (!raw->wasApplied() && !raw->error().isEmpty())
+        QMessageBox::warning(this, dialog.windowTitle(), raw->error());
+}
+
+void MainWindow::openSmartFilterDialog(AdjustmentType type)
+{
+    if (!m_document || !m_history || m_selectedId.isNull())
+        return;
+    Layer* layer = m_document->findLayer(m_selectedId);
+    if (!layer || layer->type() != LayerType::Image)
+        return;
+    QString whyNot;
+    if (!SelectionOperations::canEditPixels(*m_document, m_selectedId, &whyNot)) {
+        statusBar()->showMessage(whyNot, 3000);
+        return;
+    }
+    auto* image = static_cast<ImageLayer*>(layer);
+    const QImage source = m_document->assets().decodedImage(image->assetId);
+    if (source.isNull())
+        return;
+
+    // A prévia é limitada para não executar filtros grandes no thread da UI.
+    // Os parâmetros em pixels são convertidos de volta ao tamanho original.
+    constexpr int kPreviewMax = 768;
+    const QImage preview = source.scaled(QSize(kPreviewMax, kPreviewMax),
+                                         Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    SmartFilterDialog dialog(preview, type, m_i18n, this);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+    SmartFilterRequest request = dialog.request();
+    if (!request.valid)
+        return;
+    const double pixelScale = double(source.width()) / preview.width();
+    for (auto& [key, value] : request.params) {
+        if (key == QLatin1String("radius") || key == QLatin1String("length")
+            || key == QLatin1String("wavelength"))
+            value *= pixelScale;
+    }
+    const QString name = m_i18n ? m_i18n->t("editor", "filters.smartFilter")
+                                : QStringLiteral("Smart Filter");
+    if (!request.nonDestructive) {
+        // O caminho destrutivo usa o executor assíncrono que já converte e
+        // aplica a seleção ativa no espaço da camada.
+        const AdjustmentType filterType = request.type;
+        const AdjustmentParams filterParams = request.params;
+        applyImageFilterToActiveLayer(
+            [filterType, filterParams](const QImage& bitmap) {
+                return applyAdjustmentParameters(bitmap, filterType, filterParams);
+            }, name);
+        return;
+    }
+    if (!executeApplySmartFilter(*m_document, m_history.get(), m_selectedId,
+                                 request.type, request.params,
+                                 request.nonDestructive, name)) {
+        statusBar()->showMessage(
+            m_i18n ? m_i18n->t("editor", "filters.error.apply")
+                   : QStringLiteral("Could not apply the filter."), 3000);
+    }
+}
+
+void MainWindow::openTransformSelectionDialog()
+{
+    if (!m_document || m_document->pixelSelection().isNull())
+        return;
+    TransformSelectionDialog dialog(m_document->pixelSelection(), m_i18n, this);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+    if (!SelectionTransform::apply(*m_document, m_history.get(), dialog.parameters())) {
+        statusBar()->showMessage(
+            m_i18n ? m_i18n->t("editor", "selection.transformFailed")
+                   : QStringLiteral("Could not transform the selection."), 3000);
+    }
+}
+
+void MainWindow::openCanvasSizeDialog()
+{
+    if (!m_document || !m_history)
+        return;
+
+    QDialog dlg(this);
+    dlg.setWindowTitle(m_i18n ? m_i18n->t("common", "canvasSize.title")
+                               : QStringLiteral("Canvas Size"));
+
+    auto* form = new QFormLayout(&dlg);
+
+    auto* widthSpin = new QSpinBox(&dlg);
+    widthSpin->setRange(1, 16384);
+    widthSpin->setValue(m_document->width());
+    widthSpin->setSuffix(QStringLiteral(" px"));
+    form->addRow(m_i18n ? m_i18n->t("common", "canvasSize.width")
+                         : QStringLiteral("Width:"), widthSpin);
+
+    auto* heightSpin = new QSpinBox(&dlg);
+    heightSpin->setRange(1, 16384);
+    heightSpin->setValue(m_document->height());
+    heightSpin->setSuffix(QStringLiteral(" px"));
+    form->addRow(m_i18n ? m_i18n->t("common", "canvasSize.height")
+                         : QStringLiteral("Height:"), heightSpin);
+
+    // Âncora 3×3: a aresta oposta à âncora é a que fica fixa; as camadas
+    // deslocam-se pelo offset correspondente.
+    auto* anchorCombo = new QComboBox(&dlg);
+    static const char* const anchorKeys[] = {
+        "canvasSize.anchor.tl", "canvasSize.anchor.tc", "canvasSize.anchor.tr",
+        "canvasSize.anchor.ml", "canvasSize.anchor.c",  "canvasSize.anchor.mr",
+        "canvasSize.anchor.bl", "canvasSize.anchor.bc", "canvasSize.anchor.br",
+    };
+    static const double anchorFactors[][2] = {
+        {0.0, 0.0}, {0.5, 0.0}, {1.0, 0.0},
+        {0.0, 0.5}, {0.5, 0.5}, {1.0, 0.5},
+        {0.0, 1.0}, {0.5, 1.0}, {1.0, 1.0},
+    };
+    for (int i = 0; i < 9; ++i) {
+        anchorCombo->addItem(m_i18n ? m_i18n->t("common", anchorKeys[i])
+                                    : QString::fromLatin1(anchorKeys[i]),
+                             QPointF(anchorFactors[i][0], anchorFactors[i][1]));
+    }
+    anchorCombo->setCurrentIndex(4); // centro
+    form->addRow(m_i18n ? m_i18n->t("common", "canvasSize.anchor")
+                         : QStringLiteral("Anchor:"), anchorCombo);
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
+                                         &dlg);
+    form->addRow(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+
+    const int newW = widthSpin->value();
+    const int newH = heightSpin->value();
+    if (newW == m_document->width() && newH == m_document->height())
+        return;
+    const QPointF anchor = anchorCombo->currentData().toPointF();
+    const QPointF offset((newW - m_document->width()) * anchor.x(),
+                         (newH - m_document->height()) * anchor.y());
+    m_history->execute(std::make_unique<ResizeCanvasCommand>(
+        *m_document, newW, newH, offset));
+}
+
+void MainWindow::rotateCanvas(double degrees)
+{
+    if (!m_document || !m_history)
+        return;
+    m_history->execute(std::make_unique<RotateCanvasCommand>(*m_document, degrees));
+}
+
 void MainWindow::deleteSelectedLayer()
 {
-    if (m_selectedId.isNull() || !m_document || !m_history)
+    if (m_selectedId.isNull() || !m_document || !m_history) {
+        // Nada selecionado: em silêncio a tecla Delete parece avariada.
+        if (m_i18n)
+            statusBar()->showMessage(m_i18n->t("editor", "hints.selectLayerFirst"), 3000);
         return;
+    }
     if (LayerOperations::deleteLayer(*m_document, m_history.get(), m_selectedId)) {
         m_canvas->clearSelection();
     } else {
@@ -2747,6 +3710,11 @@ void MainWindow::openSampleProjects()
 
 bool MainWindow::confirmDiscardUnsavedChanges()
 {
+    // Modo suprimido (smoke test, ui-snapshot, testes): nunca abrir modal --
+    // era exactamente o que este diálogo fazia, travando a execução headless
+    // ao fechar uma janela com documento modificado.
+    if (m_suppressStartupInteractions)
+        return true;
     if (!m_modified || !m_i18n)
         return true;
 
@@ -2992,9 +3960,66 @@ void MainWindow::updatePositionLabel(const QPointF& documentPos)
     m_lastCursorPos = documentPos;
     if (!m_i18n || !m_positionLabel)
         return;
-    m_positionLabel->setText(m_i18n->t("common", "statusbar.position")
-                                 .arg(QString::number(documentPos.x(), 'f', 0),
-                                      QString::number(documentPos.y(), 'f', 0)));
+    QString text = m_i18n->t("common", "statusbar.position")
+                       .arg(QString::number(documentPos.x(), 'f', 0),
+                            QString::number(documentPos.y(), 'f', 0));
+    // Info: cor do píxel sob o cursor na camada de imagem ativa (aproximação
+    // pela transform da própria camada; grupos aninhados ficam de fora).
+    if (m_document && !m_selectedId.isNull()) {
+        if (const auto* img = dynamic_cast<const ImageLayer*>(
+                m_document->findLayer(m_selectedId))) {
+            bool invertible = false;
+            const QTransform toLocal =
+                img->transform.matrix(img->contentBounds()).inverted(&invertible);
+            if (invertible) {
+                const QPointF local = toLocal.map(documentPos);
+                const QImage bmp = m_document->assets().decodedImage(img->assetId);
+                if (!bmp.isNull()
+                    && QRectF(QPointF(0, 0), bmp.size()).contains(local)) {
+                    const QColor c = bmp.pixelColor(
+                        qBound(0, int(local.x()), bmp.width() - 1),
+                        qBound(0, int(local.y()), bmp.height() - 1));
+                    text += QStringLiteral("  |  %1 A%2")
+                                .arg(c.name(QColor::HexRgb)).arg(c.alpha());
+                }
+            }
+        }
+    }
+    m_positionLabel->setText(text);
+}
+
+void MainWindow::newGuide()
+{
+    if (!m_document)
+        return;
+    const QString hText = m_i18n ? m_i18n->t("editor", "guides.horizontal")
+                                 : QStringLiteral("Horizontal");
+    const QString vText = m_i18n ? m_i18n->t("editor", "guides.vertical")
+                                 : QStringLiteral("Vertical");
+    const QString title = m_i18n ? m_i18n->t("editor", "guides.new")
+                                  : QStringLiteral("New Guide");
+
+    bool ok = false;
+    const QString orient = QInputDialog::getItem(
+        this, title,
+        m_i18n ? m_i18n->t("editor", "guides.orientation") : QStringLiteral("Orientation:"),
+        {hText, vText}, 0, false, &ok);
+    if (!ok)
+        return;
+
+    const double maxPos = m_document->width() + m_document->height();
+    const double pos = QInputDialog::getDouble(
+        this, title,
+        m_i18n ? m_i18n->t("editor", "guides.position") : QStringLiteral("Position (px):"),
+        orient == hText ? m_lastCursorPos.y() : m_lastCursorPos.x(),
+        0.0, maxPos, 1, &ok);
+    if (!ok)
+        return;
+
+    Guide g;
+    g.horizontal = (orient == hText);
+    g.position = pos;
+    m_document->addGuide(g);
 }
 
 void MainWindow::retranslateUi()
@@ -3017,9 +4042,20 @@ void MainWindow::retranslateUi()
         m_imageDock->setWindowTitle(m_i18n->t("common", "panel.image"));
     if (m_historyDock)
         m_historyDock->setWindowTitle(m_i18n->t("common", "panel.history"));
+    if (m_onboardingDock)
+        m_onboardingDock->setWindowTitle(m_i18n->t("editor", "onboarding.title"));
+    if (m_navigatorDock)
+        m_navigatorDock->setWindowTitle(m_i18n->t("common", "panel.navigator"));
+    if (m_swatchesDock)
+        m_swatchesDock->setWindowTitle(m_i18n->t("common", "panel.swatches"));
 
     if (m_toolOptionsBarWidget)
         m_toolOptionsBarWidget->retranslateUi();
+
+    // As dicas de iniciante vivem fora do sistema de tradução dos docks.
+    showBeginnerTipsBar();
+    if (m_canvasEmptyHint && m_canvasEmptyHint->isVisible())
+        updateCanvasEmptyHint();
 
     updateZoomLabel();
     updatePositionLabel(m_lastCursorPos);

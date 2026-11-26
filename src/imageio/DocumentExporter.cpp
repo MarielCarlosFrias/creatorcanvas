@@ -3,9 +3,12 @@
 #include "core/Document.h"
 #include "core/color/IccProfiles.h"
 #include "rendering/CanvasRenderer.h"
+#include "rendering/IRenderer.h"
 
 #include <QImage>
 #include <QPainter>
+#include <QPdfWriter>
+#include <QPageSize>
 
 namespace cc {
 
@@ -108,6 +111,9 @@ bool exportLayerToImage(const Document& doc, const QUuid& layerId,
         painter.setRenderHint(QPainter::TextAntialiasing, true);
         QTransform transform;
         transform.scale(scale, scale);
+        // renderSiblingLayers pinta no sistema de coordenadas actual do
+        // painter (não recebe docToDevice como renderDocument).
+        painter.setTransform(transform);
         RenderOptions options;
         options.drawCheckerboard = false;
         options.canvasBorder = Qt::transparent;
@@ -186,6 +192,46 @@ bool exportSliceToImage(const Document& doc, const QRectF& sliceRect,
     }
 
     (void)tagImageFileWithProfile(filePath, format, doc.iccProfile(), doc.colorSpace());
+    return true;
+}
+
+bool exportDocumentToPdf(const Document& doc, const QString& filePath,
+                         double scale, QString* errorMessage)
+{
+    const double s = qMax(0.01, scale);
+    const double wPx = doc.width() * s;
+    const double hPx = doc.height() * s;
+
+    QPdfWriter writer(filePath);
+    // 96 dpi lógico: 1 px do documento = 1 unidade lógica do painter.
+    writer.setResolution(96);
+    // QPageSize em pontos: 1 px @96dpi = 72/96 pt.
+    writer.setPageSize(QPageSize(QSizeF(wPx * 72.0 / 96.0, hPx * 72.0 / 96.0),
+                                 QPageSize::Point));
+    writer.setPageMargins(QMarginsF(0, 0, 0, 0));
+
+    QPainter painter(&writer);
+    if (!painter.isActive()) {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Could not start the PDF writer.");
+        return false;
+    }
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setRenderHint(QPainter::TextAntialiasing, true);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    QTransform transform;
+    transform.scale(s, s);
+    RenderOptions options;
+    options.drawCheckerboard = false;
+    options.canvasBorder = Qt::transparent;
+
+    // Não usar renderDocument(): esse entry point escolhe o CachingRenderer
+    // global, que pode substituir formas e texto por pixmaps. Uma instância do
+    // renderer base pinta directamente no QPdfWriter e preserva operadores
+    // vectoriais sempre que a própria camada não exigir composição raster.
+    SoftwareRenderer vectorCapableRenderer;
+    vectorCapableRenderer.renderDocument(doc, &painter, transform, options);
+    painter.end();
     return true;
 }
 

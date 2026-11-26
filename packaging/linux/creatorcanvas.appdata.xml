@@ -13,14 +13,26 @@
     <p>Features include: visual template picker, drag-and-drop image
     import, vector shapes and Bézier paths, editable text with
     gradients/outline/shadow/knockout, adjustment and fill layers,
+    multi-layer clipboard, persistent selection channels, canvas resize/rotate,
     selection and cut tools, painting, retouching, AI background removal,
-    perspective mockups, batch processing, undo/redo, autosave with
-    session recovery, layout templates and a clean dark UI.</p>
+    perspective mockups, Blur/Noise/Distort filters, hybrid SVG/PDF export,
+    minimal PSD import, batch processing, undo/redo, autosave with
+    session recovery, Navigator and Swatches panels, rulers/guides,
+    layout templates and a clean dark UI.</p>
   </description>
   <launchable type="desktop-id">creatorcanvas.desktop</launchable>
   <url type="homepage">https://github.com/MarielCarlosFrias/creatorcanvas</url>
   <content_rating type="oars-1.0"/>
   <releases>
+    <release version="0.3.0" date="2026-11-24">
+      <description><p>Multi-layer clipboard with cross-document asset remapping,
+      persistent document/layer-space selections, Canvas Size/Rotate with
+      selection/guide/slice transforms, Image Size/Resample, Transform Selection,
+      editable Smart Filters, hybrid SVG/PDF export, minimal PSD composite import
+      and PSD/PDF/SVG Batch processing, draggable rulers/guides, Navigator
+      and Swatches panels, and substantial correctness and performance work in
+      grouping and rendering caches.</p></description>
+    </release>
     <release version="0.2.2" date="2026-11-20">
       <description><p>Stabilization release: reliable image adjustments and
       canvas zoom, resilient ONNX Runtime packaging, MiniPaint integration

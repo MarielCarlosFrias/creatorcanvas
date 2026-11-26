@@ -9,12 +9,19 @@ namespace cc {
 
 CanvasHandles CanvasGestureHandler::computeHandles(const Layer& layer, const QTransform& docToDevice)
 {
+    return computeHandles(layer, layer.transform.matrix(layer.contentBounds()), docToDevice);
+}
+
+CanvasHandles CanvasGestureHandler::computeHandles(const Layer& layer,
+                                                   const QTransform& layerToDocument,
+                                                   const QTransform& docToDevice)
+{
     CanvasHandles set;
     const QRectF bounds = layer.contentBounds();
     if (bounds.isEmpty())
         return set;
 
-    const QTransform toScreen = layer.transform.matrix(bounds) * docToDevice;
+    const QTransform toScreen = layerToDocument * docToDevice;
     set.points[0] = toScreen.map(bounds.topLeft());
     set.points[1] = toScreen.map(bounds.topRight());
     set.points[2] = toScreen.map(bounds.bottomRight());
@@ -64,7 +71,8 @@ Qt::CursorShape CanvasGestureHandler::determineCursor(const QPointF& widgetPos,
     return Qt::ArrowCursor;
 }
 
-void CanvasGestureHandler::startRotate(const Layer& layer, const QPointF& docPos)
+void CanvasGestureHandler::startRotate(const Layer& layer, const QPointF& docPos,
+                                       const QTransform& layerToDocument)
 {
     m_type = CanvasGestureType::Rotate;
     m_activeHandle = 8;
@@ -76,15 +84,18 @@ void CanvasGestureHandler::startRotate(const Layer& layer, const QPointF& docPos
         m_gestureStartBox = QSizeF();
 
     const QTransform matrix = m_gestureStart.matrix(m_gestureBounds);
+    m_layerToDocument = layerToDocument.isIdentity() ? matrix : layerToDocument;
+    m_parentToDocument = matrix.inverted() * m_layerToDocument;
     m_gestureStartDoc = docPos;
-    m_localPress = matrix.inverted().map(docPos);
-    m_rotateCenter = matrix.map(m_gestureBounds.center());
+    m_localPress = m_layerToDocument.inverted().map(docPos);
+    m_rotateCenter = m_layerToDocument.map(m_gestureBounds.center());
     m_rotateStartAngle = std::atan2(
         m_gestureStartDoc.y() - m_rotateCenter.y(),
         m_gestureStartDoc.x() - m_rotateCenter.x());
 }
 
-void CanvasGestureHandler::startScale(const Layer& layer, int handle, const QPointF& docPos)
+void CanvasGestureHandler::startScale(const Layer& layer, int handle, const QPointF& docPos,
+                                      const QTransform& layerToDocument)
 {
     m_type = CanvasGestureType::Scale;
     m_activeHandle = handle;
@@ -96,8 +107,10 @@ void CanvasGestureHandler::startScale(const Layer& layer, int handle, const QPoi
         m_gestureStartBox = QSizeF();
 
     const QTransform matrix = m_gestureStart.matrix(m_gestureBounds);
+    m_layerToDocument = layerToDocument.isIdentity() ? matrix : layerToDocument;
+    m_parentToDocument = matrix.inverted() * m_layerToDocument;
     m_gestureStartDoc = docPos;
-    m_localPress = matrix.inverted().map(docPos);
+    m_localPress = m_layerToDocument.inverted().map(docPos);
 
     static const int opposite[8] = {2, 3, 0, 1, 6, 7, 4, 5};
     const QRectF b = m_gestureBounds;
@@ -111,7 +124,7 @@ void CanvasGestureHandler::startScale(const Layer& layer, int handle, const QPoi
     case 6: m_fixedLocal = (b.bottomRight() + b.bottomLeft()) / 2; break;
     default: m_fixedLocal = (b.bottomLeft() + b.topLeft()) / 2; break;
     }
-    m_fixedDoc = matrix.map(m_fixedLocal);
+    m_fixedDoc = m_layerToDocument.map(m_fixedLocal);
 }
 
 void CanvasGestureHandler::startMove(const Layer& layer, const QPointF& docPos, const QList<Layer*>& multiLayers)
@@ -154,7 +167,7 @@ AffineTransform CanvasGestureHandler::updateTransform(const QPointF& docNow) con
     }
 
     if (m_type == CanvasGestureType::Scale) {
-        const QTransform inv = m_gestureStart.matrix(m_gestureBounds).inverted();
+        const QTransform inv = m_layerToDocument.inverted();
         const QPointF localNow = inv.map(docNow);
         const QPointF center = m_gestureBounds.center();
         const double dx = localNow.x() - m_fixedLocal.x();
@@ -183,15 +196,17 @@ AffineTransform CanvasGestureHandler::updateTransform(const QPointF& docNow) con
         if (qAbs(t.scaleY) < 0.01)
             t.scaleY = t.scaleY < 0 ? -0.01 : 0.01;
 
-        const double rad = qDegreesToRadians(m_gestureStart.rotationDeg);
-        const double cosR = std::cos(rad);
-        const double sinR = std::sin(rad);
-        const QPointF v(m_fixedLocal.x() - center.x(),
-                        m_fixedLocal.y() - center.y());
-        const QPointF scaled(v.x() * t.scaleX, v.y() * t.scaleY);
-        const QPointF rotated(scaled.x() * cosR - scaled.y() * sinR,
-                              scaled.x() * sinR + scaled.y() * cosR);
-        t.position = m_fixedDoc - rotated;
+        // Na ordem usada pelo renderer, full = T(pos) * linear * parent.
+        // Logo pos = fixedDoc - (linear * parent)(fixedLocal). Isto mantém o
+        // ponto oposto fixo também com grupos rodados/inclinados.
+        QTransform linear;
+        linear.rotate(t.rotationDeg);
+        if (t.shearX != 0.0 || t.shearY != 0.0)
+            linear.shear(t.shearX, t.shearY);
+        linear.scale(t.scaleX, t.scaleY);
+        linear.translate(-center.x(), -center.y());
+        t.position = m_parentToDocument.inverted().map(m_fixedDoc)
+                     - linear.map(m_fixedLocal);
         return t;
     }
 

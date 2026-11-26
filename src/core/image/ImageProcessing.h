@@ -95,6 +95,23 @@ public:
                               double vignette = 0.0);
     static QImage applyBlur(const QImage& source, double radius);
     static QImage applySharpen(const QImage& source, double amount);
+
+    /// Motion blur direcional (média ao longo de uma linha). |lengthPx| é o
+    /// comprimento do rasto em píxeis; o número de amostras é limitado.
+    static QImage applyMotionBlur(const QImage& source, double angleDeg,
+                                  double lengthPx);
+
+    /// Ruído uniforme aditivo. |amountPercent| 0..100 (fração de 255).
+    /// Se monochrome, o mesmo delta aplica-se a R=G=B. O alfa é preservado.
+    static QImage applyNoise(const QImage& source, double amountPercent,
+                             bool monochrome = false);
+
+    enum class DistortMode { Twirl, Pinch, Ripple };
+    /// Warp por mapeamento inverso (o píxel de destino lê a fonte na posição
+    /// deformada). amount: Twirl 0..1 (até 360° no centro), Pinch -0.9..0.9,
+    /// Ripple 0..1. |wavelengthPx| só vale para Ripple (0 = automático).
+    static QImage applyDistort(const QImage& source, DistortMode mode,
+                               double amount, double wavelengthPx = 0.0);
     static QImage applyLevels(const QImage& source, const LevelsChannel& master,
                              const LevelsChannel& red = {}, const LevelsChannel& green = {},
                              const LevelsChannel& blue = {});

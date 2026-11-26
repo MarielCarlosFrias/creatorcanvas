@@ -5,12 +5,16 @@
         "autosave": "Salvamento automático (minutos)",
         "gpuAcceleration": "Aceleração por GPU",
         "gpuAccelerationHint": "Alterações na aceleração por GPU entram em vigor após reiniciar o programa.",
+        "gpuUnavailableHint": "A aceleração GPU ainda não está disponível; é usado o renderizador por software.",
         "appearance": "Aparência",
         "darkMode": "Usar modo escuro",
         "confirmExit": "Confirmar antes de fechar com alterações não salvas",
         "canvas": "Tela de desenho",
         "showGrid": "Mostrar grade ao abrir um documento",
         "snapToGrid": "Alinhar objetos à grade",
-        "historyLimit": "Estados do histórico"
+        "advancedMode": "Modo avançado",
+    "advancedModeHint": "Revela ferramentas profissionais (histograma, edição de nós, refine edge, gradientes multi-stop, texto em caminho). Aplica-se de imediato.",
+    "historyMemory": "Memória do histórico (MB)",
+    "historyLimit": "Estados do histórico"
     }
 }

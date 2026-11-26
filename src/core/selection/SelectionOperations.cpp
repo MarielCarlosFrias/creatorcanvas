@@ -4,6 +4,8 @@
 #include "core/history/DocumentCommands.h"
 #include "core/layers/Layer.h"
 
+#include <cmath>
+
 namespace cc {
 
 bool SelectionOperations::canEditPixels(const Document& doc,
@@ -71,6 +73,50 @@ QImage SelectionOperations::applySelectionMask(const QImage& original,
         }
     }
     return out;
+}
+
+QImage SelectionOperations::selectionMaskInLayerSpace(
+    const Document& document, const ImageLayer& image,
+    const QImage& selection, SelectionSpace space)
+{
+    if (selection.isNull())
+        return {};
+    const QImage bitmap = document.assets().decodedImage(image.assetId);
+    if (bitmap.isNull())
+        return {};
+
+    const QImage source = selection.convertToFormat(QImage::Format_Alpha8);
+    if (space == SelectionSpace::Layer)
+        return source.size() == bitmap.size() ? source : QImage();
+
+    QTransform layerToDocument = image.transform.matrix(image.contentBounds());
+    for (GroupLayer* parent = document.parentOf(image.id());
+         parent && parent != document.rootGroup();
+         parent = document.parentOf(parent->id())) {
+        // QPainter(..., combine=true) e o renderer compõem layer × parent.
+        layerToDocument = layerToDocument
+            * parent->transform.matrix(parent->contentBounds());
+    }
+    if (!layerToDocument.isInvertible())
+        return {};
+
+    QImage result(bitmap.size(), QImage::Format_Alpha8);
+    result.fill(0);
+    for (int y = 0; y < bitmap.height(); ++y) {
+        uchar* dst = result.scanLine(y);
+        for (int x = 0; x < bitmap.width(); ++x) {
+            const QPointF documentPoint =
+                layerToDocument.map(QPointF(x + 0.5, y + 0.5));
+            if (!std::isfinite(documentPoint.x())
+                || !std::isfinite(documentPoint.y()))
+                continue;
+            const int sx = static_cast<int>(std::floor(documentPoint.x()));
+            const int sy = static_cast<int>(std::floor(documentPoint.y()));
+            if (sx >= 0 && sy >= 0 && sx < source.width() && sy < source.height())
+                dst[x] = source.constScanLine(sy)[sx];
+        }
+    }
+    return result;
 }
 
 QImage SelectionOperations::inverted(const QImage& selection)

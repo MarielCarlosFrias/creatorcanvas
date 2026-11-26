@@ -90,6 +90,7 @@ void ToolOptionsBar::setPaintColor(const QColor& color)
         m_floodColorBtn->setStyleSheet(swatchStyle(color));
     if (m_canvas)
         m_canvas->setPaintColor(color);
+    emit paintColorChanged(color);
 }
 
 void ToolOptionsBar::syncInitialValues()
@@ -357,13 +358,8 @@ void ToolOptionsBar::buildUi()
     m_paintColorBtn->setStyleSheet(swatchStyle(m_currentPaintColor));
     connect(m_paintColorBtn, &QPushButton::clicked, this, [this] {
         const QColor chosen = QColorDialog::getColor(m_currentPaintColor, this);
-        if (chosen.isValid()) {
-            m_currentPaintColor = chosen;
-            m_paintColorBtn->setStyleSheet(swatchStyle(chosen));
-            if (m_floodColorBtn)
-                m_floodColorBtn->setStyleSheet(swatchStyle(chosen));
-            if (m_canvas) m_canvas->setPaintColor(chosen);
-        }
+        if (chosen.isValid())
+            setPaintColor(chosen);
     });
 
     m_paintSizeLabel = new QLabel(this);
@@ -413,13 +409,8 @@ void ToolOptionsBar::buildUi()
     m_floodColorBtn->setStyleSheet(swatchStyle(m_currentPaintColor));
     connect(m_floodColorBtn, &QPushButton::clicked, this, [this] {
         const QColor chosen = QColorDialog::getColor(m_currentPaintColor, this);
-        if (chosen.isValid()) {
-            m_currentPaintColor = chosen;
-            m_floodColorBtn->setStyleSheet(swatchStyle(chosen));
-            if (m_paintColorBtn)
-                m_paintColorBtn->setStyleSheet(swatchStyle(chosen));
-            if (m_canvas) m_canvas->setPaintColor(chosen);
-        }
+        if (chosen.isValid())
+            setPaintColor(chosen);
     });
 
     m_floodTolLabel = new QLabel(this);

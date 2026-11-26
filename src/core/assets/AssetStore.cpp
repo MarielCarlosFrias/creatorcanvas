@@ -22,28 +22,53 @@ LayerId AssetStore::addImage(const QImage& image, const QString& format)
     asset.decoded = image;
 
     m_assets.append(asset);
+    m_index.insert(asset.id, m_assets.size() - 1);
     return asset.id;
 }
 
 const QByteArray& AssetStore::encodedBytes(const LayerId& id) const
 {
     static const QByteArray empty;
-    for (Asset& asset : m_assets) {
-        if (asset.id != id)
-            continue;
-        if (asset.encoded.isEmpty() && !asset.source.isNull()) {
-            QByteArray encoded;
-            QBuffer buffer(&encoded);
-            buffer.open(QIODevice::WriteOnly);
-            asset.source.save(&buffer, asset.format.toLatin1().constData());
-            asset.encoded = encoded;
-            asset.sha256 = QString::fromLatin1(
-                QCryptographicHash::hash(asset.encoded, QCryptographicHash::Sha256).toHex());
-            asset.source = QImage(); // libera a memória: bytes já codificados
-        }
-        return asset.encoded;
+    const int index = m_index.value(id, -1);
+    if (index < 0 || index >= m_assets.size() || m_assets.at(index).id != id)
+        return empty;
+
+    Asset& asset = m_assets[index];
+    if (asset.encoded.isEmpty() && !asset.source.isNull()) {
+        QByteArray encoded;
+        QBuffer buffer(&encoded);
+        buffer.open(QIODevice::WriteOnly);
+        asset.source.save(&buffer, asset.format.toLatin1().constData());
+        asset.encoded = encoded;
+        asset.sha256 = QString::fromLatin1(
+            QCryptographicHash::hash(asset.encoded, QCryptographicHash::Sha256).toHex());
+        asset.source = QImage(); // libera a memória: bytes já codificados
     }
-    return empty;
+    return asset.encoded;
+}
+
+void AssetStore::reindex()
+{
+    m_index.clear();
+    m_index.reserve(m_assets.size());
+    for (int i = 0; i < m_assets.size(); ++i)
+        m_index.insert(m_assets.at(i).id, i);
+}
+
+qint64 AssetStore::approximateBytes(const LayerId& id) const
+{
+    const int index = m_index.value(id, -1);
+    if (index < 0 || index >= m_assets.size() || m_assets.at(index).id != id)
+        return 0;
+    const Asset& asset = m_assets.at(index);
+    qint64 bytes = asset.encoded.size();
+    if (!asset.source.isNull())
+        bytes += asset.source.sizeInBytes();
+    if (!asset.decoded.isNull())
+        bytes += asset.decoded.sizeInBytes();
+    if (!asset.displayPreview.isNull())
+        bytes += asset.displayPreview.sizeInBytes();
+    return bytes;
 }
 
 bool AssetStore::remove(const LayerId& id)
@@ -51,13 +76,22 @@ bool AssetStore::remove(const LayerId& id)
     // GC: chamado só com ids que nem o documento nem a pilha de undo
     // referem mais. QImage é shared — cópias vivas (ex.: prévia na UI)
     // mantêm os pixels; só o cache do store é liberado.
-    for (int i = 0; i < m_assets.size(); ++i) {
-        if (m_assets.at(i).id == id) {
-            m_assets.removeAt(i);
-            return true;
+    int index = m_index.value(id, -1);
+    if (index < 0 || index >= m_assets.size() || m_assets.at(index).id != id) {
+        // Índice em falta (id duplicado vindo de restore?): procura linear.
+        for (int i = 0; i < m_assets.size(); ++i) {
+            if (m_assets.at(i).id == id) {
+                index = i;
+                break;
+            }
         }
     }
-    return false;
+    if (index < 0 || index >= m_assets.size() || m_assets.at(index).id != id)
+        return false;
+
+    m_assets.removeAt(index);
+    reindex(); // removeAt desloca as posições seguintes
+    return true;
 }
 
 LayerId AssetStore::add(const QByteArray& encoded, const QString& format)
@@ -78,19 +112,21 @@ LayerId AssetStore::add(const QByteArray& encoded, const QString& format)
     asset.decoded = decoded;
 
     m_assets.append(asset);
+    m_index.insert(asset.id, m_assets.size() - 1);
     return asset.id;
 }
 
 void AssetStore::restore(const Asset& asset)
 {
     m_assets.append(asset);
+    m_index.insert(asset.id, m_assets.size() - 1);
 }
 
 const Asset* AssetStore::find(const LayerId& id) const
 {
-    for (const Asset& asset : m_assets)
-        if (asset.id == id)
-            return &asset;
+    const int index = m_index.value(id, -1);
+    if (index >= 0 && index < m_assets.size() && m_assets.at(index).id == id)
+        return &m_assets[index];
     return nullptr;
 }
 

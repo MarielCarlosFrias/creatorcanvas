@@ -9,6 +9,8 @@ class TestCanvasGestureHandler : public QObject
 
 private slots:
     void testComputeHandlesAndHitTest();
+    void testComputeHandlesWithParentGroup();
+    void testScaleGestureWithParentGroup();
     void testCursorDetermination();
     void testMoveGesture();
     void testRotateGesture();
@@ -44,6 +46,60 @@ void TestCanvasGestureHandler::testComputeHandlesAndHitTest()
     // Hit-testing longe
     int miss = cc::CanvasGestureHandler::hitTestHandle(QPointF(-500, -500), handles);
     QCOMPARE(miss, -1);
+}
+
+void TestCanvasGestureHandler::testComputeHandlesWithParentGroup()
+{
+    cc::ShapeLayer shape;
+    shape.points = {QPointF(0, 0), QPointF(200, 100)};
+    shape.transform.position = QPointF(100, 100);
+    const QRectF bounds = shape.contentBounds();
+
+    // Grupo deslocado +30,+40 e rodado 15°. Os handles têm de acompanhar a
+    // mesma matriz usada pelo renderer, não apenas a transform local.
+    QTransform parent;
+    parent.translate(130, 140);
+    parent.rotate(15.0);
+    parent.translate(-100.0, -100.0);
+    const QTransform layerToDoc = parent * shape.transform.matrix(bounds);
+
+    const auto handles = cc::CanvasGestureHandler::computeHandles(
+        shape, layerToDoc, QTransform());
+    QVERIFY(handles.valid);
+    const QPointF expected = layerToDoc.map(bounds.topLeft());
+    QVERIFY((handles.points[0] - expected).manhattanLength() < 1e-6);
+
+    // O overload antigo continuaria a colocar o handle na posição sem grupo.
+    const QPointF withoutParent = shape.transform.matrix(bounds).map(bounds.topLeft());
+    QVERIFY((expected - withoutParent).manhattanLength() > 10.0);
+}
+
+void TestCanvasGestureHandler::testScaleGestureWithParentGroup()
+{
+    cc::CanvasGestureHandler handler;
+    cc::ShapeLayer layer;
+    layer.points = {QPointF(0, 0), QPointF(100, 100)};
+    layer.transform.position = QPointF(100, 100);
+    const QRectF bounds = layer.contentBounds();
+
+    QTransform parent;
+    parent.translate(180, 130);
+    parent.rotate(20.0);
+    parent.translate(-100.0, -100.0);
+    // A aplicação compõe full = camada × parent (parentToDocumentMatrix).
+    const QTransform layerToDoc = layer.transform.matrix(bounds) * parent;
+
+    const QPointF br = layerToDoc.map(bounds.bottomRight());
+    handler.startScale(layer, 2, br, layerToDoc);
+    const QPointF tl = layerToDoc.map(bounds.topLeft());
+    const QPointF stretched = tl + (br - tl) * 2.0;
+    const cc::AffineTransform scaled = handler.updateTransform(stretched);
+
+    QVERIFY(qAbs(scaled.scaleX - 2.0) < 0.05);
+    QVERIFY(qAbs(scaled.scaleY - 2.0) < 0.05);
+    // O canto oposto tem de permanecer exatamente fixo no documento.
+    const QPointF fixedAfter = (scaled.matrix(bounds) * parent).map(bounds.topLeft());
+    QVERIFY((fixedAfter - tl).manhattanLength() < 0.1);
 }
 
 void TestCanvasGestureHandler::testCursorDetermination()

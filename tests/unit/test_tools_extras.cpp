@@ -3,11 +3,14 @@
 #include <QMouseEvent>
 #include <QTest>
 
+#include <cstring>
+
 #include "core/Document.h"
 #include "core/history/CommandStack.h"
 #include "core/image/ImageProcessing.h"
 #include "core/layers/Layer.h"
 #include "tools/MarqueeTool.h"
+#include "tools/PaintTool.h"
 #include "tools/PaintExtras.h"
 #include "tools/HealingTool.h"
 #include "tools/PenTool.h"
@@ -148,6 +151,44 @@ private slots:
             false, 1.0, mask);
         QVERIFY(QColor::fromRgba(qUnpremultiply(out.pixel(5, 10))).red() > 200);
         QVERIFY(QColor::fromRgba(qUnpremultiply(out.pixel(35, 10))).red() < 40);
+    }
+
+    void paintCommitsOnlyInsideActiveSelection()
+    {
+        Document doc(40, 30);
+        QImage bitmap(40, 30, QImage::Format_ARGB32_Premultiplied);
+        bitmap.fill(Qt::white);
+        auto layer = makeImageLayer(doc, 40, 30, bitmap);
+        const LayerId layerId = layer->id();
+        QVERIFY(doc.addLayer(std::move(layer)));
+
+        QImage selection(bitmap.size(), QImage::Format_Alpha8);
+        selection.fill(0);
+        for (int y = 8; y < 22; ++y)
+            std::memset(selection.scanLine(y) + 10, 255, 15);
+        doc.setPixelSelection(selection);
+
+        ToolContext ctx;
+        ctx.document = &doc;
+        ctx.selectedLayerId = layerId;
+        PaintTool tool;
+        tool.setColor(Qt::red);
+        tool.setSize(8);
+
+        // O gesto passa por dentro e por fora da seleção. O commit deve
+        // preservar os pixels externos, mesmo que a prévia os tenha tocado.
+        auto press = makeMouse(QEvent::MouseButtonPress, QPointF(5, 15));
+        auto move = makeMouse(QEvent::MouseMove, QPointF(30, 15));
+        auto release = makeMouse(QEvent::MouseButtonRelease, QPointF(30, 15));
+        tool.mousePress(&press, QPointF(5, 15), ctx);
+        tool.mouseMove(&move, QPointF(30, 15), ctx);
+        tool.mouseRelease(&release, QPointF(30, 15), ctx);
+
+        const auto* resultLayer = static_cast<const ImageLayer*>(doc.findLayer(layerId));
+        const QImage result = doc.assets().decodedImage(resultLayer->assetId);
+        QCOMPARE(result.pixel(5, 15), bitmap.pixel(5, 15));
+        QVERIFY(result.pixel(16, 15) != bitmap.pixel(16, 15));
+        QCOMPARE(result.pixel(30, 15), bitmap.pixel(30, 15));
     }
 
     void marqueeCreatesDocumentSelection()
@@ -723,4 +764,3 @@ private slots:
 
 QTEST_MAIN(TestToolsExtras)
 #include "test_tools_extras.moc"
-

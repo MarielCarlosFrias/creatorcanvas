@@ -1,12 +1,29 @@
 #include "SnapEngine.h"
 
 #include "core/Document.h"
+#include "core/geometry/LayerTransform.h"
 #include "core/layers/Layer.h"
 
 #include <algorithm>
 #include <cmath>
 
 namespace cc {
+namespace {
+
+bool isInSubtree(const Layer& root, const Layer& candidate)
+{
+    if (root.id() == candidate.id())
+        return true;
+    if (root.type() != LayerType::Group)
+        return false;
+    const auto& group = static_cast<const GroupLayer&>(root);
+    for (const auto& child : group.children)
+        if (child && isInSubtree(*child, candidate))
+            return true;
+    return false;
+}
+
+} // namespace
 
 SnapEngine::SnapEngine() = default;
 
@@ -15,19 +32,31 @@ void SnapEngine::setThreshold(double thresholdDocPx)
     m_threshold = std::max(0.0, thresholdDocPx);
 }
 
+SnapResult SnapEngine::computeSnap(const Document& document,
+                                   const Layer& moving,
+                                   const QRectF& currentDocRect,
+                                   const QRectF& canvasRect,
+                                   const QList<Layer*>& otherLayers) const
+{
+    const auto candidates = gatherCandidates(&document, moving, currentDocRect,
+                                             canvasRect, otherLayers);
+    return pickBest(candidates, canvasRect);
+}
+
 SnapResult SnapEngine::computeSnap(const Layer& moving,
                                    const QRectF& currentDocRect,
                                    const QRectF& canvasRect,
                                    const QList<Layer*>& otherLayers) const
 {
-    Q_UNUSED(moving);  // reserved for future per-layer heuristics (M17+)
-    Q_UNUSED(canvasRect);
-    const auto candidates = gatherCandidates(currentDocRect, canvasRect, otherLayers);
+    const auto candidates = gatherCandidates(nullptr, moving, currentDocRect,
+                                             canvasRect, otherLayers);
     return pickBest(candidates, canvasRect);
 }
 
 QList<SnapEngine::Candidate>
-SnapEngine::gatherCandidates(const QRectF& moving,
+SnapEngine::gatherCandidates(const Document* document,
+                              const Layer& movingLayer,
+                              const QRectF& moving,
                               const QRectF& canvas,
                               const QList<Layer*>& others) const
 {
@@ -69,13 +98,17 @@ SnapEngine::gatherCandidates(const QRectF& moving,
     }
 
     for (Layer* other : others) {
-        if (!other || !other->visible || other->locked)
+        if (!other || !other->visible || other->locked
+            || isInSubtree(movingLayer, *other))
             continue;
 
         const QRectF local = other->contentBounds();
         if (local.isEmpty())
             continue;
-        const QRectF doc = other->transform.matrix(local).mapRect(local);
+        const QTransform otherToDocument = document
+            ? layerToDocumentMatrix(*document, *other)
+            : other->transform.matrix(local);
+        const QRectF doc = otherToDocument.mapRect(local);
 
         const double ox[3] = { doc.left(), doc.center().x(), doc.right() };
         const double oy[3] = { doc.top(), doc.center().y(), doc.bottom() };

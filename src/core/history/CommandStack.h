@@ -4,6 +4,7 @@
 #include <QSet>
 #include <QString>
 
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -15,7 +16,14 @@ class CommandStack final : public QObject
 {
     Q_OBJECT
 public:
-    explicit CommandStack(int limit = 100, QObject* parent = nullptr);
+    /// Tecto de memória por omissão: ~10 snapshots completos de 4000x3000.
+    /// O limite por contagem continua a-valer; este orçamento apenas evita
+    /// que passos volumosos (seleções, máscaras, image resize) acumulem
+    /// gigabytes antes do limite de contagem ser atingido.
+    static constexpr qint64 kDefaultByteBudget = 512ll * 1024 * 1024;
+
+    explicit CommandStack(int limit = 100, qint64 byteBudget = kDefaultByteBudget,
+                          QObject* parent = nullptr);
 
     void execute(std::unique_ptr<Command> command);
 
@@ -30,6 +38,18 @@ public:
     int redoCount() const { return static_cast<int>(m_redoStack.size()); }
     int limit() const { return m_limit; }
     void setLimit(int limit);
+
+    qint64 byteBudget() const { return m_byteBudget; }
+    void setByteBudget(qint64 bytes);
+
+    /// Memória estimada actualmente retida pelo histórico: snapshots dos
+    /// comandos + bitmaps que os comandos ainda mantêm vivos.
+    qint64 retainedBytes() const;
+
+    /// O dono da pilha (MainWindow) informa quantos bytes os assets vivos
+    /// ocupam — só ele conhece o AssetStore.
+    using AssetFootprint = std::function<qint64(const QSet<LayerId>&)>;
+    void setAssetFootprintProbe(AssetFootprint probe) { m_assetProbe = std::move(probe); }
 
     QString nextUndoName() const;
     QString nextRedoName() const;
@@ -51,6 +71,11 @@ signals:
 
 private:
     void emitStateChanged(bool beforeUndoable, bool beforeRedoable);
+    /// Descarta os comandos mais antigos enquanto o orçamento de memória
+    /// for excedido (nunca deixa a pilha vazia).
+    void trimToByteBudget();
+    /// Descarta o comando mais antigo do undo, reportando órfãos.
+    void dropOldestUndo();
     /// Coleta ids dos comandos descartados, subtrai os que ainda vivem
     /// nas pilhas restantes e emite assetsOrphaned com a diferença.
     void reportOrphanedAssets(std::vector<std::unique_ptr<Command>> dropped);
@@ -58,6 +83,8 @@ private:
     std::vector<std::unique_ptr<Command>> m_undoStack;
     std::vector<std::unique_ptr<Command>> m_redoStack;
     int m_limit;
+    qint64 m_byteBudget;
+    AssetFootprint m_assetProbe;
 };
 
 } // namespace cc

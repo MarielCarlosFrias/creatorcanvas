@@ -46,6 +46,9 @@ public:
 
     void onDocumentChanged(Document* doc) override { setDocument(doc); }
     void setDocument(Document* document);
+    /// Re-lê as dimensões do documento (após Canvas Size / Rotate Canvas) e
+    /// redesenha — o CanvasTransform guarda o tamanho em cache.
+    void refreshDocumentGeometry();
     void setI18n(I18nService* i18n);
     void setHistory(CommandStack* history);
     void clearSelection();
@@ -142,6 +145,11 @@ public:
     void setSafeZoneMode(int mode);
     int safeZoneMode() const { return m_safeZoneMode; }
 
+    void setShowRulers(bool on);
+    bool showRulers() const { return m_showRulers; }
+    void setShowGuides(bool on);
+    bool showGuides() const { return m_showGuides; }
+
     /// Starts a four-corner selection used by the mockup/logo tool. Points
     /// are collected directly on the document so the user never needs to
     /// type canvas coordinates. While placement is active the given logo is
@@ -211,7 +219,9 @@ public:
 private:
     Layer* hitTestLayer(const QPointF& docPos, bool includeLocked = false) const;
     Layer* hitTestChildrenRecursive(const GroupLayer& group, const QPointF& docPos,
-                                    bool includeLocked = false) const;
+                                    bool includeLocked = false,
+                                    const QTransform& parentToDoc = QTransform(),
+                                    float parentOpacity = 1.0f) const;
     bool imagePixelTransparent(const ImageLayer& image, const QPointF& local) const;
     HandleSet handlePositions(const Layer& layer) const;
     int handleAt(const QPointF& widgetPos) const;
@@ -225,7 +235,8 @@ private:
     void addToSelection(const LayerId& id);
     void removeFromSelection(const LayerId& id);
     void finishMockupPlacement();
-    QList<Layer*> hitTestRubberBand(const QRectF& docRect) const;
+    QList<Layer*> hitTestRubberBand(const QRectF& docRect,
+                                    bool containment = false) const;
 
     QPointer<Document> m_document;
     CommandStack* m_history = nullptr;
@@ -258,6 +269,11 @@ private:
     QImage m_previewImage;
     int m_gridSpacing = 50;
     int m_safeZoneMode = 0; // 0=None, 1=YouTube, 2=Instagram, 3=TikTok
+    bool m_showRulers = false;
+    bool m_showGuides = true;
+    bool m_draggingGuide = false;
+    bool m_dragGuideHorizontal = true;
+    double m_dragGuidePosition = 0.0;
 
     bool m_mockupPlacementActive = false;
     QPolygonF m_mockupCorners;

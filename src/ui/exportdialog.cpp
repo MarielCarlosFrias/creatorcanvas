@@ -254,6 +254,10 @@ void ExportDialog::buildUi()
     m_format->addItem(QStringLiteral("PNG"), QStringLiteral("png"));
     m_format->addItem(QStringLiteral("JPEG"), QStringLiteral("jpeg"));
     m_format->addItem(QStringLiteral("WebP"), QStringLiteral("webp"));
+    // Ambos podem conter vectores e imagens; não prometer PDF/SVG 100%
+    // vectoriais quando efeitos/composição ou bitmaps exigem raster.
+    m_format->addItem(QStringLiteral("PDF (vetorial/raster)"), QStringLiteral("pdf"));
+    m_format->addItem(QStringLiteral("SVG (vetorial + raster)"), QStringLiteral("svg"));
     addFieldRow(m_formatLabel, m_format);
 
     m_quality = new QSpinBox(outputCard);
@@ -408,29 +412,43 @@ void ExportDialog::updateControlsEnabled()
         return;
 
     const QString fmt = m_format->currentData().toString();
-    m_quality->setEnabled(fmt != QLatin1String("png"));
+    m_quality->setEnabled(fmt != QLatin1String("png") && fmt != QLatin1String("pdf")
+                          && fmt != QLatin1String("svg"));
+    // PDF/SVG exportam o documento inteiro (vectores e/ou raster): o escopo
+    // "só camada" não se aplica.
+    const bool wholeDocOnly = (fmt == QLatin1String("pdf") || fmt == QLatin1String("svg"));
+    if (m_scopeLayer) {
+        const bool hasSelectedLayer = m_doc && !m_selectedLayerId.isNull()
+                                      && m_doc->findLayer(m_selectedLayerId) != nullptr;
+        m_scopeLayer->setEnabled(!wholeDocOnly && hasSelectedLayer);
+        if (wholeDocOnly && m_scopeLayer->isChecked() && m_scopeEntire)
+            m_scopeEntire->setChecked(true);
+    }
 
-    // JPEG has no alpha channel: transparency is unavailable and forced off.
-    // The user's choice is remembered and restored when the format supports
-    // alpha again, so switching format to JPEG and back does not silently
-    // discard a "transparent PNG" intent. The checkbox is disabled BEFORE the
-    // forced uncheck so the toggled handler ignores the programmatic change.
-    const bool supportsAlpha = (fmt != QLatin1String("jpeg"));
-    if (!supportsAlpha)
-    {
-        m_transparentWanted = m_transparent->isChecked();
-        m_transparent->setEnabled(false);
-        if (m_transparent->isChecked())
-            m_transparent->setChecked(false);
-    }
-    else
-    {
-        if (m_transparent->isChecked() != m_transparentWanted)
-            m_transparent->setChecked(m_transparentWanted);
-        m_transparent->setEnabled(true);
-    }
+    // Só PNG/WebP expõem a opção de flatten do backend. JPEG é sempre opaco;
+    // PDF/SVG preservam transparência, mas não têm um argumento para a desligar.
+    // O checkbox reflecte cada comportamento sem oferecer um controlo no-op.
+    const bool hasTransparencyToggle = fmt == QLatin1String("png")
+                                       || fmt == QLatin1String("webp");
+    const bool inherentlyTransparent = fmt == QLatin1String("pdf")
+                                       || fmt == QLatin1String("svg");
+    m_transparent->setEnabled(hasTransparencyToggle);
+    const bool checked = hasTransparencyToggle ? m_transparentWanted
+                                               : inherentlyTransparent;
+    if (m_transparent->isChecked() != checked)
+        m_transparent->setChecked(checked);
     if (m_transparentLabel)
-        m_transparentLabel->setEnabled(supportsAlpha);
+        m_transparentLabel->setEnabled(hasTransparencyToggle);
+
+    if (inherentlyTransparent) {
+        m_transparent->setToolTip(tr_(QStringLiteral("export.transparentVectorHint"),
+                                      QStringLiteral("PDF and SVG preserve source transparency.")));
+    } else if (fmt == QLatin1String("jpeg")) {
+        m_transparent->setToolTip(tr_(QStringLiteral("export.transparentJpegHint"),
+                                      QStringLiteral("JPEG is always flattened onto white.")));
+    } else {
+        m_transparent->setToolTip(QString());
+    }
 }
 
 void ExportDialog::applyPresetById(const QString& presetId)
@@ -533,14 +551,15 @@ void ExportDialog::updatePreview()
             QStringLiteral("%1 x %2 px").arg(outWidth).arg(outHeight));
     }
 
-    // Render a scaled-down preview with checkerboard transparency.
+    // Render once WITHOUT checkerboard: this is the same alpha content used by
+    // the raster backends and therefore also by the size estimator.
     const double previewScale = qMin(static_cast<double>(kPreviewThumbSide) / m_doc->width(),
                                      static_cast<double>(kPreviewThumbSide) / m_doc->height());
 
     const int thumbW = qMax(1, static_cast<int>(m_doc->width() * previewScale));
     const int thumbH = qMax(1, static_cast<int>(m_doc->height() * previewScale));
 
-    QImage thumbImage(thumbW, thumbH, QImage::Format_ARGB32);
+    QImage thumbImage(thumbW, thumbH, QImage::Format_ARGB32_Premultiplied);
     thumbImage.fill(Qt::transparent);
 
     {
@@ -551,30 +570,42 @@ void ExportDialog::updatePreview()
         t.scale(previewScale, previewScale);
 
         RenderOptions opts;
-        opts.drawCheckerboard = true;
-        opts.checkerSize = 8;
+        opts.drawCheckerboard = false;
         opts.canvasBorder = Qt::transparent;
 
         if (layerOnly) {
+            // renderSiblingLayers uses the painter's current transform (unlike
+            // renderDocument, which receives it as an argument).
+            p.setTransform(t);
             renderSiblingLayers(*m_doc, {m_selectedLayerId}, &p, opts);
         } else {
             renderDocument(*m_doc, &p, t, opts);
         }
     }
 
-    // Show the same pixels the exporter will write: flatten onto white when
-    // the output is opaque (transparency off or JPEG).
-    if (!m_transparent->isChecked()) {
-        QImage flat(thumbImage.size(), QImage::Format_RGB32);
-        flat.fill(Qt::white);
-        QPainter fp(&flat);
-        fp.drawImage(0, 0, thumbImage);
-        fp.end();
-        thumbImage = flat;
-    }
-
     m_cachedBaseThumbnail = thumbImage;
-    m_previewImageLabel->setPixmap(QPixmap::fromImage(thumbImage));
+
+    // Checkerboard/white belongs only to the display surface. Mixing it into
+    // the cached source made transparent PNG/WebP estimates encode a fake
+    // opaque checker pattern that the exporters never write.
+    QImage displayImage(thumbImage.size(), QImage::Format_RGB32);
+    displayImage.fill(Qt::white);
+    {
+        QPainter display(&displayImage);
+        if (m_transparent->isChecked()) {
+            constexpr int checkerSize = 8;
+            for (int y = 0; y < displayImage.height(); y += checkerSize) {
+                for (int x = 0; x < displayImage.width(); x += checkerSize) {
+                    const bool dark = ((x / checkerSize) + (y / checkerSize)) % 2 != 0;
+                    display.fillRect(QRect(x, y, checkerSize, checkerSize),
+                                     dark ? QColor(0x99, 0x99, 0x99)
+                                          : QColor(0xcc, 0xcc, 0xcc));
+                }
+            }
+        }
+        display.drawImage(0, 0, thumbImage);
+    }
+    m_previewImageLabel->setPixmap(QPixmap::fromImage(displayImage));
 
     estimateFileSize();
 }
@@ -610,6 +641,16 @@ void ExportDialog::estimateFileSize()
     }
 
     const QString fmt = m_format->currentData().toString();
+    if (fmt == QLatin1String("pdf") || fmt == QLatin1String("svg")) {
+        // Um PNG de proxy multiplicado pelo número de píxeis não estima um
+        // content stream PDF nem XML + base64 SVG. É preferível não inventar
+        // um valor a apresentar uma estimativa de outro backend.
+        m_fileSizeLabel->setText(
+            tr_(QStringLiteral("export.fileSizeUnavailable"),
+                QStringLiteral("Estimate unavailable")));
+        return;
+    }
+
     const int quality = m_quality->value();
     const double scale = m_scale->currentData().toDouble();
 

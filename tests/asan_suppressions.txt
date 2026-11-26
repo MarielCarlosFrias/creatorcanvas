@@ -4,3 +4,18 @@
 # ONNX Runtime faz 2 alocacões internas (2x32 bytes) que não liberta no
 # encerramento da sessão — vazio conhecido da biblioteca fechada.
 leak:libonnxruntime
+
+# fontconfig/pango/GTK3 (plugin de tema libqgtk3 do Qt) fazem strdup de
+# strings de configuração de fontes no arranque do QApplication e não as
+# libertam — vazamentos de 3 bytes, de bibliotecas de sistema, no exit.
+# Não são do CreatorCanvas (o stack termina em main.cpp na construção do
+# QApplication).
+leak:FcValueSave
+leak:FcConfigSetDefaultSubstitute
+leak:libfontconfig
+leak:libpango
+leak:libpangocairo
+leak:libpangoft2
+leak:libharfbuzz
+leak:libgtk-3
+leak:libqgtk3

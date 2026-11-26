@@ -677,5 +677,90 @@ void TestImageProcessing::testMockupWarpPolygonShapeFit()
              " ponto extra na aresta não puxa conteúdo (não é Coons)");
 }
 
+    void testMotionBlur()
+    {
+        QImage img(32, 32, QImage::Format_ARGB32);
+        img.fill(Qt::black);
+        img.setPixelColor(16, 16, QColor(255, 255, 255, 255));
+
+        // amount/length inválido = identidade
+        QCOMPARE(ImageProcessing::applyMotionBlur(img, 0, 0), img);
+        QVERIFY(ImageProcessing::applyMotionBlur(QImage(), 0, 10).isNull());
+
+        const QImage blurred = ImageProcessing::applyMotionBlur(img, 0.0, 10.0);
+        QCOMPARE(blurred.size(), img.size());
+        // o rasto espalha o píxel branco na horizontal (y=16)
+        QVERIFY(qRed(blurred.pixel(16, 16)) < 255);          // centro diluído
+        QVERIFY(qRed(blurred.pixel(20, 16)) > 0);             // vizinho aceso
+        QVERIFY(qRed(blurred.pixel(16, 20)) == 0);             // fora do eixo, preto
+        // alfa preservado (fundo opaco preto continua opaco)
+        QCOMPARE(qAlpha(blurred.pixel(5, 5)), 255);
+    }
+
+    void testNoise()
+    {
+        QImage img(24, 24, QImage::Format_ARGB32);
+        img.fill(QColor(100, 100, 100, 200));
+
+        // amount 0 = identidade
+        QCOMPARE(ImageProcessing::applyNoise(img, 0.0), img);
+        QVERIFY(ImageProcessing::applyNoise(QImage(), 50.0).isNull());
+
+        const QImage noisy = ImageProcessing::applyNoise(img, 50.0);
+        QCOMPARE(noisy.size(), img.size());
+        // alfa preservado em todos os píxeis
+        for (int y = 0; y < noisy.height(); ++y)
+            for (int x = 0; x < noisy.width(); ++x)
+                QCOMPARE(qAlpha(noisy.pixel(x, y)), 200);
+        // algum píxel mudou de cor
+        bool anyDiff = false;
+        for (int y = 0; y < noisy.height() && !anyDiff; ++y)
+            for (int x = 0; x < noisy.width(); ++x)
+                if (noisy.pixel(x, y) != img.pixel(x, y)) { anyDiff = true; break; }
+        QVERIFY(anyDiff);
+        // determinístico (seed fixa)
+        QCOMPARE(ImageProcessing::applyNoise(img, 50.0), noisy);
+
+        // monochrome: R==G==B em cada píxel
+        const QImage mono = ImageProcessing::applyNoise(img, 80.0, true);
+        for (int y = 0; y < mono.height(); ++y)
+            for (int x = 0; x < mono.width(); ++x) {
+                const QRgb p = mono.pixel(x, y);
+                QCOMPARE(qRed(p), qGreen(p));
+                QCOMPARE(qGreen(p), qBlue(p));
+            }
+    }
+
+    void testDistort()
+    {
+        QImage img(40, 40, QImage::Format_ARGB32);
+        for (int y = 0; y < 40; ++y)
+            for (int x = 0; x < 40; ++x)
+                img.setPixelColor(x, y, QColor(x * 6 % 256, y * 6 % 256, 128, 255));
+
+        QVERIFY(ImageProcessing::applyDistort(QImage(), ImageProcessing::DistortMode::Twirl, 0.5).isNull());
+        // amount 0 = identidade nos três modos
+        QCOMPARE(ImageProcessing::applyDistort(img, ImageProcessing::DistortMode::Twirl, 0.0), img);
+        QCOMPARE(ImageProcessing::applyDistort(img, ImageProcessing::DistortMode::Pinch, 0.0), img);
+        QCOMPARE(ImageProcessing::applyDistort(img, ImageProcessing::DistortMode::Ripple, 0.0), img);
+
+        for (auto mode : {ImageProcessing::DistortMode::Twirl,
+                          ImageProcessing::DistortMode::Pinch,
+                          ImageProcessing::DistortMode::Ripple}) {
+            const QImage out = ImageProcessing::applyDistort(img, mode, 0.5);
+            QCOMPARE(out.size(), img.size());          // tamanho preservado
+            // o centro não se move no twirl/pinch
+            if (mode != ImageProcessing::DistortMode::Ripple)
+                QCOMPARE(out.pixel(20, 20), img.pixel(20, 20));
+            // alfa preservado
+            QCOMPARE(qAlpha(out.pixel(0, 0)), 255);
+        }
+
+        // twirl realmente desloca um píxel fora do centro
+        const QImage twirled = ImageProcessing::applyDistort(img, ImageProcessing::DistortMode::Twirl, 0.8);
+        QVERIFY(twirled.pixel(30, 20) != img.pixel(30, 20)
+                || twirled.pixel(20, 30) != img.pixel(20, 30));
+    }
+
 QTEST_MAIN(TestImageProcessing)
 #include "test_image_processing.moc"

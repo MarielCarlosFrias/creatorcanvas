@@ -24,6 +24,7 @@ cc_add_test(test_logging       unit/test_logging.cpp)
 cc_add_test(test_layers        unit/test_layers.cpp)
 cc_add_test(test_document      unit/test_document.cpp)
 cc_add_test(test_history       unit/test_history.cpp)
+cc_add_test(test_history_budget unit/test_history_budget.cpp)
 cc_add_test(test_serialization unit/test_serialization.cpp)
 cc_add_test(test_renderer      unit/test_renderer.cpp)
 cc_add_test(test_newdocument   unit/test_newdocument.cpp)
@@ -71,6 +72,62 @@ cc_add_test(test_ui_phase1 unit/test_ui_phase1.cpp
 )
 cc_add_test(test_photocraft unit/test_photocraft.cpp)
 cc_add_test(test_selection_engine unit/test_selection_engine.cpp)
+cc_add_test(test_saved_selections unit/test_saved_selections.cpp)
+cc_add_test(test_layer_clipboard unit/test_layer_clipboard.cpp)
+cc_add_test(test_selection_transform unit/test_selection_transform.cpp
+            ../src/ui/transformselectiondialog.cpp)
+cc_add_test(test_image_size unit/test_image_size.cpp
+            ../src/ui/imagesizedialog.cpp)
+cc_add_test(test_smart_filters unit/test_smart_filters.cpp
+            ../src/ui/smartfilterdialog.cpp)
+cc_add_test(test_dialog_labels unit/test_dialog_labels.cpp
+            ../src/ui/imagesizedialog.cpp
+            ../src/ui/refineedgedialog.cpp)
+
+cc_add_test(test_shortcuts unit/test_shortcuts.cpp
+            ../src/ui/actionmanager.cpp
+            ../src/ui/themeicons.cpp)
+
+cc_add_test(test_command_palette unit/test_command_palette.cpp
+            ../src/ui/commandpalette.cpp
+            ../src/ui/actionmanager.cpp
+            ../src/ui/themeicons.cpp)
+
+cc_add_test(test_pack_store unit/test_pack_store.cpp
+            ../src/ui/packbrowser.cpp)
+
+cc_add_test(test_pack_browser_search unit/test_pack_browser_search.cpp
+            ../src/ui/packbrowser.cpp)
+
+cc_add_test(test_pack_browser_activation unit/test_pack_browser_activation.cpp
+            ../src/ui/packbrowser.cpp)
+
+cc_add_test(test_sample_projects unit/test_sample_projects.cpp)
+
+cc_add_test(test_onboarding_dismiss unit/test_onboarding_dismiss.cpp
+            ../src/ui/onboardingpanel.cpp)
+
+cc_add_test(test_onboarding unit/test_onboarding.cpp
+            ../src/ui/onboardingpanel.cpp
+            ../src/ui/onboardingtour.cpp
+            ../src/ui/welcomedialog.cpp
+            ../src/ui/themeicons.cpp)
+cc_add_test(test_batch unit/test_batch.cpp)
+cc_add_test(test_panels unit/test_panels.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/navigatorpanel.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/swatchpanel.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/tooloptionsbar.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/themeicons.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvasview.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvastransform.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvasoverlayrenderer.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvasgesturehandler.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/canvascontextmenu.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/inlinetexteditor.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/aibackgrounddialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/maskeditcanvas.cpp
+)
+cc_add_test(test_canvas_ops unit/test_canvas_ops.cpp)
 cc_add_test(test_layer_render unit/test_layer_render.cpp)
 cc_add_test(test_hit_alpha unit/test_hit_alpha.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/inlinetexteditor.cpp
@@ -165,6 +222,15 @@ cc_add_test(test_mockup_dialog unit/test_mockup_dialog.cpp
 )
 cc_add_test(test_mainwindow_tabs unit/test_mainwindow_tabs.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/dockvisibilitypolicy.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/commandpalette.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/actionmanager.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/onboardingpanel.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/onboardingtour.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/welcomedialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/packbrowser.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/transformselectiondialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/imagesizedialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/smartfilterdialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/mainwindow.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/newdocumentdialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/exportdialog.cpp
@@ -206,10 +272,18 @@ cc_add_test(test_mainwindow_tabs unit/test_mainwindow_tabs.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/menubuilder.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/shortcutdialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/toolslotbutton.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/navigatorpanel.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/swatchpanel.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/mainwindow_selection.cpp
 )
 
 add_executable(generate_sample_projects ${PROJECT_SOURCE_DIR}/tools/generate_sample_projects.cpp)
 target_link_libraries(generate_sample_projects PRIVATE Qt6::Widgets cc_core cc_rendering miniz)
 target_include_directories(generate_sample_projects PRIVATE ${PROJECT_SOURCE_DIR}/src)
+
+# Projectos de exemplo construídos sobre o Pacote Inicial (resources/packs).
+add_executable(generate_pack_samples ${PROJECT_SOURCE_DIR}/tools/generate_pack_samples.cpp)
+target_link_libraries(generate_pack_samples PRIVATE Qt6::Widgets cc_core cc_rendering miniz)
+target_include_directories(generate_pack_samples PRIVATE ${PROJECT_SOURCE_DIR}/src)
 
 target_link_libraries(test_mainwindow_tabs PRIVATE cc_ui_services)

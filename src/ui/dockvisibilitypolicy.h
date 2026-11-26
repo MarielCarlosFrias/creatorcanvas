@@ -13,7 +13,9 @@ class DockVisibilityPolicy final
 public:
     void setDocks(QDockWidget* layers, QDockWidget* text,
                   QDockWidget* shape, QDockWidget* image,
-                  QDockWidget* history);
+                  QDockWidget* history,
+                  QDockWidget* navigator = nullptr,
+                  QDockWidget* swatches = nullptr);
     void apply(bool ultraCompact);
 
 private:

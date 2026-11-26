@@ -11,6 +11,7 @@ class QPainter;
 namespace cc {
 
 class Document;
+class ShapeLayer;
 
 struct RenderOptions
 {
@@ -58,5 +59,10 @@ void invalidateLayerCache(const QUuid& layerId);
 
 /// Invalida todo o cache de camadas renderizadas.
 void invalidateAllLayerCaches();
+
+/// Hit-test da silhueta renderizada de uma forma, incluindo preenchimento e
+/// traço. Usado pelo canvas para manter seleção coerente com a renderização.
+bool shapeContainsPoint(const ShapeLayer& shape, const QPointF& localPoint,
+                       double tolerance = 1.5);
 
 } // namespace cc
