@@ -51,6 +51,14 @@ void ActionManager::createActions(I18nService* i18n)
     exportAction->setIcon(ThemeIcons::actionExport());
     exportAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+E")));
 
+    exportDocumentPngAction = new QAction(this);
+    exportDocumentPngAction->setIcon(ThemeIcons::actionExport());
+    exportDocumentPngAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+E")));
+
+    quickExportLayerPngAction = new QAction(this);
+    quickExportLayerPngAction->setIcon(ThemeIcons::actionExport());
+    quickExportLayerPngAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+Alt+E")));
+
     batchAction = new QAction(this);
     batchAction->setIcon(ThemeIcons::actionExport());
     batchAction->setText(i18n->t("common", "menu.file.batch"));
@@ -74,6 +82,19 @@ void ActionManager::createActions(I18nService* i18n)
     redoAction->setIcon(ThemeIcons::actionRedo());
     redoAction->setShortcut(QKeySequence::Redo);
     redoAction->setEnabled(false);
+
+    // --- Área de transferência ---
+    copyAction = new QAction(this);
+    copyAction->setShortcut(QKeySequence::Copy);   // Ctrl+C
+
+    cutAction = new QAction(this);
+    cutAction->setShortcut(QKeySequence::Cut);     // Ctrl+X
+
+    pasteAction = new QAction(this);
+    pasteAction->setShortcut(QKeySequence::Paste); // Ctrl+V
+
+    pasteIntoAction = new QAction(this);
+    pasteIntoAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V));
 
     // --- Zoom & Exibição ---
     zoomInAction = new QAction(this);
@@ -103,6 +124,18 @@ void ActionManager::createActions(I18nService* i18n)
     toggleHistoryAction->setCheckable(true);
     toggleHistoryAction->setIcon(ThemeIcons::actionHistory());
     toggleHistoryAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+H")));
+
+    toggleRulersAction = new QAction(this);
+    toggleRulersAction->setCheckable(true);
+    toggleGuidesAction = new QAction(this);
+    toggleGuidesAction->setCheckable(true);
+    toggleGuidesAction->setChecked(true);
+    newGuideAction = new QAction(this);
+    clearGuidesAction = new QAction(this);
+    toggleNavigatorAction = new QAction(this);
+    toggleNavigatorAction->setCheckable(true);
+    toggleSwatchesAction = new QAction(this);
+    toggleSwatchesAction->setCheckable(true);
 
     toggleToolsBarAction = new QAction(this);
     toggleToolsBarAction->setCheckable(true);
@@ -234,8 +267,13 @@ void ActionManager::createActions(I18nService* i18n)
     ungroupAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_G));
 
     mergeSelectedAction = new QAction(this);
+    mergeDownAction = new QAction(this);
     mergeVisibleAction = new QAction(this);
     flattenAction = new QAction(this);
+    duplicateLayerAction = new QAction(this);
+    duplicateLayerAction->setIcon(ThemeIcons::actionDuplicate());
+    rasterizeLayerAction = new QAction(this);
+    rasterizeLayerAction->setIcon(ThemeIcons::layerTypeImage());
     textBehindSubjectAction = new QAction(this);
 
     flipHAction = new QAction(this);
@@ -249,6 +287,13 @@ void ActionManager::createActions(I18nService* i18n)
 
     rotateRightAction = new QAction(this);
     rotateRightAction->setIcon(ThemeIcons::actionRotateRight());
+
+    // --- Tela (canvas) ---
+    imageSizeAction = new QAction(this);
+    canvasSizeAction = new QAction(this);
+    rotateCanvasCwAction = new QAction(this);
+    rotateCanvasCcwAction = new QAction(this);
+    rotateCanvas180Action = new QAction(this);
 
     deleteAction = new QAction(this);
     deleteAction->setIcon(ThemeIcons::actionDelete());
@@ -277,8 +322,19 @@ void ActionManager::createActions(I18nService* i18n)
     invertSelectionAction = new QAction(this);
     invertSelectionAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_I));
 
+    reselectAction = new QAction(this);
+    reselectAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_D));
+
+    transformSelectionAction = new QAction(this);
+    saveSelectionAction = new QAction(this);
+
     selectionOpsAction = new QAction(this);
     colorRangeAction = new QAction(this);
+
+    // --- Edição sobre a seleção ativa (menu Editar) ---
+    fillSelectionAction = new QAction(this);
+    strokeSelectionAction = new QAction(this);
+    clearSelectionAction = new QAction(this);
 
     // Selecionar Sujeito (IA): mesmo motor do recorte de fundo, mas o
     // resultado é uma seleção de píxeis em vez de descartar o fundo.
@@ -337,6 +393,14 @@ void ActionManager::createActions(I18nService* i18n)
         filterActions.append(new QAction(this));
     }
 
+    // --- Filtros com parâmetros (Blur / Noise / Distort) ---
+    blurGaussianAction = new QAction(this);
+    blurMotionAction = new QAction(this);
+    noiseAddAction = new QAction(this);
+    distortTwirlAction = new QAction(this);
+    distortPinchAction = new QAction(this);
+    distortRippleAction = new QAction(this);
+
     // Ajustes (submenu Image ▸ Adjustments), na ordem de kAdjustmentTypes
     // do diálogo.
     adjustmentActions.clear();
@@ -350,6 +414,18 @@ void ActionManager::createActions(I18nService* i18n)
     settingsAction->setShortcut(QKeySequence::Preferences);
 
     shortcutsAction = new QAction(this);
+
+    commandPaletteAction = new QAction(this);
+    commandPaletteAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+K")));
+
+    quickTourAction = new QAction(this);
+
+    backgroundsAction = new QAction(this);
+    backgroundsAction->setIcon(ThemeIcons::actionNewDocument());
+    // Ctrl+B já é da barra de ferramentas (View): conflito de atalho fazia
+    // os dois dispararem. Ctrl+Shift+B fica livre.
+    backgroundsAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+B")));
+
     layerCompsAction = new QAction(this);
     webSlicesAction = new QAction(this);
     toggleAdvancedModeAction = new QAction(this);
@@ -396,6 +472,10 @@ void ActionManager::retranslate(I18nService* i18n)
 
     exportAction->setText(i18n->t("common", "menu.file.export"));
     exportAction->setToolTip(exportAction->text() + QStringLiteral(" (Ctrl+E)"));
+    exportDocumentPngAction->setText(i18n->t("editor", "export.quickPng"));
+    exportDocumentPngAction->setToolTip(i18n->t("editor", "export.quickPng.tooltip"));
+    quickExportLayerPngAction->setText(i18n->t("editor", "hints.layerQuickExport"));
+    quickExportLayerPngAction->setToolTip(i18n->t("common", "panel.quickExportPng.tooltip"));
 
     batchAction->setText(i18n->t("common", "menu.file.batch"));
     batchAction->setToolTip(i18n->t("common", "menu.file.batch.tooltip"));
@@ -408,6 +488,20 @@ void ActionManager::retranslate(I18nService* i18n)
 
     redoAction->setText(i18n->t("common", "menu.edit.redo"));
     redoAction->setToolTip(redoAction->text() + QStringLiteral(" (Ctrl+Y)"));
+
+    copyAction->setText(i18n->t("common", "menu.edit.copy"));
+    copyAction->setToolTip(copyAction->text() + QStringLiteral(" (Ctrl+C)"));
+    cutAction->setText(i18n->t("common", "menu.edit.cut"));
+    cutAction->setToolTip(cutAction->text() + QStringLiteral(" (Ctrl+X)"));
+    pasteAction->setText(i18n->t("common", "menu.edit.paste"));
+    pasteAction->setToolTip(pasteAction->text() + QStringLiteral(" (Ctrl+V)"));
+    pasteIntoAction->setText(i18n->t("common", "menu.edit.pasteInto"));
+    pasteIntoAction->setToolTip(pasteIntoAction->text() + QStringLiteral(" (Ctrl+Shift+V)"));
+
+    fillSelectionAction->setText(i18n->t("common", "menu.edit.fill"));
+    strokeSelectionAction->setText(i18n->t("common", "menu.edit.stroke"));
+    clearSelectionAction->setText(i18n->t("common", "menu.edit.clear"));
+    clearSelectionAction->setToolTip(i18n->t("common", "menu.edit.clear.tooltip"));
 
     // --- Zoom ---
     const QString zInText = i18n->t("common", "action.zoomIn");
@@ -429,6 +523,13 @@ void ActionManager::retranslate(I18nService* i18n)
 
     toggleHistoryAction->setText(i18n->t("common", "menu.view.history"));
     toggleHistoryAction->setToolTip(toggleHistoryAction->text() + QStringLiteral(" (Ctrl+H)"));
+
+    toggleRulersAction->setText(i18n->t("common", "menu.view.rulers"));
+    toggleGuidesAction->setText(i18n->t("editor", "guides.show"));
+    newGuideAction->setText(i18n->t("editor", "guides.new"));
+    clearGuidesAction->setText(i18n->t("editor", "guides.clear"));
+    toggleNavigatorAction->setText(i18n->t("common", "menu.view.panels.navigator"));
+    toggleSwatchesAction->setText(i18n->t("common", "menu.view.panels.swatches"));
 
     toggleToolsBarAction->setText(i18n->t("common", "menu.view.toggleToolsBar"));
     toggleToolsBarAction->setToolTip(toggleToolsBarAction->text() + QStringLiteral(" (Ctrl+B)"));
@@ -488,12 +589,21 @@ void ActionManager::retranslate(I18nService* i18n)
     groupAction->setText(i18n->t("common", "menu.layer.group"));
     ungroupAction->setText(i18n->t("common", "menu.layer.ungroup"));
     mergeSelectedAction->setText(i18n->t("common", "action.mergeSelected"));
+    mergeDownAction->setText(i18n->t("common", "action.mergeDown"));
     mergeVisibleAction->setText(i18n->t("common", "action.mergeVisible"));
     flattenAction->setText(i18n->t("common", "action.flatten"));
+    duplicateLayerAction->setText(i18n->t("common", "action.duplicateLayer"));
+    rasterizeLayerAction->setText(i18n->t("common", "action.rasterizeLayer"));
     textBehindSubjectAction->setText(i18n->t("common", "action.textBehindSubject"));
 
     flipHAction->setText(i18n->t("common", "menu.layer.flipH"));
     flipVAction->setText(i18n->t("common", "menu.layer.flipV"));
+
+    imageSizeAction->setText(i18n->t("common", "menu.image.imageSize"));
+    canvasSizeAction->setText(i18n->t("common", "menu.image.canvasSize"));
+    rotateCanvasCwAction->setText(i18n->t("common", "menu.image.rotateCw"));
+    rotateCanvasCcwAction->setText(i18n->t("common", "menu.image.rotateCcw"));
+    rotateCanvas180Action->setText(i18n->t("common", "menu.image.rotate180"));
     rotateLeftAction->setText(i18n->t("common", "menu.layer.rotateLeft"));
     rotateRightAction->setText(i18n->t("common", "menu.layer.rotateRight"));
     deleteAction->setText(i18n->t("common", "menu.layer.delete"));
@@ -510,6 +620,10 @@ void ActionManager::retranslate(I18nService* i18n)
     selectAllAction->setText(i18n->t("common", "action.selectAll"));
     deselectAction->setText(i18n->t("editor", "selection.deselect"));
     invertSelectionAction->setText(i18n->t("editor", "selection.invert"));
+    reselectAction->setText(i18n->t("editor", "selection.reselect"));
+    reselectAction->setToolTip(reselectAction->text() + QStringLiteral(" (Ctrl+Shift+D)"));
+    transformSelectionAction->setText(i18n->t("common", "action.transformSelection"));
+    saveSelectionAction->setText(i18n->t("editor", "selection.save"));
     selectionOpsAction->setText(i18n->t("editor", "selection.operations"));
     selectionOpsAction->setToolTip(i18n->t("editor", "selection.operationsTooltip"));
     colorRangeAction->setText(i18n->t("editor", "selection.colorRange.title"));
@@ -569,6 +683,13 @@ void ActionManager::retranslate(I18nService* i18n)
         filterActions[i]->setText(i18n->t("editor", QString::fromLatin1(filterKeys[i])));
     }
 
+    blurGaussianAction->setText(i18n->t("editor", "filters.blurGaussian"));
+    blurMotionAction->setText(i18n->t("editor", "filters.blurMotion"));
+    noiseAddAction->setText(i18n->t("editor", "filters.noiseAdd"));
+    distortTwirlAction->setText(i18n->t("editor", "filters.distortTwirl"));
+    distortPinchAction->setText(i18n->t("editor", "filters.distortPinch"));
+    distortRippleAction->setText(i18n->t("editor", "filters.distortRipple"));
+
     static const char* const adjustmentKeys[] = {
         "adjustments.brightnessContrast", "adjustments.hueSaturation",
         "adjustments.shadowsHighlights", "adjustments.vignette",
@@ -583,13 +704,19 @@ void ActionManager::retranslate(I18nService* i18n)
     // --- Janela, Ajuda & Configurações ---
     settingsAction->setText(i18n->t("common", "menu.settings.open"));
     shortcutsAction->setText(i18n->t("common", "menu.settings.shortcuts"));
+    commandPaletteAction->setText(i18n->t("editor", "commandPalette.menu"));
+    commandPaletteAction->setToolTip(i18n->t("editor", "commandPalette.tip"));
+    quickTourAction->setText(i18n->t("editor", "tour.title"));
+    quickTourAction->setToolTip(i18n->t("editor", "tour.restartHint"));
+    backgroundsAction->setText(i18n->t("editor", "pack.action.browse"));
+    backgroundsAction->setToolTip(i18n->t("editor", "pack.action.browse.tooltip"));
     layerCompsAction->setText(i18n->t("editor", "comps.menuOpen"));
     toggleAdvancedModeAction->setText(i18n->t("editor", "advancedMode.menu"));
     refineEdgeAction->setText(i18n->t("editor", "refineEdge.menuOpen"));
     toggleAdvancedModeAction->setToolTip(i18n->t("editor", "advancedMode.tip"));
     webSlicesAction->setText(i18n->t("editor", "webSlices.menuOpen"));
     startScreenAction->setText(i18n->t("common", "start.screenAction"));
-    sampleProjectsAction->setText(QStringLiteral("Projetos de Exemplo para Prática…"));
+    sampleProjectsAction->setText(i18n->t("common", "menu.help.sampleProjects"));
     aboutAction->setText(i18n->t("common", "menu.help.about"));
     aboutQtAction->setText(i18n->t("common", "menu.help.aboutQt"));
 }
@@ -691,10 +818,16 @@ void ActionManager::registerShortcutActions()
     };
     add("file.new", newAction); add("file.open", openAction); add("file.save", saveAction);
     add("file.saveAs", saveAsAction); add("file.import", importAction); add("file.export", exportAction);
-    add("file.batch", batchAction); add("file.quit", quitAction);
+    add("file.batch", batchAction); add("file.exportPng", exportDocumentPngAction); add("file.quit", quitAction);
+    add("layer.quickExportPng", quickExportLayerPngAction);
     add("edit.undo", undoAction); add("edit.redo", redoAction);
+    add("edit.copy", copyAction); add("edit.cut", cutAction);
+    add("edit.paste", pasteAction); add("edit.pasteInto", pasteIntoAction);
     add("view.zoomIn", zoomInAction); add("view.zoomOut", zoomOutAction); add("view.zoomFit", zoomFitAction);
     add("view.grid", toggleGridAction); add("view.snap", toggleSnapAction); add("view.history", toggleHistoryAction);
+    add("view.rulers", toggleRulersAction); add("view.guides", toggleGuidesAction);
+    add("view.newGuide", newGuideAction); add("view.clearGuides", clearGuidesAction);
+    add("panel.navigator", toggleNavigatorAction); add("panel.swatches", toggleSwatchesAction);
     add("view.toolsBar", toggleToolsBarAction); add("view.rightPanel", toggleRightPanelAction);
     add("panel.layers", toggleLayersDockAction); add("panel.text", toggleTextDockAction);
     add("panel.shape", toggleShapeDockAction); add("panel.image", toggleImageDockAction);
@@ -708,11 +841,20 @@ void ActionManager::registerShortcutActions()
     add("align.bottom", alignBottomAction); add("align.centerBoth", alignCenterBothAction);
     add("align.distributeH", distributeHAction); add("align.distributeV", distributeVAction);
     add("layer.group", groupAction); add("layer.ungroup", ungroupAction); add("layer.mergeSelected", mergeSelectedAction);
-    add("layer.mergeVisible", mergeVisibleAction); add("layer.flatten", flattenAction); add("layer.textBehind", textBehindSubjectAction);
+    add("layer.mergeDown", mergeDownAction); add("layer.mergeVisible", mergeVisibleAction);
+    add("layer.flatten", flattenAction); add("layer.duplicate", duplicateLayerAction);
+    add("layer.rasterize", rasterizeLayerAction); add("layer.textBehind", textBehindSubjectAction);
     add("transform.flipH", flipHAction); add("transform.flipV", flipVAction); add("transform.rotateLeft", rotateLeftAction);
-    add("transform.rotateRight", rotateRightAction); add("layer.delete", deleteAction); add("layer.lock", lockLayerAction);
+    add("transform.rotateRight", rotateRightAction);
+    add("image.imageSize", imageSizeAction); add("image.canvasSize", canvasSizeAction);
+    add("image.rotateCanvasCw", rotateCanvasCwAction);
+    add("image.rotateCanvasCcw", rotateCanvasCcwAction); add("image.rotateCanvas180", rotateCanvas180Action);
+    add("layer.delete", deleteAction); add("layer.lock", lockLayerAction);
     add("layer.createClippingMask", createClippingMaskAction); add("layer.releaseClippingMask", releaseClippingMaskAction);
     add("select.all", selectAllAction); add("select.none", deselectAction); add("select.invert", invertSelectionAction);
+    add("select.reselect", reselectAction); add("select.transform", transformSelectionAction);
+    add("select.saveSelection", saveSelectionAction);
+    add("edit.fill", fillSelectionAction); add("edit.stroke", strokeSelectionAction); add("edit.clear", clearSelectionAction);
     add("select.operations", selectionOpsAction); add("select.colorRange", colorRangeAction);
     add("select.subjectAi", selectSubjectAction);
     add("tool.select", toolSelectAction); add("tool.marquee", toolMarqueeAction); add("tool.crop", toolCropAction);
@@ -729,9 +871,67 @@ void ActionManager::registerShortcutActions()
     };
     for (int i = 0; i < adjustmentActions.size() && i < 11; ++i)
         add(adjustmentRegistry[i], adjustmentActions[i]);
+    add("filter.blurGaussian", blurGaussianAction); add("filter.blurMotion", blurMotionAction);
+    add("filter.noiseAdd", noiseAddAction);
+    add("filter.distortTwirl", distortTwirlAction); add("filter.distortPinch", distortPinchAction);
+    add("filter.distortRipple", distortRippleAction);
     add("ai.removeBackground", removeBgAiAction); add("ai.quickRemoveBackground", removeBgAiQuickAction);
     add("ai.mockup", mockupAction); add("image.editInMiniPaint", editInMiniPaintAction); add("settings.open", settingsAction); add("settings.shortcuts", shortcutsAction);
     add("help.startScreen", startScreenAction); add("help.about", aboutAction); add("help.aboutQt", aboutQtAction);
+    add("help.commandPalette", commandPaletteAction);
+    add("help.quickTour", quickTourAction);
+    add("layer.backgrounds", backgroundsAction);
+
+    // Acções que ficavam de fora do registo (e portanto sem atalho
+    // configurável nem pesquisa): formas extra, filtros artísticos/tonais,
+    // Select ▸ Modify, zonas seguras e utilitários de janela/projeto.
+    static const char* const newShapeRegistry[] = {
+        "shape.triangle", "shape.diamond", "shape.pentagon", "shape.hexagon",
+        "shape.cross", "shape.checkmark", "shape.cloud", "shape.explosion",
+    };
+    for (int i = 0; i < addNewShapeActions.size() && i < 8; ++i)
+        add(newShapeRegistry[i], addNewShapeActions[i]);
+
+    static const char* const artisticFilterRegistry[] = {
+        "filter.grayscale", "filter.sepia", "filter.vintage",
+        "filter.highContrast", "filter.vividPop", "filter.cyberpunk",
+        "filter.goldenHour", "filter.cinemaNoir", "filter.invert",
+        "filter.posterize", "filter.threshold",
+    };
+    for (int i = 0; i < filterActions.size() && i < 11; ++i)
+        add(artisticFilterRegistry[i], filterActions[i]);
+
+    static const char* const modifyRegistry[] = {
+        "select.modify.expand", "select.modify.contract",
+        "select.modify.border", "select.modify.smooth", "select.modify.feather",
+    };
+    for (int i = 0; i < modifyActions.size() && i < 5; ++i)
+        add(modifyRegistry[i], modifyActions[i]);
+
+    add("view.safeNone", safeNoneAction); add("view.safeYouTube", safeYouTubeAction);
+    add("view.safeInstagram", safeInstagramAction); add("view.safeTikTok", safeTikTokAction);
+    add("window.workspaceLayout", workspaceLayoutAction);
+    add("layer.layerComps", layerCompsAction);
+    add("layer.webSlices", webSlicesAction);
+    add("window.advancedMode", toggleAdvancedModeAction);
+    add("select.refineEdge", refineEdgeAction);
+    add("help.sampleProjects", sampleProjectsAction);
+}
+
+QVector<QAction*> ActionManager::allActions() const
+{
+    return findChildren<QAction*>().toVector();
+}
+
+QString ActionManager::actionId(const QAction* action) const
+{
+    if (!action)
+        return QString();
+    for (auto it = m_shortcutActions.cbegin(); it != m_shortcutActions.cend(); ++it) {
+        if (it.value() == action)
+            return it.key();
+    }
+    return QString();
 }
 
 void ActionManager::loadCustomShortcuts()

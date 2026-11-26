@@ -41,12 +41,24 @@ public:
     QAction* saveAsAction = nullptr;
     QAction* importAction = nullptr;
     QAction* exportAction = nullptr;
+    QAction* exportDocumentPngAction = nullptr;
     QAction* batchAction = nullptr;
     QAction* workspaceLayoutAction = nullptr;
     QAction* quitAction = nullptr;
 
     QAction* undoAction = nullptr;
     QAction* redoAction = nullptr;
+
+    // Edit ▸ Copiar / Recortar / Colar
+    QAction* copyAction = nullptr;
+    QAction* cutAction = nullptr;
+    QAction* pasteAction = nullptr;
+    QAction* pasteIntoAction = nullptr;
+
+    // Edit ▸ Fill / Stroke / Clear (atuam sobre a seleção de píxeis ativa)
+    QAction* fillSelectionAction = nullptr;
+    QAction* strokeSelectionAction = nullptr;
+    QAction* clearSelectionAction = nullptr;
 
     QAction* zoomInAction = nullptr;
     QAction* zoomOutAction = nullptr;
@@ -79,8 +91,11 @@ public:
     QAction* groupAction = nullptr;
     QAction* ungroupAction = nullptr;
     QAction* mergeSelectedAction = nullptr;
+    QAction* mergeDownAction = nullptr;
     QAction* mergeVisibleAction = nullptr;
     QAction* flattenAction = nullptr;
+    QAction* duplicateLayerAction = nullptr;
+    QAction* rasterizeLayerAction = nullptr;
 
     QAction* textBehindSubjectAction = nullptr;
     QAction* flipHAction = nullptr;
@@ -88,13 +103,25 @@ public:
     QAction* rotateLeftAction = nullptr;
     QAction* rotateRightAction = nullptr;
 
+    // Image ▸ Image Size / Canvas Size / Rotate Canvas
+    QAction* imageSizeAction = nullptr;
+    QAction* canvasSizeAction = nullptr;
+    QAction* rotateCanvasCwAction = nullptr;
+    QAction* rotateCanvasCcwAction = nullptr;
+    QAction* rotateCanvas180Action = nullptr;
+
     QAction* deleteAction = nullptr;
+    // Exportação rápida da camada selecionada (menu Camada + atalho).
+    QAction* quickExportLayerPngAction = nullptr;
     QAction* lockLayerAction = nullptr;
     QAction* createClippingMaskAction = nullptr;
     QAction* releaseClippingMaskAction = nullptr;
     QAction* selectAllAction = nullptr;
     QAction* deselectAction = nullptr;
     QAction* invertSelectionAction = nullptr;
+    QAction* reselectAction = nullptr;
+    QAction* transformSelectionAction = nullptr;
+    QAction* saveSelectionAction = nullptr;
     QAction* selectionOpsAction = nullptr;
     QAction* colorRangeAction = nullptr;
     QAction* selectSubjectAction = nullptr;
@@ -124,11 +151,21 @@ public:
     QAction* toolGradientAction = nullptr;
 
     QList<QAction*> filterActions;
+    /// Submenus Filter ▸ Blur / Noise / Distort (filtros com diálogo de parâmetros)
+    QAction* blurGaussianAction = nullptr;
+    QAction* blurMotionAction = nullptr;
+    QAction* noiseAddAction = nullptr;
+    QAction* distortTwirlAction = nullptr;
+    QAction* distortPinchAction = nullptr;
+    QAction* distortRippleAction = nullptr;
     /// Ações do submenu Image ▸ Adjustments (na ordem de kAdjustmentTypes).
     QList<QAction*> adjustmentActions;
 
     QAction* settingsAction = nullptr;
     QAction* shortcutsAction = nullptr;
+    QAction* commandPaletteAction = nullptr;
+    QAction* quickTourAction = nullptr;
+    QAction* backgroundsAction = nullptr;
     QAction* layerCompsAction = nullptr;
     QAction* toggleAdvancedModeAction = nullptr;
     QAction* refineEdgeAction = nullptr;
@@ -141,6 +178,12 @@ public:
     QAction* toggleGridAction = nullptr;
     QAction* toggleSnapAction = nullptr;
     QAction* toggleHistoryAction = nullptr;
+    QAction* toggleRulersAction = nullptr;
+    QAction* toggleGuidesAction = nullptr;
+    QAction* newGuideAction = nullptr;
+    QAction* clearGuidesAction = nullptr;
+    QAction* toggleNavigatorAction = nullptr;
+    QAction* toggleSwatchesAction = nullptr;
     QAction* toggleToolsBarAction = nullptr;
     QAction* toggleRightPanelAction = nullptr;
     QAction* toggleLayersDockAction = nullptr;
@@ -152,6 +195,14 @@ public:
     QAction* safeYouTubeAction = nullptr;
     QAction* safeInstagramAction = nullptr;
     QAction* safeTikTokAction = nullptr;
+
+    /// Todas as acções criadas, na ordem de criação (igual à dos
+    /// menus). Base da paleta de comandos: as acções são filhas do
+    /// ActionManager, pelo que basta enumerá-las.
+    QVector<QAction*> allActions() const;
+
+    /// Id estável de uma acção no registo de atalhos (vazio se não constar).
+    QString actionId(const QAction* action) const;
 
     QMap<QString, QKeySequence> getAllShortcuts() const;
     bool setShortcut(const QString& actionName, const QKeySequence& key);
