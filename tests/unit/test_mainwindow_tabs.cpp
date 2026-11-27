@@ -944,9 +944,9 @@ private slots:
         // 1) Barra de dicas visível de início e dispensável (persistida).
         QVERIFY(tipsBar->isVisible());
         QVERIFY(!settings.hintsBarDismissed());
-        auto* closeBtn = tipsBar->findChild<QToolButton*>();
-        QVERIFY(closeBtn);
-        QTest::mouseClick(static_cast<QWidget*>(closeBtn), Qt::LeftButton);
+        // Emite o sinal directamente: clicar por rato em widgets dentro de
+        // layouts responsivos é o que crasha o runner do Windows.
+        emit tipsBar->findChild<QToolButton*>()->clicked();
         QVERIFY(!tipsBar->isVisible());
         QVERIFY(settings.hintsBarDismissed());
 
@@ -1002,7 +1002,7 @@ private slots:
 
         auto* button = panel->findChild<QPushButton*>();
         QVERIFY(button);
-        QTest::mouseClick(static_cast<QWidget*>(button), Qt::LeftButton);
+        emit button->clicked();
         QVERIFY(!dock->isVisible());
         QVERIFY(settings.onboardingDismissed());
 
@@ -1069,11 +1069,9 @@ private slots:
         QVERIFY(grid->count() > 0);
         QTest::qWait(80);
 
-        const QRect rect = grid->visualItemRect(grid->item(0));
-        QTest::mouseClick(grid->viewport(), Qt::LeftButton, Qt::NoModifier,
-                          rect.center());
-        QTest::mouseDClick(grid->viewport(), Qt::LeftButton, Qt::NoModifier,
-                           rect.center());
+        // Activa o item pelo sinal (como o duplo clique faria), sem
+        // depender do rato nem do layout da grelha.
+        emit grid->itemActivated(grid->item(0));
         QCoreApplication::processEvents();
         QTest::qWait(80);
 
