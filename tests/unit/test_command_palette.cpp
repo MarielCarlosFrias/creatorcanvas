@@ -116,38 +116,30 @@ private slots:
         actions.createActions(&i18n);
 
         QWidget host;
-        qWarning() << "DBG 1: antes do popup";
         CommandPalette palette(&actions, &i18n, &host);
         palette.show();
-        qWarning() << "DBG 2: popup mostrado";
         QCOMPARE(palette.windowTitle(), QStringLiteral("Command Palette"));
         auto* query = palette.findChild<QLineEdit*>();
         QVERIFY(query);
         QVERIFY(!query->placeholderText().isEmpty());
-        qWarning() << "DBG 3: asserts base ok";
 
-        // Mudar o idioma re-traduz o chrome do popup (sinal languageChanged):
-        // título e placeholder em todos os idiomas. O popup é transitório, por
-        // isso os rótulos dos itens são refrescados ao abrir (refresh()).
-        qWarning() << "DBG 4: antes de setLanguage";
+        // O popup NAO se re-traduz sozinho quando o idioma muda (é
+        // transitório); quem garante a tradução correcta é o refresh() que o
+        // MainWindow faz antes de cada abertura.
         QVERIFY(i18n.setLanguage(QStringLiteral("pt-BR")));
-        qWarning() << "DBG 5: depois de setLanguage";
+        palette.refresh();
         QCOMPARE(palette.windowTitle(), QStringLiteral("Paleta de Comandos"));
-        qWarning() << "DBG 6: titulo pt ok";
         QVERIFY(!query->placeholderText().isEmpty());
         QVERIFY(query->placeholderText() != QStringLiteral("Type a command name..."));
+        QVERIFY(!firstRowText(palette).isEmpty());
 
         QVERIFY(i18n.setLanguage(QStringLiteral("sv")));
-        qWarning() << "DBG 7: sv ok";
+        palette.refresh();
         QCOMPARE(palette.windowTitle(), QStringLiteral("Kommandopalett"));
 
-        // E ao reabrir, os rótulos voltam ao idioma certo.
         QVERIFY(i18n.setLanguage(QStringLiteral("en")));
         palette.refresh();
-        qWarning() << "DBG 8: refresh ok";
-        QVERIFY(firstRowText(palette).isEmpty() == false);
         QCOMPARE(palette.windowTitle(), QStringLiteral("Command Palette"));
-        qWarning() << "DBG 9: fim do teste";
     }
 };
 

@@ -61,18 +61,23 @@ CommandPalette::CommandPalette(ActionManager* actions, I18nService* i18n,
     connect(m_results, &QListWidget::itemActivated,
             this, &CommandPalette::onItemActivated);
 
-    if (m_i18n)
-        connect(m_i18n, &I18nService::languageChanged,
-                this, &CommandPalette::retranslateUi);
+    // Sem ligacao a languageChanged: o popup e transitorio e o MainWindow
+    // chama refresh() antes de cada abertura, pelo que re-traduzir em tempo
+    // real so existiria para o caso impossivel de o idioma mudar com o popup
+    // aberto -- e esse caminho bloqueia 300 s em algumas combinacoes
+    // Qt/plataforma (runners). Ver refresh().
     retranslateUi();
 }
 
 void CommandPalette::refresh()
 {
+    // Reconstroi as entradas (rotulos no idioma actual) E o chrome do popup,
+    // para que abrir depois de mudar de idioma mostre tudo traduzido.
     buildEntries();
     if (m_query)
         m_query->clear();
     rebuildResults();
+    retranslateUi();
 }
 
 void CommandPalette::buildEntries()
