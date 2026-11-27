@@ -15,7 +15,7 @@ jobs:
         include:
           - { name: linux-22.04,  os: ubuntu-22.04,   preset: linux-debug }
           - { name: linux-24.04,  os: ubuntu-24.04,   preset: linux-debug }
-          - { name: windows-msvc, os: windows-latest, preset: windows-debug }
+          - { name: windows-msvc, os: windows-latest, preset: windows-debug, minipaint: '-DCC_MINIPAINT_SOURCE_DIR=OFF' }
           - { name: linux-asan,   os: ubuntu-24.04,   preset: linux-asan }
     env:
       ASAN_OPTIONS: detect_leaks=0:halt_on_error=1
@@ -88,6 +88,7 @@ jobs:
       - name: Install SFML 3 (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
+        continue-on-error: true   # o MiniPaint e opcional (-DCC_MINIPAINT_SOURCE_DIR=OFF)
         run: |
           Invoke-WebRequest -Uri "https://www.sfml-dev.org/files/SFML-3.0.0-windows-vc17-64-bit.zip" -OutFile "$env:TEMP\sfml.zip"
           Expand-Archive -Path "$env:TEMP\sfml.zip" -DestinationPath "C:\sfml"
@@ -97,7 +98,7 @@ jobs:
           Write-Host "SFML installed at $sfml"
 
       - name: Configure
-        run: cmake --preset ${{ matrix.preset }}
+        run: cmake --preset ${{ matrix.preset }} ${{ matrix.minipaint || '' }}
 
       - name: Build
         shell: bash
