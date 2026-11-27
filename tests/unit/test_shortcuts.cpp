@@ -1,8 +1,20 @@
 #include <QtTest>
+#include <QTemporaryDir>
 
 #include "localization/i18nservice.h"
 #include "services/settingsservice.h"
 #include "ui/actionmanager.h"
+
+namespace {
+// NUNCA SettingsService(":memory:"): o QSettings grava um FICHEIRO real com
+// esse nome no directorio de trabalho (mais um .lock), o que suja a build e
+// pode bloquear corridas seguintes num lock preso. Usa um tmp dir.
+QString testSettingsFile()
+{
+    static QTemporaryDir dir;
+    return dir.filePath(QStringLiteral("settings.ini"));
+}
+} // namespace
 
 using namespace cc;
 
@@ -15,7 +27,7 @@ class TestShortcuts final : public QObject
 private slots:
     void noDuplicateDefaultShortcuts()
     {
-        SettingsService settings(QStringLiteral(":memory:"));
+        SettingsService settings(testSettingsFile());
         I18nService i18n(&settings, {QStringLiteral(":/locales")});
         QVERIFY(i18n.loadAvailableLanguages());
 
@@ -41,7 +53,7 @@ private slots:
 
     void packBrowserShortcutIsNotTheToolsBarOne()
     {
-        SettingsService settings(QStringLiteral(":memory:"));
+        SettingsService settings(testSettingsFile());
         I18nService i18n(&settings, {QStringLiteral(":/locales")});
         QVERIFY(i18n.loadAvailableLanguages());
 

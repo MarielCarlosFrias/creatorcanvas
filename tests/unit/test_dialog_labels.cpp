@@ -1,4 +1,5 @@
 #include <QtTest>
+#include <QTemporaryDir>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QLabel>
@@ -11,6 +12,17 @@
 #include "ui/imagesizedialog.h"
 #include "ui/refineedgedialog.h"
 
+namespace {
+// NUNCA SettingsService(":memory:"): o QSettings grava um FICHEIRO real com
+// esse nome no directorio de trabalho (mais um .lock), o que suja a build e
+// pode bloquear corridas seguintes num lock preso. Usa um tmp dir.
+QString testSettingsFile()
+{
+    static QTemporaryDir dir;
+    return dir.filePath(QStringLiteral("settings.ini"));
+}
+} // namespace
+
 using namespace cc;
 
 class TestDialogLabels final : public QObject
@@ -20,7 +32,7 @@ class TestDialogLabels final : public QObject
 private slots:
     void imageSizeDialogUsesTranslatedLabels()
     {
-        SettingsService settings(QStringLiteral(":memory:"));
+        SettingsService settings(testSettingsFile());
         I18nService i18n(&settings, {QStringLiteral(":/locales")});
         QVERIFY(i18n.loadAvailableLanguages());
 
@@ -56,7 +68,7 @@ private slots:
 
     void imageSizeDialogTranslatesToPortuguese()
     {
-        SettingsService settings(QStringLiteral(":memory:"));
+        SettingsService settings(testSettingsFile());
         I18nService i18n(&settings, {QStringLiteral(":/locales")});
         QVERIFY(i18n.loadAvailableLanguages());
         i18n.setLanguage(QStringLiteral("pt-BR"));
@@ -76,9 +88,12 @@ private slots:
 
     void refineEdgeDialogButtonsAreTranslated()
     {
-        SettingsService settings(QStringLiteral(":memory:"));
+        SettingsService settings(testSettingsFile());
         I18nService i18n(&settings, {QStringLiteral(":/locales")});
         QVERIFY(i18n.loadAvailableLanguages());
+        // Explícito: o ficheiro de settings é partilhado no processo e o teste
+        // anterior mudou o idioma.
+        QVERIFY(i18n.setLanguage(QStringLiteral("en")));
 
         QImage selection(64, 48, QImage::Format_Alpha8);
         selection.fill(0);
