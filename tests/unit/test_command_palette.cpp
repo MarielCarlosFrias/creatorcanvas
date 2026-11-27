@@ -123,19 +123,22 @@ private slots:
         QVERIFY(query);
         QVERIFY(!query->placeholderText().isEmpty());
 
-        // Os rotulos do popup vem dos catalogos: valida os tres idiomas sem
-        // re-traduzir o widget. (A re-traducao de widgets ao mudar de idioma
-        // esta coberta por test_mainwindow_tabs, que trabalha com a janela
-        // real.) Assim o teste e deterministico em qualquer versao do Qt.
+        // Mudar o idioma re-traduz o chrome do popup (sinal languageChanged):
+        // título e placeholder em todos os idiomas. O popup é transitório, por
+        // isso os rótulos dos itens são refrescados ao abrir (refresh()).
         QVERIFY(i18n.setLanguage(QStringLiteral("pt-BR")));
-        QCOMPARE(i18n.t("editor", "commandPalette.title"),
-                 QStringLiteral("Paleta de Comandos"));
-        QVERIFY(!i18n.t("editor", "commandPalette.placeholder").isEmpty());
-        QVERIFY(!i18n.t("editor", "commandPalette.hint").isEmpty());
+        QCOMPARE(palette.windowTitle(), QStringLiteral("Paleta de Comandos"));
+        QVERIFY(!query->placeholderText().isEmpty());
+        QVERIFY(query->placeholderText() != QStringLiteral("Type a command name..."));
 
         QVERIFY(i18n.setLanguage(QStringLiteral("sv")));
-        QTest::qWait(10);
         QCOMPARE(palette.windowTitle(), QStringLiteral("Kommandopalett"));
+
+        // E ao reabrir, os rótulos voltam ao idioma certo.
+        QVERIFY(i18n.setLanguage(QStringLiteral("en")));
+        palette.refresh();
+        QVERIFY(firstRowText(palette).isEmpty() == false);
+        QCOMPARE(palette.windowTitle(), QStringLiteral("Command Palette"));
     }
 };
 

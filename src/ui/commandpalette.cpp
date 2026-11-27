@@ -316,6 +316,12 @@ QString CommandPalette::groupLabel(const QString& id) const
 
 void CommandPalette::retranslateUi()
 {
+    // Só o chrome do popup. A lista NÃO é reconstruída aqui: os rótulos dos
+    // itens são capturados em buildEntries() e o popup é transitório (abre e
+    // fecha numa única interacção), pelo que bastam os textos fixos. A
+    // reconstrução neste ponto mostra-se bloqueante em algumas combinações
+    // Qt/plataforma (Qt 6.8 + offscreen: 300 s no watchdog do teste) sem
+    // qualquer benefício visível para o utilizador.
     setWindowTitle(m_i18n ? m_i18n->t("editor", "commandPalette.title")
                           : QStringLiteral("Command Palette"));
     if (m_query)
@@ -325,7 +331,6 @@ void CommandPalette::retranslateUi()
     if (m_hint)
         m_hint->setText(m_i18n ? m_i18n->t("editor", "commandPalette.hint")
                                : QString());
-    rebuildResults();
 }
 
 } // namespace cc
