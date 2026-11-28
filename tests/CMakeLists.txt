@@ -104,6 +104,72 @@ cc_add_test(test_pack_browser_search unit/test_pack_browser_search.cpp
 cc_add_test(test_pack_browser_activation unit/test_pack_browser_activation.cpp
             ../src/ui/packbrowser.cpp)
 
+cc_add_test(test_stress unit/test_stress.cpp
+            ../src/ui/mainwindow.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/packbrowser.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/onboardingpanel.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/onboardingtour.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/commandpalette.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/actionmanager.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/welcomedialog.cpp
+            ../src/ui/themeicons.cpp
+            ../src/ui/dockvisibilitypolicy.cpp
+            ../src/ui/transformselectiondialog.cpp
+            ../src/ui/imagesizedialog.cpp
+            ../src/ui/smartfilterdialog.cpp
+            ../src/ui/newdocumentdialog.cpp
+            ../src/ui/exportdialog.cpp
+            ../src/ui/settingsdialog.cpp
+            ../src/ui/collapsiblesection.cpp
+            ../src/ui/startscreen.cpp
+            ../src/ui/layerspanel.cpp
+            ../src/ui/historypanel.cpp
+            ../src/ui/textinspector.cpp
+            ../src/ui/shapeinspector.cpp
+            ../src/ui/imageinspector.cpp
+            ../src/ui/puppetwarpdialog.cpp
+            ../src/ui/darktheme.cpp
+            ../src/ui/canvasview.cpp
+            ../src/ui/canvastransform.cpp
+            ../src/ui/canvasoverlayrenderer.cpp
+            ../src/ui/canvasgesturehandler.cpp
+            ../src/ui/canvascontextmenu.cpp
+            ../src/ui/inlinetexteditor.cpp
+            ../src/ui/maskeditcanvas.cpp
+            ../src/ui/menubuilder.cpp
+            ../src/ui/mainwindow_selection.cpp            ${PROJECT_SOURCE_DIR}/src/ui/transformbar.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/tooloptionsbar.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/navigatorpanel.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/shortcutdialog.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/swatchpanel.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/toolslotbutton.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/refineedgedialog.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/adjustmentsdialog.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/adjustmentsection.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/smartfilterdialog.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/webslicesdialog.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/layercompsdialog.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/curveeditor.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/gradientstopeditor.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/histogramview.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/batchdialog.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/workspacelayout.cpp
+            ${PROJECT_SOURCE_DIR}/src/services/minipaintbridge.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/aibackgrounddialog.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/mockupdialog.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/puppetwarpdialog.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/transformselectiondialog.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/maskeditcanvas.cpp
+            ${PROJECT_SOURCE_DIR}/src/services/autosaveservice.cpp
+            ${PROJECT_SOURCE_DIR}/src/services/recentfiles.cpp
+            ${PROJECT_SOURCE_DIR}/src/services/presetstore.cpp
+            ${PROJECT_SOURCE_DIR}/src/services/textstylestore.cpp
+            ${PROJECT_SOURCE_DIR}/src/services/BatchProcessor.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/slicepreviewwidget.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/recoverydialog.cpp
+            ${PROJECT_SOURCE_DIR}/src/ui/inlinetexteditor.cpp
+)
+
 cc_add_test(test_sample_projects unit/test_sample_projects.cpp)
 
 cc_add_test(test_onboarding_dismiss unit/test_onboarding_dismiss.cpp
